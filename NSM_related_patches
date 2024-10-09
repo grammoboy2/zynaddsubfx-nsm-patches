@@ -1,0 +1,18 @@
+Style: reran style.sh jun 1 2012
+cce34c19bf2c643ecdc8f05c1d934cd6c0fb5561
+
+Fix NSM File Saving oct 26 2016 
+eea687deb6be33c6b571d8db4eafafaea0a672f1
+
+Fix naming of jack_client using NSM client-id when using JACK-MULTI
+https://github.com/zynaddsubfx/zynaddsubfx/pull/174/commits/c41882c99ac168867bf5a03a93cb8b8e48e955e4 
+
+Add .png verion of icon jul 11 2020 
+Alternative icon requested for use in NSM
+56eabf23f7b7f2ceba57ece637f462b12de93a8c
+
+NSM: Guard against saving without a project Dec 9 2020 
+052df4b3e620ced210230993ae5c7200b5701a97
+
+Yoshimi NSM patch port *ONLY PARTIALLY WORKING*
+https://github.com/Yoshimi/yoshimi/pull/3
