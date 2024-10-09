@@ -1,0 +1,294 @@
+From 3db418b800e8811ab1c7d4cdc1b0a977c10319df Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 4 Jun 2017 22:45:53 -0400
+Subject: [PATCH 1145/1936] More Filter Parameter Floating Point Updates
+
+---
+ src/DSP/AnalogFilter.cpp    |  1 -
+ src/Misc/Schema.cpp         |  5 ++
+ src/Misc/XMLwrapper.cpp     |  2 +-
+ src/Params/FilterParams.cpp | 19 +++++---
+ src/Tests/PluginTest.h      | 91 +++++++++++++++++++++++++++++++++++++
+ src/Tests/guitar-adnote.xmz | 32 ++++++-------
+ 6 files changed, 125 insertions(+), 25 deletions(-)
+
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index f76f80d7..5b0f654b 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -68,7 +68,6 @@ AnalogFilter::Coeff AnalogFilter::computeCoeff(int type, float cutoff, float q,
+ {
+     AnalogFilter::Coeff coeff;
+     bool  zerocoefs = false; //this is used if the freq is too high
+-    printf("computeCoeff(%d, %f, %f, %d, %f, %f, %d)\n", type, cutoff, q, stages, gain, fs, order);
+ 
+     const float samplerate_f = fs;
+     const float halfsamplerate_f = fs/2;
+diff --git a/src/Misc/Schema.cpp b/src/Misc/Schema.cpp
+index 65cec807..67a22962 100644
+--- a/src/Misc/Schema.cpp
++++ b/src/Misc/Schema.cpp
+@@ -22,6 +22,7 @@ namespace zyn {
+  *   - 'tooltip'   : string [OPTIONAL]
+  *   - 'type'      : type
+  *   - 'units'     : unit-type
++ *   - 'scale'     : scale-type
+  *   - 'domain'    : range [OPTIONAL]
+  *   - 'options'   : [option...] [OPTIONAL]
+  * type : {'int', 'float', 'boolean'}
+@@ -116,6 +117,8 @@ void dump_param_cb(const rtosc::Port *p, const char *full_name, void *v)
+     auto mdoc        = meta.find("documentation");
+     auto msname      = meta.find("shortname");
+     auto units       = meta.find("unit");
++    auto scale       = meta.find("scale");
++
+     opts options;
+     string doc;
+     string name      = p->name;;
+@@ -193,6 +196,8 @@ void dump_param_cb(const rtosc::Port *p, const char *full_name, void *v)
+     o << "        \"tooltip\"  : \"" << doc  << "\",\n";
+     if(units != meta.end())
+         o << "        \"units\"    : \"" << units.value << "\",\n";
++    if(scale != meta.end())
++        o << "        \"scale\"    : \"" << scale.value << "\",\n";
+     o << "        \"type\"     : \"" << type  << "\"";
+     if(min && max)
+         o << ",\n        \"range\"    : [" << min << "," << max << "]";
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index f94953ef..bfdd73df 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -253,7 +253,7 @@ void XMLwrapper::addparreal(const string &name, float val)
+     union { float in; uint32_t out; } convert;
+     char buf[11];
+     convert.in = val;
+-    sprintf(buf, "0x%8X", convert.out);
++    sprintf(buf, "0x%0.8X", convert.out);
+     addparams("par_real", 3, "name", name.c_str(), "value",
+               stringFrom<float>(val).c_str(), "exact_value", buf);
+ }
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 2c4baa87..bb960d40 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -268,8 +268,13 @@ void FilterParams::defaults()
+     Pq    = Dq;
+ 
+     Pstages       = 0;
+-    freqtracking  = 0.0;
+-    gain          = 0.0;
++    basefreq  = (Pfreq / 64.0f - 1.0f) * 5.0f;
++    basefreq  = powf(2.0f, basefreq + 9.96578428f);
++    baseq     = expf(powf((float) Pq / 127.0f, 2) * logf(1000.0f)) - 0.9f;
++
++    gain = 0.0f;
++    freqtracking = 0.0f;
++
+     Pcategory     = 0;
+ 
+     Pnumformants     = 3;
+@@ -437,11 +442,11 @@ void FilterParams::add2XML(XMLwrapper& xml)
+     //filter parameters
+     xml.addpar("category", Pcategory);
+     xml.addpar("type", Ptype);
+-    xml.addpar("basefreq", basefreq);
+-    xml.addpar("q", Pq);
++    xml.addparreal("basefreq", basefreq);
++    xml.addparreal("baseq", baseq);
+     xml.addpar("stages", Pstages);
+-    xml.addpar("freq_track", freqtracking);
+-    xml.addpar("gain",       gain);
++    xml.addparreal("freq_tracking", freqtracking);
++    xml.addparreal("gain",       gain);
+ 
+     //formant filter parameters
+     if((Pcategory == 1) || (!xml.minimal)) {
+@@ -491,7 +496,7 @@ void FilterParams::getfromXMLsection(XMLwrapper& xml, int n)
+ 
+ void FilterParams::getfromXML(XMLwrapper& xml)
+ {
+-    const bool upgrade_3_0_2 = xml.fileversion() < version_type(3,0,2);
++    const bool upgrade_3_0_2 = (xml.fileversion() < version_type(3,0,2)) && (xml.getparreal("basefreq", -1) < 0);
+ 
+     //filter parameters
+     Pcategory    = xml.getpar127("category", Pcategory);
+diff --git a/src/Tests/PluginTest.h b/src/Tests/PluginTest.h
+index 6067dcc0..8f99888f 100644
+--- a/src/Tests/PluginTest.h
++++ b/src/Tests/PluginTest.h
+@@ -33,6 +33,95 @@ NSM_Client *nsm = 0;
+ char *instance_name=(char*)"";
+ MiddleWare *middleware;
+ 
++void fill_vec_with_lines(std::vector<string> &v, string s)
++{
++    std::istringstream stream(s);
++    std::string line;
++    while(std::getline(stream, line))
++        v.push_back(line);
++}
++void print_string_differences(string orig, string next)
++{
++    std::vector<string> a, b;
++    fill_vec_with_lines(a, orig);
++    fill_vec_with_lines(b, next);
++    int N = a.size();
++    int M = b.size();
++    printf("%d vs %d\n", N, M);
++
++    //Original String by New String
++    //Each step is either an insertion, deletion, or match
++    //Match     is 0 cost and moves +1 State (if symbols are the same)
++    //Replace   is 3 cost and moves +1 State (if symbols are different)
++    //Insertion is 2 cost and moves +2 State (+2 if symbols are different)
++    //Deletion  is 1 cost and moves +0 State (+2 if symbols are different)
++    char *transition = new char[N*M];
++    int  *cost       = new int[N*M];
++
++    const int match  = 1;
++    const int insert = 2;
++    const int del    = 3;
++    for(int i=0; i<N; ++i) {
++        for(int j=0; j<M; ++j) {
++            transition[i*M + j] = 0;
++            cost[i*M + j] = 0xffff;
++        }
++    }
++
++    //Just assume the -1 line is the same
++    cost[0*M + 0] = (a[0] == b[0])*3;
++    cost[0*M + 1] = (a[1] == b[0])*2 + 2;
++    for(int i=1; i<N; ++i) {
++        for(int j=0; j<M; ++j) {
++            int cost_match = 0xffffff;
++            int cost_ins   = 0xffffff;
++            int cost_del   = 0xffffff;
++            cost_del = cost[(i-1)*M + j] + 2 + (a[i] != b[j])*2;
++            if(j > 1)
++                cost_ins = cost[(i-1)*M + (j-2)] + 1 + 2*(a[i] != b[j]);
++            if(j > 0)
++                cost_match = cost[(i-1)*M + (j-1)] + 2*(a[i] != b[j]);
++
++            if(cost_match >= 0xffff && cost_ins >= 0xffff && cost_del >= 0xffff) {
++                ;
++            } else if(cost_match < cost_ins && cost_match < cost_del) {
++                cost[i*M+j] = cost_match;
++                transition[i*M+j] = match;
++            } else if(cost_ins < cost_del) {
++                cost[i*M+j] = cost_ins;
++                transition[i*M+j] = insert;
++            } else {
++                cost[i*M+j] = cost_del;
++                transition[i*M+j] = del;
++            }
++        }
++    }
++
++    int total_cost = cost[(N-1)*M + (M-1)];
++    if(total_cost < 500) {
++        printf("total cost = %d\n", cost[(N-1)*M + (M-1)]);
++
++        //int b_pos = b.size()-1;
++        int a_pos = a.size()-1;
++        for(int i=(M-1); i >= 0; --i) {
++            if(a[a_pos] != b[i]) {
++                printf("- %s\n", a[a_pos].c_str());
++                printf("+ %s\n", b[i].c_str());
++            }
++            if(transition[i*M+a_pos] == match) {
++                //printf("R");
++                a_pos -= 1;
++            } else if(transition[i*M+a_pos] == del) {
++                //printf("D");
++            } else if(transition[i*M+a_pos] == insert) {
++                //printf("I");
++                a_pos -= 2;
++            }
++        }
++        //printf("%d vs %d\n", N, M);
++    }
++}
++
+ class PluginTest:public CxxTest::TestSuite
+ {
+     public:
+@@ -104,6 +193,8 @@ class PluginTest:public CxxTest::TestSuite
+ 
+             TS_ASSERT_EQUALS((int)(fdata.length()+1), res);
+             TS_ASSERT(fdata == result);
++            if(fdata != result)
++                print_string_differences(fdata, result);
+         }
+ 
+ 
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index fc3e3d07..a65e7e57 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -137,11 +137,11 @@ version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
+ <FILTER>
+ <par name="category" value="0" />
+ <par name="type" value="2" />
+-<par name="freq" value="70" />
+-<par name="q" value="40" />
++<par_real name="basefreq" value="1383.91" exact_value="0x44ACFD1C" />
++<par_real name="baseq" value="1.08427" exact_value="0x3F8AC956" />
+ <par name="stages" value="0" />
+-<par name="freq_track" value="64" />
+-<par name="gain" value="64" />
++<par_real name="freq_tracking" value="0" exact_value="0x00000000" />
++<par_real name="gain" value="0" exact_value="0x00000000" />
+ </FILTER>
+ <FILTER_ENVELOPE>
+ <par_bool name="free_mode" value="no" />
+@@ -309,11 +309,11 @@ version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
+ <FILTER>
+ <par name="category" value="0" />
+ <par name="type" value="2" />
+-<par name="freq" value="65" />
+-<par name="q" value="68" />
++<par_real name="basefreq" value="1055.65" exact_value="0x4483F4A4" />
++<par_real name="baseq" value="6.34546" exact_value="0x40CB0DF9" />
+ <par name="stages" value="0" />
+-<par name="freq_track" value="64" />
+-<par name="gain" value="64" />
++<par_real name="freq_tracking" value="0" exact_value="0x00000000" />
++<par_real name="gain" value="0" exact_value="0x00000000" />
+ </FILTER>
+ <par_bool name="filter_envelope_enabled" value="yes" />
+ <FILTER_ENVELOPE>
+@@ -1060,11 +1060,11 @@ version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
+ <FILTER>
+ <par name="category" value="0" />
+ <par name="type" value="4" />
+-<par name="freq" value="80" />
+-<par name="q" value="40" />
++<par_real name="basefreq" value="2378.41" exact_value="0x4514A69F" />
++<par_real name="baseq" value="1.08427" exact_value="0x3F8AC956" />
+ <par name="stages" value="0" />
+-<par name="freq_track" value="64" />
+-<par name="gain" value="64" />
++<par_real name="freq_tracking" value="0" exact_value="0x00000000" />
++<par_real name="gain" value="0" exact_value="0x00000000" />
+ </FILTER>
+ <par name="filter_velocity_sensing" value="64" />
+ <par name="filter_velocity_sensing_amplitude" value="64" />
+@@ -3411,11 +3411,11 @@ version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
+ <FILTER>
+ <par name="category" value="0" />
+ <par name="type" value="2" />
+-<par name="freq" value="111" />
+-<par name="q" value="95" />
++<par_real name="basefreq" value="12745.1" exact_value="0x4647248B" />
++<par_real name="baseq" value="46.8148" exact_value="0x423B4262" />
+ <par name="stages" value="0" />
+-<par name="freq_track" value="64" />
+-<par name="gain" value="64" />
++<par_real name="freq_tracking" value="0" exact_value="0x00000000" />
++<par_real name="gain" value="0" exact_value="0x00000000" />
+ </FILTER>
+ <FILTER_ENVELOPE>
+ <par_bool name="free_mode" value="no" />
+-- 
+2.47.0
+

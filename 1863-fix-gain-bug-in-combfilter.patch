@@ -1,0 +1,25 @@
+From ab4184f725560149e93009362e781110a592aeaf Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sun, 9 Oct 2022 12:12:02 +0200
+Subject: [PATCH 1863/1936] fix gain bug in combfilter
+
+---
+ src/DSP/Filter.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/DSP/Filter.cpp b/src/DSP/Filter.cpp
+index 7ac00aea..b13427d4 100644
+--- a/src/DSP/Filter.cpp
++++ b/src/DSP/Filter.cpp
+@@ -60,7 +60,7 @@ Filter *Filter::generate(Allocator &memory, const FilterParams *pars,
+             break;
+         case 4:
+             filter = memory.alloc<CombFilter>(&memory, Ftype, 1000.0f, pars->getq(), srate, bufsize);
+-            filter->outgain = dB2rap(pars->getgain());
++            filter->setgain(pars->getgain());
+             break;
+         default:
+             filter = memory.alloc<AnalogFilter>(Ftype, 1000.0f, pars->getq(), Fstages, srate, bufsize);
+-- 
+2.47.0
+

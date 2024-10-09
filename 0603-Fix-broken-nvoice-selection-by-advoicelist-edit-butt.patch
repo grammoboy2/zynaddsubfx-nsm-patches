@@ -1,0 +1,30 @@
+From c886f993c3e1a7c22f69a27abf7058c9f40dfb83 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Fri, 16 Oct 2015 13:07:00 -0400
+Subject: [PATCH 0603/1936] Fix broken nvoice selection by advoicelist edit
+ buttons.
+
+---
+ src/UI/ADnoteUI.fl | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 32e65dc4..8f8af548 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -172,10 +172,10 @@ o->redraw();}
+         label edit
+         callback {
+ class ADnoteUI *adnoteui = ui->partui->adnoteui;
+-class ADvoiceUI *advoice = adnoteui->advoice;
+ adnoteui->ADnoteVoice->show();
+-advoice->change_voice(nvoice);
+ adnoteui->currentvoicecounter->value(nvoice+1);
++adnoteui->currentvoicecounter->do_callback();
++class ADvoiceUI *advoice = adnoteui->advoice;
+ if (advoice->mod_type->value() == 0)
+     advoice->voiceFMparametersgroup->deactivate();
+ else
+-- 
+2.47.0
+

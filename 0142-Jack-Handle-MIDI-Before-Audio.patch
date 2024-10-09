@@ -1,0 +1,28 @@
+From f1e96cbe7165a645d06601e94eaacfd2599df323 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 23 Jan 2014 17:05:35 -0500
+Subject: [PATCH 0142/1936] Jack: Handle MIDI *Before* Audio
+
+---
+ src/Nio/JackEngine.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/Nio/JackEngine.cpp b/src/Nio/JackEngine.cpp
+index 134bd46c..1201024d 100644
+--- a/src/Nio/JackEngine.cpp
++++ b/src/Nio/JackEngine.cpp
+@@ -285,10 +285,9 @@ int JackEngine::processCallback(jack_nframes_t nframes)
+ {
+     bool okaudio = true;
+ 
++    handleMidi(nframes);
+     if((NULL != audio.ports[0]) && (NULL != audio.ports[1]))
+         okaudio = processAudio(nframes);
+-    if(okaudio)
+-        handleMidi(nframes);
+     return okaudio ? 0 : -1;
+ }
+ 
+-- 
+2.47.0
+

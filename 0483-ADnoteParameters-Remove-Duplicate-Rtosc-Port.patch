@@ -1,0 +1,33 @@
+From 9b20e0a7e054996e8f7ffcc53ae8c8ea8f8cc08d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 1 Jun 2015 17:05:51 -0400
+Subject: [PATCH 0483/1936] ADnoteParameters: Remove Duplicate Rtosc Port
+
+---
+ src/Params/ADnoteParameters.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index e43e1865..405fdc92 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -189,7 +189,6 @@ static const Ports voicePorts = {
+ #define rObject ADnoteGlobalParam
+ 
+ static const Ports globalPorts = {
+-    rParamZyn(PPanning, "Panning (0 random, 1 left, 127 right)"),
+     rRecurp(Reson, "Resonance"),
+     rRecurp(FreqLfo, "Frequency LFO"),
+     rRecurp(AmpLfo, "Amplitude LFO"),
+@@ -207,7 +206,7 @@ static const Ports globalPorts = {
+     rParamZyn(PBandwidth,    "Relative Fine Detune Gain"),
+ 
+     //Amplitude
+-    rParamZyn(PPanning, "Panning of ADsynth"),
++    rParamZyn(PPanning, "Panning of ADsynth (0 random, 1 left, 127 right)"),
+     rParamZyn(PVolume, "volume control"),
+     rParamZyn(PAmpVelocityScaleFunction, "Volume Velocity Control"),
+ 
+-- 
+2.47.0
+

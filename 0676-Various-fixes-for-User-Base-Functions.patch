@@ -1,0 +1,282 @@
+From c18ad371e966aaea077aefd89c426e5a4efe7896 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 3 Nov 2015 22:07:17 -0500
+Subject: [PATCH 0676/1936] Various fixes for User Base Functions:
+
+	a) BF Mods can be applied
+	b) User Base FN is indicate in the wave form choice widget
+	c) BF Mods and parameters are appropriately highlighted for
+        wave choice.
+---
+ src/Synth/OscilGen.cpp | 29 +++++++++++++----
+ src/Synth/OscilGen.h   |  4 +++
+ src/UI/Fl_Osc_Choice.H |  3 +-
+ src/UI/OscilGenUI.fl   | 70 ++++++++++++++++++++++++++++++++++++------
+ 4 files changed, 89 insertions(+), 17 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 3013ecef..c6a49c19 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -310,6 +310,8 @@ OscilGen::OscilGen(const SYNTH_T &synth_, FFTwrapper *fft_, Resonance *res_)
+     outoscilFFTfreqs = new fft_t[synth.oscilsize / 2];
+     oscilFFTfreqs    = new fft_t[synth.oscilsize / 2];
+     basefuncFFTfreqs = new fft_t[synth.oscilsize / 2];
++    cachedbasefunc = new float[synth.oscilsize];
++    cachedbasevalid = false;
+     pendingfreqs     = oscilFFTfreqs;
+ 
+     randseed = 1;
+@@ -324,6 +326,7 @@ OscilGen::~OscilGen()
+     delete[] outoscilFFTfreqs;
+     delete[] basefuncFFTfreqs;
+     delete[] oscilFFTfreqs;
++    delete[] cachedbasefunc;
+ }
+ 
+ 
+@@ -436,6 +439,17 @@ void OscilGen::convert2sine()
+     prepare();
+ }
+ 
++float OscilGen::userfunc(float x)
++{
++    if (!fft)
++        return 0;
++    if (!cachedbasevalid) {
++        fft->freqs2smps(basefuncFFTfreqs, cachedbasefunc);
++        cachedbasevalid = true;
++    }
++    return cinterpolate(cachedbasefunc, synth.oscilsize, synth.oscilsize * x);
++}
++
+ /*
+  * Get the base function
+  */
+@@ -490,8 +504,10 @@ void OscilGen::getbasefunction(float *smps)
+ 
+         if(func)
+             smps[i] = func(t, par);
+-        else
++        else if (Pcurrentbasefunc == 0)
+             smps[i] = -sinf(2.0f * PI * i / synth.oscilsize);
++        else
++            smps[i] = userfunc(t);
+     }
+ }
+ 
+@@ -1143,6 +1159,7 @@ void OscilGen::useasbase()
+ 
+     oldbasefunc = Pcurrentbasefunc = 127;
+     prepare();
++    cachedbasevalid = false;
+ }
+ 
+ 
+@@ -1326,10 +1343,6 @@ void OscilGen::getfromXML(XMLwrapper *xml)
+         xml->exitbranch();
+     }
+ 
+-    if(Pcurrentbasefunc != 0)
+-        changebasefunction();
+-
+-
+     if(xml->enterbranch("BASE_FUNCTION")) {
+         for(int i = 1; i < synth.oscilsize / 2; ++i)
+             if(xml->enterbranch("BF_HARMONIC", i)) {
+@@ -1340,9 +1353,13 @@ void OscilGen::getfromXML(XMLwrapper *xml)
+             }
+         xml->exitbranch();
+ 
++        if(Pcurrentbasefunc != 0)
++            changebasefunction();
++
+         clearDC(basefuncFFTfreqs);
+         normalize(basefuncFFTfreqs, synth.oscilsize);
+-    }
++    } else if(Pcurrentbasefunc != 0)
++        changebasefunction();
+ }
+ 
+ 
+diff --git a/src/Synth/OscilGen.h b/src/Synth/OscilGen.h
+index d7dfbaab..1157b455 100644
+--- a/src/Synth/OscilGen.h
++++ b/src/Synth/OscilGen.h
+@@ -128,6 +128,8 @@ class OscilGen:public Presets
+         //This array stores some termporary data and it has OSCIL_SIZE elements
+         float *tmpsmps;
+         fft_t *outoscilFFTfreqs;
++        float *cachedbasefunc;
++        bool cachedbasevalid;
+ 
+         float hmag[MAX_AD_HARMONICS], hphase[MAX_AD_HARMONICS]; //the magnituides and the phases of the sine/nonsine harmonics
+ 
+@@ -149,6 +151,8 @@ class OscilGen:public Presets
+         //Do the oscil modulation stuff
+         void modulation(fft_t *freqs);
+ 
++        float userfunc(float x);
++
+     public:
+         //Check system for needed updates
+         bool needPrepare(void);
+diff --git a/src/UI/Fl_Osc_Choice.H b/src/UI/Fl_Osc_Choice.H
+index 3a13c785..a8b09774 100644
+--- a/src/UI/Fl_Osc_Choice.H
++++ b/src/UI/Fl_Osc_Choice.H
+@@ -21,8 +21,9 @@ class Fl_Osc_Choice:public Fl_Choice, public Fl_Osc_Widget
+         void update(void);
+         void callback(Fl_Callback *cb, void *p = NULL);
+         
+-        void cb(void);
++        virtual void cb(void);
+     private:
+         int min;
++    protected:
+         std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 8cd386a0..bb7291f0 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -95,6 +95,29 @@ class OGSlider {: {public Fl_Osc_TSlider}
+   decl {bool phase;} {public local
+   }
+ } 
++class OGWaveChoice {: {public Fl_Osc_Choice}
++} {
++   Function {OGWaveChoice(int x,int y, int w, int h, const char *label=0)
++   :Fl_Osc_Choice(x,y,w,h,label)} {open
++   } { code {} {}}
++   Function {OSC_value(int i)} {open return_type void
++   } { code { value(i == 127 ? size()-2 : i);
++   ogui->setbfmodstatus(i); } {} }
++   Function {cb(void)} {open return_type void
++   } {
++    code {
++        int v = Fl_Osc_Choice::value();
++	if (value() < size()-2)
++	    oscWrite(ext, "i", v);
++	else
++	    oscWrite(ext);
++	if(cb_data.first)
++	    cb_data.first(this, cb_data.second);
++} {}}
++
++  decl { class OscilEditor *ogui;} { public }
++
++}
+ 
+ class Oscilharmonic {: {public Fl_Group}
+ } {
+@@ -321,7 +344,7 @@ class OscilEditor {open : {public PresetsUI_}
+         Fl_Group basefuncdisplaygroup {open
+           xywh {370 10 360 300} box UP_FRAME
+           code0 {o->base = loc;}
+-          code1 {o->osc = osc;}
++          code1 {o->osc = osc; bftype->ogui = this;}
+           code2 {assert(osc);}
+           class Fl_Osc_Group
+         } {
+@@ -330,7 +353,7 @@ class OscilEditor {open : {public PresetsUI_}
+             code0 {oscilo_base=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");}
+             code1 {oscilo_base->parent(o);oscilo_base->init(true);}
+           } {}
+-          Fl_Dial bfslider {
++          Fl_Dial bfpar {
+             callback {redrawoscil(); bfparval->value(o->value());}
+             tooltip {Base Function Parameter} xywh {525 285 20 20} minimum -64 maximum 63 step 1
+             code0 {o->init("Pbasefuncpar");}
+@@ -341,12 +364,11 @@ class OscilEditor {open : {public PresetsUI_}
+             callback {basefuncdisplaygroup->redraw();
+ redrawoscil();
+ 
+-if(!basefuncmodulation)
+-return;
+-if(o->value()==0||o->value()==127) basefuncmodulation->deactivate();
+-else basefuncmodulation->activate();}
++if(!basefuncmodulation) return;
++setbfmodstatus(o->value());
++}
+             xywh {375 290 90 15} down_box BORDER_BOX labelsize 10 align 5 when 1 textsize 11
+-            class Fl_Osc_Choice
++            class OGWaveChoice
+           } {
+             MenuItem {} {
+               label Sine
+@@ -412,6 +434,10 @@ else basefuncmodulation->activate();}
+               label Circle
+               xywh {127 127 100 20} labelfont 1 labelsize 11
+             }
++	    MenuItem {} {
++	      label User
++	      xywh {127 127 100 20} labelfont 1 labelsize 11 hide
++	    }
+           }
+           Fl_Box {} {
+             label {Base Func.}
+@@ -502,9 +528,12 @@ if (autoclearbutton->value()){
+    fltbutton->do_callback();
+    sabutton->value(0);
+    sabutton->do_callback();
++   bfmodtype->value(0);
++   bfmodtype->do_callback();
+ };
+ 
+  osc->requestValue(loc+"prepare");
++ bftype->update();
+ 
+ basefuncdisplaygroup->redraw();
+ redrawoscil();}
+@@ -885,8 +914,8 @@ redrawoscil();}
+ 
+ osc->requestValue(loc+"convert2sine");
+ bftype->update();
+-bfslider->value(0);
+-bfslider->do_callback();
++bfpar->value(0);
++bfpar->do_callback();
+ 
+ redrawoscil();
+ refresh();}
+@@ -937,7 +966,7 @@ rndslider = NULL;
+ hrndtype = NULL;
+ magtype = NULL;
+ basefuncdisplaygroup = NULL;
+-bfslider = NULL;
++bfpar = NULL;
+ bftype = NULL;
+ make_window();
+ bftype->init("Pcurrentbasefunc");
+@@ -980,6 +1009,27 @@ oscils->update();
+ oscilo_base->update();
+ oscils_base->update();} {}
+   }
++  Function {setbfmodstatus(int menuentry)} {open public
++  } {
++    code {
++    switch (menuentry){
++    case 0:
++         bfpar->deactivate();
++	 bfparval->deactivate();
++         basefuncmodulation->deactivate();
++         break;
++    case 127:
++         bfpar->deactivate();
++	 bfparval->deactivate();
++         basefuncmodulation->activate();
++         break;
++    default:
++         bfpar->activate();
++	 bfparval->activate();
++         basefuncmodulation->activate();
++    }
++    } {} }
++
+   decl {Oscilharmonic *h[(MAX_AD_HARMONICS - 1)];} {private local
+   }
+   decl {std::string loc;} {private local
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From 6d554221f91f17073063248255cf82758210b60c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 24 Oct 2015 13:36:15 -0400
+Subject: [PATCH 0634/1936] UI: Fix Button Rebase Method
+
+---
+ src/UI/Fl_Osc_Button.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/Fl_Osc_Button.cpp b/src/UI/Fl_Osc_Button.cpp
+index 125e73f8..d61b8226 100644
+--- a/src/UI/Fl_Osc_Button.cpp
++++ b/src/UI/Fl_Osc_Button.cpp
+@@ -20,6 +20,7 @@ void Fl_Osc_Button::OSC_value(bool v)
+     Fl_Button::value(v);
+ }
+ 
+-void Fl_Osc_Button::rebase(std::string)
++void Fl_Osc_Button::rebase(std::string base)
+ {
++    loc = base;
+ }
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From 2bf7a228d5475c26b20fd041df099489343e0796 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 1 Nov 2015 14:05:30 -0500
+Subject: [PATCH 0660/1936] EffectMgr: Add OSC Bounds To Effect Parameters
+
+---
+ src/Effects/EffectMgr.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index a4553225..845a3676 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -45,7 +45,7 @@ static const rtosc::Ports local_ports = {
+     rSelf(EffectMgr),
+     rPaste,
+     rRecurp(filterpars, "Filter Parameter for Dynamic Filter"),
+-    {"parameter#128::i:T:F", rProp(parameter) rProp(alias) rDoc("Parameter Accessor"),
++    {"parameter#128::i:T:F", rProp(parameter) rProp(alias) rLinear(0,127) rDoc("Parameter Accessor"),
+         NULL,
+         [](const char *msg, rtosc::RtData &d)
+         {
+-- 
+2.47.0
+

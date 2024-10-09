@@ -1,0 +1,374 @@
+From a21a01750dc353283fdaf0c91d32803148b04178 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <oliver@onion.private>
+Date: Sat, 28 Jun 2014 13:04:18 -0400
+Subject: [PATCH 0197/1936] Improve UI legibility.  Use a brighter color for
+ C&P buttons and "White Noise" and "N" displays.
+
+---
+ src/UI/ADnoteUI.fl    | 12 ++++++------
+ src/UI/EnvelopeUI.fl  | 24 ++++++++++++------------
+ src/UI/FilterUI.fl    |  8 ++++----
+ src/UI/LFOUI.fl       |  4 ++--
+ src/UI/MasterUI.fl    | 12 ++++++------
+ src/UI/OscilGenUI.fl  |  4 ++--
+ src/UI/PADnoteUI.fl   |  4 ++--
+ src/UI/PartUI.fl      |  4 ++--
+ src/UI/ResonanceUI.fl |  4 ++--
+ src/UI/SUBnoteUI.fl   |  4 ++--
+ 10 files changed, 40 insertions(+), 40 deletions(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 6566a2c8..444d72a5 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -117,7 +117,7 @@ detunevalueoutput->do_callback();}
+   voicelfofreq->deactivate();
+   voiceoscil->deactivate();
+ };}
+-          xywh {65 5 20 20} labelfont 1 labelsize 13 labelcolor 7
++          xywh {65 5 20 20} labelfont 1 labelsize 13 labelcolor 53
+           code0 {if (pars->VoicePar[nvoice].Type==0) o->hide();}
+         }
+       }
+@@ -767,7 +767,7 @@ bypassfiltercheckbutton->redraw();}
+         Fl_Box noiselabel {
+           label {White Noise}
+           callback {if (pars->VoicePar[nvoice].Type==0) o->hide(); else o->show();}
+-          xywh {150 430 300 65} labelfont 1 labelsize 50 labelcolor 7
++          xywh {150 430 300 65} labelfont 1 labelsize 50 labelcolor 53
+           code0 {if (pars->VoicePar[nvoice].Type==0) o->hide(); else o->show();}
+         }
+       }
+@@ -1018,12 +1018,12 @@ resui->resonancewindow->show();}
+       Fl_Button {} {
+         label C
+         callback {presetsui->copyArray(pars);}
+-        xywh {405 405 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {405 405 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->pasteArray(pars,this);}
+-        xywh {435 405 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {435 405 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+     }
+     Fl_Window ADnoteVoice {
+@@ -1058,12 +1058,12 @@ ADnoteVoice->redraw();}
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(pars,nvoice);}
+-        xywh {705 609 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {705 609 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->paste(pars,this,nvoice);}
+-        xywh {735 609 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {735 609 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+     }
+     Fl_Window ADnoteVoiceList {
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index 4f518096..fd25ca01 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -360,12 +360,12 @@ envfree->redraw();}
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(env);}
+-        xywh {465 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        xywh {465 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->paste(env,this);}
+-        xywh {482 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        xywh {482 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+       }
+     }
+   }
+@@ -439,12 +439,12 @@ freeedit->redraw();}
+         Fl_Button {} {
+           label C
+           callback {presetsui->copy(env);}
+-          xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+         Fl_Button {} {
+           label P
+           callback {presetsui->paste(env,this);}
+-          xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+       }
+     }
+@@ -508,12 +508,12 @@ freeedit->redraw();}
+         Fl_Button {} {
+           label C
+           callback {presetsui->copy(env);}
+-          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+         Fl_Button {} {
+           label P
+           callback {presetsui->paste(env,this);}
+-          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+       }
+       Fl_Button {} {
+@@ -603,12 +603,12 @@ freeedit->redraw();}
+         Fl_Button {} {
+           label C
+           callback {presetsui->copy(env);}
+-          xywh {220 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {220 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+         Fl_Button {} {
+           label P
+           callback {presetsui->paste(env,this);}
+-          xywh {237 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {237 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+       }
+     }
+@@ -673,12 +673,12 @@ freeedit->redraw();}
+         Fl_Button {} {
+           label C
+           callback {presetsui->copy(env);}
+-          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+         Fl_Button {} {
+           label P
+           callback {presetsui->paste(env,this);}
+-          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+       }
+       Fl_Button {} {
+@@ -715,12 +715,12 @@ freeedit->redraw();}
+         Fl_Button {} {
+           label C
+           callback {presetsui->copy(env);}
+-          xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+         Fl_Button {} {
+           label P
+           callback {presetsui->paste(env,this);}
+-          xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+       }
+     }
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index ed6da9d6..abff1bb9 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -333,12 +333,12 @@ pars->changed=true;} open
+       Fl_Button {} {
+         label C
+         callback {presetsui->copyArray(pars);}
+-        xywh {186 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        xywh {186 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->pasteArray(pars,this);}
+-        xywh {203 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        xywh {203 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+       }
+     }
+   }
+@@ -508,12 +508,12 @@ pars->changed=true;}
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(pars,nvowel);}
+-        xywh {635 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {635 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->paste(pars,this,nvowel);}
+-        xywh {665 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {665 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Box {} {
+         label Vowel
+diff --git a/src/UI/LFOUI.fl b/src/UI/LFOUI.fl
+index 889a3861..2f6cecda 100644
+--- a/src/UI/LFOUI.fl
++++ b/src/UI/LFOUI.fl
+@@ -144,12 +144,12 @@ hide();
+         Fl_Button {} {
+           label C
+           callback {presetsui->copy(pars);}
+-          xywh {145 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {145 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+         Fl_Button {} {
+           label P
+           callback {presetsui->paste(pars,this);}
+-          xywh {162 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          xywh {162 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+       }
+     }
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 06e186f4..92fac5f3 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -803,14 +803,14 @@ syseffectui->refresh(master->sysefx[nsyseff]);}
+           Fl_Button {} {
+             label C
+             callback {presetsui->copy(master->sysefx[nsyseff]);}
+-            xywh {180 187 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++            xywh {180 187 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+           }
+           Fl_Button {} {
+             label P
+             callback {pthread_mutex_lock(&master->mutex);
+ presetsui->paste(master->sysefx[nsyseff],syseffectui);
+ pthread_mutex_unlock(&master->mutex);}
+-            xywh {210 187 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++            xywh {210 187 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+           }
+         }
+         Fl_Group {} {
+@@ -916,14 +916,14 @@ master->insefx[ninseff]->cleanup();} open
+           Fl_Button {} {
+             label C
+             callback {presetsui->copy(master->insefx[ninseff]);}
+-            xywh {180 185 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++            xywh {180 185 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+           }
+           Fl_Button {} {
+             label P
+             callback {pthread_mutex_lock(&master->mutex);
+ presetsui->paste(master->insefx[ninseff],inseffectui);
+ pthread_mutex_unlock(&master->mutex);}
+-            xywh {210 185 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++            xywh {210 185 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+           }
+         }
+       }
+@@ -1438,7 +1438,7 @@ simplesyseffectui->refresh(master->sysefx[nsyseff]);}
+               callback {pthread_mutex_lock(&master->mutex);
+ presetsui->paste(master->sysefx[nsyseff],simplesyseffectui);
+ pthread_mutex_unlock(&master->mutex);}
+-              xywh {560 65 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++              xywh {560 65 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+             }
+           }
+           Fl_Group {} {
+@@ -1546,7 +1546,7 @@ master->insefx[ninseff]->cleanup();} open
+               callback {pthread_mutex_lock(&master->mutex);
+ presetsui->paste(master->insefx[ninseff],simpleinseffectui);
+ pthread_mutex_unlock(&master->mutex);}
+-              xywh {560 65 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++              xywh {560 65 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+             }
+           }
+         }
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index c616db77..a3bc5d63 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -1050,12 +1050,12 @@ refresh();}
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(oscil);}
+-        xywh {670 545 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {670 545 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->paste(oscil,this);}
+-        xywh {700 545 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {700 545 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Scroll _this_has_to_be_the_last {
+         xywh {5 340 660 250} type HORIZONTAL box FLAT_BOX
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 42fca069..b9059311 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -986,12 +986,12 @@ if (resui!=NULL) {
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(pars);}
+-        xywh {65 400 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {65 400 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->paste(pars,this);}
+-        xywh {95 400 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {95 400 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label export
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 556ae13e..b5c2b80c 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -744,14 +744,14 @@ if (x==2) part->partefx[ninseff]->setdryonly(true);
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(part->partefx[ninseff]);}
+-        xywh {90 127 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {90 127 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {pthread_mutex_lock(&master->mutex);
+ presetsui->paste(part->partefx[ninseff],inseffectui);
+ pthread_mutex_unlock(&master->mutex);}
+-        xywh {120 127 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {120 127 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+     }
+     Fl_Window instrumentkitlist {
+diff --git a/src/UI/ResonanceUI.fl b/src/UI/ResonanceUI.fl
+index 12e591ab..f1b887cd 100644
+--- a/src/UI/ResonanceUI.fl
++++ b/src/UI/ResonanceUI.fl
+@@ -330,12 +330,12 @@ redrawPADnoteApply();}
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(respar);}
+-        xywh {625 275 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {625 275 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->paste(respar,this);}
+-        xywh {655 275 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {655 275 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button applybutton {
+         label Apply
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index ea9b5b86..c8c8550c 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -375,12 +375,12 @@ globalfiltergroup->redraw();}
+       Fl_Button {} {
+         label C
+         callback {presetsui->copy(pars);}
+-        xywh {540 451 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {540 451 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Button {} {
+         label P
+         callback {presetsui->paste(pars,this);}
+-        xywh {570 451 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        xywh {570 451 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Group {} {
+         label OVERTONES open
+-- 
+2.47.0
+

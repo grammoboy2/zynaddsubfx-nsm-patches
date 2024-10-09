@@ -1,0 +1,25 @@
+From 67366a08a8362af15ea60f6fe39f4ad9918af08f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 27 Mar 2017 10:32:19 -0400
+Subject: [PATCH 1127/1936] Re-enable auto-save
+
+---
+ src/main.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index c7e54c56..f6312b87 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -592,7 +592,7 @@ int wmidi = -1;
+     }
+ 
+     printf("[INFO] auto_save setup\n");
+-    if(auto_save_interval > 0 && false) {
++    if(auto_save_interval > 0) {
+         int old_save = middleware->checkAutoSave();
+         if(old_save > 0)
+             GUI::raiseUi(gui, "/alert-reload", "i", old_save);
+-- 
+2.47.0
+

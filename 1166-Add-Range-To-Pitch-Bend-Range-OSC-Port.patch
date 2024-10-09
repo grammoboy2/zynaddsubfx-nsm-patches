@@ -1,0 +1,24 @@
+From 214aebb41f6feabd7ae748d8e56ff9567ae99a8d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 20 Jul 2017 18:09:07 -0400
+Subject: [PATCH 1166/1936] Add Range To Pitch Bend Range OSC Port
+
+---
+ src/Params/Controller.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index b1684e46..0aebc37b 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -46,6 +46,7 @@ const rtosc::Ports Controller::ports = {
+     rToggle(pitchwheel.is_split,   rDefault(false),
+         "If PitchWheel Has unified bendrange or not"),
+     rParamI(pitchwheel.bendrange,  rShort("pch.d"), rDefault(200),
++            rLinear(-6400, 6400),
+         "Range of MIDI Pitch Wheel"),
+     rParamI(pitchwheel.bendrange_down, rDefault(0),
+         "Lower Range of MIDI Pitch Wheel"),
+-- 
+2.47.0
+

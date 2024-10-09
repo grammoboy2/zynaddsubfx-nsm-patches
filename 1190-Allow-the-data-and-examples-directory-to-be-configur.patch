@@ -1,0 +1,85 @@
+From 0f882176323537b291fec5383c3f3fa538f8ee09 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Mon, 31 Jul 2017 18:48:49 +0200
+Subject: [PATCH 1190/1936] Allow the data and examples directory to be
+ configurable.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ CMakeLists.txt      |  9 +++++++++
+ src/Misc/Config.cpp | 18 +++++++++++++-----
+ 2 files changed, 22 insertions(+), 5 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index efb2b06c..02ed7fb3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -5,6 +5,10 @@ set(VERSION_MAJOR "3")
+ set(VERSION_MINOR "0")
+ set(VERSION_REVISION "2")
+ 
++#Set data directory, if any
++if(DEFINED ZYN_DATADIR)
++add_definitions(-DZYN_DATADIR="${ZYN_DATADIR}")
++endif()
+ 
+ #Include RTOSC
+ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rtosc/CMakeLists.txt")
+@@ -40,8 +44,13 @@ install(FILES zynaddsubfx.svg
+     DESTINATION share/pixmaps)
+ install(DIRECTORY instruments/banks
+     DESTINATION share/zynaddsubfx)
++if(DEFINED ZYN_EXAMPLESDIR)
++install(DIRECTORY instruments/examples
++    DESTINATION ${ZYN_EXAMPLESDIR})
++else()
+ install(DIRECTORY instruments/examples
+     DESTINATION share/zynaddsubfx)
++endif()
+ install(DIRECTORY instruments/ZynAddSubFX.lv2presets
+     DESTINATION ${PluginLibDir}/lv2)
+ 
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 6fcac93b..84451020 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -234,14 +234,18 @@ void Config::init()
+         //banks
+         cfg.bankRootDirList[0] = "~/banks";
+         cfg.bankRootDirList[1] = "./";
+-        cfg.bankRootDirList[2] = "/usr/share/zynaddsubfx/banks";
+-        cfg.bankRootDirList[3] = "/usr/local/share/zynaddsubfx/banks";
+ #ifdef __APPLE__
+-        cfg.bankRootDirList[4] = "../Resources/banks";
++        cfg.bankRootDirList[2] = "../Resources/banks";
+ #else
+-        cfg.bankRootDirList[4] = "../banks";
++        cfg.bankRootDirList[2] = "../banks";
++#endif
++        cfg.bankRootDirList[3] = "banks";
++#ifdef ZYN_DATADIR
++        cfg.bankRootDirList[4] = ZYN_DATADIR "/banks";
++#else
++        cfg.bankRootDirList[4] = "/usr/share/zynaddsubfx/banks";
++        cfg.bankRootDirList[5] = "/usr/local/share/zynaddsubfx/banks";
+ #endif
+-        cfg.bankRootDirList[5] = "banks";
+     }
+ 
+     if(cfg.presetsDirList[0].empty()) {
+@@ -253,8 +257,12 @@ void Config::init()
+         cfg.presetsDirList[1] = "../presets";
+ #endif
+         cfg.presetsDirList[2] = "presets";
++#ifdef ZYN_DATADIR
++        cfg.presetsDirList[3] = ZYN_DATADIR "/presets";
++#else
+         cfg.presetsDirList[3] = "/usr/share/zynaddsubfx/presets";
+         cfg.presetsDirList[4] = "/usr/local/share/zynaddsubfx/presets";
++#endif
+     }
+     cfg.LinuxALSAaudioDev = "default";
+     cfg.nameTag = "";
+-- 
+2.47.0
+

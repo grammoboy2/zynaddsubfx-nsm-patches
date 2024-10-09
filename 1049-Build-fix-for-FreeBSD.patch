@@ -1,0 +1,29 @@
+From bf976de4a8cc660dfe9316fc3454800122987de9 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 8 Oct 2016 00:03:13 +0200
+Subject: [PATCH 1049/1936] Build fix for FreeBSD.
+
+Include prototype for free() which is defined by stdlib.h.
+Else the compiler might error out saying it is missing a
+prototype for free().
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/UI/NSM.C | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index a726004b..0b135c16 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -30,6 +30,7 @@
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <unistd.h>
++#include <stdlib.h>
+ 
+ extern int Pexitprogram;
+ #ifndef NO_UI
+-- 
+2.47.0
+

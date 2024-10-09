@@ -1,0 +1,26 @@
+From 719be6fc05a1bf7c2d9aa59ab5746154637fa15a Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 27 Dec 2015 14:30:01 -0500
+Subject: [PATCH 0801/1936] Make the mouse wheel sense of free mode dt agree
+ with the other wheel actions.
+
+---
+ src/UI/EnvelopeFreeEdit.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/EnvelopeFreeEdit.cpp b/src/UI/EnvelopeFreeEdit.cpp
+index 36325e82..f6fe9a1e 100644
+--- a/src/UI/EnvelopeFreeEdit.cpp
++++ b/src/UI/EnvelopeFreeEdit.cpp
+@@ -260,7 +260,7 @@ int EnvelopeFreeEdit::handle(int event)
+                   oscWrite(to_s("Penvval")+to_s(lastpoint), "c", ny);
+                   oscWrite("Penvval","");
+               } else if (lastpoint > 0) {
+-                  int newdt = Penvdt[lastpoint] + delta;
++                  int newdt = Penvdt[lastpoint] - delta;
+                   newdt = newdt < 0 ? 0 : newdt > 127 ? 127 : newdt;
+                   Penvdt[lastpoint] = newdt;
+                   oscWrite(to_s("Penvdt")+to_s(lastpoint),  "c", newdt);
+-- 
+2.47.0
+

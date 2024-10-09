@@ -1,0 +1,783 @@
+From f7698a5e949204d4dbdb1ce82d0b08ea448ab51d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 14 Jan 2016 21:38:43 -0500
+Subject: [PATCH 0822/1936] WIP For Watchpoints
+
+---
+ src/CMakeLists.txt               |   1 +
+ src/Containers/ScratchString.cpp |  39 ++++++++++
+ src/Containers/ScratchString.h   |  17 +++++
+ src/Misc/Master.cpp              |   5 +-
+ src/Misc/Master.h                |   5 ++
+ src/Misc/Part.cpp                |  13 +++-
+ src/Misc/Part.h                  |   4 +-
+ src/Synth/CMakeLists.txt         |   1 +
+ src/Synth/LFO.cpp                |  11 ++-
+ src/Synth/LFO.h                  |   7 +-
+ src/Synth/PADnote.cpp            |  16 +++--
+ src/Synth/PADnote.h              |   4 +-
+ src/Synth/SynthNote.h            |   1 +
+ src/Synth/WatchPoint.cpp         | 120 +++++++++++++++++++++++++++++++
+ src/Synth/WatchPoint.h           |  80 +++++++++++++++++++++
+ src/Tests/CMakeLists.txt         |   2 +
+ src/Tests/MessageTest.h          |  12 ++--
+ src/Tests/WatchTest.h            |  91 +++++++++++++++++++++++
+ src/globals.h                    |   1 +
+ 19 files changed, 410 insertions(+), 20 deletions(-)
+ create mode 100644 src/Containers/ScratchString.cpp
+ create mode 100644 src/Containers/ScratchString.h
+ create mode 100644 src/Synth/WatchPoint.cpp
+ create mode 100644 src/Synth/WatchPoint.h
+ create mode 100644 src/Tests/WatchTest.h
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index e105ed33..24926992 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -391,6 +391,7 @@ add_subdirectory(Nio)
+ add_library(zynaddsubfx_core STATIC
+     globals.cpp
+     ../tlsf/tlsf.c
++    Containers/ScratchString.cpp
+     Containers/NotePool.cpp
+     Containers/MultiPseudoStack.cpp
+ 	${zynaddsubfx_dsp_SRCS}
+diff --git a/src/Containers/ScratchString.cpp b/src/Containers/ScratchString.cpp
+new file mode 100644
+index 00000000..be98c65c
+--- /dev/null
++++ b/src/Containers/ScratchString.cpp
+@@ -0,0 +1,39 @@
++#include "ScratchString.h"
++#include <cstring>
++#include <cstdio>
++
++ScratchString::ScratchString(void)
++{
++    memset(c_str, 0, sizeof(c_str));
++}
++
++ScratchString::ScratchString(int num)
++{
++    snprintf(c_str, SCRATCH_SIZE, "%d", num);
++}
++    
++ScratchString::ScratchString(unsigned char num)
++{
++    snprintf(c_str, SCRATCH_SIZE, "%d", num);
++}
++
++ScratchString::ScratchString(const char *str)
++{
++    if(str)
++        strncpy(c_str, str, SCRATCH_SIZE);
++    else
++        memset(c_str, 0, sizeof(c_str));
++}
++
++ScratchString ScratchString::operator+(const ScratchString s)
++{
++    ScratchString ss;
++    strncpy(ss.c_str, c_str, SCRATCH_SIZE);
++    strncat(ss.c_str, s.c_str, SCRATCH_SIZE);
++    return ss;
++}
++
++//ScratchString::operator const char*() const
++//{
++//    return c_str;
++//}
+diff --git a/src/Containers/ScratchString.h b/src/Containers/ScratchString.h
+new file mode 100644
+index 00000000..5e2a69f0
+--- /dev/null
++++ b/src/Containers/ScratchString.h
+@@ -0,0 +1,17 @@
++#pragma once
++#define SCRATCH_SIZE 128
++
++//Fixed Size String Substitute
++struct ScratchString
++{
++    ScratchString(void);
++    ScratchString(int num);
++    ScratchString(unsigned char num);
++    ScratchString(const char *str);
++
++    ScratchString operator+(const ScratchString s);
++
++    //operator const char*() const;
++
++    char c_str[SCRATCH_SIZE];
++};
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 40f328ff..384da0c4 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -31,6 +31,7 @@
+ #include "../Effects/EffectMgr.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../Misc/Allocator.h"
++#include "../Containers/ScratchString.h"
+ #include "../Nio/Nio.h"
+ #include "PresetExtractor.h"
+ 
+@@ -329,9 +330,11 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+         fakepeakpart[npart]  = 0;
+     }
+ 
++    ScratchString ss;
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
+         part[npart] = new Part(*memory, synth, time, config->cfg.GzipCompression,
+-                               config->cfg.Interpolation, &microtonal, fft);
++                               config->cfg.Interpolation, &microtonal, fft, &watcher,
++                               (ss+"/part"+npart+"/").c_str);
+ 
+     //Insertion Effects init
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 4fb5f626..5342fc98 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -33,6 +33,7 @@
+ #include "Recorder.h"
+ 
+ #include "../Params/Controller.h"
++#include "../Synth/WatchPoint.h"
+ 
+ class Allocator;
+ 
+@@ -167,6 +168,10 @@ class Master
+         //Statistics on output levels
+         vuData vu;
+ 
++        //Other watchers
++        WatchManager watcher;
++
++        //Midi Learn
+         rtosc::MidiMapperRT midi;
+ 
+         bool   frozenState;//read-only parameters for threadsafe actions
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 04080544..725d2b94 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -34,6 +34,7 @@
+ #include "../Synth/ADnote.h"
+ #include "../Synth/SUBnote.h"
+ #include "../Synth/PADnote.h"
++#include "../Containers/ScratchString.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../Misc/Util.h"
+ #include <cstdlib>
+@@ -204,7 +205,7 @@ const Ports &Part::ports = partPorts;
+ 
+ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+     const int &gzip_compression, const int &interpolation,
+-    Microtonal *microtonal_, FFTwrapper *fft_)
++    Microtonal *microtonal_, FFTwrapper *fft_, WatchManager *wm_, const char *prefix_)
+     :Pdrummode(false),
+     Ppolymode(true),
+     Plegatomode(false),
+@@ -213,12 +214,18 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+     ctl(synth_, &time_),
+     microtonal(microtonal_),
+     fft(fft_),
++    wm(wm_),
+     memory(alloc),
+     synth(synth_),
+     time(time_),
+     gzip_compression(gzip_compression),
+     interpolation(interpolation)
+ {
++    if(prefix_)
++        strncpy(prefix, prefix_, sizeof(prefix));
++    else
++        memset(prefix, 0, sizeof(prefix));
++
+     monomemClear();
+ 
+     for(int n = 0; n < NUM_KIT_ITEMS; ++n) {
+@@ -477,6 +484,7 @@ bool Part::NoteOn(unsigned char note,
+ 
+     //Create New Notes
+     for(uint8_t i = 0; i < NUM_KIT_ITEMS; ++i) {
++        ScratchString pre = prefix;
+         auto &item = kit[i];
+         if(Pkitmode != 0 && !item.validNote(note))
+             continue;
+@@ -494,7 +502,8 @@ bool Part::NoteOn(unsigned char note,
+                         {memory.alloc<SUBnote>(kit[i].subpars, pars), 1, i});
+             if(item.Ppadenabled)
+                 notePool.insertNote(note, sendto,
+-                        {memory.alloc<PADnote>(kit[i].padpars, pars, interpolation), 2, i});
++                        {memory.alloc<PADnote>(kit[i].padpars, pars, interpolation, wm,
++                            (pre+"kit"+i+"/pad/").c_str), 2, i});
+         } catch (std::bad_alloc & ba) {
+             std::cerr << "dropped new note: " << ba.what() << std::endl;
+         }
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index dec2eedb..f964ccd3 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -40,7 +40,7 @@ class Part
+          * @param fft_ Pointer to the FFTwrapper*/
+         Part(Allocator &alloc, const SYNTH_T &synth, const AbsTime &time,
+              const int& gzip_compression, const int& interpolation,
+-             Microtonal *microtonal_, FFTwrapper *fft_);
++             Microtonal *microtonal_, FFTwrapper *fft_, WatchManager *wm=0, const char *prefix=0);
+         /**Destructor*/
+         ~Part();
+ 
+@@ -203,6 +203,8 @@ class Part
+         float oldfreq;    //this is used for portamento
+         Microtonal *microtonal;
+         FFTwrapper *fft;
++        WatchManager *wm;
++        char prefix[64];
+         Allocator  &memory;
+         const SYNTH_T &synth;
+         const AbsTime &time;
+diff --git a/src/Synth/CMakeLists.txt b/src/Synth/CMakeLists.txt
+index ce45fa54..5469dd1a 100644
+--- a/src/Synth/CMakeLists.txt
++++ b/src/Synth/CMakeLists.txt
+@@ -7,5 +7,6 @@ set(zynaddsubfx_synth_SRCS
+ 	Synth/PADnote.cpp
+ 	Synth/Resonance.cpp
+ 	Synth/SUBnote.cpp
++    Synth/WatchPoint.cpp
+ 	PARENT_SCOPE
+ )
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index b0d69104..64288755 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -28,13 +28,16 @@
+ #include <cstdio>
+ #include <cmath>
+ 
+-LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t)
++LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManager *m,
++        const char *watch_prefix)
+     :first_half(-1),
+     delayTime(t, lfopars.Pdelay / 127.0f * 4.0f), //0..4 sec
+     waveShape(lfopars.PLFOtype),
+     deterministic(!lfopars.Pfreqrand),
+     dt_(t.dt()),
+-    lfopars_(lfopars), basefreq_(basefreq)
++    lfopars_(lfopars), basefreq_(basefreq),
++    watchPhase(m, watch_prefix, "phase"),
++    watchMag(m,   watch_prefix, "magnitude")
+ {
+     int stretch = lfopars.Pstretch;
+     if(stretch == 0)
+@@ -175,6 +178,10 @@ float LFO::lfoout()
+ 
+         computeNextFreqRnd();
+     }
++
++    watchPhase(phase);
++    watchMag(out);
++
+     return out;
+ }
+ 
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index 3fb5e179..b0c9d49d 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -25,6 +25,7 @@
+ 
+ #include "../globals.h"
+ #include "../Misc/Time.h"
++#include "WatchPoint.h"
+ 
+ /**Class for creating Low Frequency Oscillators*/
+ class LFO
+@@ -35,7 +36,8 @@ class LFO
+          * @param lfopars pointer to a LFOParams object
+          * @param basefreq base frequency of LFO
+          */
+-        LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t);
++        LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManager *m=0,
++                const char *watch_prefix=0);
+         ~LFO();
+ 
+         float lfoout();
+@@ -72,6 +74,9 @@ class LFO
+         const LFOParams &lfopars_;
+         const float basefreq_;
+ 
++        FloatWatchPoint watchPhase;
++        FloatWatchPoint watchMag;
++
+         void computeNextFreqRnd(void);
+ };
+ 
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 27ae76e6..f9805605 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -26,21 +26,23 @@
+ #include "../Params/PADnoteParameters.h"
+ #include "../Params/Controller.h"
+ #include "../Params/FilterParams.h"
++#include "../Containers/ScratchString.h"
+ #include "../Misc/Util.h"
+ 
+ PADnote::PADnote(const PADnoteParameters *parameters,
+-                 SynthParams pars, const int& interpolation)
++                 SynthParams pars, const int& interpolation, WatchManager *wm, const char *prefix)
+     :SynthNote(pars), pars(*parameters), interpolation(interpolation)
+ {
+     firsttime = true;
+-    setup(pars.frequency, pars.velocity, pars.portamento, pars.note);
++    setup(pars.frequency, pars.velocity, pars.portamento, pars.note, false, prefix);
+ }
+ 
+ void PADnote::setup(float freq,
+                     float velocity_,
+                     int portamento_,
+                     int midinote,
+-                    bool legato)
++                    bool legato, 
++                    const char *prefix)
+ {
+     portamento = portamento_;
+     velocity   = velocity_;
+@@ -139,11 +141,15 @@ void PADnote::setup(float freq,
+         else
+             NoteGlobalPar.Punch.Enabled = 0;
+ 
++        ScratchString pre = prefix;
++
+         NoteGlobalPar.FreqEnvelope = memory.alloc<Envelope>(*pars.FreqEnvelope, basefreq, synth.dt());
+-        NoteGlobalPar.FreqLfo      = memory.alloc<LFO>(*pars.FreqLfo, basefreq, time);
++        NoteGlobalPar.FreqLfo      = memory.alloc<LFO>(*pars.FreqLfo, basefreq, time, wm,
++                (pre+"freqlfo/").c_str);
+ 
+         NoteGlobalPar.AmpEnvelope = memory.alloc<Envelope>(*pars.AmpEnvelope, basefreq, synth.dt());
+-        NoteGlobalPar.AmpLfo      = memory.alloc<LFO>(*pars.AmpLfo, basefreq, time);
++        NoteGlobalPar.AmpLfo      = memory.alloc<LFO>(*pars.AmpLfo, basefreq, time, wm,
++                (pre+"amplfo/").c_str);
+     }
+ 
+     NoteGlobalPar.Volume = 4.0f
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index 528f1ac9..a64c15ba 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -31,7 +31,7 @@ class PADnote:public SynthNote
+ {
+     public:
+         PADnote(const PADnoteParameters *parameters, SynthParams pars,
+-                const int &interpolation);
++                const int &interpolation, WatchManager *wm=0, const char *prefix=0);
+         ~PADnote();
+ 
+         SynthNote *cloneLegato(void);
+@@ -42,7 +42,7 @@ class PADnote:public SynthNote
+         void releasekey();
+     private:
+         void setup(float freq, float velocity, int portamento_,
+-                   int midinote, bool legato = false);
++                   int midinote, bool legato = false, const char *prefix=0);
+         void fadein(float *smps);
+         void computecurrentparameters();
+         bool finished_;
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index 38e98a55..6a338c7e 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -114,6 +114,7 @@ class SynthNote
+         const Controller &ctl;
+         const SYNTH_T    &synth;
+         const AbsTime    &time;
++        WatchManager     *wm;
+ };
+ 
+ #endif
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+new file mode 100644
+index 00000000..53e8fe14
+--- /dev/null
++++ b/src/Synth/WatchPoint.cpp
+@@ -0,0 +1,120 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  WatchPoint.cpp - Synthesis State Watcher
++  Copyright (C) 2015-2015 Mark McCurry
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#include "WatchPoint.h"
++#include <cstring>
++#include <rtosc/thread-link.h>
++
++
++WatchPoint::WatchPoint(WatchManager *ref, const char *prefix, const char *id)
++    :active(false), samples_left(0), reference(ref)
++{
++    identity[0] = 0;
++    if(prefix)
++        strncpy(identity, prefix, 128);
++    if(id)
++        strncat(identity, id, 128);
++    printf("new watchpoint = <%s>\n", identity);
++}
++
++bool WatchPoint::is_active(void)
++{
++    //Either the watchpoint is already active or the watchpoint manager has
++    //received another activation this frame
++    if(active)
++        return true;
++
++    if(reference && reference->active(identity)) {
++        active       = true;
++        samples_left = reference->samples(identity);
++        return true;
++    }
++
++    return false;
++}
++    
++FloatWatchPoint::FloatWatchPoint(WatchManager *ref, const char *prefix, const char *id)
++    :WatchPoint(ref, prefix, id)
++{}
++    
++WatchManager::WatchManager(thrlnk *link)
++    :write_back(link), new_active(false)
++{
++    memset(active_list, 0, sizeof(active_list));
++    memset(sample_list, 0, sizeof(sample_list));
++    memset(deactivate,  0, sizeof(deactivate));
++}
++    
++void WatchManager::add_watch(const char *id)
++{
++    //Apply to a free slot
++    for(int i=0; i<MAX_WATCH; ++i) {
++        if(!active_list[i][0]) {
++            strncpy(active_list[i], id, 128);
++            new_active = true;
++            break;
++        }
++    }
++}
++
++void WatchManager::del_watch(const char *id)
++{
++    //Queue up the delete
++    for(int i=0; i<MAX_WATCH; ++i)
++        if(!strcmp(active_list[i], id))
++            return (void) (deactivate[i] = true);
++}
++
++void WatchManager::tick(void)
++{
++    new_active = false;
++
++    //Clear deleted slots
++    for(int i=0; i<MAX_WATCH; ++i)
++        if(deactivate[i])
++            memset(active_list[i], 0, 128);
++}
++
++bool WatchManager::active(const char *id) const
++{
++    if(new_active)
++        for(int i=0; i<MAX_WATCH; ++i)
++            if(!strcmp(active_list[i], id))
++                return true;
++
++    return false;
++}
++    
++int WatchManager::samples(const char *id) const
++{
++    for(int i=0; i<MAX_WATCH; ++i)
++        if(!strcmp(active_list[i], id))
++            return sample_list[i];
++    return 0;
++}
++    
++void WatchManager::satisfy(const char *id, float f)
++{
++    if(write_back)
++        write_back->write(id, "f", f);
++    del_watch(id);
++}
++
+diff --git a/src/Synth/WatchPoint.h b/src/Synth/WatchPoint.h
+new file mode 100644
+index 00000000..e0cfa1ba
+--- /dev/null
++++ b/src/Synth/WatchPoint.h
+@@ -0,0 +1,80 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  WatchPoint.h - Synthesis State Watcher
++  Copyright (C) 2015-2015 Mark McCurry
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#pragma once
++
++class WatchManager;
++namespace rtosc {class ThreadLink;}
++
++struct WatchPoint
++{
++    bool          active;
++    int           samples_left;
++    WatchManager *reference;
++    char          identity[128];
++
++    WatchPoint(WatchManager *ref, const char *prefix, const char *id);
++    bool is_active(void);
++};
++
++#define MAX_WATCH 16
++struct WatchManager
++{
++    typedef rtosc::ThreadLink thrlnk;
++    thrlnk *write_back;
++    bool    new_active;
++    char    active_list[128][MAX_WATCH];
++    int     sample_list[MAX_WATCH];
++    bool    deactivate[MAX_WATCH];
++
++    //External API
++    WatchManager(thrlnk *link=0);
++    void add_watch(const char *);
++    void del_watch(const char *);
++    void tick(void);
++
++    //Watch Point Query API
++    bool active(const char *) const;
++    int  samples(const char *) const;
++    
++    //Watch Point Response API
++    void satisfy(const char *, float);
++};
++
++struct FloatWatchPoint:public WatchPoint
++{
++    FloatWatchPoint(WatchManager *ref, const char *prefix, const char *id);
++    inline void operator()(float f)
++    {
++        if(is_active() && reference) {
++            reference->satisfy(identity, f);
++        }
++    }
++};
++
++//struct VecWatchPoint:public WatchPoint
++//{
++//    inline void operator()(float *f, int n)
++//    {
++//        if(!is_active()) {
++//        }
++//    }
++//};
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index ec90acf5..ce51029c 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -17,6 +17,7 @@ CXXTEST_ADD_TEST(MiddlewareTest MiddlewareTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/M
+ CXXTEST_ADD_TEST(MessageTest MessageTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MessageTest.h)
+ CXXTEST_ADD_TEST(UnisonTest UnisonTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/UnisonTest.h)
+ CXXTEST_ADD_TEST(MqTest MqTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MqTest.h)
++CXXTEST_ADD_TEST(WatchTest WatchTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/WatchTest.h)
+ #CXXTEST_ADD_TEST(RtAllocTest RtAllocTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RtAllocTest.h)
+ CXXTEST_ADD_TEST(AllocatorTest AllocatorTest.cpp
+     ${CMAKE_CURRENT_SOURCE_DIR}/AllocatorTest.h)
+@@ -40,6 +41,7 @@ target_link_libraries(XMLwrapperTest ${test_lib})
+ target_link_libraries(RandTest       ${test_lib})
+ target_link_libraries(PADnoteTest    ${test_lib})
+ target_link_libraries(MqTest         ${test_lib})
++target_link_libraries(WatchTest         ${test_lib})
+ target_link_libraries(PluginTest     zynaddsubfx_core zynaddsubfx_nio
+     zynaddsubfx_gui_bridge
+     ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+diff --git a/src/Tests/MessageTest.h b/src/Tests/MessageTest.h
+index de0f8032..03451229 100644
+--- a/src/Tests/MessageTest.h
++++ b/src/Tests/MessageTest.h
+@@ -94,17 +94,17 @@ class MessageTest:public CxxTest::TestSuite
+             ms->applyOscEvent(ms->uToB->read());
+             TS_ASSERT(!ms->uToB->hasNext());
+ 
+-	    auto &osc_src = *ms->part[0]->kit[0].adpars->VoicePar[0].FMSmp;
++            auto &osc_src = *ms->part[0]->kit[0].adpars->VoicePar[0].FMSmp;
+             auto &osc_dst = *ms->part[0]->kit[0].padpars->oscilgen;
+             auto &osc_oth = *ms->part[0]->kit[0].adpars->VoicePar[1].OscilSmp;
+ 
+-	    TS_ASSERT_EQUALS(osc_src.Pbasefuncpar, 64);
++            TS_ASSERT_EQUALS(osc_src.Pbasefuncpar, 64);
+             osc_src.Pbasefuncpar = 32;
+-	    TS_ASSERT_EQUALS(osc_src.Pbasefuncpar, 32);
++            TS_ASSERT_EQUALS(osc_src.Pbasefuncpar, 32);
+ 
+             //Copy From ADsynth modulator
+             printf("====Copy From ADsynth modulator\n");
+-	    start_realtime();
++            start_realtime();
+             mw->transmitMsg("/presets/copy", "s", "/part0/kit0/adpars/VoicePar0/FMSmp/");
+ 
+             TS_ASSERT_EQUALS(osc_dst.Pbasefuncpar, 64);
+@@ -114,10 +114,10 @@ class MessageTest:public CxxTest::TestSuite
+             printf("====Paste to PADsynth\n");
+             mw->transmitMsg("/presets/paste", "s", "/part0/kit0/padpars/oscilgen/");
+ 
+-	    printf("====Paste to ADsynth\n");
++            printf("====Paste to ADsynth\n");
+             mw->transmitMsg("/presets/paste", "s", "/part0/kit0/adpars/VoicePar1/OscilSmp/");
+ 
+-	    stop_realtime();
++            stop_realtime();
+             TS_ASSERT_EQUALS(osc_dst.Pbasefuncpar, 32);
+             TS_ASSERT_EQUALS(osc_oth.Pbasefuncpar, 32);
+         }
+diff --git a/src/Tests/WatchTest.h b/src/Tests/WatchTest.h
+new file mode 100644
+index 00000000..8fb5483d
+--- /dev/null
++++ b/src/Tests/WatchTest.h
+@@ -0,0 +1,91 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  PluginTest.h - CxxTest for realtime watch points
++  Copyright (C) 2015-2015 Mark McCurry
++  Authors: Mark McCurry
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++#include <cxxtest/TestSuite.h>
++#include <cmath>
++#include <cstdlib>
++#include <iostream>
++#include <fstream>
++#include <string>
++#include <thread>
++#include <rtosc/thread-link.h>
++#include "../Misc/Time.h"
++#include "../Params/LFOParams.h"
++#include "../Synth/LFO.h"
++#include <unistd.h>
++using namespace std;
++
++char *instance_name=(char*)"";
++
++class WatchTest:public CxxTest::TestSuite
++{
++    public:
++        rtosc::ThreadLink *tr;
++        SYNTH_T      *s;
++        AbsTime      *at;
++        WatchManager *w;
++        LFOParams    *par;
++        LFO          *l;
++        void setUp() {
++            tr  = new rtosc::ThreadLink(1024,3);
++            s   = new SYNTH_T;
++            at  = new AbsTime(*s);
++            w   = new WatchManager(tr);
++            par = new LFOParams;
++            l   = new LFO(*par, 440.0, *at, w);
++        }
++
++        void tearDown() {
++            delete at;
++            delete s;
++            delete tr;
++        }
++
++        void testNoWatch(void)
++        {
++            TS_ASSERT(!tr->hasNext());
++            l->lfoout();
++            TS_ASSERT(!tr->hasNext());
++        }
++        
++        void testPhaseWatch(void)
++        {
++            TS_ASSERT(!tr->hasNext());
++            w->add_watch("phase");
++            l->lfoout();
++            TS_ASSERT(tr->hasNext());
++            TS_ASSERT_EQUALS(string("phase"), tr->read());
++            TS_ASSERT(!tr->hasNext());
++        }
++        
++        void testPhaseMagWatch(void)
++        {
++            TS_ASSERT(!tr->hasNext());
++            w->add_watch("phase");
++            w->add_watch("magnitude");
++            l->lfoout();
++            TS_ASSERT(tr->hasNext());
++            TS_ASSERT_EQUALS(string("phase"), tr->read());
++            TS_ASSERT(tr->hasNext());
++            TS_ASSERT_EQUALS(string("magnitude"), tr->read());
++            TS_ASSERT(!tr->hasNext());
++        }
++};
+diff --git a/src/globals.h b/src/globals.h
+index cf8f639b..89cd48f4 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -54,6 +54,7 @@ class  EnvelopeParams;
+ class  LFOParams;
+ class  FilterParams;
+ 
++struct WatchManager;
+ class  LFO;
+ class  Envelope;
+ class  OscilGen;
+-- 
+2.47.0
+

@@ -1,0 +1,170 @@
+From 993cae28e1eb5f088ab06d34bd28abcb53c2ebf0 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 18 Oct 2014 16:11:42 -0400
+Subject: [PATCH 0251/1936] Fix Broken Params
+
+Fix:
+- nrpn enable
+- sysefx volume
+- master volume
+- part volume
+---
+ src/Misc/Master.cpp | 61 +++++++++++++++++++++++++++++++++++++--------
+ src/UI/MasterUI.fl  |  2 +-
+ src/UI/PartUI.fl    |  5 ++--
+ 3 files changed, 54 insertions(+), 14 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 9839c672..2af709e3 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -48,11 +48,39 @@ using namespace std;
+ using namespace rtosc;
+ #define rObject Master
+ 
++static Ports sysefxPort =
++{
++    {"part#" STRINGIFY(NUM_MIDI_PARTS) "::i", 0, 0, [](const char *m, RtData&d)
++        {
++            //ok, this is going to be an ugly workaround
++            //we know that if we are here the message previously MUST have
++            //matched Psysefxvol#/
++            //and the number is one or two digits at most
++            const char *index_1 = m;
++            index_1 -=2;
++            assert(isdigit(*index_1));
++            if(isdigit(index_1[-1]))
++                index_1--;
++            int ind1 = atoi(index_1);
++
++            //Now get the second index like normal
++            while(!isdigit(*m)) m++;
++            int ind2 = atoi(m);
++            Master &mast = *(Master*)d.obj;
++
++            if(rtosc_narguments(m))
++                mast.setPsysefxvol(ind2, ind1, rtosc_argument(m,0).i);
++            else
++                d.reply(d.loc, "i", mast.Psysefxvol[ind2][ind1]);
++        }}
++};
++
+ static Ports localports = {
+     rRecursp(part, 16, "Part"),//NUM_MIDI_PARTS
+     rRecursp(sysefx, 4, "System Effect"),//NUM_SYS_EFX
+     rRecursp(insefx, 8, "Insertion Effect"),//NUM_INS_EFX
+     rRecur(microtonal, "Micrtonal Mapping Functionality"),
++    rRecur(ctl, "Controller"),
+     rParamZyn(Pkeyshift,  "Global Key Shift"),
+     rParams(Pinsparts, NUM_INS_EFX, "Part to insert part onto"),
+     {"echo", rDoc("Hidden port to echo messages"), 0, [](const char *m, RtData&) {
+@@ -76,21 +104,27 @@ static Ports localports = {
+     {"Pvolume::i", rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+-            d.reply(d.loc, "c", ((Master*)d.obj)->Pvolume);
++            d.reply(d.loc, "i", ((Master*)d.obj)->Pvolume);
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='c') {
+             ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
+-            d.broadcast(d.loc, "c", ((Master*)d.obj)->Pvolume);}}},
++            d.broadcast(d.loc, "i", ((Master*)d.obj)->Pvolume);}}},
+     {"volume::i", rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+-            d.reply(d.loc, "c", ((Master*)d.obj)->Pvolume);
+-        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='c') {
+-            printf("looking at value %d\n", rtosc_argument(m,0).i);
+-            printf("limited value is %d\n", limit<char>(
+-                        rtosc_argument(m,0).i, 0,127));
++            d.reply(d.loc, "i", ((Master*)d.obj)->Pvolume);
++        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
++            //printf("looking at value %d\n", rtosc_argument(m,0).i);
++            //printf("limited value is %d\n", limit<char>(
++            //            rtosc_argument(m,0).i, 0,127));
+             ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
+-            printf("sets volume to value %d\n", ((Master*)d.obj)->Pvolume);
+-            d.broadcast(d.loc, "c", ((Master*)d.obj)->Pvolume);}}},
++            //printf("sets volume to value %d\n", ((Master*)d.obj)->Pvolume);
++            d.broadcast(d.loc, "i", ((Master*)d.obj)->Pvolume);}}},
++    {"Psysefxvol#" STRINGIFY(NUM_SYS_EFX) "/::i", 0, &sysefxPort,
++        [](const char *msg, rtosc::RtData &d) {
++            SNIP;
++            sysefxPort.dispatch(msg, d);
++        }},
++    //    unsigned char Psysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+ 
+     {"noteOn:iii", rDoc("Noteon Event"), 0,
+         [](const char *m,RtData &d){
+@@ -129,6 +163,8 @@ static Ports localports = {
+        bToU->write("/close-ui", "");}},  
+ };
+ 
++
++
+ Ports &Master::ports = localports;
+ Master *the_master;
+ 
+@@ -559,7 +595,7 @@ void Master::AudioOut(float *outl, float *outr)
+ 
+     //Apply the part volumes and pannings (after insertion effects)
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) {
+-        if(part[npart]->Penabled)
++        if(!part[npart]->Penabled)
+             continue;
+ 
+         Stereo<float> newvol(part[npart]->volume),
+@@ -571,6 +607,8 @@ void Master::AudioOut(float *outl, float *outr)
+             newvol.l *= pan * 2.0f;
+         else
+             newvol.r *= (1.0f - pan) * 2.0f;
++        //if(npart==0)
++        //printf("[%d]vol = %f->%f\n", npart, oldvol.l, newvol.l);
+ 
+         //the volume or the panning has changed and needs interpolation
+         if(ABOVE_AMPLITUDE_THRESHOLD(oldvol.l, newvol.l)
+@@ -586,11 +624,12 @@ void Master::AudioOut(float *outl, float *outr)
+             part[npart]->oldvolumel = newvol.l;
+             part[npart]->oldvolumer = newvol.r;
+         }
+-        else
++        else {
+             for(int i = 0; i < synth->buffersize; ++i) { //the volume did not changed
+                 part[npart]->partoutl[i] *= newvol.l;
+                 part[npart]->partoutr[i] *= newvol.r;
+             }
++        }
+     }
+ 
+ 
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 8f1e0265..3f1402f3 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -764,7 +764,7 @@ mastermenu->redraw();}
+         Fl_Check_Button nrpnbutton {
+           label NRPN
+           tooltip {Receive NRPNs} xywh {15 120 60 25} down_box DOWN_BOX labelsize 12
+-          code0 {o->init("ctl.NRPN.receive");}
++          code0 {o->init("ctl/NRPN.receive");}
+           class Fl_Osc_Check
+         }
+         Fl_Counter npartcounter {
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index a30281a8..e69fec1b 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -65,8 +65,9 @@ class PartSysEffSend {open : {public Fl_Group}
+         label 01
+         xywh {0 0 25 25} box ROUND_UP_BOX labelfont 1 labelsize 10 align 130 maximum 127 step 1
+         code0 {o->size(25,25);}
+-        code1 {o->init("sysefx"+to_s(neff)+"/part"+to_s(npart)+"/dummy");}
+-        code2 {char tmp[10];snprintf(tmp,10,"%d",neff+1);o->copy_label(tmp);}
++        code1 {o->alt_init("/","Psysefxvol"+to_s(neff)+"/part"+to_s(npart));}
++        code2 {o->mark_dead();}
++        code3 {char tmp[10];snprintf(tmp,10,"%d",neff+1);o->copy_label(tmp);}
+         class Fl_Osc_Dial
+       }
+     }
+-- 
+2.47.0
+

@@ -1,0 +1,60 @@
+From d0b0eb7eb4e537ccec395015d17f01b9201ee649 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 1 Nov 2015 20:41:24 -0500
+Subject: [PATCH 0663/1936] NotePool: Ignore Notes When Full
+
+Fixes sf bug 94
+---
+ src/Containers/NotePool.cpp | 8 ++++++++
+ src/Containers/NotePool.h   | 2 ++
+ src/Misc/Part.cpp           | 2 +-
+ 3 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index d33d1668..c13941ff 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -106,6 +106,14 @@ void NotePool::applyLegato(LegatoParams &par)
+     }
+ };
+ 
++bool NotePool::full(void) const
++{
++    for(int i=0; i<POLYPHONY; ++i)
++        if(ndesc[i].status == Part::KEY_OFF)
++            return false;
++    return true;
++}
++
+ //Note that isn't KEY_PLAYING or KEY_RELASED_AND_SUSTAINING
+ bool NotePool::existsRunningNote(void) const
+ {
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 91e3f633..9e69e899 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -93,6 +93,8 @@ class NotePool
+         void upgradeToLegato(void);
+         void applyLegato(LegatoParams &par);
+ 
++        bool full(void) const;
++
+         //Note that isn't KEY_PLAYING or KEY_RELASED_AND_SUSTAINING
+         bool existsRunningNote(void) const;
+         int getRunningNotes(void) const;
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 2b35a843..60375138 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -398,7 +398,7 @@ void Part::NoteOn(unsigned char note,
+     const bool doingLegato     = isRunningNote && isLegatoMode() &&
+                                  lastlegatomodevalid;
+ 
+-    if(!Pnoteon || !inRange(note, Pminkey, Pmaxkey))
++    if(!Pnoteon || !inRange(note, Pminkey, Pmaxkey) || notePool.full())
+         return;
+ 
+     verifyKeyMode();
+-- 
+2.47.0
+

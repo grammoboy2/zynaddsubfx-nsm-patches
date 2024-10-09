@@ -1,0 +1,125 @@
+From 6485e9cadd0960f849dc2058929a47b1a3f341d1 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Tue, 10 Jul 2018 14:37:23 +0200
+Subject: [PATCH 1273/1936] Don't break if a requested OscilGen is not
+ available
+
+* If OscilGen is not found in the NonRtObjStore, don't assert,
+  but print a warning instead
+* Fit zyn to match rtosc again: replace rNoWalk by rNoDefaults
+---
+ rtosc                   |  2 +-
+ src/Misc/Master.cpp     |  6 +++---
+ src/Misc/MiddleWare.cpp | 38 ++++++++++++++++++++++++--------------
+ src/Misc/Part.cpp       |  6 +++---
+ 4 files changed, 31 insertions(+), 21 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index d5f8fbfe..8f157f19 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit d5f8fbfe57d22a2337ba877b98944cf22b5b0989
++Subproject commit 8f157f19f20cc901bd2f86b0572b9807e3e48366
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index acf8b35b..9babbcc3 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -300,8 +300,7 @@ static const Ports automate_ports = {
+         if(a.active_slot >= 0)
+             a.createBinding(a.active_slot, rtosc_argument(msg, 0).s, true);
+         rEnd},
+-    // TODO: remove rNoWalk
+-    {"slot#16/", rNoWalk rDoc("Parameters of individual automation slots"), &slot_ports,
++    {"slot#16/", rDoc("Parameters of individual automation slots"), &slot_ports,
+         rBegin;
+         (void)a;
+         d.push_index(get_next_int(msg));
+@@ -515,7 +514,8 @@ static const Ports master_ports = {
+         [](const char *, rtosc::RtData &d) {d.reply("/undo_pause", "");}},
+     {"undo_resume:",rProp(internal) rDoc("resume undo event recording"),0,
+         [](const char *, rtosc::RtData &d) {d.reply("/undo_resume", "");}},
+-    {"config/", rNoWalk rDoc("Top Level Application Configuration Parameters"),
++    {"config/", rNoDefaults
++        rDoc("Top Level Application Configuration Parameters"),
+         &Config::ports, [](const char *, rtosc::RtData &d){d.forward();}},
+     {"presets/", rDoc("Parameter Presets"), &preset_ports, rBOIL_BEGIN
+         SNIP
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 10f518dc..9883f0cc 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -300,10 +300,15 @@ struct NonRtObjStore
+     void handleOscil(const char *msg, rtosc::RtData &d) {
+         string obj_rl(d.message, msg);
+         void *osc = get(obj_rl);
+-        assert(osc);
+-        strcpy(d.loc, obj_rl.c_str());
+-        d.obj = osc;
+-        OscilGen::non_realtime_ports.dispatch(msg, d);
++        if(osc)
++        {
++            strcpy(d.loc, obj_rl.c_str());
++            d.obj = osc;
++            OscilGen::non_realtime_ports.dispatch(msg, d);
++        }
++        else
++            fprintf(stderr, "Warning: trying to access oscil object \"%s\","
++                            "which does not exist\n", obj_rl.c_str());
+     }
+     void handlePad(const char *msg, rtosc::RtData &d) {
+         string obj_rl(d.message, msg);
+@@ -313,18 +318,23 @@ struct NonRtObjStore
+             d.matches++;
+             d.reply((obj_rl+"needPrepare").c_str(), "F");
+         } else {
+-            if(!pad)
+-                return;
+-            strcpy(d.loc, obj_rl.c_str());
+-            d.obj = pad;
+-            PADnoteParameters::non_realtime_ports.dispatch(msg, d);
+-            if(rtosc_narguments(msg)) {
+-                if(!strcmp(msg, "oscilgen/prepare"))
+-                    ; //ignore
+-                else {
+-                    d.reply((obj_rl+"needPrepare").c_str(), "T");
++            if(pad)
++            {
++                strcpy(d.loc, obj_rl.c_str());
++                d.obj = pad;
++                PADnoteParameters::non_realtime_ports.dispatch(msg, d);
++                if(rtosc_narguments(msg)) {
++                    if(!strcmp(msg, "oscilgen/prepare"))
++                        ; //ignore
++                    else {
++                        d.reply((obj_rl+"needPrepare").c_str(), "T");
++                    }
+                 }
+             }
++            else
++                fprintf(stderr, "Warning: trying to access pad synth object "
++                                "\"%s\", which does not exist\n",
++                        obj_rl.c_str());
+         }
+     }
+ };
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 0e906dbf..86bd9035 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -173,9 +173,9 @@ static const Ports partPorts = {
+ #define rObject Part::Kit
+ static const Ports kitPorts = {
+     rSelf(Part::Kit, rEnabledBy(Penabled)),
+-    rRecurp(padpars, "Padnote parameters"),
+-    rRecurp(adpars, "Adnote parameters"),
+-    rRecurp(subpars, "Adnote parameters"),
++    rRecurp(padpars, rEnabledBy(Ppadenabled), "Padnote parameters"),
++    rRecurp(adpars, rEnabledBy(Padenabled), "Adnote parameters"),
++    rRecurp(subpars, rEnabledBy(Psubenabled), "Subnote parameters"),
+     rToggle(firstkit, rProp(internal), "If this is the part's first kit"),
+     rToggle(Penabled, rDefaultDepends(firstkit),
+             rPreset(true, true), rPreset(false, false),
+-- 
+2.47.0
+

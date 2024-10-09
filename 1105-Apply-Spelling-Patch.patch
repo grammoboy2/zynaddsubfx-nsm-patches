@@ -1,0 +1,49 @@
+From 5140d65dd556d51cf6c971b19d2f899379adb812 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 3 Dec 2016 11:36:50 -0500
+Subject: [PATCH 1105/1936] Apply Spelling Patch
+
+Patch Authored By: Jaromir Mikes
+---
+ src/Params/FilterParams.cpp | 2 +-
+ src/UI/EffUI.fl             | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index d392845d..7a869f39 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -34,7 +34,7 @@ constexpr int sizeof_pvowels = sizeof(FilterParams::Pvowels);
+ static const rtosc::Ports subsubports = {
+     rParamZyn(freq, rShort("f.freq"), "Formant frequency"),
+     rParamZyn(amp,  rShort("f.str"),  "Strength of formant"),
+-    rParamZyn(q,    rShort("f.q"),    "The formant's quality factor, also known as resonance bandwith or Q for short"),
++    rParamZyn(q,    rShort("f.q"),    "The formant's quality factor, also known as resonance bandwidth or Q for short"),
+ };
+ #undef rObject
+ 
+diff --git a/src/UI/EffUI.fl b/src/UI/EffUI.fl
+index 9e868b6c..e448cf7a 100644
+--- a/src/UI/EffUI.fl
++++ b/src/UI/EffUI.fl
+@@ -445,7 +445,7 @@ if (filterwindow!=NULL){
+         class Fl_Osc_Check
+       }
+       Fl_Check_Button chorusp11 {
+-        label Substract
++        label Subtract
+         tooltip {inverts the output} xywh {185 10 70 20} box THIN_UP_BOX down_box DOWN_BOX color 51 labelsize 10
+         code0 {o->init("parameter11");}
+         class Fl_Osc_Check
+@@ -599,7 +599,7 @@ if (filterwindow!=NULL){
+         class Fl_Osc_Dial
+       }
+       Fl_Check_Button phaserp10 {
+-        label Substract
++        label Subtract
+         tooltip {inverts output} xywh {200 10 74 20} box THIN_UP_BOX down_box DOWN_BOX color 51 labelfont 1 labelsize 10
+         code0 {o->init("parameter10");}
+         class Fl_Osc_Check
+-- 
+2.47.0
+

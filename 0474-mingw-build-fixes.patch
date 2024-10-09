@@ -1,0 +1,56 @@
+From d105ed4b97d203221caa64f9462cfb9cfa01ec4e Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Tue, 26 May 2015 10:46:05 +0200
+Subject: [PATCH 0474/1936] mingw build fixes
+
+---
+ src/Misc/Bank.cpp       | 4 ++++
+ src/Synth/Resonance.cpp | 6 +++---
+ 2 files changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 2215c6e2..4b4d5543 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -288,7 +288,11 @@ int Bank::newbank(string newbankdirname)
+         bankdir += "/";
+ 
+     bankdir += newbankdirname;
++#ifdef _WIN32
++    if(mkdir(bankdir.c_str()) < 0)
++#else
+     if(mkdir(bankdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) < 0)
++#endif
+         return -1;
+ 
+     const string tmpfilename = bankdir + '/' + FORCE_BANK_DIR_FILE;
+diff --git a/src/Synth/Resonance.cpp b/src/Synth/Resonance.cpp
+index 1d333960..4e34fd67 100644
+--- a/src/Synth/Resonance.cpp
++++ b/src/Synth/Resonance.cpp
+@@ -98,11 +98,11 @@ void Resonance::applyres(int n, fft_t *fftdata, float freq) const
+ 
+     //Provide an upper bound for resonance
+     const float upper =
+-        limit<float>(array_max(Prespoints, N_RES_POINTS), 1.0f, INFINITY);
++        limit<float>(array_max(Prespoints, N_RES_POINTS), 1.0f, (float)INFINITY);
+ 
+     for(int i = 1; i < n; ++i) {
+         //compute where the n-th hamonics fits to the graph
+-        const float x  = limit((logf(freq*i) - l1) / l2, 0.0f, INFINITY) * N_RES_POINTS;
++        const float x  = limit((logf(freq*i) - l1) / l2, 0.0f, (float)INFINITY) * N_RES_POINTS;
+         const float dx = x - floor(x);
+         const int kx1  = limit<int>(floor(x), 0, N_RES_POINTS - 1);
+         const int kx2  = limit<int>(kx1 + 1,  0, N_RES_POINTS - 1);
+@@ -136,7 +136,7 @@ float Resonance::getfreqresponse(float freq) const
+         limit<float>(array_max(Prespoints, N_RES_POINTS), 1.0f, INFINITY);
+ 
+     //compute where the n-th hamonics fits to the graph
+-    const float x   = limit((logf(freq) - l1) / l2, 0.0f, INFINITY) * N_RES_POINTS;
++    const float x   = limit((logf(freq) - l1) / l2, 0.0f, (float)INFINITY) * N_RES_POINTS;
+     const float dx  = x - floor(x);
+     const int   kx1 = limit<int>(floor(x), 0, N_RES_POINTS - 1);
+     const int   kx2 = limit<int>(kx1 + 1,  0, N_RES_POINTS - 1);
+-- 
+2.47.0
+

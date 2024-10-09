@@ -1,0 +1,19 @@
+From 9d05fae274fa74cd84a73f679f46ed3e1969f939 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 13 Feb 2016 12:26:11 -0500
+Subject: [PATCH 0855/1936] Update DPF Submodule
+
+---
+ DPF | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/DPF b/DPF
+index 8c4e45d4..19f82001 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit 8c4e45d4a773a2fa5ccfa9255e23270c9b2a6583
++Subproject commit 19f82001a2bb6b2287781c9a91dbb496de271eb8
+-- 
+2.47.0
+

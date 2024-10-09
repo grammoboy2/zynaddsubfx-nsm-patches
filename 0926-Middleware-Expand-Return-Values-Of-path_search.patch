@@ -1,0 +1,38 @@
+From a663671dbd8d1f393df14d8aefd8553524f501c1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 9 Jun 2016 13:42:09 -0400
+Subject: [PATCH 0926/1936] Middleware: Expand Return Values Of path_search
+
+Prior to this commit it was possible to exhaust
+stack allocated arrays and segfault
+---
+ src/Misc/MiddleWare.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index aba19fb8..ce1e9fdb 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -73,8 +73,8 @@ void path_search(const char *m, const char *url)
+     using rtosc::Port;
+ 
+     //assumed upper bound of 32 ports (may need to be resized)
+-    char         types[129];
+-    rtosc_arg_t  args[128];
++    char         types[256+1];
++    rtosc_arg_t  args[256];
+     size_t       pos    = 0;
+     const Ports *ports  = NULL;
+     const char  *str    = rtosc_argument(m,0).s;
+@@ -95,7 +95,7 @@ void path_search(const char *m, const char *url)
+     if(ports) {
+         //RTness not confirmed here
+         for(const Port &p:*ports) {
+-            if(strstr(p.name, needle)!=p.name)
++            if(strstr(p.name, needle) != p.name || !p.name)
+                 continue;
+             types[pos]    = 's';
+             args[pos++].s = p.name;
+-- 
+2.47.0
+

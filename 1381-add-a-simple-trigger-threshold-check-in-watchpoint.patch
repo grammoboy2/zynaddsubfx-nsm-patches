@@ -1,0 +1,50 @@
+From 18308d8d5366c708406380b72c91478e2e9e0bdf Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Wed, 26 Jun 2019 16:12:35 +0300
+Subject: [PATCH 1381/1936] add a simple trigger threshold check in watchpoint
+
+---
+ src/Synth/WatchPoint.cpp | 18 +++++++++++++-----
+ 1 file changed, 13 insertions(+), 5 deletions(-)
+
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index f2e6d13e..73279c18 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -169,7 +169,6 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+         return;
+ 
+     int space = 128 - sample_list[selected];
+-    int start = sample_list[selected];
+     
+     if(space >= n)
+         space = n;
+@@ -177,11 +176,20 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+     //FIXME buffer overflow
+     if(space){
+         for(int i=0; i<space; ++i){
+-            data_list[selected][start] = f[i];
+-            start++;
++
++            if(strstr(active_list[i], "noteout") == NULL)
++                {   
++                    data_list[selected][sample_list[selected]] = f[i];
++                    sample_list[selected]++;
++                }
++            else{
++                 if(f[i] > -4){
++                    data_list[selected][sample_list[selected]] = f[i];
++                    sample_list[selected]++;
++                }
++            }
+         }
+-        sample_list[selected] += space;
+     }
+ }
+ 
+-}
++}
+\ No newline at end of file
+-- 
+2.47.0
+

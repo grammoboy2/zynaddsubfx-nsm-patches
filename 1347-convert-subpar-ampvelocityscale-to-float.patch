@@ -1,0 +1,116 @@
+From 44709756f3da1bacab009be57c3ca58c48396d45 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Mon, 25 Mar 2019 08:56:29 +0200
+Subject: [PATCH 1347/1936] convert subpar/ampvelocityscale to float
+
+---
+ src/Params/SUBnoteParameters.cpp | 23 ++++++++++++++++-------
+ src/Params/SUBnoteParameters.h   |  2 +-
+ src/Synth/SUBnote.cpp            |  2 +-
+ src/Tests/guitar-adnote.xmz      |  2 +-
+ 4 files changed, 19 insertions(+), 10 deletions(-)
+
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 393f0edd..915d3a92 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -40,8 +40,8 @@ static const rtosc::Ports SUBnotePorts = {
+     rToggle(Pstereo,    rShort("stereo"), rDefault(true), "Stereo Enable"),
+     rParamZyn(PVolume,  rShort("volume"), rDefault(96), "Volume"),
+     rParamZyn(PPanning, rShort("panning"), rDefault(64), "Left Right Panning"),
+-    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), rDefault(90),
+-        "Amplitude Velocity Sensing function"),
++    rParamF(AmpVelocityScaleFunction, rShort("sense"), rDefault(70.86),
++        rLinear(0.0, 100.0), "Amplitude Velocity Sensing function"),
+     rParamI(PDetune,       rShort("detune"), rLinear(0, 16383), rDefault(8192),
+         "Detune in detune type units"),
+     rParamI(PCoarseDetune, rShort("cdetune"), rDefault(0), "Coarse Detune"),
+@@ -272,7 +272,7 @@ void SUBnoteParameters::defaults()
+ {
+     PVolume  = 96;
+     PPanning = 64;
+-    PAmpVelocityScaleFunction = 90;
++    AmpVelocityScaleFunction = 70.86;
+ 
+     Pfixedfreq   = 0;
+     PfixedfreqET = 0;
+@@ -349,7 +349,7 @@ void SUBnoteParameters::add2XML(XMLwrapper& xml)
+     xml.addparbool("stereo", Pstereo);
+     xml.addpar("volume", PVolume);
+     xml.addpar("panning", PPanning);
+-    xml.addpar("velocity_sensing", PAmpVelocityScaleFunction);
++    xml.addparreal("velocity_sensing", AmpVelocityScaleFunction);
+     xml.beginbranch("AMPLITUDE_ENVELOPE");
+     AmpEnvelope->add2XML(xml);
+     xml.endbranch();
+@@ -473,7 +473,7 @@ void SUBnoteParameters::paste(SUBnoteParameters &sub)
+     doPaste(Pstereo);
+     doPaste(PVolume);
+     doPaste(PPanning);
+-    doPaste(PAmpVelocityScaleFunction);
++    doPaste(AmpVelocityScaleFunction);
+     doPPaste(AmpEnvelope);
+ 
+     //Frequency Parameters
+@@ -545,8 +545,17 @@ void SUBnoteParameters::getfromXML(XMLwrapper& xml)
+         Pstereo  = xml.getparbool("stereo", Pstereo);
+         PVolume  = xml.getpar127("volume", PVolume);
+         PPanning = xml.getpar127("panning", PPanning);
+-        PAmpVelocityScaleFunction = xml.getpar127("velocity_sensing",
+-                PAmpVelocityScaleFunction);
++        const bool upgrade_3_0_3 = (xml.fileversion() < version_type(3,0,3)) ||
++            (xml.getparreal("velocity_sensing", -1) < 0);
++
++        if (upgrade_3_0_3) {
++            int tmp_val = xml.getpar127("velocity_sensing", 0);
++            AmpVelocityScaleFunction    = 100.0f * tmp_val / 127.0f;
++        } else {
++            AmpVelocityScaleFunction    = xml.getparreal("velocity_sensing", AmpVelocityScaleFunction);
++        }
++
++
+         if(xml.enterbranch("AMPLITUDE_ENVELOPE")) {
+             AmpEnvelope->getfromXML(xml);
+             xml.exitbranch();
+diff --git a/src/Params/SUBnoteParameters.h b/src/Params/SUBnoteParameters.h
+index f5dd1cf0..cbeb0d1a 100644
+--- a/src/Params/SUBnoteParameters.h
++++ b/src/Params/SUBnoteParameters.h
+@@ -46,7 +46,7 @@ class SUBnoteParameters:public Presets
+         unsigned char   Pstereo; //0 for mono,1 for stereo
+         unsigned char   PVolume;
+         unsigned char   PPanning;
+-        unsigned char   PAmpVelocityScaleFunction;
++        float   AmpVelocityScaleFunction;
+         EnvelopeParams *AmpEnvelope;
+ 
+         //Frequency Parameters
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 4e315b65..79606ae3 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -100,7 +100,7 @@ void SUBnote::setup(float freq,
+     portamento  = portamento_;
+     NoteEnabled = ON;
+     volume      = powf(0.1f, 3.0f * (1.0f - pars.PVolume / 96.0f)); //-60 dB .. 0 dB
+-    volume     *= VelF(velocity, pars.PAmpVelocityScaleFunction);
++    volume     *= VelF(velocity, pars.AmpVelocityScaleFunction);
+     if(pars.PPanning != 0)
+         panning = pars.PPanning / 127.0f;
+     else
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 46cfbc71..189374f9 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -994,7 +994,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_bool name="stereo" value="yes" />
+ <par name="volume" value="96" />
+ <par name="panning" value="64" />
+-<par name="velocity_sensing" value="90" />
++<par_real name="velocity_sensing" value="70.86" exact_value="0x428DB852" />
+ <AMPLITUDE_ENVELOPE>
+ <par_bool name="free_mode" value="no" />
+ <par name="env_points" value="4" />
+-- 
+2.47.0
+

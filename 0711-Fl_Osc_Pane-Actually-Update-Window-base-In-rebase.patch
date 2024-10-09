@@ -1,0 +1,25 @@
+From fce88199008f4fb3b929b7591ea82dad25ee771e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 8 Nov 2015 13:12:07 -0500
+Subject: [PATCH 0711/1936] Fl_Osc_Pane: Actually Update Window base In
+ rebase()
+
+---
+ src/UI/Fl_Osc_Pane.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/UI/Fl_Osc_Pane.cpp b/src/UI/Fl_Osc_Pane.cpp
+index 5c60a085..502c413f 100644
+--- a/src/UI/Fl_Osc_Pane.cpp
++++ b/src/UI/Fl_Osc_Pane.cpp
+@@ -113,6 +113,7 @@ void Fl_Osc_Window::rebase(std::string new_base)
+         else if(dynamic_cast<Fl_Group*>(widget))
+             nested_rebase(dynamic_cast<Fl_Group*>(widget), new_base);
+     }
++    base = new_base;
+ }
+ 
+ static Fl_Osc_Pane *find_osc_pane(Fl_Widget *root)
+-- 
+2.47.0
+

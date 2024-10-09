@@ -1,0 +1,250 @@
+From fcf39a29a8453e4dcabef939e31ae65a21e19d2a Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@mailueberfall.de>
+Date: Mon, 11 Aug 2014 22:32:15 +0200
+Subject: [PATCH 0220/1936] Corrections for last commit.
+
+---
+ src/Misc/Master.cpp     |  4 +++-
+ src/Misc/MiddleWare.cpp | 25 +++++++++++-----------
+ src/UI/Connection.cpp   |  3 +++
+ src/UI/MasterUI.fl      | 46 +++++++++++++++++++----------------------
+ src/UI/NSM/Client.C     |  2 --
+ 5 files changed, 40 insertions(+), 40 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 0f0ff1dd..b2ed25d8 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -114,7 +114,9 @@ static Ports localports = {
+         [](const char *m, RtData &d){
+             Master *M =  (Master*)d.obj;
+             printf("learning '%s'\n", rtosc_argument(m,0).s);
+-            M->midi.learn(rtosc_argument(m,0).s);}}
++            M->midi.learn(rtosc_argument(m,0).s);}},
++    {"close-ui", rDoc("Request to close any connection named \"GUI\""), 0, [](const char *, RtData &) {
++       bToU->write("/close-ui", "");}},  
+ };
+ 
+ Ports &Master::ports = localports;
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 042188ff..0bd94ee3 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -308,11 +308,10 @@ static Fl_Osc_Interface *genOscInterface(struct MiddleWareImpl*);
+ /* Implementation */
+ class MiddleWareImpl
+ {
+-    std::string get_tmp_file_name()
++    //! returns file name to where UDP port is saved
++    std::string get_tmp_nam() const
+     {
+-         std::string tmp_file_name = "/tmp/zynaddsubfx_";
+-         tmp_file_name += std::to_string(getpid());
+-	 return tmp_file_name;
++         return "/tmp/zynaddsubfx_" + std::to_string(getpid());
+     }
+ public:
+     MiddleWareImpl(void)
+@@ -322,16 +321,18 @@ public:
+         fprintf(stderr, "lo server running on %d\n", lo_server_get_port(server));
+         
+         {
+-            std::string tmp_file_name = get_tmp_file_name();
+-            if(0 == access(tmp_file_name.c_str(), F_OK)) {
++            std::string tmp_nam = get_tmp_nam();
++            if(0 == access(tmp_nam.c_str(), F_OK)) {
+                 fprintf(stderr, "Error: Cannot overwrite file %s. "
+-                    "You should probably remove it.", tmp_file_name.c_str());
++                    "You should probably remove it.", tmp_nam.c_str());
+                 exit(EXIT_FAILURE);
+             }
+-            FILE* tmp_fp = fopen(tmp_file_name.c_str(), "w");
++            FILE* tmp_fp = fopen(tmp_nam.c_str(), "w");
+             if(!tmp_fp)
+-                 fprintf(stderr, "Warning: could not create new file %s.\n", tmp_file_name.c_str());
+-            fprintf(tmp_fp, "%d", (int)lo_server_get_port(server));
++                fprintf(stderr, "Warning: could not create new file %s.\n",
++                    tmp_nam.c_str());
++            else
++                fprintf(tmp_fp, "%u", (unsigned)lo_server_get_port(server));
+             fclose(tmp_fp);
+         }
+ 
+@@ -367,7 +368,7 @@ public:
+ 
+     ~MiddleWareImpl(void)
+     {
+-        remove(get_tmp_file_name().c_str());
++        remove(get_tmp_nam().c_str());
+         
+         warnMemoryLeaks();
+ 
+@@ -575,7 +576,7 @@ public:
+                     lo_send_message(addr, rtmsg, msg);
+                 }
+             }
+-        } else if(curr_url == "GUI") {
++        } else if(curr_url == "GUI" || !strcmp(rtmsg, "/close-ui")) {
+             cb(ui, rtmsg); //GUI::raiseUi(gui, bToU->read());
+         } else{
+             lo_message msg  = lo_message_deserialise((void*)rtmsg,
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index c49c71b3..1b1ed4ec 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -128,6 +128,9 @@ static rtosc::Ports ports = {
+                 ui->panellistitem[i]->partvu->update(partvu[i]);
+         }
+     } END
++    BEGIN("close-ui") {
++        ui->close();
++    } END
+ };
+ 
+ void GUI::raiseUi(ui_handle_t gui, const char *message)
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 8b30bc1a..238b05bc 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -89,8 +89,7 @@ class SysEffSend {: {public Fl_Osc_Dial}
+     code {} {}
+   }
+   Function {init(int neff1,int neff2)} {} {
+-    code {
+-    //TODO figure out if this extra class is even needed
++    code {//TODO figure out if this extra class is even needed
+ minimum(0);
+ maximum(127);
+ step(1);
+@@ -107,7 +106,7 @@ this->copy_label(tmp);} {}
+   }
+ } 
+ 
+-class Panellistitem {open : {public Fl_Osc_Group}
++class Panellistitem {: {public Fl_Osc_Group}
+ } {
+   Function {make_window()} {open private
+   } {
+@@ -200,9 +199,7 @@ panellistitem->show();
+ end();} {}
+   }
+   Function {refresh()} {} {
+-    code {
+-
+-if ((int)bankui->cbwig->value()!=(npart+1))
++    code {if ((int)bankui->cbwig->value()!=(npart+1))
+    panellistitemgroup->color(fl_rgb_color(160,160,160));
+ else 
+    panellistitemgroup->color(fl_rgb_color(50,190,240));
+@@ -233,10 +230,8 @@ class MasterUI {open
+ 0
+ \#endif
+  || fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))) {
+-    config.save();
+-    *exitprogram=1;
+-};
+-} open
++    close();
++};} open
+       xywh {330 365 390 525} type Double xclass zynaddsubfx visible
+     } {
+       Fl_Group win_root {open
+@@ -315,8 +310,7 @@ if (result) {
+ 
+ osc->write("/save_xsz", "s", filename);
+ 
+-/*if (result<0) fl_alert("Error: Could not save the file.");*/
+-}
++/*if (result<0) fl_alert("Error: Could not save the file.");*/}
+               xywh {30 30 100 20}
+             }
+             MenuItem {} {
+@@ -392,8 +386,7 @@ if (result) {
+ };
+ 
+ osc->write("/save_xiz", "is", npart, filename);
+-/*if (result<0) fl_alert("Error: Could not save the file.");*/
+-}
++/*if (result<0) fl_alert("Error: Could not save the file.");*/}
+               xywh {25 25 100 20} divider
+             }
+             MenuItem {} {
+@@ -657,7 +650,7 @@ inseffectui->show();}
+                 xywh {105 105 100 20} labelfont 1 labelsize 10
+               }
+             }
+-            Fl_Group inseffectuigroup {open selected
++            Fl_Group inseffectuigroup {open
+               xywh {10 210 380 95} box FLAT_BOX color 48
+               class Fl_Osc_Group
+             } {
+@@ -922,10 +915,9 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))
+ {
+ 	config.save();
+ 	*exitprogram=1;
+-};
+-} open
+-      xywh {661 384 600 335} type Double visible
+-      class Fl_Osc_Window
++};} open
++      xywh {661 384 600 335} type Double
++      class Fl_Osc_Window visible
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+@@ -1532,14 +1524,13 @@ delete selectuiwindow;} {}
+ };} {}
+   }
+   Function {simplerefresh()} {} {
+-    code { 
+-/*
++    code {/*
+      if (master->part[npart]->Pname[0]!=0) partname->label((char *)master->part[npart]->Pname);
+      else partname->label("Click here to load a instrument");
+      */
+ 
+-simplelistitemgroup->redraw();
+-  }{}}
++simplelistitemgroup->redraw();} {}
++  }
+   Function {do_new_master_unconditional()} {} {
+     code {delete microtonalui;
+ 
+@@ -1555,8 +1546,7 @@ simplelistitemgroup->redraw();
+   }
+   Function {do_load_master_unconditional(const char *filename, const char *display_name)} {return_type int
+   } {
+-    code {
+-    osc->write("/load_xmz", "s", filename);
++    code {osc->write("/load_xmz", "s", filename);
+     refresh_master_ui();
+     updatepanel();
+ 
+@@ -1663,4 +1653,10 @@ bankui->hide();} {}
+   }
+   decl {class Fl_Osc_Interface *osc;} {public local
+   }
++  Function {close()} {open return_type void
++  } {
++    code {config.save();
++*exitprogram=1;} {selected
++    }
++  }
+ } 
+diff --git a/src/UI/NSM/Client.C b/src/UI/NSM/Client.C
+index 18d55b5c..83141e27 100644
+--- a/src/UI/NSM/Client.C
++++ b/src/UI/NSM/Client.C
+@@ -166,9 +166,7 @@ namespace NSM
+     void
+     Client::check(int timeout)
+     {
+-#ifdef LO_VERSION_GE_026
+         if(lo_server_wait(_server, timeout))
+-#endif
+             while(lo_server_recv_noblock(_server, 0)) {}
+     }
+ 
+-- 
+2.47.0
+

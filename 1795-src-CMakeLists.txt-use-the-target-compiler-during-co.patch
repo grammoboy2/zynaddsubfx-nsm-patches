@@ -1,0 +1,52 @@
+From 859e359523e57cd75ec3b1249d722364d690d56e Mon Sep 17 00:00:00 2001
+From: Julien Olivain <ju.o@free.fr>
+Date: Sat, 2 Dec 2017 18:38:32 +0100
+Subject: [PATCH 1795/1936] src/CMakeLists.txt: use the target compiler during
+ config tests
+
+The availability of the "fistpl" x86 instruction was tested with a
+direct call to the "as" command. In case the project is cross-compiled
+to another architecture, the host compiler is tested instead the
+target one. This was leading to compilation failures. This commit now
+perform the test using the target compiler defined in CMake, which
+fixes cross-compilation. This commit does not change the behavior
+when doing a native compilation, as the host and target compiler are the
+same.
+
+Signed-off-by: Julien Olivain <ju.o@free.fr>
+---
+ src/CMakeLists.txt | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index e233a30b..33abdafb 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -59,9 +59,10 @@ find_library(HAVE_LIBRT rt)
+ set(CMAKE_REQUIRED_FLAGS "")
+ 
+ 
+-execute_process(COMMAND echo fistpl 0
+-                COMMAND as -
+-                ERROR_VARIABLE AVOID_ASM)
++CHECK_CXX_SOURCE_COMPILES(
++    "int main(){
++    __asm__ __volatile__ (\"fistpl 0\");
++    return 0;}" HAVE_X86_FISTPL)
+ 
+ ######### Settings ###########
+ # NOTE: These cache variables should normally not be changed in this
+@@ -384,8 +385,8 @@ if(COMPILER_SUPPORTS_SYSTEM_HDR_PREFIX)
+     add_definitions(--system-header-prefix="FL/")
+ endif()
+ 
+-if(NOT AVOID_ASM)
+-	message(STATUS "Compiling with x86 opcode support")
++if(HAVE_X86_FISTPL)
++    message(STATUS "Compiling with x86 opcode support")
+     add_definitions(-DASM_F2I_YES)
+ endif()
+ 
+-- 
+2.47.0
+

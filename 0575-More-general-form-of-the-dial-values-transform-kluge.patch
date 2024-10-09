@@ -1,0 +1,99 @@
+From 20623a3836960ce87747e67cdf1ebcea685edc3d Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 6 Oct 2015 18:49:37 -0400
+Subject: [PATCH 0575/1936] More general form of the dial values transform
+ kluge.
+
+---
+ src/UI/OscilGenUI.fl   |  8 ++++----
+ src/UI/WidgetPDial.cpp | 14 +++++++++++++-
+ src/UI/WidgetPDial.h   |  5 ++++-
+ 3 files changed, 21 insertions(+), 6 deletions(-)
+
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 0ccf9839..bbb4ecb5 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -347,7 +347,7 @@ oscildisplaygroup->redraw();}
+           } {}
+           Fl_Dial bfslider {
+             callback {redrawoscil();
+-            bfparval->value(o->value() + o->value_offset) }
++            bfparval->value(o->transform(o->value())) }
+             tooltip {Base Function Parameter} xywh {525 285 20 20} minimum 0 maximum 127 step 1
+             code0 {o->init("Pbasefuncpar");}
+             class Fl_Osc_Dial
+@@ -622,7 +622,7 @@ redrawoscil();}
+           }
+           Fl_Dial wshpar {
+             callback {redrawoscil();
+-            wsparval->value(o->value() + o->value_offset) }
++            wsparval->value(o->transform(o->value())) }
+             tooltip {Waveshaping Parameter} xywh {265 318 20 20} minimum 0 maximum 127 step 1
+             code0 {o->init("Pwaveshaping");}
+             class Fl_Osc_Dial
+@@ -954,8 +954,8 @@ make_window();
+ bftype->init("Pcurrentbasefunc");
+ initialized = true;
+ 
+-wshpar->value_offset=-64;
+-bfslider->value_offset=-64;
++wshpar->set_transform(1,-64);
++bfslider->set_transform(1,-64);
+ 
+ refresh();
+ osceditUI->show();} {}
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index 0123a671..e1b8b1b3 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -18,7 +18,8 @@
+ //static int numobj = 0;
+ 
+ WidgetPDial::WidgetPDial(int x, int y, int w, int h, const char *label)
+-    :Fl_Dial(x, y, w, h, label), oldvalue(0.0f), pos(false), textset(false)
++  :Fl_Dial(x, y, w, h, label), oldvalue(0.0f), pos(false), textset(false),
++   value_offset(0.0), value_scale(0.0)
+ {
+     //cout << "[" << label << "] There are now " << ++numobj << endl;
+     Fl_Group *save = Fl_Group::current();
+@@ -183,3 +184,14 @@ void WidgetPDial::resetPos()
+ {
+     pos = false;
+ }
++
++void WidgetPDial::set_transform(float scale, float offset)
++{
++    value_offset = offset;
++    value_scale = scale;
++}
++
++float WidgetPDial::transform(float x)
++{
++    return value_scale * x + value_offset;
++}
+diff --git a/src/UI/WidgetPDial.h b/src/UI/WidgetPDial.h
+index 030fcc93..a556b731 100644
+--- a/src/UI/WidgetPDial.h
++++ b/src/UI/WidgetPDial.h
+@@ -14,7 +14,8 @@ class WidgetPDial:public Fl_Dial
+         void draw();
+         void pdialcolor(int r, int g, int b);
+         void tooltip(const char *c);
+-        float value_offset;
++	void set_transform(float scale = 1.0, float offset = 0.0);
++	float transform(float x);
+     private:
+         void getPos();
+         void resetPos();
+@@ -22,5 +23,7 @@ class WidgetPDial:public Fl_Dial
+         bool   pos;
+         bool   textset;
+         class TipWin * tipwin;
++        float value_offset;
++        float value_scale;
+ };
+ #endif
+-- 
+2.47.0
+

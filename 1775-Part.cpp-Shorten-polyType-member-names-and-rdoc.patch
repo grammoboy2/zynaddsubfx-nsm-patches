@@ -1,0 +1,41 @@
+From 33b6fa9bc44d5e7188687a5349bf989e4b1b6dc1 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Fri, 1 Oct 2021 08:22:51 +0200
+Subject: [PATCH 1775/1936] Part.cpp: Shorten polyType member names and rdoc
+
+Shorten the polyType names to match shortened names because of
+less space for button in GUI.
+
+Shorten rdoc for polyType to one line as it was too long to fit
+in the allotted space (2 message lines in zest), and the
+description wasn't accurate anyway.
+---
+ src/Misc/Part.cpp | 12 ++----------
+ 1 file changed, 2 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 3acddccf..8dbd7a59 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -120,16 +120,8 @@ static const Ports partPorts = {
+     {"captureMax:", rDoc("Capture maximum valid note"), NULL,
+         [](const char *, RtData &r)
+         {Part *p = (Part*)r.obj; p->Pmaxkey = p->lastnote;}},
+-    {"polyType::c:i", rProp(parameter) rOptions(Polyphonic, Monophonic, Legato, Latch)
+-        rDoc("Synthesis polyphony type\n"
+-                "Polyphonic - Each note is played independently\n"
+-                "Monophonic - A single note is played at a time with"
+-                " envelopes resetting between notes\n"
+-                "Legato     - A single note is played at a time without"
+-                " envelopes resetting between notes\n"
+-                "Latch     - Notes are released when a new one is hit "
+-                " after key release\n"
+-            ), NULL,
++    {"polyType::c:i", rProp(parameter) rOptions(Poly, Mono, Legato, Latch)
++        rDoc("Synthesis polyphony type\n"), NULL,
+         [](const char *msg, RtData &d)
+         {
+             Part *p = (Part*)d.obj;
+-- 
+2.47.0
+

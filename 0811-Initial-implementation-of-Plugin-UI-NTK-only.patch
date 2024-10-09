@@ -1,0 +1,999 @@
+From 1c62e7eea57624dc75f8c29064310df94764ea2b Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Tue, 5 Jan 2016 04:53:56 +0000
+Subject: [PATCH 0811/1936] Initial implementation of Plugin UI (NTK only)
+
+---
+ src/Plugin/ZynAddSubFX/CMakeLists.txt        |  52 ++++-
+ src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h   |  18 +-
+ src/Plugin/ZynAddSubFX/DistrhoUI.cpp         |  64 ++++++
+ src/Plugin/ZynAddSubFX/DistrhoUI.hpp         | 111 ++++++++++
+ src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp | 222 +++++++++++++++++++
+ src/Plugin/ZynAddSubFX/ExternalUI.hpp        |   1 +
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp    | 215 ++++++++++++++++++
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp       |  80 ++++++-
+ src/UI/guimain.cpp                           |  26 ++-
+ 9 files changed, 778 insertions(+), 11 deletions(-)
+ create mode 100644 src/Plugin/ZynAddSubFX/DistrhoUI.cpp
+ create mode 100644 src/Plugin/ZynAddSubFX/DistrhoUI.hpp
+ create mode 100644 src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
+ create mode 100644 src/Plugin/ZynAddSubFX/ExternalUI.hpp
+ create mode 100644 src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 557ab328..beff9014 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -1,8 +1,43 @@
+ 
+ include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
+ 
+-add_library(ZynAddSubFX_lv2 SHARED ${CMAKE_SOURCE_DIR}/src/globals.cpp ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp ZynAddSubFX.cpp)
+-add_library(ZynAddSubFX_vst SHARED ${CMAKE_SOURCE_DIR}/src/globals.cpp ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp ZynAddSubFX.cpp)
++if(NtkGui)
++
++# UI Enabled
++add_library(ZynAddSubFX_lv2 SHARED
++    ${CMAKE_SOURCE_DIR}/src/globals.cpp
++    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
++    ZynAddSubFX.cpp)
++
++add_library(ZynAddSubFX_lv2_ui SHARED
++    DistrhoUI.cpp
++    ZynAddSubFX-UI.cpp)
++
++add_library(ZynAddSubFX_vst SHARED
++    ${CMAKE_SOURCE_DIR}/src/globals.cpp
++    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
++    DistrhoUI.cpp
++    ZynAddSubFX.cpp
++    ZynAddSubFX-UI.cpp)
++
++elseif(NtkGui)
++
++# UI Disabled
++add_library(ZynAddSubFX_lv2 SHARED
++    ${CMAKE_SOURCE_DIR}/src/globals.cpp
++    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
++    ZynAddSubFX.cpp)
++
++add_library(ZynAddSubFX_vst SHARED
++    ${CMAKE_SOURCE_DIR}/src/globals.cpp
++    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
++    ZynAddSubFX.cpp)
++
++endif(NtkGui)
+ 
+ set_target_properties(ZynAddSubFX_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynAddSubFX_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+@@ -29,3 +64,16 @@ install(FILES
+ 	${CMAKE_CURRENT_BINARY_DIR}/lv2/presets.ttl
+ 	${CMAKE_CURRENT_BINARY_DIR}/lv2/ZynAddSubFX.ttl
+ 	DESTINATION lib/lv2/ZynAddSubFX.lv2/)
++
++if(NtkGui)
++set_target_properties(ZynAddSubFX_lv2_ui PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++set_target_properties(ZynAddSubFX_lv2_ui PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynAddSubFX_lv2_ui PROPERTIES OUTPUT_NAME "ZynAddSubFX_ui")
++set_target_properties(ZynAddSubFX_lv2_ui PROPERTIES PREFIX "")
++
++install(TARGETS ZynAddSubFX_lv2_ui LIBRARY DESTINATION lib/lv2/ZynAddSubFX.lv2/)
++
++install(FILES
++        ${CMAKE_CURRENT_BINARY_DIR}/lv2/ZynAddSubFX_ui.ttl
++        DESTINATION lib/lv2/ZynAddSubFX.lv2/)
++endif(NtkGui)
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+index c80bbb55..2511d05e 100644
+--- a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
++++ b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+@@ -27,7 +27,12 @@
+ #define DISTRHO_PLUGIN_NAME  "ZynAddSubFX"
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net"
+ 
+-#define DISTRHO_PLUGIN_HAS_UI          0
++#ifdef NTK_GUI
++ #define DISTRHO_PLUGIN_HAS_UI         1
++#else
++ #define DISTRHO_PLUGIN_HAS_UI         0
++#endif
++
+ #define DISTRHO_PLUGIN_IS_RT_SAFE      1
+ #define DISTRHO_PLUGIN_IS_SYNTH        1
+ #define DISTRHO_PLUGIN_NUM_INPUTS      0
+@@ -36,4 +41,15 @@
+ #define DISTRHO_PLUGIN_WANT_STATE      1
+ #define DISTRHO_PLUGIN_WANT_FULL_STATE 1
+ 
++enum Parameters {
++    kParamOscPort,
++    kParamCount
++};
++
++// Needed for dpf code, external-ui is not official
++#ifdef NTK_GUI
++ #define HAVE_DGL
++ #include "DistrhoUIInternal.hpp"
++#endif
++
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUI.cpp b/src/Plugin/ZynAddSubFX/DistrhoUI.cpp
+new file mode 100644
+index 00000000..4d78c6de
+--- /dev/null
++++ b/src/Plugin/ZynAddSubFX/DistrhoUI.cpp
+@@ -0,0 +1,64 @@
++/*
++ * DISTRHO Plugin Framework (DPF)
++ * Copyright (C) 2012-2015 Filipe Coelho <falktx@falktx.com>
++ *
++ * Permission to use, copy, modify, and/or distribute this software for any purpose with
++ * or without fee is hereby granted, provided that the above copyright notice and this
++ * permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD
++ * TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN
++ * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
++ * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
++ * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++
++#include "DistrhoUIInternal.hpp"
++
++START_NAMESPACE_DISTRHO
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Static data, see DistrhoUIInternal.hpp */
++
++double d_lastUiSampleRate = 0.0;
++
++/* ------------------------------------------------------------------------------------------------------------
++ * UI */
++
++UI::UI()
++    : pData(new PrivateData())
++{
++}
++
++UI::~UI()
++{
++    delete pData;
++}
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Host state */
++
++void UI::editParameter(uint32_t index, bool started)
++{
++    pData->editParamCallback(index + pData->parameterOffset, started);
++}
++
++void UI::setParameterValue(uint32_t index, float value)
++{
++    pData->setParamCallback(index + pData->parameterOffset, value);
++}
++
++void UI::setState(const char* key, const char* value)
++{
++    pData->setStateCallback(key, value);
++}
++
++void UI::sendNote(uint8_t channel, uint8_t note, uint8_t velocity)
++{
++    pData->sendNoteCallback(channel, note, velocity);
++}
++
++// -----------------------------------------------------------------------------------------------------------
++
++END_NAMESPACE_DISTRHO
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUI.hpp b/src/Plugin/ZynAddSubFX/DistrhoUI.hpp
+new file mode 100644
+index 00000000..ec1fcd56
+--- /dev/null
++++ b/src/Plugin/ZynAddSubFX/DistrhoUI.hpp
+@@ -0,0 +1,111 @@
++/*
++ * DISTRHO Plugin Framework (DPF)
++ * Copyright (C) 2012-2015 Filipe Coelho <falktx@falktx.com>
++ *
++ * Permission to use, copy, modify, and/or distribute this software for any purpose with
++ * or without fee is hereby granted, provided that the above copyright notice and this
++ * permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD
++ * TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN
++ * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
++ * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
++ * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++
++#ifndef DISTRHO_UI_HPP_INCLUDED
++#define DISTRHO_UI_HPP_INCLUDED
++
++#include "extra/LeakDetector.hpp"
++
++START_NAMESPACE_DISTRHO
++
++/* ------------------------------------------------------------------------------------------------------------
++ * DPF UI */
++
++/**
++   DPF UI class from where UI instances are created.
++ */
++class UI
++{
++public:
++   /**
++      UI class constructor.
++      The UI should be initialized to a default state that matches the plugin side.
++    */
++    UI();
++
++   /**
++      Destructor.
++    */
++    virtual ~UI();
++
++   /* --------------------------------------------------------------------------------------------------------
++    * Host state */
++
++   /**
++      editParameter.
++    */
++    void editParameter(uint32_t index, bool started);
++
++   /**
++      setParameterValue.
++    */
++    void setParameterValue(uint32_t index, float value);
++
++   /**
++      setState.
++    */
++    void setState(const char* key, const char* value);
++
++   /**
++      sendNote.
++    */
++    void sendNote(uint8_t channel, uint8_t note, uint8_t velocity);
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * DSP/Plugin Callbacks */
++
++   /**
++      A parameter has changed on the plugin side.@n
++      This is called by the host to inform the UI about parameter changes.
++    */
++    virtual void parameterChanged(uint32_t index, float value) = 0;
++
++   /**
++      A program has been loaded on the plugin side.@n
++      This is called by the host to inform the UI about program changes.
++    */
++    virtual void programLoaded(uint32_t index) = 0;
++
++   /**
++      A state has changed on the plugin side.@n
++      This is called by the host to inform the UI about state changes.
++    */
++    virtual void stateChanged(const char* key, const char* value) = 0;
++
++    // -------------------------------------------------------------------------------------------------------
++
++private:
++    struct PrivateData;
++    PrivateData* const pData;
++    friend class UIExporter;
++
++    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UI)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create UI, entry point */
++
++/**
++   createUI.
++ */
++extern UI* createUI(const intptr_t winId);
++
++// -----------------------------------------------------------------------------------------------------------
++
++END_NAMESPACE_DISTRHO
++
++#endif // DISTRHO_UI_HPP_INCLUDED
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp b/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
+new file mode 100644
+index 00000000..9952f0e3
+--- /dev/null
++++ b/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
+@@ -0,0 +1,222 @@
++/*
++ * DISTRHO Plugin Framework (DPF)
++ * Copyright (C) 2012-2015 Filipe Coelho <falktx@falktx.com>
++ *
++ * Permission to use, copy, modify, and/or distribute this software for any purpose with
++ * or without fee is hereby granted, provided that the above copyright notice and this
++ * permission notice appear in all copies.
++ *
++ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD
++ * TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN
++ * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
++ * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
++ * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
++ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
++ */
++
++#ifndef DISTRHO_UI_INTERNAL_HPP_INCLUDED
++#define DISTRHO_UI_INTERNAL_HPP_INCLUDED
++
++#include "DistrhoUI.hpp"
++
++START_NAMESPACE_DISTRHO
++
++// -----------------------------------------------------------------------
++// Static data, see DistrhoUI.cpp
++
++extern double d_lastUiSampleRate;
++
++// -----------------------------------------------------------------------
++// UI callbacks
++
++typedef void (*editParamFunc) (void* ptr, uint32_t rindex, bool started);
++typedef void (*setParamFunc)  (void* ptr, uint32_t rindex, float value);
++typedef void (*setStateFunc)  (void* ptr, const char* key, const char* value);
++typedef void (*sendNoteFunc)  (void* ptr, uint8_t channel, uint8_t note, uint8_t velo);
++typedef void (*setSizeFunc)   (void* ptr, uint width, uint height);
++
++// -----------------------------------------------------------------------
++// UI private data
++
++struct UI::PrivateData {
++    // DSP
++    uint32_t parameterOffset;
++
++    // Callbacks
++    editParamFunc editParamCallbackFunc;
++    setParamFunc  setParamCallbackFunc;
++    setStateFunc  setStateCallbackFunc;
++    sendNoteFunc  sendNoteCallbackFunc;
++    setSizeFunc   setSizeCallbackFunc;
++    void*         ptr;
++
++    PrivateData() noexcept
++        : parameterOffset(0),
++          editParamCallbackFunc(nullptr),
++          setParamCallbackFunc(nullptr),
++          setStateCallbackFunc(nullptr),
++          sendNoteCallbackFunc(nullptr),
++          setSizeCallbackFunc(nullptr),
++          ptr(nullptr)
++    {
++#ifdef DISTRHO_PLUGIN_TARGET_LV2
++        // events in+out
++        parameterOffset += 4 /* 2 stereo outs + events in&out */;
++#endif
++    }
++
++    void editParamCallback(const uint32_t rindex, const bool started)
++    {
++        if (editParamCallbackFunc != nullptr)
++            editParamCallbackFunc(ptr, rindex, started);
++    }
++
++    void setParamCallback(const uint32_t rindex, const float value)
++    {
++        if (setParamCallbackFunc != nullptr)
++            setParamCallbackFunc(ptr, rindex, value);
++    }
++
++    void setStateCallback(const char* const key, const char* const value)
++    {
++        if (setStateCallbackFunc != nullptr)
++            setStateCallbackFunc(ptr, key, value);
++    }
++
++    void sendNoteCallback(const uint8_t channel, const uint8_t note, const uint8_t velocity)
++    {
++        if (sendNoteCallbackFunc != nullptr)
++            sendNoteCallbackFunc(ptr, channel, note, velocity);
++    }
++
++    void setSizeCallback(const uint width, const uint height)
++    {
++        if (setSizeCallbackFunc != nullptr)
++            setSizeCallbackFunc(ptr, width, height);
++    }
++};
++
++// -----------------------------------------------------------------------
++// UI exporter class
++
++class UIExporter
++{
++public:
++    UIExporter(void* const ptr, const intptr_t winId,
++               const editParamFunc editParamCall, const setParamFunc setParamCall, const setStateFunc setStateCall, const sendNoteFunc sendNoteCall, const setSizeFunc setSizeCall,
++               void* const dspPtr = nullptr)
++        : fUI(createUI(winId)),
++          fData((fUI != nullptr) ? fUI->pData : nullptr)
++    {
++        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
++        DISTRHO_SAFE_ASSERT_RETURN(fData != nullptr,);
++
++        fData->ptr = ptr;
++        fData->editParamCallbackFunc = editParamCall;
++        fData->setParamCallbackFunc  = setParamCall;
++        fData->setStateCallbackFunc  = setStateCall;
++        fData->sendNoteCallbackFunc  = sendNoteCall;
++        fData->setSizeCallbackFunc   = setSizeCall;
++    }
++
++    // -------------------------------------------------------------------
++
++    uint32_t getParameterOffset() const noexcept
++    {
++        DISTRHO_SAFE_ASSERT_RETURN(fData != nullptr, 0);
++
++        return fData->parameterOffset;
++    }
++
++    // -------------------------------------------------------------------
++
++    void parameterChanged(const uint32_t index, const float value)
++    {
++        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
++
++        fUI->parameterChanged(index, value);
++    }
++
++    void programLoaded(const uint32_t index)
++    {
++        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
++
++        fUI->programLoaded(index);
++    }
++
++    void stateChanged(const char* const key, const char* const value)
++    {
++        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
++        DISTRHO_SAFE_ASSERT_RETURN(key != nullptr && key[0] != '\0',);
++        DISTRHO_SAFE_ASSERT_RETURN(value != nullptr,);
++
++        fUI->stateChanged(key, value);
++    }
++
++    // -------------------------------------------------------------------
++    // compatibility calls, used for regular OpenGL windows
++
++    uint getWidth() const noexcept
++    {
++        return 390;
++    }
++
++    uint getHeight() const noexcept
++    {
++        return 525;
++    }
++
++    intptr_t getWindowId() const noexcept
++    {
++        return 0;
++    }
++
++    bool isVisible() const noexcept
++    {
++        return true;
++    }
++
++    void setSampleRate(const double sampleRate, const bool doCallback = false)
++    {
++    }
++
++    void setWindowSize(const uint width, const uint height, const bool updateUI = false)
++    {
++    }
++
++    void setWindowTitle(const char* const uiTitle)
++    {
++    }
++
++    void setWindowTransientWinId(const uintptr_t winId)
++    {
++    }
++
++    bool setWindowVisible(const bool yesNo)
++    {
++        return true;
++    }
++
++    bool idle()
++    {
++        return true;
++    }
++
++    void quit()
++    {
++    }
++
++private:
++    // -------------------------------------------------------------------
++
++    UI* const fUI;
++    UI::PrivateData* const fData;
++
++    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UIExporter)
++};
++
++// -----------------------------------------------------------------------
++
++END_NAMESPACE_DISTRHO
++
++#endif // DISTRHO_UI_INTERNAL_HPP_INCLUDED
+diff --git a/src/Plugin/ZynAddSubFX/ExternalUI.hpp b/src/Plugin/ZynAddSubFX/ExternalUI.hpp
+new file mode 100644
+index 00000000..8d1c8b69
+--- /dev/null
++++ b/src/Plugin/ZynAddSubFX/ExternalUI.hpp
+@@ -0,0 +1 @@
++ 
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+new file mode 100644
+index 00000000..6574634f
+--- /dev/null
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+@@ -0,0 +1,215 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  ZynAddSubFX-UI.cpp - DPF + ZynAddSubFX External UI
++  Copyright (C) 2015-2016 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++// DPF includes
++#include "DistrhoUI.hpp"
++#include "src/DistrhoPluginChecks.h"
++
++// Custom includes
++#include <cerrno>
++#include <sys/wait.h>
++#include <unistd.h>
++
++/* ------------------------------------------------------------------------------------------------------------
++ * External UI class */
++
++// NOTE: The following code is non-portable!
++//       It's only meant to be used in linux
++
++class ExternalUI
++{
++public:
++    ExternalUI(const intptr_t w)
++        : pid(0),
++          winId(w) {}
++
++    ~ExternalUI()
++    {
++        terminateAndWaitForProcess();
++    }
++
++    void respawnAtURL(const int url)
++    {
++        terminateAndWaitForProcess();
++
++        char urlAsString[32];
++        sprintf(urlAsString, "osc.udp://localhost:%i/", url);
++
++        char winIdAsString[32];
++        sprintf(winIdAsString, "%llu", (long long unsigned)winId);
++
++        printf("Now respawning at '%s', using winId '%s'\n", urlAsString, winIdAsString);
++
++        const char* args[] = {
++            "zynaddsubfx-ext-gui",
++            "--embed",
++            winIdAsString,
++            urlAsString,
++            nullptr
++        };
++
++        pid = vfork();
++
++        switch (pid)
++        {
++        case 0:
++            execvp(args[0], (char**)args);
++            _exit(1);
++            break;
++
++        case -1:
++            printf("Could not start external ui\n");
++            break;
++        }
++    }
++
++private:
++    pid_t pid;
++    const intptr_t winId;
++
++    void terminateAndWaitForProcess()
++    {
++        if (pid <= 0)
++            return;
++
++        printf("Waiting for previous process to stop,,,\n");
++
++        bool sendTerm = true;
++
++        for (pid_t p;;)
++        {
++            p = ::waitpid(pid, nullptr, WNOHANG);
++
++            switch (p)
++            {
++            case 0:
++                if (sendTerm)
++                {
++                    sendTerm = false;
++                    ::kill(pid, SIGTERM);
++                }
++                break;
++
++            case -1:
++                if (errno == ECHILD)
++                {
++                    printf("Done! (no such process)\n");
++                    pid = 0;
++                    return;
++                }
++                break;
++
++            default:
++                if (p == pid)
++                {
++                    printf("Done! (clean wait)\n");
++                    pid = 0;
++                    return;
++                }
++                break;
++            }
++
++            // 5 msec
++            usleep(5*1000);
++        }
++    }
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * ZynAddSubFX UI class */
++
++class ZynAddSubFXUI : public UI
++{
++public:
++    ZynAddSubFXUI(const intptr_t winId)
++        : UI(),
++          externalUI(winId),
++          oscPort(0)
++    {
++    }
++
++    ~ZynAddSubFXUI() override
++    {
++    }
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * DSP/Plugin Callbacks */
++
++   /**
++      A parameter has changed on the plugin side.
++      This is called by the host to inform the UI about parameter changes.
++    */
++    void parameterChanged(uint32_t index, float value) override
++    {
++        switch (index)
++        {
++        case kParamOscPort: {
++            const int port = int(value+0.5f);
++
++            if (oscPort != port)
++            {
++                oscPort = port;
++                externalUI.respawnAtURL(port);
++            }
++        } break;
++        }
++    }
++
++   /**
++      A program has been loaded on the plugin side.
++      This is called by the host to inform the UI about program changes.
++    */
++    void programLoaded(uint32_t index) override
++    {
++    }
++
++   /**
++      A state has changed on the plugin side.
++      This is called by the host to inform the UI about state changes.
++    */
++    void stateChanged(const char* key, const char* value) override
++    {
++    }
++
++private:
++    ExternalUI externalUI;
++    int oscPort;
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(ZynAddSubFXUI)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create plugin, entry point */
++
++START_NAMESPACE_DISTRHO
++
++UI* createUI(const intptr_t winId)
++{
++    return new ZynAddSubFXUI(winId);
++}
++
++END_NAMESPACE_DISTRHO
++
++#ifdef DISTRHO_PLUGIN_TARGET_LV2
++#include "src/DistrhoUILV2.cpp"
++#endif
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index c2859c6b..d815412d 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -32,6 +32,7 @@
+ // Extra includes
+ #include "extra/Mutex.hpp"
+ #include "extra/Thread.hpp"
++#include <lo/lo.h>
+ 
+ /* ------------------------------------------------------------------------------------------------------------
+  * ZynAddSubFX plugin class */
+@@ -41,12 +42,13 @@ class ZynAddSubFX : public Plugin,
+ {
+ public:
+     ZynAddSubFX()
+-        : Plugin(0, 1, 1), // 0 parameters, 1 program, 1 state
++        : Plugin(kParamCount, 1, 1), // 1 program, 1 state
+           Thread("ZynMwTick"),
+           master(nullptr),
+           middleware(nullptr),
+           active(false),
+-          defaultState(nullptr)
++          defaultState(nullptr),
++          oscPort(0)
+     {
+         config.init();
+ 
+@@ -137,9 +139,51 @@ protected:
+    /* --------------------------------------------------------------------------------------------------------
+     * Parameters, empty for now */
+ 
+-    void  initParameter(uint32_t, Parameter&) noexcept override {}
+-    float getParameterValue(uint32_t) const noexcept override { return 0.0f; }
+-    void  setParameterValue(uint32_t index, float value) noexcept override {}
++   /**
++      Initialize the parameter @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initParameter(uint32_t index, Parameter& parameter) noexcept override
++    {
++        switch (index)
++        {
++        case kParamOscPort:
++            parameter.hints  = kParameterIsOutput;
++            parameter.name   = "OSC Port";
++            parameter.symbol = "osc_port";
++            parameter.unit   = "";
++            parameter.ranges.min = 0.0f;
++            parameter.ranges.max = 999999.0f;
++            parameter.ranges.def = 0.0f;
++            break;
++        }
++    }
++
++   /**
++      Get the current value of a parameter.
++      The host may call this function from any context, including realtime processing.
++    */
++    float getParameterValue(uint32_t index) const noexcept override
++    {
++        switch (index)
++        {
++        case kParamOscPort:
++            return oscPort;
++        default:
++            return 0.0f;
++        }
++    }
++
++   /**
++      Change a parameter value.
++      The host may call this function from any context, including realtime processing.
++      When a parameter is marked as automable, you must ensure no non-realtime operations are performed.
++      @note This function will only be called for parameter inputs.
++    */
++    void setParameterValue(uint32_t /*index*/, float /*value*/) noexcept override
++    {
++        // only an output port for now
++    }
+ 
+    /* --------------------------------------------------------------------------------------------------------
+     * Programs */
+@@ -364,11 +408,14 @@ private:
+     bool  active;
+     Mutex mutex;
+     char* defaultState;
++    int   oscPort;
+ 
+     char* _getState() const
+     {
+         char* data = nullptr;
+ 
++#if 0
++        // FIXME: this can lead to issues during startup
+         if (active)
+         {
+             middleware->doReadOnlyOp([this, &data]{
+@@ -376,6 +423,7 @@ private:
+             });
+         }
+         else
++#endif
+         {
+             master->getalldata(&data);
+         }
+@@ -389,6 +437,17 @@ private:
+         middleware->setUiCallback(__uiCallback, this);
+         middleware->setIdleCallback(__idleCallback, this);
+         _masterChangedCallback(middleware->spawnMaster());
++
++        if (char* url = lo_url_get_port(middleware->getServerAddress()))
++        {
++            oscPort = std::atoi(url);
++            std::free(url);
++        }
++        else
++        {
++            oscPort = 0;
++        }
++
+         startThread();
+     }
+ 
+@@ -401,6 +460,9 @@ private:
+         middleware = nullptr;
+     }
+ 
++   /* --------------------------------------------------------------------------------------------------------
++    * ZynAddSubFX Callbacks */
++
+     void _masterChangedCallback(Master* m)
+     {
+         master = m;
+@@ -412,8 +474,12 @@ private:
+         ((ZynAddSubFX*)ptr)->_masterChangedCallback(m);
+     }
+ 
++   /* -------------------------------------------------------------------------------------------------------- */
++
+     void _uiCallback(const char* const)
+     {
++        // this can be used to receive messages from UI
++        // to be handled soon for parameters
+     }
+ 
+     static void __uiCallback(void* ptr, const char* msg)
+@@ -421,6 +487,8 @@ private:
+         ((ZynAddSubFX*)ptr)->_uiCallback(msg);
+     }
+ 
++   /* -------------------------------------------------------------------------------------------------------- */
++
+     void _idleCallback()
+     {
+         // this can be used to give host idle time
+@@ -432,6 +500,8 @@ private:
+         ((ZynAddSubFX*)ptr)->_idleCallback();
+     }
+ 
++   /* -------------------------------------------------------------------------------------------------------- */
++
+     void run() noexcept override
+     {
+         for (; ! shouldThreadExit();)
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index 445c4303..cf8c9216 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -31,7 +31,8 @@
+ #include <sys/stat.h>
+ GUI::ui_handle_t gui = 0;
+ #if USE_NSM
+-NSM_Client *nsm = 0;
++NSM_Client *nsm = NULL;
++const char *embedId = NULL;
+ #endif
+ lo_server server;
+ std::string sendtourl;
+@@ -75,6 +76,7 @@ int Pexitprogram = 0;
+ #include <FL/Fl_Shared_Image.H>
+ #include <FL/Fl_Tiled_Image.H>
+ #include <FL/Fl_Dial.H>
++#include <FL/x.H>
+ #include <err.h>
+ #endif // NTK_GUI
+ 
+@@ -187,7 +189,21 @@ ui_handle_t GUI::createUi(Fl_Osc_Interface *osc, void *exit)
+     //midi_win->show();
+ 
+     Fl::add_handler(kb_shortcut_handler);
+-    return (void*) (ui = new MasterUI((int*)exit, osc));
++
++    ui = new MasterUI((int*)exit, osc);
++
++#ifdef NTK_GUI
++    if (embedId != NULL)
++    {
++        if (long long winId = atoll(embedId))
++        {
++            fl_embed(ui->masterwindow, winId);
++            ui->masterwindow->show();
++        }
++    }
++#endif
++
++    return (void*) ui;
+ }
+ void GUI::destroyUi(ui_handle_t ui)
+ {
+@@ -571,6 +587,10 @@ int main(int argc, char *argv[])
+             help = true;
+         else if(!strcmp("--no-uri", argv[i]))
+             no_uri = true;
++#if USE_NSM
++        else if(!strcmp("--embed", argv[i]))
++            embedId = argv[++i];
++#endif
+         else
+             uri = argv[i];
+     }
+@@ -586,7 +606,7 @@ int main(int argc, char *argv[])
+     if(uri) {
+         server = lo_server_new_with_proto(NULL, LO_UDP, liblo_error_cb);
+         lo_server_add_method(server, NULL, NULL, handler_function, 0);
+-        sendtourl = argv[1];
++        sendtourl = uri;
+     }
+     fprintf(stderr, "ext client running on %d\n", lo_server_get_port(server));
+     std::thread lo_watch(watch_lo);
+-- 
+2.47.0
+

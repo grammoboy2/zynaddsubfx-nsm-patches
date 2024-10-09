@@ -1,0 +1,99 @@
+From 8643c9dbbe672015459fb185f40243d4ed3a1a88 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 13 Aug 2013 13:28:35 -0400
+Subject: [PATCH 0125/1936] Add Basic Effect Middleware Swapping
+
+---
+ src/Effects/EffectMgr.cpp | 16 ++++++++++++++++
+ src/Misc/Master.cpp       |  1 +
+ src/Misc/MiddleWare.cpp   | 14 ++++++++++++++
+ 3 files changed, 31 insertions(+)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 9c132e8d..829384fe 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -71,6 +71,22 @@ rtosc::Ports EffectMgr::ports = {
+             eq->getFilter(a,b);
+             d.reply(d.loc, "bb", sizeof(a), a, sizeof(b), b);
+         }},
++    {"efftype:b", rProp(internal), NULL, [](const char *msg, rtosc::RtData &d)
++        {
++            EffectMgr *eff  = (EffectMgr*)d.obj;
++            EffectMgr *eff_ = *(EffectMgr**)rtosc_argument(msg,0).b.data;
++
++            //Lets trade data
++            std::swap(eff->nefx,eff_->nefx);
++            std::swap(eff->efx,eff_->efx);
++            std::swap(eff->filterpars,eff_->filterpars);
++            std::swap(eff->efxoutl, eff_->efxoutl);
++            std::swap(eff->efxoutr, eff_->efxoutr);
++
++            //Return the old data for distruction
++            d.reply("/free", "sb", "EffectMgr", sizeof(EffectMgr*), &eff_);
++        }},
++
+ };
+ 
+ 
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index c6c1aa1c..048dee84 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -52,6 +52,7 @@ static Ports localports = {
+     rRecursp(insefx, 8, "Insertion Effect"),//NUM_INS_EFX
+     rRecur(microtonal, "Micrtonal Mapping Functionality"),
+     rParam(Pkeyshift,  "Global Key Shift"),
++    rParams(Pinsparts, NUM_INS_EFX, "Part to insert part onto"),
+     {"echo", "=documentation\0:Hidden port to echo messages\0", 0, [](const char *m, RtData&) {
+        bToU->raw_write(m-1);}},
+     {"get-vu", rDoc("Grab VU Data"), 0, [](const char *, RtData &d) {
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 2619ece2..823f6304 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -19,6 +19,7 @@
+ #include "Part.h"
+ #include "../Params/ADnoteParameters.h"
+ #include "../Params/PADnoteParameters.h"
++#include "../Effects/EffectMgr.h"
+ 
+ #include <string>
+ 
+@@ -133,6 +134,8 @@ void deallocate(const char *str, void *v)
+         delete (Part*)v;
+     else if(!strcmp(str, "Master"))
+         delete (Master*)v;
++    else if(!strcmp(str, "EffectMgr"))
++        delete (EffectMgr*)v;
+     else if(!strcmp(str, "fft_t"))
+         delete[] (fft_t*)v;
+     else
+@@ -238,6 +241,15 @@ void loadBank(Bank &bank, int pos, Fl_Osc_Interface *osc)
+         refreshBankView(bank, i, osc);
+ }
+ 
++void createEffect(const char *msg)
++{
++    const bool insertion = !strstr(msg, "sysefx");
++    const int  efftype   = rtosc_argument(msg, 0).i;
++    EffectMgr *em        = new EffectMgr(insertion);
++    em->changeeffect(efftype);
++    uToB->write(msg, "b", sizeof(EffectMgr*), &em);
++}
++
+ //
+ //static rtosc::Ports padPorts= {
+ //    {"prepare:", "::Prepares the padnote instance", 0, }
+@@ -510,6 +522,8 @@ struct MiddleWareImpl
+             rescanForBanks(master->bank, osc);
+         } else if(!strcmp(msg, "/loadbank") && !strcmp(rtosc_argument_string(msg), "c")) {
+             loadBank(master->bank, rtosc_argument(msg, 0).i, osc);
++        } else if(strstr(msg, "efftype") && !strcmp(rtosc_argument_string(msg), "c")) {
++            createEffect(msg);
+         } else if(objmap.find(obj_rl) != objmap.end()) {
+             //try some over simplified pattern matching
+             if(strstr(msg, "oscil/")) {
+-- 
+2.47.0
+

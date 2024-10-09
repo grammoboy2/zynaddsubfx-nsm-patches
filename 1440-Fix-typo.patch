@@ -1,0 +1,25 @@
+From a89918b1f8018cc1b1e7d067ec62499ed3e2fc94 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 19 Oct 2019 08:47:53 +0200
+Subject: [PATCH 1440/1936] Fix typo
+
+---
+ src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 08d9eea0..e93a1430 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -96,7 +96,7 @@ SET (NoNeonPlease False CACHE BOOL
+ SET (PluginLibDir "lib" CACHE STRING
+     "Install directory for plugin libraries PREFIX/PLUGIN_LIB_DIR/{lv2,vst}")
+ SET (DemoMode FALSE CACHE BOOL "Enable 10 minute silence")
+-SET (ZynFusionDir "" CACHE STRING "Developers only: zest binary's dir; useful if fusion is not system-instealled.")
++SET (ZynFusionDir "" CACHE STRING "Developers only: zest binary's dir; useful if fusion is not system-installed.")
+ mark_as_advanced(FORCE ZynFusionDir)
+ 
+ # Now, handle the incoming settings and set define flags/variables based
+-- 
+2.47.0
+

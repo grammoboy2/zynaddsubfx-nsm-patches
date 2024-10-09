@@ -1,0 +1,189 @@
+From 58d893fc9505f51c62737e3cbd8fcc71fa5d87cd Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Mar 2014 18:41:30 -0400
+Subject: [PATCH 0156/1936] UI: Fix Basic Part Name View
+
+---
+ src/Misc/Part.cpp         |  3 ++-
+ src/Misc/Part.h           |  2 +-
+ src/UI/CMakeLists.txt     |  1 +
+ src/UI/MasterUI.fl        |  5 +++++
+ src/UI/PartNameButton.cpp | 28 ++++++++++++++++++++++++++++
+ src/UI/PartNameButton.h   | 17 +++++++++++++++++
+ src/UI/PartUI.fl          | 17 ++++++++++++++---
+ 7 files changed, 68 insertions(+), 5 deletions(-)
+ create mode 100644 src/UI/PartNameButton.cpp
+ create mode 100644 src/UI/PartNameButton.h
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 971007a9..5f9e1b3d 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -65,6 +65,7 @@ static Ports partPorts = {
+     rParam(info.Ptype, "Class of Instrument"),
+     rString(info.Pauthor, MAX_INFO_TEXT_SIZE, "Instrument Author"),
+     rString(info.Pcomments, MAX_INFO_TEXT_SIZE, "Instrument Comments"),
++    rString(Pname, PART_MAX_NAME_LEN, "Kit User Specified Label"),
+     {"captureMin:", NULL, NULL, [](const char *, RtData &r)
+         {Part *p = (Part*)r.obj; p->Pminkey = p->lastnote;}},
+     {"captureMax:", NULL, NULL, [](const char *, RtData &r)
+@@ -179,7 +180,7 @@ Part::Part(Microtonal *microtonal_, FFTwrapper *fft_)
+     }
+     cleanup();
+ 
+-    Pname = new unsigned char [PART_MAX_NAME_LEN];
++    Pname = new char[PART_MAX_NAME_LEN];
+ 
+     oldvolumel = oldvolumer = 0.5f;
+     lastnote   = -1;
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 250309c3..2012ac87 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -125,7 +125,7 @@ class Part
+         unsigned char Plegatomode; // 0=normal, 1=legato
+         unsigned char Pkeylimit; //how many keys are alowed to be played same time (0=off), the older will be relased
+ 
+-        unsigned char *Pname; //name of the instrument
++        char *Pname; //name of the instrument
+         struct { //instrument additional information
+             unsigned char Ptype;
+             char          Pauthor[MAX_INFO_TEXT_SIZE + 1];
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index b2c5801b..fc7ce074 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -34,6 +34,7 @@ add_library(zynaddsubfx_gui STATIC
+ 	${zynaddsubfx_gui_FLTK_UI_SRCS}
+         NioUI.cpp
+         WidgetPDial.cpp
++        PartNameButton.cpp
+         Fl_Osc_Pane.cpp
+         Fl_Osc_Widget.cpp
+         Fl_Osc_Dial.cpp
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index ff7d2172..cdda76cd 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -59,6 +59,9 @@ decl {\#include "Fl_Osc_Dial.H"} {private local
+ decl {\#include "VuMasterMeter.h"} {public local
+ } 
+ 
++decl {\#include "PartNameButton.h"} {public local
++} 
++
+ decl {\#include "../Misc/Master.h"} {public local
+ } 
+ 
+@@ -1030,6 +1033,8 @@ if (result==-10) fl_alert("Error: Could not load the file\\nbecause it is not an
+ };
+ bankui->show();}
+           xywh {130 72 205 18} box THIN_DOWN_BOX down_box FLAT_BOX color 50 labelfont 1 labelsize 11 align 208
++          code0 {o->ext = "Pname";o->oscRegister("Pname");}
++          class PartNameButton
+         }
+         Fl_Slider partpanning {
+           label Pan
+diff --git a/src/UI/PartNameButton.cpp b/src/UI/PartNameButton.cpp
+new file mode 100644
+index 00000000..e0f4c7d8
+--- /dev/null
++++ b/src/UI/PartNameButton.cpp
+@@ -0,0 +1,28 @@
++#include "PartNameButton.h"
++
++PartNameButton::PartNameButton(int X, int Y, int W, int H, const char *label)
++    :Fl_Button(X,Y,W,H,label), Fl_Osc_Widget(this)
++{
++}
++
++void PartNameButton::OSC_value(const char *label_)
++{
++    printf("\n\n\n\n\n\n\n\n\nNWEWERWERW LABESRL:\n");
++    printf("'%s'\n", label_);
++
++    the_string = label_;
++    label(the_string.c_str());
++}
++
++void PartNameButton::debug(void)
++{
++    printf("debugging part name at address '%x'\n", (int)this);
++    Fl_Group *w = this->parent();
++    while(w)
++    {
++        printf("    Looking at parent '%x'[%d,%d]\n", (int)w, w->visible(), w->visible_r());
++        if(auto *win = dynamic_cast<Fl_Window*>(w))
++            printf("        Window(%d,'%s')\n", win->shown(), win->label());
++        w = w->parent();
++    }
++}
+diff --git a/src/UI/PartNameButton.h b/src/UI/PartNameButton.h
+new file mode 100644
+index 00000000..14cc8860
+--- /dev/null
++++ b/src/UI/PartNameButton.h
+@@ -0,0 +1,17 @@
++#pragma once
++#include <FL/Fl_Button.H>
++#include "Fl_Osc_Widget.H"
++#include <string>
++
++class PartNameButton:public Fl_Button, public Fl_Osc_Widget
++{
++    public:
++        PartNameButton(int X, int Y, int W, int H, const char *label=NULL);
++
++        virtual ~PartNameButton(void){};
++        virtual void OSC_value(const char *);
++        void debug(void);
++        std::string the_string;
++
++        //virtual void rebase(std::string) override;
++};
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 1d80a98e..9542b8ec 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -26,6 +26,9 @@ decl {\#include "Fl_Osc_Dial.H"} {public local
+ decl {\#include "Fl_Osc_Input.H"} {public local
+ } 
+ 
++decl {\#include "PartNameButton.h"} {public local
++} 
++
+ decl {\#include "EffUI.h"} {public local
+ } 
+ 
+@@ -285,8 +288,11 @@ if (event==FL_RIGHT_MOUSE){
+   if (event==FL_LEFT_MOUSE) bankui->show();
+        else instrumenteditwindow->show();
+ };}
+-          tooltip {left mousebutton - to choose/save/.. from/to bank or right mousebutton to change the name or middle button to change the instrument information} xywh {195 5 185 20} box UP_FRAME down_box DOWN_FRAME labelfont 1 labelsize 11 align 84
++          tooltip {left mousebutton - to choose/save/.. from/to bank or right mousebutton to change the name or middle button to change the instrument information}
++          xywh {195 5 185 20} box UP_FRAME down_box DOWN_FRAME labelfont 1 labelsize 11 align 84
+           code0 {/*o->label((char *)part->Pname);*/}
++          code1 {o->ext = "Pname";o->oscRegister("Pname");}
++          class PartNameButton
+         }
+         Fl_Box {} {
+           label {To Sys.Efx.}
+@@ -1028,8 +1034,13 @@ keylimitlist->value(val);} {}
+   } {
+     code {
+ if (engine==-1){//this is used if I want to clear the engine from the part
+-    if (kititem==lastkititem) kititem=-1;
+-    else kititem=lastkititem;
++    //if (kititem==lastkititem) kititem=-1;
++    //else kititem=lastkititem;
++    delete adnoteui;
++    delete subnoteui;   
++    delete padnoteui;
++    adnoteui=NULL;subnoteui=NULL;padnoteui=NULL;
++    return;
+ }
+ 
+ if (kititem!=lastkititem){
+-- 
+2.47.0
+

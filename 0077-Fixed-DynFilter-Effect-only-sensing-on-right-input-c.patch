@@ -1,0 +1,26 @@
+From c141f777ba02ab7f6580f194aa86b99d0be366c9 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@mailueberfall.de>
+Date: Tue, 30 Apr 2013 19:58:23 +0200
+Subject: [PATCH 0077/1936] Fixed DynFilter Effect only sensing on right input
+ channel.
+
+---
+ src/Effects/DynamicFilter.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Effects/DynamicFilter.cpp b/src/Effects/DynamicFilter.cpp
+index 1074fa75..74731da0 100644
+--- a/src/Effects/DynamicFilter.cpp
++++ b/src/Effects/DynamicFilter.cpp
+@@ -65,7 +65,7 @@ void DynamicFilter::out(const Stereo<float *> &smp)
+         efxoutl[i] = smp.l[i];
+         efxoutr[i] = smp.r[i];
+ 
+-        const float x = (fabsf(smp.l[i]) + fabsf(smp.l[i])) * 0.5f;
++        const float x = (fabsf(smp.l[i]) + fabsf(smp.r[i])) * 0.5f;
+         ms1 = ms1 * (1.0f - ampsmooth) + x * ampsmooth + 1e-10;
+     }
+ 
+-- 
+2.47.0
+

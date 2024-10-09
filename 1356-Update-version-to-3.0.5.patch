@@ -1,0 +1,50 @@
+From 4d4aedf834dbd13c6e5f07ac512c9da74732fd58 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 15 Apr 2019 00:10:44 -0400
+Subject: [PATCH 1356/1936] Update version to 3.0.5
+
+---
+ CMakeLists.txt              | 2 +-
+ HISTORY.txt                 | 2 +-
+ src/Tests/guitar-adnote.xmz | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index fd83d24d..b000e598 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,7 +3,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+ set(VERSION_MAJOR "3")
+ set(VERSION_MINOR "0")
+-set(VERSION_REVISION "4")
++set(VERSION_REVISION "5")
+ 
+ #Set data directory, if any
+ if(DEFINED ZYN_DATADIR)
+diff --git a/HISTORY.txt b/HISTORY.txt
+index a0b221ad..01f17d13 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,4 +1,4 @@
+-3.0.5 (soon)
++3.0.5 (15 April 2019)
+         - Add Stereo peaks for individual part metering
+         - Change LFO frequency units to Hz (from unitless)
+         - Enhance LFO delay parameter resolution and units (seconds)
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index efb9e2dd..3ea07b63 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -2,7 +2,7 @@
+ <?xml version="1.0f" encoding="UTF-8"?>
+ <!DOCTYPE ZynAddSubFX-data>
+ <ZynAddSubFX-data version-major="3" version-minor="0"
+-version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
++version-revision="5" ZynAddSubFX-author="Nasca Octavian Paul">
+ <INFORMATION>
+ <par_bool name="PADsynth_used" value="yes" />
+ </INFORMATION>
+-- 
+2.47.0
+

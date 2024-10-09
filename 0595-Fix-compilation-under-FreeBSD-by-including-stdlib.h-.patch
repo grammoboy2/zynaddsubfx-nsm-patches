@@ -1,0 +1,23 @@
+From 571749b4cd15955950299e00889e2fc149077d7a Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Mon, 12 Oct 2015 20:42:55 +0200
+Subject: [PATCH 0595/1936] Fix compilation under FreeBSD by including stdlib.h
+ which defines atoi().
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/UI/Fl_Osc_Numeric_Input.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/UI/Fl_Osc_Numeric_Input.cpp b/src/UI/Fl_Osc_Numeric_Input.cpp
+index 0afc6842..00015dd4 100644
+--- a/src/UI/Fl_Osc_Numeric_Input.cpp
++++ b/src/UI/Fl_Osc_Numeric_Input.cpp
+@@ -1,3 +1,4 @@
++#include <stdlib.h>
+ #include "Fl_Osc_Numeric_Input.H"
+ 
+ Fl_Osc_Numeric_Input::Fl_Osc_Numeric_Input(int X, int Y, int W, int H, const char *label)
+-- 
+2.47.0
+

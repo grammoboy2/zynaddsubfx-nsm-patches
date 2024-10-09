@@ -1,0 +1,25 @@
+From f53234135db7bb71dc646b8745bfb4a29ac04396 Mon Sep 17 00:00:00 2001
+From: Philippe Gervais <philippe.n.gervais@free.fr>
+Date: Sat, 6 Feb 2021 21:17:57 +0100
+Subject: [PATCH 1708/1936] Fix a typo: depricated -> deprecated
+
+---
+ src/Misc/Master.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 6784d985..2db9b593 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -577,7 +577,7 @@ static const Ports master_ports = {
+         rBOIL_END},
+     {"bank/", rDoc("Controls for instrument banks"), &bankPorts,
+             [](const char*,RtData&) {}},
+-    {"learn:s", rProp(depricated) rDoc("MIDI Learn"), 0,
++    {"learn:s", rProp(deprecated) rDoc("MIDI Learn"), 0,
+         rBegin;
+         int free_slot = m->automate.free_slot();
+         if(free_slot >= 0) {
+-- 
+2.47.0
+

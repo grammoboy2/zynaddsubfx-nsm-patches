@@ -1,0 +1,57 @@
+From 150bfb07aa48505297654b2acfe224175c17f510 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 26 Mar 2017 14:11:51 -0400
+Subject: [PATCH 1125/1936] Exit If Zyn-Fusion Is Closed In Standalone
+
+---
+ src/main.cpp | 17 ++++++++++++++++-
+ 1 file changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index 42521ff3..31798dec 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -47,6 +47,10 @@
+ #include "UI/Connection.h"
+ GUI::ui_handle_t gui;
+ 
++#ifdef ZEST_GUI
++#include <sys/wait.h>
++#endif
++
+ //Glue Layer
+ #include "Misc/MiddleWare.h"
+ MiddleWare *middleware;
+@@ -632,10 +636,12 @@ int wmidi = -1;
+     }
+ 
+ #ifdef ZEST_GUI
++    pid_t gui_pid = 0;
+     if(!noui) {
+         printf("[INFO] Launching Zyn-Fusion...\n");
+         const char *addr = middleware->getServerAddress();
+-        if(fork() == 0) {
++        gui_pid = fork();
++        if(gui_pid == 0) {
+             execlp("zyn-fusion", "zyn-fusion", addr, "--builtin", "--no-hotload",  0);
+             execlp("./zyn-fusion", "zyn-fusion", addr, "--builtin", "--no-hotload",  0);
+ 
+@@ -682,6 +688,15 @@ done:
+ #ifdef WIN32
+         Sleep(1);
+ #endif
++
++#ifdef ZEST_GUI
++        if(!noui) {
++            int status = 0;
++            int ret = waitpid(gui_pid, &status, WNOHANG);
++            if(ret == gui_pid)
++                Pexitprogram = 1;
++        }
++#endif
+     }
+ 
+     exitprogram(config);
+-- 
+2.47.0
+

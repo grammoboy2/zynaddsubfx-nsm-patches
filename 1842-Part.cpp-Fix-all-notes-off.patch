@@ -1,0 +1,82 @@
+From 0190e89fed40f5ac3b2165440b2101eee5aa6a52 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Thu, 24 Mar 2022 08:19:41 +0100
+Subject: [PATCH 1842/1936] Part.cpp: Fix all notes off
+
+When the MIDI All Notes Off is received, this is equated to a
+note off for all currently playing keys, which is not the
+same as releasing all playing voices, as the latter does not
+take into consideration the sustain pedal state.
+
+This is noticable when playing Roland keyboards, which habitually
+emit an All Notes Off message whenever all keys are released.
+---
+ src/Misc/Part.cpp | 38 ++++++++++++++++++++++++++++----------
+ 1 file changed, 28 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 4d0105bd..2b8c3573 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -686,7 +686,7 @@ void Part::NoteOff(note_t note) //release the key
+     for(auto &desc:notePool.activeDesc()) {
+         if(desc.note != note || !desc.playing())
+             continue;
+-        // if latch is on we ignore noteoff, but set the state to lateched
++        // if latch is on we ignore noteoff, but set the state to latched
+         if(Platchmode) {
+             notePool.latch(desc);
+         } else if(!ctl.sustain.sustain) { //the sustain pedal is not pushed
+@@ -705,6 +705,33 @@ void Part::NoteOff(note_t note) //release the key
+     }
+ }
+ 
++/*
++ * This handles the MIDI All Notes Off message (the 'notes off' in 'all notes
++ * off' refers to note off events, not actually silencing all playing
++ * voices).
++ */
++void Part::ReleaseAllKeys(void)
++{
++    // Clear all notes from list.
++    monomemClear();
++
++    for(auto &desc:notePool.activeDesc()) {
++        if(!desc.playing())
++            continue;
++        // if latch is on we ignore noteoff, but set the state to latched
++        if(Platchmode) {
++            notePool.latch(desc);
++        } else if(!ctl.sustain.sustain) { //the sustain pedal is not pushed
++            notePool.release(desc);
++        } else {   //the sustain pedal is pushed
++            if(desc.canSustain())
++                desc.doSustain();
++            else
++                notePool.release(desc);
++        }
++    }
++}
++
+ void Part::PolyphonicAftertouch(note_t note,
+                 unsigned char velocity)
+ {
+@@ -876,15 +903,6 @@ void Part::ReleaseSustainedKeys()
+     notePool.releaseSustainingNotes();
+ }
+ 
+-/*
+- * Release all keys
+- */
+-
+-void Part::ReleaseAllKeys()
+-{
+-    notePool.releasePlayingNotes();
+-}
+-
+ // Call NoteOn(...) with the most recent still held key as new note
+ // (Made for Mono/Legato).
+ void Part::MonoMemRenote()
+-- 
+2.47.0
+

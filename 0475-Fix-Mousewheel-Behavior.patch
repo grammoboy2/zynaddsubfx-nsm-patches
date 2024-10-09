@@ -1,0 +1,92 @@
+From e84dadbe2bac425b27c187d2e9f90c32872fb92b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 29 May 2015 18:05:40 -0400
+Subject: [PATCH 0475/1936] Fix Mousewheel Behavior
+
+Rtosc events resulted in quantizing the values of the knobs to integer
+quantities which resulted in weird feeling movement.
+This was resolved by retaining the fractional portion when integer args are
+provided.
+---
+ src/UI/Fl_Osc_Dial.cpp    | 4 ++--
+ src/UI/Fl_Osc_Slider.cpp  | 4 ++--
+ src/UI/Fl_Osc_VSlider.cpp | 4 ++--
+ src/UI/SUBnoteUI.fl       | 2 +-
+ 4 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/src/UI/Fl_Osc_Dial.cpp b/src/UI/Fl_Osc_Dial.cpp
+index 64eaab7f..6ca6b871 100644
+--- a/src/UI/Fl_Osc_Dial.cpp
++++ b/src/UI/Fl_Osc_Dial.cpp
+@@ -78,12 +78,12 @@ int Fl_Osc_Dial::handle(int ev)
+ 
+ void Fl_Osc_Dial::OSC_value(int v)
+ {
+-    value(v+minimum());
++    value(v+minimum()+fmodf(value(), 1));
+ }
+ 
+ void Fl_Osc_Dial::OSC_value(char v)
+ {
+-    value(v+minimum());
++    value(v+minimum()+fmodf(value(), 1));
+ }
+ 
+ void Fl_Osc_Dial::update(void)
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index b46f0932..24ed44f7 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -33,7 +33,7 @@ Fl_Osc_Slider::~Fl_Osc_Slider(void)
+ void Fl_Osc_Slider::OSC_value(int v)
+ {
+     const float min_ = min__(minimum(), maximum());//flipped sliders
+-    Fl_Slider::value(v+min_);
++    Fl_Slider::value(v+min_+fmodf(value(),1.0));
+ }
+ 
+ void Fl_Osc_Slider::OSC_value(float v)
+@@ -45,7 +45,7 @@ void Fl_Osc_Slider::OSC_value(float v)
+ void Fl_Osc_Slider::OSC_value(char v)
+ {
+     const float min_ = min__(minimum(), maximum());//flipped sliders
+-    Fl_Slider::value(v+min_);
++    Fl_Slider::value(v+min_+fmodf(value(),1.0));
+ }
+ 
+ void Fl_Osc_Slider::cb(void)
+diff --git a/src/UI/Fl_Osc_VSlider.cpp b/src/UI/Fl_Osc_VSlider.cpp
+index f43ba1b6..1c438c07 100644
+--- a/src/UI/Fl_Osc_VSlider.cpp
++++ b/src/UI/Fl_Osc_VSlider.cpp
+@@ -27,12 +27,12 @@ Fl_Osc_VSlider::~Fl_Osc_VSlider(void)
+ 
+ void Fl_Osc_VSlider::OSC_value(char v)
+ {
+-    Fl_Slider::value(v+minimum());
++    Fl_Slider::value(v+minimum()+fmodf(value(), 1.0f));
+ }
+         
+ void Fl_Osc_VSlider::OSC_value(int v)
+ {
+-    Fl_Slider::value(v+minimum());
++    Fl_Slider::value(v+minimum()+fmodf(value(), 1.0f));
+ }
+ 
+ void Fl_Osc_VSlider::OSC_value(float v)
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 92e22753..2d5121ca 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -81,7 +81,7 @@ return(1);} {}
+   }
+   Function {OSC_value(char c)} {open return_type void
+   } {
+-    code {value(127-c);} {}
++    code {value(127-c+fmodf(value(), 1.0f));} {}
+   }
+   decl {bool bw;} {public local
+   }
+-- 
+2.47.0
+

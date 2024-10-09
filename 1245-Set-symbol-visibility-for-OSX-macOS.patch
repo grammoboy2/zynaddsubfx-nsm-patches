@@ -1,0 +1,183 @@
+From eba10893246bb6c8bcb22fc0bce62c5503cccdfb Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Sun, 7 Jan 2018 16:20:26 +0100
+Subject: [PATCH 1245/1936] Set symbol-visibility for OSX/macOS
+
+This hides symbols of all statically linked libraries when linking
+which is required due to OSX flat-namespace with static-gcc.
+---
+ src/Plugin/AlienWah/CMakeLists.txt      | 9 +++++++--
+ src/Plugin/Chorus/CMakeLists.txt        | 9 +++++++--
+ src/Plugin/Distortion/CMakeLists.txt    | 9 +++++++--
+ src/Plugin/DynamicFilter/CMakeLists.txt | 9 +++++++--
+ src/Plugin/Echo/CMakeLists.txt          | 9 +++++++--
+ src/Plugin/Phaser/CMakeLists.txt        | 9 +++++++--
+ src/Plugin/Reverb/CMakeLists.txt        | 9 +++++++--
+ src/Plugin/ZynAddSubFX/CMakeLists.txt   | 5 +++--
+ 8 files changed, 52 insertions(+), 16 deletions(-)
+
+diff --git a/src/Plugin/AlienWah/CMakeLists.txt b/src/Plugin/AlienWah/CMakeLists.txt
+index 1ae66ad6..e03fabaf 100644
+--- a/src/Plugin/AlienWah/CMakeLists.txt
++++ b/src/Plugin/AlienWah/CMakeLists.txt
+@@ -14,8 +14,13 @@ set_target_properties(ZynAlienWah_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynAlienWah_vst PROPERTIES OUTPUT_NAME "ZynAlienWah")
+ set_target_properties(ZynAlienWah_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynAlienWah_lv2 zynaddsubfx_core ${OS_LIBRARIES})
+-target_link_libraries(ZynAlienWah_vst zynaddsubfx_core ${OS_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynAlienWah_lv2 zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
++    target_link_libraries(ZynAlienWah_vst zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_VSTPluginMain")
++else()
++    target_link_libraries(ZynAlienWah_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++    target_link_libraries(ZynAlienWah_vst zynaddsubfx_core ${OS_LIBRARIES})
++endif()
+ 
+ install(TARGETS ZynAlienWah_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAlienWah.lv2/)
+ install(TARGETS ZynAlienWah_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/Chorus/CMakeLists.txt b/src/Plugin/Chorus/CMakeLists.txt
+index c95547f8..e6321647 100644
+--- a/src/Plugin/Chorus/CMakeLists.txt
++++ b/src/Plugin/Chorus/CMakeLists.txt
+@@ -14,8 +14,13 @@ set_target_properties(ZynChorus_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynChorus_vst PROPERTIES OUTPUT_NAME "ZynChorus")
+ set_target_properties(ZynChorus_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynChorus_lv2 zynaddsubfx_core ${OS_LIBRARIES})
+-target_link_libraries(ZynChorus_vst zynaddsubfx_core ${OS_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynChorus_lv2 zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
++    target_link_libraries(ZynChorus_vst zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_VSTPluginMain")
++else()
++    target_link_libraries(ZynChorus_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++    target_link_libraries(ZynChorus_vst zynaddsubfx_core ${OS_LIBRARIES})
++endif()
+ 
+ install(TARGETS ZynChorus_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynChorus.lv2/)
+ install(TARGETS ZynChorus_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/Distortion/CMakeLists.txt b/src/Plugin/Distortion/CMakeLists.txt
+index 06da25eb..6188774a 100644
+--- a/src/Plugin/Distortion/CMakeLists.txt
++++ b/src/Plugin/Distortion/CMakeLists.txt
+@@ -14,8 +14,13 @@ set_target_properties(ZynDistortion_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst
+ set_target_properties(ZynDistortion_vst PROPERTIES OUTPUT_NAME "ZynDistortion")
+ set_target_properties(ZynDistortion_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynDistortion_lv2 zynaddsubfx_core ${OS_LIBRARIES})
+-target_link_libraries(ZynDistortion_vst zynaddsubfx_core ${OS_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynDistortion_lv2 zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
++    target_link_libraries(ZynDistortion_vst zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_VSTPluginMain")
++else()
++    target_link_libraries(ZynDistortion_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++    target_link_libraries(ZynDistortion_vst zynaddsubfx_core ${OS_LIBRARIES})
++endif()
+ 
+ install(TARGETS ZynDistortion_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynDistortion.lv2/)
+ install(TARGETS ZynDistortion_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/DynamicFilter/CMakeLists.txt b/src/Plugin/DynamicFilter/CMakeLists.txt
+index 83b29191..c562783b 100644
+--- a/src/Plugin/DynamicFilter/CMakeLists.txt
++++ b/src/Plugin/DynamicFilter/CMakeLists.txt
+@@ -14,8 +14,13 @@ set_target_properties(ZynDynamicFilter_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES OUTPUT_NAME "ZynDynamicFilter")
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynDynamicFilter_lv2 zynaddsubfx_core ${OS_LIBRARIES})
+-target_link_libraries(ZynDynamicFilter_vst zynaddsubfx_core ${OS_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynDynamicFilter_lv2 zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
++    target_link_libraries(ZynDynamicFilter_vst zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_VSTPluginMain")
++else()
++    target_link_libraries(ZynDynamicFilter_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++    target_link_libraries(ZynDynamicFilter_vst zynaddsubfx_core ${OS_LIBRARIES})
++endif()
+ 
+ install(TARGETS ZynDynamicFilter_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynDynamicFilter.lv2/)
+ install(TARGETS ZynDynamicFilter_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/Echo/CMakeLists.txt b/src/Plugin/Echo/CMakeLists.txt
+index a23a3e85..fa7c31c6 100644
+--- a/src/Plugin/Echo/CMakeLists.txt
++++ b/src/Plugin/Echo/CMakeLists.txt
+@@ -14,8 +14,13 @@ set_target_properties(ZynEcho_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynEcho_vst PROPERTIES OUTPUT_NAME "ZynEcho")
+ set_target_properties(ZynEcho_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynEcho_lv2 zynaddsubfx_core ${OS_LIBRARIES})
+-target_link_libraries(ZynEcho_vst zynaddsubfx_core ${OS_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynEcho_lv2 zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
++    target_link_libraries(ZynEcho_vst zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_VSTPluginMain")
++else()
++    target_link_libraries(ZynEcho_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++    target_link_libraries(ZynEcho_vst zynaddsubfx_core ${OS_LIBRARIES})
++endif()
+ 
+ install(TARGETS ZynEcho_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynEcho.lv2/)
+ install(TARGETS ZynEcho_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/Phaser/CMakeLists.txt b/src/Plugin/Phaser/CMakeLists.txt
+index 6a157a10..f344d939 100644
+--- a/src/Plugin/Phaser/CMakeLists.txt
++++ b/src/Plugin/Phaser/CMakeLists.txt
+@@ -14,8 +14,13 @@ set_target_properties(ZynPhaser_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynPhaser_vst PROPERTIES OUTPUT_NAME "ZynPhaser")
+ set_target_properties(ZynPhaser_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynPhaser_lv2 zynaddsubfx_core ${OS_LIBRARIES})
+-target_link_libraries(ZynPhaser_vst zynaddsubfx_core ${OS_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynPhaser_lv2 zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
++    target_link_libraries(ZynPhaser_vst zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_VSTPluginMain")
++else()
++    target_link_libraries(ZynPhaser_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++    target_link_libraries(ZynPhaser_vst zynaddsubfx_core ${OS_LIBRARIES})
++endif()
+ 
+ install(TARGETS ZynPhaser_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynPhaser.lv2/)
+ install(TARGETS ZynPhaser_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/Reverb/CMakeLists.txt b/src/Plugin/Reverb/CMakeLists.txt
+index 0682ca41..c2d74a97 100644
+--- a/src/Plugin/Reverb/CMakeLists.txt
++++ b/src/Plugin/Reverb/CMakeLists.txt
+@@ -14,8 +14,13 @@ set_target_properties(ZynReverb_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynReverb_vst PROPERTIES OUTPUT_NAME "ZynReverb")
+ set_target_properties(ZynReverb_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynReverb_lv2 zynaddsubfx_core ${OS_LIBRARIES})
+-target_link_libraries(ZynReverb_vst zynaddsubfx_core ${OS_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynReverb_lv2 zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
++    target_link_libraries(ZynReverb_vst zynaddsubfx_core ${OS_LIBRARIES} "-Wl,-exported_symbol,_VSTPluginMain")
++else()
++    target_link_libraries(ZynReverb_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++    target_link_libraries(ZynReverb_vst zynaddsubfx_core ${OS_LIBRARIES})
++endif()
+ 
+ install(TARGETS ZynReverb_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynReverb.lv2/)
+ install(TARGETS ZynReverb_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 4f59738f..b63bcccb 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -132,14 +132,15 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+ endif()
+ if(APPLE)
+     target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+-        ${PLATFORM_LIBRARIES} "-framework Cocoa" "-framework openGL")
++        ${PLATFORM_LIBRARIES} "-framework Cocoa" "-framework openGL" "-Wl,-exported_symbol,_VSTPluginMain")
+ else()
+     target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+         ${PLATFORM_LIBRARIES})
+ endif()
+ if(ZestGui AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+     if(APPLE)
+-        target_link_libraries(ZynAddSubFX_lv2_ui "-framework Cocoa" "-framework openGL")
++        target_link_libraries(ZynAddSubFX_lv2_ui "-framework Cocoa" "-framework openGL" "-Wl,-exported_symbol,_lv2ui_descriptor")
++        target_link_libraries(ZynAddSubFX_lv2 "-Wl,-exported_symbol,_lv2_descriptor" "-Wl,-exported_symbol,_lv2_generate_ttl")
+     else()
+         target_link_libraries(ZynAddSubFX_lv2_ui X11 GL)
+     endif()
+-- 
+2.47.0
+

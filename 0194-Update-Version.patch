@@ -1,0 +1,25 @@
+From 8d86210ffd302131a78bb8c00e9090393860f6eb Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 20 Jun 2014 13:24:41 -0400
+Subject: [PATCH 0194/1936] Update Version
+
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 169877a3..d36aa807 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,7 +1,7 @@
+ cmake_minimum_required(VERSION 2.8)
+ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+-set(VERSION "2.4.3")
++set(VERSION "2.4.4")
+ 
+ enable_testing()
+ include(CTestConfig.cmake)
+-- 
+2.47.0
+

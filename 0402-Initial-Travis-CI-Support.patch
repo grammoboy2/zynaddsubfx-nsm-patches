@@ -1,0 +1,33 @@
+From 3bdf4f05d0337a39dcef42117c198378156a450a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 31 Mar 2015 16:46:59 -0400
+Subject: [PATCH 0402/1936] Initial Travis CI Support
+
+---
+ .travis.yml | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+ create mode 100644 .travis.yml
+
+diff --git a/.travis.yml b/.travis.yml
+new file mode 100644
+index 00000000..aba3f19e
+--- /dev/null
++++ b/.travis.yml
+@@ -0,0 +1,14 @@
++language: cpp
++
++compiler:
++    - gcc
++    - clang
++
++before_install:
++    - sudo apt-get update && sudo apt-get install zlib-dev mxml-dev fftw3-dev cxxtest
++
++script:
++    - mkdir build && cd build
++    - cmake ..
++    - make
++    - ctest --output-on-failure
+-- 
+2.47.0
+

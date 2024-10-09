@@ -1,0 +1,26 @@
+From 92b7ab3b054dc970a6e5fb569c7b04672a488e36 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 22 Feb 2020 10:05:13 +0100
+Subject: [PATCH 1466/1936] Fix indention space vs tabs.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Effects/Reverb.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index 3a897dfe..d0be3665 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -470,7 +470,7 @@ unsigned char Reverb::getpresetpar(unsigned char npreset, unsigned int npar)
+             /* lower the volume if reverb is insertion effect */
+             return presets[npreset][npar] / 2;
+         }
+-	return presets[npreset][npar];
++        return presets[npreset][npar];
+     }
+     return 0;
+ }
+-- 
+2.47.0
+

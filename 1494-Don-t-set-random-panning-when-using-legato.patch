@@ -1,0 +1,31 @@
+From 2a3a3d2554f40f7507efa36880009efc670b326f Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 13:22:12 +0200
+Subject: [PATCH 1494/1936] Don't set random panning when using legato.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/PADnote.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 5c996408..e631f105 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -113,10 +113,10 @@ void PADnote::setup(float freq,
+     }
+ 
+ 
+-    if(pars.PPanning == 0)
+-        NoteGlobalPar.Panning = RND;
+-    else
++    if(pars.PPanning)
+         NoteGlobalPar.Panning = pars.PPanning / 128.0f;
++    else if(!legato)
++        NoteGlobalPar.Panning = RND;
+ 
+     if(!legato) {
+         NoteGlobalPar.Fadein_adjustment =
+-- 
+2.47.0
+

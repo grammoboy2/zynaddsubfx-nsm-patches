@@ -1,0 +1,109 @@
+From 9f4051b55882bee47b3e9667d0d4d6414628827e Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 24 Jan 2021 19:31:21 +0100
+Subject: [PATCH 1706/1936] Fix memory leaks (main.cpp, plugin, rtosc)
+
+---
+ rtosc                                  |  2 +-
+ src/Misc/MiddleWare.cpp                | 18 ++++++++++++++++--
+ src/Misc/MiddleWare.h                  |  3 ++-
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp |  6 +++---
+ src/main.cpp                           |  3 ++-
+ 5 files changed, 24 insertions(+), 8 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 2138685a..7de244ba 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 2138685a5b0a1d81eea9025360b7774c0b9fb12d
++Subproject commit 7de244bae04deb5964516ba544e551d95e7f15ce
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 739b575d..11dcd1dd 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -2448,12 +2448,26 @@ const SYNTH_T &MiddleWare::getSynth(void) const
+     return impl->synth;
+ }
+ 
+-const char* MiddleWare::getServerAddress(void) const
++char* MiddleWare::getServerAddress(void) const
+ {
+     if(impl->server)
+         return lo_server_get_url(impl->server);
+     else
+-        return "NULL";
++        return nullptr;
++}
++
++char* MiddleWare::getServerPort(void) const
++{
++    char* addr = getServerAddress();
++    char* result;
++    if(addr)
++    {
++        result = lo_url_get_port(addr);
++        free(addr);
++    }
++    else
++        result = nullptr;
++    return result;
+ }
+ 
+ const PresetsStore& MiddleWare::getPresetsStore() const
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 71efeb09..a36ab2c0 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -82,7 +82,8 @@ class MiddleWare
+         //View Synthesis Parameters
+         const SYNTH_T &getSynth(void) const;
+         //liblo stuff
+-        const char* getServerAddress(void) const;
++        char* getServerAddress(void) const;
++        char* getServerPort(void) const;
+ 
+         const PresetsStore& getPresetsStore() const;
+         PresetsStore& getPresetsStore();
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index cc9596df..47862b0b 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -514,10 +514,10 @@ private:
+         middleware->setIdleCallback(__idleCallback, this);
+         _masterChangedCallback(middleware->spawnMaster());
+ 
+-        if (char* url = lo_url_get_port(middleware->getServerAddress()))
++        if (char* portStr = middleware->getServerPort())
+         {
+-            oscPort = std::atoi(url);
+-            std::free(url);
++            oscPort = std::atoi(portStr);
++            std::free(portStr);
+         }
+         else
+         {
+diff --git a/src/main.cpp b/src/main.cpp
+index 20243add..44d36798 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -708,7 +708,7 @@ int main(int argc, char *argv[])
+ #endif
+     if(!noui) {
+         printf("[INFO] Launching Zyn-Fusion...\n");
+-        const char *addr = middleware->getServerAddress();
++        char *addr = middleware->getServerAddress();
+ #ifndef WIN32
+         gui_pid = fork();
+         if(gui_pid == 0) {
+@@ -759,6 +759,7 @@ int main(int argc, char *argv[])
+             exit(1);
+         }
+ #endif
++        free(addr);
+     }
+ #endif
+ 
+-- 
+2.47.0
+

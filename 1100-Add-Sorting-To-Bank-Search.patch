@@ -1,0 +1,50 @@
+From 778a90f315291f900c0067d8c6d971b1116d0187 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 28 Nov 2016 17:18:53 -0500
+Subject: [PATCH 1100/1936] Add Sorting To Bank Search
+
+---
+ src/Misc/BankDb.cpp | 7 +++++++
+ src/Misc/BankDb.h   | 1 +
+ 2 files changed, 8 insertions(+)
+
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index 3fb77bb1..a92bc111 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -55,6 +55,11 @@ bool BankEntry::match(string s) const
+         sfind(type, s) || sfind(comments,s) || sfind(author,s);
+ }
+ 
++bool BankEntry::operator<(const BankEntry &b) const
++{
++    return this->file < b.file;
++}
++
+ static svec split(string s)
+ {
+     svec vec;
+@@ -97,6 +102,8 @@ bvec BankDb::search(std::string ss) const
+             vec.push_back(field);
+     }
+ 
++    std::sort(vec.begin(), vec.end());
++
+     return vec;
+ }
+ 
+diff --git a/src/Misc/BankDb.h b/src/Misc/BankDb.h
+index 455807f9..60b2a382 100644
+--- a/src/Misc/BankDb.h
++++ b/src/Misc/BankDb.h
+@@ -20,6 +20,7 @@ struct BankEntry
+     typedef std::vector<std::string> svec;
+     svec tags(void) const;
+     bool match(std::string) const;
++    bool operator<(const BankEntry &b) const;
+ };
+ 
+ 
+-- 
+2.47.0
+

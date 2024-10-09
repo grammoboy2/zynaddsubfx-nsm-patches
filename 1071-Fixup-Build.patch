@@ -1,0 +1,34 @@
+From 54587f4737831cf44d54033747ecefbd35b9d242 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 26 Oct 2016 14:30:24 -0400
+Subject: [PATCH 1071/1936] Fixup Build
+
+---
+ src/UI/NSM.C | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index d37d2264..ba6ef18c 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -22,7 +22,7 @@
+ 
+ #include "../Nio/Nio.h"
+ 
+-#ifndef NO_UI
++#if defined(FLTK_UI) || defined(NTK_UI)
+ #include <FL/Fl.H>
+ #endif
+ #include <cstdio>
+@@ -109,7 +109,7 @@ NSM_Client::command_open(const char *name,
+     return r;
+ }
+ 
+-#ifndef NO_UI
++#if defined(FLTK_UI) || defined(NTK_UI)
+ static void save_callback(Fl_Widget *, void *v)
+ {
+     MasterUI *ui = static_cast<MasterUI*>(v);
+-- 
+2.47.0
+

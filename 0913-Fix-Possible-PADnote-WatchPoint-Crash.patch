@@ -1,0 +1,57 @@
+From 9b394389584e6ee674a3015c9a00cb822e3c8420 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 20 May 2016 11:36:35 -0400
+Subject: [PATCH 0913/1936] Fix Possible PADnote WatchPoint Crash
+
+---
+ src/Synth/PADnote.cpp | 6 ++++--
+ src/Synth/PADnote.h   | 2 +-
+ 2 files changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index dd28c76e..69c3ded5 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -23,7 +23,8 @@
+ #include "../Misc/Util.h"
+ 
+ PADnote::PADnote(const PADnoteParameters *parameters,
+-                 SynthParams pars, const int& interpolation, WatchManager *wm, const char *prefix)
++                 SynthParams pars, const int& interpolation, WatchManager *wm,
++                 const char *prefix)
+     :SynthNote(pars), pars(*parameters), interpolation(interpolation)
+ {
+     NoteGlobalPar.GlobalFilter    = nullptr;
+@@ -31,7 +32,7 @@ PADnote::PADnote(const PADnoteParameters *parameters,
+     NoteGlobalPar.FilterLfo       = nullptr;
+ 
+     firsttime = true;
+-    setup(pars.frequency, pars.velocity, pars.portamento, pars.note, false, prefix);
++    setup(pars.frequency, pars.velocity, pars.portamento, pars.note, false, wm, prefix);
+ }
+ 
+ void PADnote::setup(float freq,
+@@ -39,6 +40,7 @@ void PADnote::setup(float freq,
+                     int portamento_,
+                     int midinote,
+                     bool legato, 
++                    WatchManager *wm,
+                     const char *prefix)
+ {
+     portamento = portamento_;
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index cefeaf0e..b60dc61b 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -36,7 +36,7 @@ class PADnote:public SynthNote
+         void releasekey();
+     private:
+         void setup(float freq, float velocity, int portamento_,
+-                   int midinote, bool legato = false, const char *prefix=0);
++                   int midinote, bool legato = false, WatchManager *wm=0, const char *prefix=0);
+         void fadein(float *smps);
+         void computecurrentparameters();
+         bool finished_;
+-- 
+2.47.0
+

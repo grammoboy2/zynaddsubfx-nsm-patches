@@ -1,0 +1,53 @@
+From 9a1c77585b38d92ff487e3c095818bd3cbc2f996 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 7 Oct 2022 12:49:11 +0200
+Subject: [PATCH 1862/1936] Make sure the search results don't overflow the
+ incoming 8192 bytes sized buffer when using the zynaddsubfx-ext-gui .
+
+Because the search results also include the full path of the banks
+the maximum message size may vary. Sometimes banks are installed in
+/usr/local and sometimes in /usr . For now simply print a warning message
+when this happens and continue, for example when searching for "str"
+in the bank search under FreeBSD:
+
+guimain.cpp:571 Received too many bytes 9052 > 8192 (ignored)
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/UI/guimain.cpp | 16 +++++++++++++---
+ 1 file changed, 13 insertions(+), 3 deletions(-)
+
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index 22422231..2625ab51 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -558,13 +558,23 @@ static int handler_function(const char *path, const char *types, lo_arg **argv,
+     (void) argc;
+     (void) user_data;
+     char buffer[8192];
++    size_t size;
++
++    size = lo_message_length(msg, path);
++    if (size > sizeof(buffer)) {
++        /*
++         * Sometimes search results may return too much data to handle
++         * by the lo_buffer. Just print a warning and ignore such
++         * messages for now.
++         */
++        fprintf(stderr, "guimain.cpp:%u Received too many bytes "
++            "%zu > %zu (ignored)\n", __LINE__, size, sizeof(buffer));
++        return 0;
++    }
+     memset(buffer, 0, sizeof(buffer));
+-    size_t size = sizeof(buffer);
+-    assert(lo_message_length(msg, path) <= sizeof(buffer));
+     lo_message_serialise(msg, path, buffer, &size);
+     assert(size <= sizeof(buffer));
+     lo_buffer.raw_write(buffer);
+-
+     return 0;
+ }
+ 
+-- 
+2.47.0
+

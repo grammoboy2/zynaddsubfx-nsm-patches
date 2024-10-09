@@ -1,0 +1,28 @@
+From 957590b1a406ef0afd3b6d182bc6ee42e14e7cc3 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Wed, 2 Aug 2017 23:41:34 +0200
+Subject: [PATCH 1197/1936] Fix for clang compile warnings.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Effects/EQ.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Effects/EQ.cpp b/src/Effects/EQ.cpp
+index 5719986f..b260e25d 100644
+--- a/src/Effects/EQ.cpp
++++ b/src/Effects/EQ.cpp
+@@ -80,8 +80,8 @@ rtosc::Ports EQ::ports = {
+             memset(b, 0, sizeof(b));
+             eq->getFilter(a,b);
+ 
+-            char        type[MAX_EQ_BANDS*MAX_FILTER_STAGES*3*2+1] = {0};
+-            rtosc_arg_t  val[MAX_EQ_BANDS*MAX_FILTER_STAGES*3*2] = {0};
++            char        type[MAX_EQ_BANDS*MAX_FILTER_STAGES*3*2+1] = {};
++            rtosc_arg_t  val[MAX_EQ_BANDS*MAX_FILTER_STAGES*3*2] = {};
+             for(int i=0; i<MAX_EQ_BANDS*MAX_FILTER_STAGES*3; ++i) {
+                 int stride = MAX_EQ_BANDS*MAX_FILTER_STAGES*3;
+                 type[i]  = type[i+stride] = 'f';
+-- 
+2.47.0
+

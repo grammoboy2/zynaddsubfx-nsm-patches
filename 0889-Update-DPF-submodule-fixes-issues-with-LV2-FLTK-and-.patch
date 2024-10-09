@@ -1,0 +1,20 @@
+From 7ed2c76c1056911cfc5fb534d2871053360b84a3 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Mon, 14 Mar 2016 22:56:49 +0100
+Subject: [PATCH 0889/1936] Update DPF submodule, fixes issues with LV2+FLTK
+ and OSX builds
+
+---
+ DPF | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/DPF b/DPF
+index f7262453..662ca8a7 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit f726245325c7fcfcdffb66e1c3a89bb07da96d06
++Subproject commit 662ca8a75157a046e8b395f38303625cdd1011e1
+-- 
+2.47.0
+

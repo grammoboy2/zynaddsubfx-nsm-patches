@@ -1,0 +1,26 @@
+From 4189b19880d30841d0a5510d49a3b921882c86e8 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Fri, 9 Oct 2015 13:23:11 -0400
+Subject: [PATCH 0582/1936] Get Q from params; voice param filter Q gets
+ ignored otherwise.
+
+---
+ src/DSP/FormantFilter.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index 2c9b540d..ad21fc97 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -71,7 +71,7 @@ FormantFilter::FormantFilter(FilterParams *pars, Allocator *alloc, unsigned int
+     outgain = dB2rap(pars->getgain());
+ 
+     oldinput   = -1.0f;
+-    Qfactor    = 1.0f;
++    Qfactor = pars->getq();
+     oldQfactor = Qfactor;
+     firsttime  = 1;
+ }
+-- 
+2.47.0
+

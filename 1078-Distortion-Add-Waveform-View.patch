@@ -1,0 +1,42 @@
+From 8af16d3da210dd84ba6741c63045a98613ed9ad0 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 15 Nov 2016 19:46:17 -0500
+Subject: [PATCH 1078/1936] Distortion: Add Waveform View
+
+---
+ src/Effects/Distorsion.cpp | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/src/Effects/Distorsion.cpp b/src/Effects/Distorsion.cpp
+index 2475ce16..b71772c6 100644
+--- a/src/Effects/Distorsion.cpp
++++ b/src/Effects/Distorsion.cpp
+@@ -50,6 +50,25 @@ rtosc::Ports Distorsion::ports = {
+     rEffParTF(Pstereo, 9, rShort("stereo"), "Stereo"),
+     rEffParTF(Pprefiltering, 10, rShort("p.filt"),
+                   "Filtering before/after non-linearity"),
++    {"waveform:", 0, 0, [](const char *, rtosc::RtData &d)
++        {
++            Distorsion  &dd = *(Distorsion*)d.obj;
++            float        buffer[128];
++            rtosc_arg_t  args[128];
++            char         arg_str[128+1] = {0};
++
++            for(int i=0; i<128; ++i)
++                buffer[i] = 2*(i/128.0)-1;
++
++            waveShapeSmps(sizeof(buffer), buffer, dd.Ptype + 1, dd.Pdrive);
++
++            for(int i=0; i<128; ++i) {
++                arg_str[i] = 'f';
++                args[i].f  = buffer[i];
++            }
++
++            d.replyArray(d.loc, arg_str, args);
++        }},
+ };
+ #undef rBegin
+ #undef rEnd
+-- 
+2.47.0
+

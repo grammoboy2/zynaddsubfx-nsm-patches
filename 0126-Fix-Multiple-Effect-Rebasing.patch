@@ -1,0 +1,148 @@
+From c61f50fa520d64ee5e3d0eeea08cc44d9223bd61 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 13 Aug 2013 23:41:26 -0400
+Subject: [PATCH 0126/1936] Fix Multiple Effect Rebasing
+
+---
+ src/Effects/EffectMgr.cpp |  5 +++++
+ src/UI/Fl_EQGraph.cpp     |  1 +
+ src/UI/Fl_Osc_Pane.H      |  3 ++-
+ src/UI/Fl_Osc_Pane.cpp    |  7 +++++++
+ src/UI/MasterUI.fl        | 16 +++++++++++++---
+ src/UI/PartUI.fl          |  2 ++
+ 6 files changed, 30 insertions(+), 4 deletions(-)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 829384fe..b8bddf61 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -71,6 +71,11 @@ rtosc::Ports EffectMgr::ports = {
+             eq->getFilter(a,b);
+             d.reply(d.loc, "bb", sizeof(a), a, sizeof(b), b);
+         }},
++    {"efftype:", rProp(internal), NULL, [](const char *, rtosc::RtData &d)
++        {
++            EffectMgr *eff  = (EffectMgr*)d.obj;
++            d.reply(d.loc, "c", eff->nefx);
++        }},
+     {"efftype:b", rProp(internal), NULL, [](const char *msg, rtosc::RtData &d)
+         {
+             EffectMgr *eff  = (EffectMgr*)d.obj;
+diff --git a/src/UI/Fl_EQGraph.cpp b/src/UI/Fl_EQGraph.cpp
+index e746389a..b9b68768 100644
+--- a/src/UI/Fl_EQGraph.cpp
++++ b/src/UI/Fl_EQGraph.cpp
+@@ -16,6 +16,7 @@ Fl_EQGraph::Fl_EQGraph(int x,int y, int w, int h, const char *label)
+     memset(dem, 0, sizeof(dem));
+     num[0] = 1;
+     dem[0] = 1;
++    ext = "eq-coeffs";
+     oscRegister("eq-coeffs");
+ }
+ 
+diff --git a/src/UI/Fl_Osc_Pane.H b/src/UI/Fl_Osc_Pane.H
+index b7aa3dca..d919592c 100644
+--- a/src/UI/Fl_Osc_Pane.H
++++ b/src/UI/Fl_Osc_Pane.H
+@@ -33,7 +33,8 @@ class Fl_Osc_Group:public Fl_Osc_Pane, public Fl_Group
+         std::string ext;
+ 
+         virtual std::string loc(void) const;
+-        virtual void rebase(std::string new_base);
++        virtual void reext(std::string new_base);
++        virtual void rebase(std::string new_ext);
+ };
+ #endif
+ 
+diff --git a/src/UI/Fl_Osc_Pane.cpp b/src/UI/Fl_Osc_Pane.cpp
+index 4c236cad..0f2b4cf1 100644
+--- a/src/UI/Fl_Osc_Pane.cpp
++++ b/src/UI/Fl_Osc_Pane.cpp
+@@ -86,4 +86,11 @@ std::string Fl_Osc_Group::loc(void) const
+ void Fl_Osc_Group::rebase(std::string new_base)
+ {
+     nested_rebase(this, new_base+ext);
++    base = new_base;
++}
++
++void Fl_Osc_Group::reext(std::string new_ext)
++{
++    nested_rebase(this, base+new_ext);
++    ext = new_ext;
+ }
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 7ae07671..c3b76885 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -489,6 +489,8 @@ if (fl_choice("The file *might* exist. \\nOverwrite it?","No","Yes",NULL)) {
+             Fl_Counter syseffnocounter {
+               label {Sys.Effect No.}
+               callback {nsyseff=(int) o->value()-1;
++              syseffectuigroup->reext("sysefx"+to_s(nsyseff)+"/");
++              sysefftype->oscMove("sysefx"+to_s(nsyseff)+"/efftype");
+ syseffectui->refresh();}
+               xywh {10 186 80 22} type Simple labelfont 1 labelsize 10 align 1 minimum 0 maximum 127 step 1 value 1 textfont 1
+               code0 {o->bounds(1,NUM_SYS_EFX);}
+@@ -578,6 +580,10 @@ pthread_mutex_unlock(&master->mutex);*/}
+             Fl_Counter inseffnocounter {
+               label {Ins.Effect No.}
+               callback {ninseff=(int) o->value()-1;
++              insefftype->oscMove("insefx"+to_s(ninseff)+"/efftype");
++              inseffectuigroup->reext("insefx"+to_s(ninseff)+"/");
++              inseffpart->oscMove("Pinsparts"+to_s(ninseff));
++
+               /*
+ insefftype->value(master->insefx[ninseff]->geteffect());
+ inseffpart->value(master->Pinsparts[ninseff]+2);
+@@ -600,13 +606,15 @@ if (master->Pinsparts[ninseff]!=-1) {
+               label EffType
+               callback {/*pthread_mutex_lock(&master->mutex);
+ master->insefx[ninseff]->changeeffect((int) o->value());
+-pthread_mutex_unlock(&master->mutex);
++pthread_mutex_unlock(&master->mutex);*/
+ inseffectui->efftype = o->value();
+ inseffectui->refresh();
+-inseffectui->show();*/}
++inseffectui->show();}
+               xywh {290 178 100 22} down_box BORDER_BOX labelsize 10
+               code0 {/*o->value(master->insefx[ninseff]->geteffect());*/}
+               code1 {/*if (master->Pinsparts[ninseff]== -1) o->deactivate();*/}
++              code2 {o->init("insefx"+to_s(ninseff)+"/efftype");}
++              class Fl_Osc_Choice
+             } {
+               MenuItem {} {
+                 label {No Effect}
+@@ -1157,7 +1165,7 @@ pthread_mutex_unlock(&master->mutex);
+ simplesyseffectui->efftype = o->value();
+ simplesyseffectui->refresh();*/}
+               xywh {515 80 70 15} down_box BORDER_BOX labelsize 10 align 5
+-              code0 {o->init("/bad_location");}
++              code0 {o->init("sysefx"+to_s(nsyseff)+"/efftype");}
+               class Fl_Osc_Choice
+             } {
+               MenuItem {} {
+@@ -1260,6 +1268,8 @@ simpleinseffectui->show();}
+               xywh {515 80 70 15} down_box BORDER_BOX labelsize 10 align 5
+               code0 {/*o->value(master->insefx[ninseff]->geteffect());*/}
+               code1 {/*if (master->Pinsparts[ninseff]== -1) o->deactivate();*/}
++              code2 {o->init("insefx"+to_s(ninseff)+"/efftype");}
++              class Fl_Osc_Choice
+             } {
+               MenuItem {} {
+                 label {No Effect}
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 25abe28a..d2ac0555 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -594,6 +594,8 @@ else {propta->deactivate();proptb->deactivate();}}
+       Fl_Counter inseffnocounter {
+         label {FX No.}
+         callback {ninseff=(int) o->value()-1;
++        insefftype->oscMove("partefx"+to_s(ninseff)+"/efftype");
++        inseffectuigroup->reext("partefx"+to_s(ninseff)+"/");
+ /*insefftype->value(part->partefx[ninseff]->geteffect());*/
+ //insefftype->do_callback();
+ inseffectui->refresh();
+-- 
+2.47.0
+

@@ -1,0 +1,24 @@
+From 07154f4d210f17168a85bf3d5969a5a34fe81245 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 22 Sep 2016 09:40:03 -0400
+Subject: [PATCH 1030/1936] Add /damage message when loading .xmz
+
+---
+ src/Misc/MiddleWare.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index c74887bc..81fd0658 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1317,6 +1317,7 @@ static rtosc::Ports middwareSnoopPorts = {
+         rBegin;
+         const char *file = rtosc_argument(msg, 0).s;
+         impl.loadMaster(file);
++        d.reply("/damage", "s", "/");
+         rEnd},
+     {"reset_master:", 0, 0,
+         rBegin;
+-- 
+2.47.0
+

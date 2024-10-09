@@ -1,0 +1,51 @@
+From c4a3c0070973183329e0920267464ff88592ff82 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Apr 2015 12:20:51 -0400
+Subject: [PATCH 0416/1936] CMake: Add X11 Dep
+
+---
+ src/CMakeLists.txt | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index a1411ca1..6cfcd4fc 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -6,6 +6,7 @@ message(STATUS "Checking Library Path" $ENV{CMAKE_LIBRARY_PATH} ${CMAKE_LIBRARY_
+ include(CheckFunctionExists)
+ find_package(PkgConfig REQUIRED)
+ find_package(zlib REQUIRED)
++find_package(X11)
+ pkg_check_modules(FFTW REQUIRED fftw3)
+ pkg_check_modules(MXML REQUIRED mxml)
+ find_package(Threads   REQUIRED)
+@@ -266,6 +267,9 @@ if(FltkGui)
+ 
+ 
+ 	set(GUI_LIBRARIES zynaddsubfx_gui ${FLTK_LIBRARIES} ${FLTK_LIBRARIES} ${OPENGL_LIBRARIES})
++    if(X11_FOUND)
++        set(GUI_LIBRARIES ${GUI_LIBRARIES} ${X11_LIBRARIES})
++    endif()
+ 
+ 	add_definitions(-DFLTK_GUI)
+ 	message(STATUS "Will build FLTK gui")
+@@ -287,6 +291,10 @@ if(NtkGui)
+ 
+ 	set(GUI_LIBRARIES zynaddsubfx_gui ${NTK_LIBRARIES} ${NTK_IMAGES_LIBRARIES} ${OPENGL_LIBRARIES})
+ 
++    if(X11_FOUND)
++        set(GUI_LIBRARIES ${GUI_LIBRARIES} ${X11_LIBRARIES})
++    endif()
++
+ 	add_definitions(-DNTK_GUI)
+ 
+ 	message(STATUS "Will build NTK gui")
+@@ -435,4 +443,5 @@ package_status(DSSI_FOUND       "DSSI     " "enabled" ${Yellow})
+ package_status(LIBLO_FOUND      "liblo    " "enabled" ${Red})
+ package_status(FLTK_FOUND       "fltk     " "found"   ${Yellow})
+ package_status(NTK_FOUND        "ntk      " "found"   ${Yellow})
++package_status(X11_FOUND        "x11      " "found"   ${Yellow})
+ message(STATUS "Link libraries: ${ZLIB_LIBRARY} ${FFTW_LIBRARY} ${MXML_LIBRARIES} ${AUDIO_LIBRARIES} ${OS_LIBRARIES}")
+-- 
+2.47.0
+

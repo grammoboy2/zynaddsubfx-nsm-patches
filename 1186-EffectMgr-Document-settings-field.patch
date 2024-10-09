@@ -1,0 +1,47 @@
+From 188c505b2f9193b2229ba745180838531dd99993 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 28 Jul 2017 13:15:55 -0400
+Subject: [PATCH 1186/1936] EffectMgr: Document settings field
+
+---
+ src/Effects/EffectMgr.h | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index d0ff4212..147a38b8 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -77,6 +77,30 @@ class EffectMgr:public Presets
+ 
+         //Parameters Prior to initialization
+         char preset;
++
++        /**
++         * When loading an effect from XML the child effect cannot be loaded
++         * directly as it would require access to the realtime memory pool,
++         * which cannot be done outside of the realtime thread.
++         * Therefore, parameters are loaded to this array which can then be used
++         * to construct the full effect (via init()) once the object is in the
++         * realtime context.
++         *
++         * Additionally this structure is used in the case of pasting effects as
++         * pasted effect object are *not* fully initialized when they're put on
++         * the middleware -> backend ringbuffer, but settings has the values
++         * loaded from the XML serialization.
++         * The settings values can be pasted once they're on the realtime thread
++         * and then they can be applied.
++         *
++         * The requirement that the realtime memory pool is used to create the
++         * effect is in place as it is possible to change the effect type in the
++         * realtime thread and thus the new effect would draw from the realtime
++         * memory pool and the old object would be expected to be freed to the
++         * realtime memory pool.
++         *
++         * See also: PresetExtractor.cpp
++         */
+         char settings[128];
+ 
+         bool dryonly;
+-- 
+2.47.0
+

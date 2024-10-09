@@ -1,0 +1,31 @@
+From 98e0b77a1a543252307dffb4a32abb2f852c8618 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 3 Oct 2019 20:14:42 +0200
+Subject: [PATCH 1428/1936] Optionally install HISTORY.txt.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ CMakeLists.txt | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b000e598..091694f2 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -35,7 +35,12 @@ include(CTestConfig.cmake)
+ add_subdirectory(src)
+ add_subdirectory(doc) # Doxygen only
+ 
+-install(FILES AUTHORS.txt COPYING HISTORY.txt README.adoc
++if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/HISTORY.txt")
++install(FILES HISTORY.txt
++	DESTINATION share/doc/zynaddsubfx
++	)
++endif()
++install(FILES AUTHORS.txt COPYING README.adoc
+ 	DESTINATION share/doc/zynaddsubfx
+ 	)
+ install(FILES zynaddsubfx-jack-multi.desktop zynaddsubfx-jack.desktop zynaddsubfx-alsa.desktop zynaddsubfx-oss.desktop
+-- 
+2.47.0
+

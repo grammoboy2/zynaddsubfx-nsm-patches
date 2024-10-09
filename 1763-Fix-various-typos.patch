@@ -1,0 +1,358 @@
+From a62d6c0a5228e72d0c3ddb7eea05d5c3894998db Mon Sep 17 00:00:00 2001
+From: luz paz <luzpaz@users.noreply.github.com>
+Date: Sat, 4 Sep 2021 08:07:22 -0400
+Subject: [PATCH 1763/1936] Fix various typos
+
+Found via `codespell -q 3 -L continous`
+---
+ ExternalPrograms/Spliter/readme.txt |  4 ++--
+ NEWS.txt                            | 12 ++++++------
+ src/Misc/Microtonal.cpp             | 10 +++++-----
+ src/Misc/Microtonal.h               |  6 +++---
+ src/Misc/Part.cpp                   |  4 ++--
+ src/Misc/XMLwrapper.h               |  2 +-
+ src/Nio/SndioEngine.cpp             |  2 +-
+ src/Params/PADnoteParameters.cpp    |  6 +++---
+ src/Synth/Envelope.cpp              |  2 +-
+ src/UI/MasterUI.fl                  |  2 +-
+ src/UI/MicrotonalUI.fl              |  4 ++--
+ src/UI/OscilGenUI.fl                |  2 +-
+ src/UI/PADnoteUI.fl                 |  2 +-
+ src/globals.h                       |  2 +-
+ style.cfg                           |  2 +-
+ 15 files changed, 31 insertions(+), 31 deletions(-)
+
+diff --git a/ExternalPrograms/Spliter/readme.txt b/ExternalPrograms/Spliter/readme.txt
+index 10a78cc0..872f0843 100644
+--- a/ExternalPrograms/Spliter/readme.txt
++++ b/ExternalPrograms/Spliter/readme.txt
+@@ -1,7 +1,7 @@
+ Spliter
+ ------
+ 
+-This program splits the keyboard and alows you to play two instruments same time. You can use this program with ZynAddSubFX or any other synthesizer.
++This program splits the keyboard and allows you to play two instruments same time. You can use this program with ZynAddSubFX or any other synthesizer.
+ This requires ALSA 0.9.x.
+ 
+ To compile it, run "make".
+@@ -11,5 +11,5 @@ If you want to use with ZynAddSubFX send the midi events thru Spliter with aconn
+  - connect the "Spliter OUT" to ZynAddSubFX
+  - change the midi channels that you want to play. Be sure that the both output channels are enabled and receive NoteOn in ZynAddSubFX.
+  
+-If you change some settings from Spliter while you are playing to keyboard you may ecounter "stucked keys". To clear all theese press to "Panic" button from ZynAddSubFX.
++If you change some settings from Spliter while you are playing to keyboard you may encounter "stucked keys". To clear all these press the "Panic" button from ZynAddSubFX.
+ 
+diff --git a/NEWS.txt b/NEWS.txt
+index 6c0f6176..8ad357fb 100644
+--- a/NEWS.txt
++++ b/NEWS.txt
+@@ -185,7 +185,7 @@
+         - Add Subnote filter smoothing
+         - Add Unison derandomization options
+         - Add NSM import/export
+-        - Add NTK UI compatiability
++        - Add NTK UI compatibility
+         - (re)Add OSX Support
+         - Enhance performance of ADnote and SUBnote
+         - Enhance Installer
+@@ -240,7 +240,7 @@
+ 	- added a commandline -L which load a instrument (.xiz) - now it only loads to part 0 (you can use this option with -l to load a master file and after this the option -L to replace the part)
+ 
+ 2.2.0 (8 Apr 2005)
+-	- the VST version of ZynAddSubFX is removed from the instalation until it will be more stable (hope soon :) )
++	- the VST version of ZynAddSubFX is removed from the installation until it will be more stable (hope soon :) )
+ 	- now, the instrument banks contains over 300 high quality instruments
+ 	- added "Apply" a button from OscilGen window for PADsynth
+ 	- added another parameter to ADsynth that controls the amount of all detunes of voices
+@@ -277,7 +277,7 @@
+ 2.0.0_pre1 (17 Iul 2004)
+ 	- Added a new powerful synth engine which is called PADsynth, you can make very beautifull pads and even some strange sounds
+ 	- Now is used the XML format for all zynaddsubfx parameters(.XMZ for master parameters, .XIZ for instrument parameters and .XSZ for scale parameters).You can import older parameters. All parameters files are compressed with gzip algorithm.
+-	- Some parameters has changed and you might ecounter different sounds that you saved in the older versions of zynaddsubfx
++	- Some parameters has changed and you might encounter different sounds that you saved in the older versions of zynaddsubfx
+ 	- The instrument banks are no longer single files, but directories that contains instrument .XIZ files (you can organize them even with a file manager). Also, you can use more than 1 banks easily.
+ 	- Added a new effect called DynamicFilter that allows you to do WahWah,AutoWah, VocalMorpher and other effects
+ 	- Speedups
+@@ -309,7 +309,7 @@
+       - bugfixes
+ 
+ 1.4.1 (8 May 2003)
+-      - added single mode to the instrument kit who alows only one item to be played same time
++      - added single mode to the instrument kit who allows only one item to be played same time
+       - added "Spectrum Adjust" to the ADsynth oscillator
+       - added "drum mode" to the instrument, where all midi keys are mapped to 12tET
+       - added a parameter to the "440Hz" which make the freq to varies a bit according to the key pressed (very usefull to toms and other drums)
+@@ -375,7 +375,7 @@
+       - Added keyresponse limits to Part
+       - Added presets to Effects
+       - The fade is smaller on high frequecy content and larger on low frequecies; so you'll don't hear starting clicks on basses and audible fadeins on higher pitched sounds
+-      - Added tunnings to Reverb: you can choose Random of Freeverb
++      - Added tunings to Reverb: you can choose Random of Freeverb
+ 
+ 1.0.4 (7 Jan 2003)
+       - It is possible to load Scala (.scl and .kbm) files
+@@ -395,7 +395,7 @@
+       - added VU-Meter
+       - Change the Insertion effect modes behaves (it sounds a bit louder)
+       - Added to the project an external program called Spliter that splits the
+-	keyboard and alows you to play two instruments same time. You can use this
++	keyboard and allows you to play two instruments same time. You can use this
+ 	program with ZynAddSubFX or any other synthesizer.
+       - Added a new function to OscilGen
+ 
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 02925f6b..c28555e4 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -511,7 +511,7 @@ int Microtonal::linetotunings(OctaveTuning &octave, const char *line)
+ }
+ 
+ /*
+- * Convert the text to tunnings
++ * Convert the text to tunings
+  */
+ int Microtonal::texttotunings(const char *text)
+ {
+@@ -589,7 +589,7 @@ void Microtonal::texttomapping(const char *text)
+ }
+ 
+ /*
+- * Convert tunning to text line
++ * Convert tuning to text line
+  */
+ void Microtonal::tuningtoline(int n, char *line, int maxn)
+ {
+@@ -616,7 +616,7 @@ int Microtonal::loadline(FILE *file, char *line)
+ 
+ 
+ /*
+- * Loads the tunnings from a scl file
++ * Loads the tunings from a scl file
+  */
+ int Microtonal::loadscl(SclInfo &scl, const char *filename)
+ {
+@@ -650,7 +650,7 @@ int Microtonal::loadscl(SclInfo &scl, const char *filename)
+     if(nnotes > MAX_OCTAVE_SIZE)
+         return 2;
+ 
+-    //load the tunnings
++    //load the tunings
+     for(int nline = 0; nline < nnotes; ++nline) {
+         if(loadline(file, &tmp[0]) != 0)
+             return 2;
+@@ -715,7 +715,7 @@ int Microtonal::loadkbm(KbmInfo &kbm, const char *filename)
+     kbm.PAfreq = tmpPAfreq;
+ 
+     //the scale degree(which is the octave) is not loaded,
+-    //it is obtained by the tunnings with getoctavesize() method
++    //it is obtained by the tunings with getoctavesize() method
+     if(loadline(file, &tmp[0]) != 0)
+         return 2;
+ 
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index dbe9e012..720693cd 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -48,7 +48,7 @@ struct OctaveTuning {
+      */
+     float tuning_log2;
+ 
+-    //the real tunning is x1/x2
++    //the real tuning is x1/x2
+     unsigned int x1, x2;
+ };
+ 
+@@ -116,9 +116,9 @@ class Microtonal
+         // Functions
+         /** Return the current octave size*/
+         unsigned char getoctavesize() const;
+-        /**Convert tunning to string*/
++        /**Convert tuning to string*/
+         void tuningtoline(int n, char *line, int maxn);
+-        /**load the tunnings from a .scl file*/
++        /**load the tunings from a .scl file*/
+         static int loadscl(SclInfo &scl, const char *filename);
+         /**load the mapping from .kbm file*/
+         static int loadkbm(KbmInfo &kbm, const char *filename);
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 008b49ab..e864c4d2 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -363,7 +363,7 @@ void Part::cloneTraits(Part &p) const
+     CLONE(Plegatomode);
+     CLONE(Pkeylimit);
+ 
+-    // Controller has a refence, so it can not be re-assigned
++    // Controller has a reference, so it can not be re-assigned
+     // So, destroy and reconstruct it.
+     p.ctl.~Controller(); new (&p.ctl) Controller(this->ctl);
+ }
+@@ -1149,7 +1149,7 @@ int Part::loadXMLinstrument(const char *filename)
+     // store filename in member variable
+     int length = sizeof(loaded_file)-1;
+     strncpy(loaded_file, filename, length);
+-    // set last element to \0 in case filname is too long or not terminated
++    // set last element to \0 in case filename is too long or not terminated
+     loaded_file[length]='\0';
+ 
+     getfromXMLinstrument(xml);
+diff --git a/src/Misc/XMLwrapper.h b/src/Misc/XMLwrapper.h
+index 5a433e40..58ebff7c 100644
+--- a/src/Misc/XMLwrapper.h
++++ b/src/Misc/XMLwrapper.h
+@@ -264,7 +264,7 @@ class XMLwrapper
+         /**
+          * Loads specified file and returns data.
+          *
+-         * Will load a gziped file or an uncompressed file.
++         * Will load a gzipped file or an uncompressed file.
+          * @param filename the file
+          * @return The decompressed data
+          */
+diff --git a/src/Nio/SndioEngine.cpp b/src/Nio/SndioEngine.cpp
+index 7ac53c95..46ec2fcd 100644
+--- a/src/Nio/SndioEngine.cpp
++++ b/src/Nio/SndioEngine.cpp
+@@ -344,7 +344,7 @@ void SndioEngine::showAudioInfo(struct sio_hdl *handle)
+     for(i = 0; i < SIO_NCHAN; ++i)
+         fprintf(stderr, "    [%d] pchan = %u\n", i, cap.pchan[i]);
+ 
+-    fprintf(stderr, "  suported sample rates:\n");
++    fprintf(stderr, "  supported sample rates:\n");
+     for(i = 0; i < SIO_NRATE; ++i)
+         fprintf(stderr, "    [%d] rate = %u\n", i, cap.rate[i]);
+ 
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 1c96b021..de04fc75 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -170,7 +170,7 @@ static const rtosc::Ports non_realtime_ports =
+             rOptions(bandwidth,discrete,continious),
+             rDefault(bandwidth),
+             "Harmonic Distribution Model"),
+-    rOption(Php.base.type, rOptions(Gaussian, Rectanglar, Double Exponential),
++    rOption(Php.base.type, rOptions(Gaussian, Rectangular, Double Exponential),
+             rShort("shape"), rDefault(Gaussian),
+             "Harmonic profile shape"),
+     rParamZyn(Php.base.par1, rShort("warp"),      rDefault(80),
+@@ -189,7 +189,7 @@ static const rtosc::Ports non_realtime_ports =
+ 
+     //Harmonic Modulation
+     rOption(Php.amp.type, rShort("mult"), rOptions(Off, Gauss, Sine, Flat),
+-            rDefault(Off), "Type of amplitude multipler"),
++            rDefault(Off), "Type of amplitude multiplier"),
+     rParamZyn(Php.amp.par1, rShort("p1"),   rDefault(80),
+         "Amplitude multiplier parameter"),
+     rParamZyn(Php.amp.par2, rShort("p2"),   rDefault(60),
+@@ -707,7 +707,7 @@ static float Pbwscale_translate(char Pbwscale)
+ //Requires
+ // - bandwidth scaling power
+ // - bandwidth
+-// - oscilator harmonics at various frequencies (oodles of data)
++// - oscillator harmonics at various frequencies (oodles of data)
+ // - sampled resonance
+ void PADnoteParameters::generatespectrum_bandwidthMode(float *spectrum,
+                                                        int size,
+diff --git a/src/Synth/Envelope.cpp b/src/Synth/Envelope.cpp
+index 9ce524fe..237024b4 100644
+--- a/src/Synth/Envelope.cpp
++++ b/src/Synth/Envelope.cpp
+@@ -154,7 +154,7 @@ float Envelope::envout(bool doWatch)
+             if (envval[i] != -40.0f) zerorelease = false;
+         if (zerorelease &&                             //if sustaining at zero with zero until env ends
+             (mode == ADSR_lin || mode == ADSR_dB)) {   // and its an amp envelope
+-            envfinish = true;   // finish voice to free ressources
++            envfinish = true;   // finish voice to free resources
+         }
+         if(doWatch) {
+             watch(envsustain, envoutval);
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 075bf76e..a95a75b1 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1759,7 +1759,7 @@ microtonalui=new MicrotonalUI(osc, "/microtonal/");
+ updatesendwindow();
+ updatepanel();
+ 
+-//the simle MasterUI
++//the simple MasterUI
+ simplenpartcounter->value(1);
+ simplesyseffnocounter->value(1);
+ simpleinseffnocounter->value(1);
+diff --git a/src/UI/MicrotonalUI.fl b/src/UI/MicrotonalUI.fl
+index 595d467f..8005eaf2 100644
+--- a/src/UI/MicrotonalUI.fl
++++ b/src/UI/MicrotonalUI.fl
+@@ -78,7 +78,7 @@ class MicrotonalUI {} {
+         Fl_Button applybutton {
+           label Retune
+           callback {apply();}
+-          tooltip {Retune the synth accorging to the inputs from "Tunnings" and "Keyboard Mappings"} xywh {8 413 107 28} box THIN_UP_BOX labeltype EMBOSSED_LABEL labelfont 1 labelsize 13
++          tooltip {Retune the synth accorging to the inputs from "Tunings" and "Keyboard Mappings"} xywh {8 413 107 28} box THIN_UP_BOX labeltype EMBOSSED_LABEL labelfont 1 labelsize 13
+         }
+         Fl_Value_Output octavesizeoutput {
+           label {nts./oct.}
+@@ -126,7 +126,7 @@ if (true) {
+        octavesizeoutput->update();
+      }
+      }
+-          tooltip {Inport Scala .scl file (tunnings)} xywh {243 411 84 15} box THIN_UP_BOX labelfont 1 labelsize 10
++          tooltip {Inport Scala .scl file (tunings)} xywh {243 411 84 15} box THIN_UP_BOX labelfont 1 labelsize 10
+         }
+         Fl_Group keymappinggroup {
+           label {Keyboard Mapping} open
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index e164536b..98695fb3 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -280,7 +280,7 @@ class OscilEditor {open : {public PresetsUI_}
+           Fl_Value_Slider rndslider {
+             label rnd
+             callback {}
+-            tooltip {Oscilator Phase Randomness: smaller than 0 is "group", larger than 0 is for each harmonic} xywh {145 290 100 10} type {Horz Knob} box NO_BOX labelsize 10 align 5 minimum -64 maximum 63 step 1
++            tooltip {Oscillator Phase Randomness: smaller than 0 is "group", larger than 0 is for each harmonic} xywh {145 290 100 10} type {Horz Knob} box NO_BOX labelsize 10 align 5 minimum -64 maximum 63 step 1
+             code0 {(void)o->init("Prand"); if (!adnotep) o->hide();}
+ 	    class Fl_Osc_VSlider
+           }
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 5384eaee..e8d9f107 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -423,7 +423,7 @@ cbwidget->do_callback();}
+               xywh {105 105 100 20} labelfont 1 labelsize 11
+             }
+             MenuItem {} {
+-              label Quater
++              label Quarter
+               xywh {115 115 100 20} labelfont 1 labelsize 11
+             }
+             MenuItem {} {
+diff --git a/src/globals.h b/src/globals.h
+index 044526c1..f3a23281 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -326,7 +326,7 @@ struct SYNTH_T {
+      * All internal transfer of sound data use buffer of this size.
+      * All parameters are constant during this period of time, except
+      * some parameters(like amplitudes) which are linearly interpolated.
+-     * If you increase this you'll ecounter big latencies, but if you
++     * If you increase this you'll encounter big latencies, but if you
+      * decrease this the CPU requirements gets high.
+      */
+     int buffersize;
+diff --git a/style.cfg b/style.cfg
+index d203b3d4..da4ae9e9 100644
+--- a/style.cfg
++++ b/style.cfg
+@@ -519,7 +519,7 @@ sp_cmt_cpp_start                         = ignore   # ignore/add/remove/force
+ # Whether to keep non-indenting tabs
+ align_keep_tabs                          = false    # false/true
+ 
+-# Whether to use tabs for alinging
++# Whether to use tabs for aligning
+ align_with_tabs                          = false    # false/true
+ 
+ # Whether to bump out to the next tab when aligning
+-- 
+2.47.0
+

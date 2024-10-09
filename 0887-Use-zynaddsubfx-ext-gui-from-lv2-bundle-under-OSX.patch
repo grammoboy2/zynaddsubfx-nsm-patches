@@ -1,0 +1,76 @@
+From 9ba01bb22414193e503e4f2c5fbae744f69009d8 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sat, 12 Mar 2016 18:10:38 +0100
+Subject: [PATCH 0887/1936] Use zynaddsubfx-ext-gui from lv2 bundle under OSX
+
+---
+ DPF                                       |  2 +-
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp | 19 ++++++++++++++++---
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/DPF b/DPF
+index ba4e2404..f7262453 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit ba4e24046493f754dcf32386102a8f6e50e7268c
++Subproject commit f726245325c7fcfcdffb66e1c3a89bb07da96d06
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+index 1955a877..b5215c9f 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+@@ -20,12 +20,22 @@
+ class ZynAddSubFXUI : public UI
+ {
+ public:
+-    ZynAddSubFXUI(const intptr_t wid)
++    ZynAddSubFXUI(const intptr_t wid, const char* const bpath)
+         : UI(390, 525),
+           oscPort(0),
+           winId(wid)
+     {
+         setTitle("ZynAddSubFX");
++
++#if DISTRHO_OS_MAC
++        extUiPath  = bpath;
++        extUiPath += "/zynaddsubfx-ext-gui";
++#else
++        extUiPath = "zynaddsubfx-ext-gui";
++
++        // unused
++        return; (void)bpath;
++#endif
+     }
+ 
+     ~ZynAddSubFXUI() override
+@@ -74,6 +84,7 @@ protected:
+ 
+ private:
+     int oscPort;
++    String extUiPath;
+     const intptr_t winId;
+ 
+     void respawnAtURL(const int url)
+@@ -87,7 +98,7 @@ private:
+         printf("Now respawning at '%s', using winId '%s'\n", urlAsString, winIdAsString);
+ 
+         const char* args[] = {
+-            "zynaddsubfx-ext-gui",
++            extUiPath.buffer(),
+             "--embed",
+             winIdAsString,
+             "--title",
+@@ -114,7 +125,9 @@ UI* createUI()
+ #else
+     const uintptr_t winId = 0;
+ #endif
+-    return new ZynAddSubFXUI(winId);
++    const char* const bundlePath = UI::getNextBundlePath();
++
++    return new ZynAddSubFXUI(winId, bundlePath);
+ }
+ 
+ END_NAMESPACE_DISTRHO
+-- 
+2.47.0
+

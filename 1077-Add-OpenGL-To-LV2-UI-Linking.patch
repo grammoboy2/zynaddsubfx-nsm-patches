@@ -1,0 +1,26 @@
+From 191b6e7d26c9442fe163569ea9f4c428ed6212f2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 15 Nov 2016 19:44:59 -0500
+Subject: [PATCH 1077/1936] Add OpenGL To LV2 UI Linking
+
+---
+ src/Plugin/ZynAddSubFX/CMakeLists.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 71da39f9..e62b85a1 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -115,6 +115,9 @@ target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_L
+     ${PLATFORM_LIBRARIES})
+ target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+     ${PLATFORM_LIBRARIES})
++if(ZestGui)
++    target_link_libraries(ZynAddSubFX_lv2_ui X11 GL)
++endif()
+ 
+ install(TARGETS ZynAddSubFX_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
+ install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+-- 
+2.47.0
+

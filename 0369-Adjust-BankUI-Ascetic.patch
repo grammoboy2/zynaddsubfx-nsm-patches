@@ -1,0 +1,39 @@
+From a22e890635ba110d302febb234faf73f795833d4 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 25 Feb 2015 17:48:25 -0500
+Subject: [PATCH 0369/1936] Adjust BankUI Ascetic
+
+---
+ src/UI/BankUI.fl    | 1 +
+ src/UI/BankView.cpp | 3 +++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index faa8c972..7dc3e3d3 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -58,6 +58,7 @@ class BankUI {open
+       Fl_Group modeselect {open
+         xywh {5 528 425 42} box ENGRAVED_BOX
+         class BankViewControls
++        code0 {o->box(FL_UP_BOX);}
+       } {}
+       Fl_Button {} {
+         label {New Bank...}
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index a36489ec..0a9128ef 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -83,6 +83,9 @@ void BankSlot::update(const char *name__, const char *fname__)
+     filename_ = fname__;
+     snprintf(labelstr, 127, "%d. %s", nslot, name_.c_str());
+     label(labelstr);
++    
++    if(name_.empty())
++        label("");
+ 
+     color(empty() ? 46 : 51);
+ #ifdef NTK_GUI
+-- 
+2.47.0
+

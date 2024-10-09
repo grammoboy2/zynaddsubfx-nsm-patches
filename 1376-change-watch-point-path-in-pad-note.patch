@@ -1,0 +1,46 @@
+From 97c97acc6a2ba672882648b0581806985a41897e Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Mon, 24 Jun 2019 10:58:58 +0300
+Subject: [PATCH 1376/1936] change watch point path in pad note
+
+---
+ src/Synth/PADnote.cpp | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 94e5db62..b5207125 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -355,7 +355,9 @@ int PADnote::Compute_Cubic(float *outl,
+ 
+ 
+ int PADnote::noteout(float *outl, float *outr)
+-{
++{   
++    watchOut(outr,synth.buffersize);
++    
+     computecurrentparameters();
+     float *smps = pars.sample[nsample].smp;
+     if(smps == NULL) {
+@@ -378,7 +380,7 @@ int PADnote::noteout(float *outl, float *outr)
+     else
+         Compute_Linear(outl, outr, freqhi, freqlo);
+ 
+-    watchOut(outr,synth.buffersize);
++    watchOut1(outr,synth.buffersize);
+ 
+     if(firsttime) {
+         fadein(outl);
+@@ -401,8 +403,7 @@ int PADnote::noteout(float *outl, float *outr)
+                 break;
+             }
+         }
+-
+-    watchOut1(outr,synth.buffersize);
++    
+ 
+     if(ABOVE_AMPLITUDE_THRESHOLD(globaloldamplitude, globalnewamplitude))
+         // Amplitude Interpolation
+-- 
+2.47.0
+

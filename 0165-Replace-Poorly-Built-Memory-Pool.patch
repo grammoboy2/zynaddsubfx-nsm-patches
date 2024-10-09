@@ -1,0 +1,183 @@
+From dcc10b646925dd6d23d5ee02636e020d2b26c290 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 23 Mar 2014 17:16:02 -0400
+Subject: [PATCH 0165/1936] Replace Poorly Built Memory Pool
+
+Memory pool->Variable Length Array Stack Allocations
+---
+ src/Misc/Master.cpp     |  7 ++----
+ src/Misc/Part.cpp       |  6 ++---
+ src/Misc/Util.cpp       | 51 -----------------------------------------
+ src/Misc/Util.h         |  7 ------
+ src/Synth/SUBnote.cpp   |  6 ++---
+ src/Tests/SubNoteTest.h |  1 -
+ 6 files changed, 6 insertions(+), 72 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index b2c179e8..c4b8947b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -394,8 +394,8 @@ void Master::AudioOut(float *outl, float *outr)
+         if(sysefx[nefx]->geteffect() == 0)
+             continue;  //the effect is disabled
+ 
+-        float *tmpmixl = getTmpBuffer();
+-        float *tmpmixr = getTmpBuffer();
++        float tmpmixl[synth->buffersize];
++        float tmpmixr[synth->buffersize];
+         //Clean up the samples used by the system effects
+         memset(tmpmixl, 0, synth->bufferbytes);
+         memset(tmpmixr, 0, synth->bufferbytes);
+@@ -436,9 +436,6 @@ void Master::AudioOut(float *outl, float *outr)
+             outl[i] += tmpmixl[i] * outvol;
+             outr[i] += tmpmixr[i] * outvol;
+         }
+-
+-        returnTmpBuffer(tmpmixl);
+-        returnTmpBuffer(tmpmixr);
+     }
+ 
+     //Mix all parts
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index c6f70f2a..50d4cede 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -947,8 +947,8 @@ void Part::RunNote(unsigned int k)
+                 continue;
+             noteplay++;
+ 
+-            float *tmpoutr = getTmpBuffer();
+-            float *tmpoutl = getTmpBuffer();
++            float tmpoutr[synth->buffersize];
++            float tmpoutl[synth->buffersize];
+             (*note)->noteout(&tmpoutl[0], &tmpoutr[0]);
+ 
+             if((*note)->finished()) {
+@@ -959,8 +959,6 @@ void Part::RunNote(unsigned int k)
+                 partfxinputl[sendcurrenttofx][i] += tmpoutl[i];
+                 partfxinputr[sendcurrenttofx][i] += tmpoutr[i];
+             }
+-            returnTmpBuffer(tmpoutr);
+-            returnTmpBuffer(tmpoutl);
+         }
+     }
+ 
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index 0f795834..e6e61d90 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -152,57 +152,6 @@ void invSignal(float *sig, size_t len)
+         sig[i] *= -1.0f;
+ }
+ 
+-//Some memory pools for short term buffer use
+-//(avoid the use of new in RT thread(s))
+-
+-struct pool_entry {
+-    bool   free;
+-    float *dat;
+-};
+-typedef std::vector<pool_entry> pool_t;
+-typedef pool_t::iterator        pool_itr_t;
+-
+-pool_t pool;
+-
+-float *getTmpBuffer()
+-{
+-    for(pool_itr_t itr = pool.begin(); itr != pool.end(); ++itr)
+-        if(itr->free) { //Use Pool
+-            itr->free = false;
+-            return itr->dat;
+-        }
+-    pool_entry p; //Extend Pool
+-    p.free = false;
+-    p.dat  = new float[synth->buffersize];
+-    pool.push_back(p);
+-
+-    return p.dat;
+-}
+-
+-void returnTmpBuffer(float *buf)
+-{
+-    for(pool_itr_t itr = pool.begin(); itr != pool.end(); ++itr)
+-        if(itr->dat == buf) { //Return to Pool
+-            itr->free = true;
+-            return;
+-        }
+-    fprintf(stderr,
+-            "ERROR: invalid buffer returned %s %d\n",
+-            __FILE__,
+-            __LINE__);
+-}
+-
+-void clearTmpBuffers(void)
+-{
+-    for(pool_itr_t itr = pool.begin(); itr != pool.end(); ++itr) {
+-        if(!itr->free) //Warn about used buffers
+-            warn("Temporary buffer (%p) about to be freed may be in use",
+-                 itr->dat);
+-        delete [] itr->dat;
+-    }
+-    pool.clear();
+-}
+-
+ float SYNTH_T::numRandom()
+ {
+     return RND;
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 1c1545d5..45d6f84f 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -56,13 +56,6 @@ extern class Config config;
+ 
+ void invSignal(float *sig, size_t len);
+ 
+-//Memory pool for temporary buffers
+-//No allocation in *normal* case
+-//All should be sized to synth->buffersize
+-float *getTmpBuffer();
+-void returnTmpBuffer(float *buf);
+-void clearTmpBuffers(void);
+-
+ template<class T>
+ std::string stringFrom(T x)
+ {
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 91045c56..db54e6d8 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -482,8 +482,8 @@ int SUBnote::noteout(float *outl, float *outr)
+     if(NoteEnabled == OFF)
+         return 0;
+ 
+-    float *tmprnd = getTmpBuffer();
+-    float *tmpsmp = getTmpBuffer();
++    float tmprnd[synth->buffersize];
++    float tmpsmp[synth->buffersize];
+     //left channel
+     for(int i = 0; i < synth->buffersize; ++i)
+         tmprnd[i] = RND * 2.0f - 1.0f;
+@@ -514,8 +514,6 @@ int SUBnote::noteout(float *outl, float *outr)
+     }
+     else
+         memcpy(outr, outl, synth->bufferbytes);
+-    returnTmpBuffer(tmprnd);
+-    returnTmpBuffer(tmpsmp);
+ 
+     if(firsttick != 0) {
+         int n = 10;
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index 0708a735..e5cefd86 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -106,7 +106,6 @@ class SubNoteTest:public CxxTest::TestSuite
+             delete [] outL;
+             delete [] outR;
+             delete [] denormalkillbuf;
+-            clearTmpBuffers();
+             delete synth;
+         }
+ 
+-- 
+2.47.0
+

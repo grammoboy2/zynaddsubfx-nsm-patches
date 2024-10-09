@@ -1,0 +1,113 @@
+From 24c2a91b53cc42d9a01cf0ebf92d533ba94a8134 Mon Sep 17 00:00:00 2001
+From: Philippe Gervais <philippe.n.gervais@free.fr>
+Date: Sun, 14 Feb 2021 11:52:29 +0100
+Subject: [PATCH 1712/1936] Fixed a few compiler warnings
+
+Fixed some minor string buffer size issues, which could lead to non-zero
+terminated strings or buffer overflow.
+
+Fixed an "unused variable" warning due to code being preprocessed out.
+---
+ src/Misc/Master.cpp | 2 +-
+ src/UI/ADnoteUI.fl  | 6 +++---
+ src/UI/MasterUI.fl  | 7 ++++---
+ src/UI/guimain.cpp  | 2 ++
+ 4 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 2db9b593..e1e4468e 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -560,7 +560,7 @@ static const Ports master_ports = {
+                 assert(!*obj->dnd_buffer);
+                 const char* var = rtosc_argument(msg, 0).s;
+                 printf("receiving /last_dnd %s\n",var);
+-                strncpy(obj->dnd_buffer, var, Master::dnd_buffer_size);
++                strncpy(obj->dnd_buffer, var, Master::dnd_buffer_size-1);
+             }
+         rBOIL_END },
+     {"config/", rNoDefaults
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index c231e861..250c92f4 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -178,7 +178,7 @@ class ADvoicelistitem {open : {public Fl_Osc_Group}
+ else voicelistitemgroup->activate();
+ o->redraw();}
+         private xywh {30 5 20 20} down_box DOWN_BOX labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 4
+-        code0 {char tmp[10];snprintf(tmp,10,"%d",nvoice+1);o->label(strdup(tmp));}
++        code0 {char tmp[12];snprintf(tmp,12,"%d",nvoice+1);o->label(strdup(tmp));}
+         code1 {o->init("Enabled");}
+         class Fl_Osc_Check
+       }
+@@ -825,7 +825,7 @@ o->redraw();}
+         Fl_Group activeVoiceID {
+           label 01
+           xywh {5 5 55 35} box THIN_UP_BOX labeltype EMBOSSED_LABEL labelfont 1 labelsize 22 align 16
+-          code0 {char tmp[10];snprintf(tmp,10,"%d",nvoice+1);o->label(strdup(tmp));}
++          code0 {char tmp[12];snprintf(tmp,12,"%d",nvoice+1);o->label(strdup(tmp));}
+         } {}
+         Fl_Choice {} {
+           callback {switch (o->value()) {
+@@ -930,7 +930,7 @@ delete(oscedit);
+   } {
+     code {nvoice = nvoice_;
+     loc = base+"VoicePar"+to_s(nvoice)+"/";
+-    char tmp[50];snprintf(tmp,10,"%d",nvoice+1);
++    char tmp[50];snprintf(tmp,12,"%d",nvoice+1);
+     activeVoiceID->label(strdup(tmp));
+     extoscil->clear();
+     extoscil->add("Internal");
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index dd7d6a74..075bf76e 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -125,7 +125,7 @@ labelsize(10);
+ align(FL_ALIGN_TOP);
+ 
+ Fl_Osc_Dial::init("part"+to_s(neff1)+"/sysefxsend"+to_s(neff2));
+-char tmp[20];snprintf(tmp,20,"%d->%d",neff1+1,neff2+1);
++char tmp[25];snprintf(tmp,25,"%d->%d",neff1+1,neff2+1);
+ this->copy_label(tmp);} {}
+   }
+   Function {~SysEffSend()} {} {
+@@ -206,7 +206,7 @@ bankui->show();}
+ 
+             o->redraw();}
+         private xywh {5 0 45 20} down_box DOWN_BOX labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 24
+-        code0 {char tmp[10];snprintf(tmp,10,"%d",npart+1);o->copy_label(tmp);}
++        code0 {char tmp[12];snprintf(tmp,12,"%d",npart+1);o->copy_label(tmp);}
+         code1 {o->init("Penabled");}
+         class Fl_Osc_Check
+       }
+@@ -1558,12 +1558,13 @@ ninseff=0;
+ nsyseff=0;
+ npart=0;
+ last_loaded[0]=0;
++last_loaded[XMZ_PATH_MAX - 1]=0;
+ loading_next[0]=0;
+ last_xmz = new Osc_DataModel(osc);
+ last_xmz->callback = [this](std::string filestr) {
+     const char *filename = filestr.c_str();
+     if (filename[0] != 0)
+-       strncpy(last_loaded, filename, XMZ_PATH_MAX);
++       strncpy(last_loaded, filename, XMZ_PATH_MAX-1);
+     else if (loading_next[0] != 0) {
+        strncpy(last_loaded, loading_next, XMZ_PATH_MAX);
+        loading_next[0] = 0;
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index dca28e84..f23aac95 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -202,6 +202,8 @@ ui_handle_t GUI::createUi(Fl_Osc_Interface *osc, void *exit)
+                 MasterUI::menu_mastermenu[13].hide(); // file -> exit
+                 fl_embed(ui->masterwindow, winId);
+             }
++#else
++            (void) winId; // Silences compiler warning.
+ #endif
+             ui->masterwindow->show();
+         }
+-- 
+2.47.0
+

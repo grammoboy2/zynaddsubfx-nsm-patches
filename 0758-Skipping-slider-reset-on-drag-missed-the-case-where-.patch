@@ -1,0 +1,40 @@
+From 37e377f68a44ff77468b242e07274319a21c3f6b Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 24 Nov 2015 23:31:23 -0500
+Subject: [PATCH 0758/1936] Skipping slider reset on drag: missed the case
+ where fltk does the work.
+
+---
+ src/UI/Fl_Osc_Slider.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index a2a6461a..f369a755 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -103,6 +103,7 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+             just_pushed = true;
+             mod_state = Fl::event_state() & MOD_MASK;
+             slow_state = 0;
++            start_pos = horizontal() ? Fl::event_x() : Fl::event_y();
+             handled = mod_state ? 1 : Fl_Slider::handle(ev, X, Y, W, H);
+             break;
+         case FL_MOUSEWHEEL:
+@@ -146,8 +147,13 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+         case FL_DRAG: {
+             old_mod_state = mod_state;
+             mod_state = Fl::event_state() & MOD_MASK;
+-            if (slow_state == 0 && mod_state == 0)
++            if (slow_state == 0 && mod_state == 0) {
++                int delta = (horizontal() ? Fl::event_x() : Fl::event_y())
++                    - start_pos;
++                if (delta < -1 || delta > 1)
++                    Fl::event_clicks(0);
+                 return Fl_Slider::handle(ev, X, Y, W, H);
++            }
+ 
+             if (mod_state != 0) {
+                 slow_state = 1;
+-- 
+2.47.0
+

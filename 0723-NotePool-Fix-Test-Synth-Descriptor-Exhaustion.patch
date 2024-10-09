@@ -1,0 +1,267 @@
+From 39cd490956abad22a1a01f5e90f31f091caab9bb Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 13 Nov 2015 12:08:07 -0500
+Subject: [PATCH 0723/1936] NotePool: Fix/Test Synth Descriptor Exhaustion
+
+---
+ src/Containers/NotePool.cpp   | 30 ++++++++++++++++++++--------
+ src/Containers/NotePool.h     |  1 +
+ src/Misc/Part.cpp             | 37 +++++++++++++++++++++++++++++------
+ src/Misc/Part.h               |  4 +++-
+ src/Tests/InstrumentStats.cpp |  8 ++++++--
+ src/Tests/test-all.rb         |  2 +-
+ src/UI/WidgetPDial.cpp        |  2 +-
+ 7 files changed, 65 insertions(+), 19 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index c13941ff..ac4a1303 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -10,7 +10,7 @@ NotePool::NotePool(void)
+     :needs_cleaning(0)
+ {
+     memset(ndesc, 0, sizeof(ndesc));
+-    memset(sdesc, 0, sizeof(ndesc));
++    memset(sdesc, 0, sizeof(sdesc));
+ }
+ NotePool::activeNotesIter NotePool::activeNotes(NoteDescriptor &n)
+ {
+@@ -37,19 +37,21 @@ static int getMergeableDescriptor(uint8_t note, uint8_t sendto, bool legato,
+         if(ndesc[desc_id].status == Part::KEY_OFF)
+             break;
+ 
+-    //Out of free descriptors
+-    if(ndesc[desc_id].status != Part::KEY_OFF)
+-        return -1;
+-
+     if(desc_id != 0) {
+         auto &nd = ndesc[desc_id-1];
+         if(nd.age == 0 && nd.note == note && nd.sendto == sendto
+                 && nd.status == Part::KEY_PLAYING && nd.legatoMirror == legato)
+             return desc_id-1;
+     }
++
++    //Out of free descriptors
++    if(desc_id >= POLYPHONY || ndesc[desc_id].status != Part::KEY_OFF) {
++        return -1;
++    }
++
+     return desc_id;
+ }
+-        
++
+ NotePool::activeDescIter      NotePool::activeDesc(void)
+ {
+     cleanup();
+@@ -76,8 +78,11 @@ void NotePool::insertNote(uint8_t note, uint8_t sendto, SynthDescriptor desc, bo
+ 
+     //Get first free synth descriptor
+     int sdesc_id = 0;
+-    while(sdesc[sdesc_id].note)
++    while(sdesc[sdesc_id].note && sdesc_id < POLYPHONY*EXPECTED_USAGE)
+         sdesc_id++;
++
++    assert(sdesc_id < POLYPHONY*EXPECTED_USAGE);
++
+     sdesc[sdesc_id] = desc;
+ };
+ 
+@@ -114,6 +119,15 @@ bool NotePool::full(void) const
+     return true;
+ }
+ 
++bool NotePool::synthFull(int sdesc_count) const
++{
++    int actually_free=sizeof(sdesc)/sizeof(sdesc[0]);
++    for(const auto &desc:activeDesc()) {
++        actually_free -= desc.size;
++    }
++    return actually_free < sdesc_count;
++}
++
+ //Note that isn't KEY_PLAYING or KEY_RELASED_AND_SUSTAINING
+ bool NotePool::existsRunningNote(void) const
+ {
+@@ -151,7 +165,7 @@ int NotePool::enforceKeyLimit(int limit) const
+         //if(oldestnotepos != -1)
+         //    ReleaseNotePos(oldestnotepos);
+         //}
+-    printf("Unimplemented enforceKeyLimit()\n");
++    //printf("Unimplemented enforceKeyLimit()\n");
+     return -1;
+ }
+ 
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 9e69e899..866479fa 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -94,6 +94,7 @@ class NotePool
+         void applyLegato(LegatoParams &par);
+ 
+         bool full(void) const;
++        bool synthFull(int sdesc_count) const;
+ 
+         //Note that isn't KEY_PLAYING or KEY_RELASED_AND_SUSTAINING
+         bool existsRunningNote(void) const;
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index cd917ae7..00d2ccff 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -376,7 +376,7 @@ Part::~Part()
+     }
+ }
+ 
+-void assert_kit_sanity(const Part::Kit *kits)
++static void assert_kit_sanity(const Part::Kit *kits)
+ {
+     for(int i=0; i<NUM_KIT_ITEMS; ++i) {
+         //an enabled kit must have a corresponding parameter object
+@@ -386,10 +386,33 @@ void assert_kit_sanity(const Part::Kit *kits)
+     }
+ }
+ 
++static int kit_usage(const Part::Kit *kits, int note, int mode)
++{
++    const bool non_kit   = mode == 0;
++    const bool singl_kit = mode == 2;
++    int synth_usage = 0;
++
++    for(uint8_t i = 0; i < NUM_KIT_ITEMS; ++i) {
++        const auto &item = kits[i];
++        if(!non_kit && !item.validNote(note))
++            continue;
++
++        synth_usage += item.Padenabled;
++        synth_usage += item.Psubenabled;
++        synth_usage += item.Ppadenabled;
++
++        //Partial Kit Use
++        if(non_kit || (singl_kit && item.active()))
++            break;
++    }
++
++    return synth_usage;
++}
++
+ /*
+  * Note On Messages
+  */
+-void Part::NoteOn(unsigned char note,
++bool Part::NoteOn(unsigned char note,
+                   unsigned char velocity,
+                   int masterkeyshift)
+ {
+@@ -398,8 +421,9 @@ void Part::NoteOn(unsigned char note,
+     const bool doingLegato     = isRunningNote && isLegatoMode() &&
+                                  lastlegatomodevalid;
+ 
+-    if(!Pnoteon || !inRange(note, Pminkey, Pmaxkey) || notePool.full())
+-        return;
++    if(!Pnoteon || !inRange(note, Pminkey, Pmaxkey) || notePool.full() ||
++            notePool.synthFull(kit_usage(kit, note, Pkitmode)))
++        return false;
+ 
+     verifyKeyMode();
+     assert_kit_sanity(kit);
+@@ -426,7 +450,7 @@ void Part::NoteOn(unsigned char note,
+     const float notebasefreq = getBaseFreq(note, keyshift);
+ 
+     if(notebasefreq < 0)
+-        return;
++        return false;
+ 
+     //Portamento
+     lastnote = note;
+@@ -447,7 +471,7 @@ void Part::NoteOn(unsigned char note,
+     if(doingLegato) {
+         LegatoParams pars = {notebasefreq, vel, portamento, note, true};
+         notePool.applyLegato(pars);
+-        return;
++        return true;
+     }
+ 
+     //Create New Notes
+@@ -480,6 +504,7 @@ void Part::NoteOn(unsigned char note,
+ 
+     //Enforce the key limit
+     setkeylimit(Pkeylimit);
++    return true;
+ }
+ 
+ /*
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 8b7d38ea..e3f126be 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -48,7 +48,9 @@ class Part
+         void cloneTraits(Part &part) const REALTIME;
+ 
+         // Midi commands implemented
+-        void NoteOn(unsigned char note,
++
++        //returns true when note is successfully applied
++        bool NoteOn(unsigned char note,
+                     unsigned char velocity,
+                     int masterkeyshift) REALTIME;
+         void NoteOff(unsigned char note) REALTIME;
+diff --git a/src/Tests/InstrumentStats.cpp b/src/Tests/InstrumentStats.cpp
+index 6d3622c2..9beca4c4 100644
+--- a/src/Tests/InstrumentStats.cpp
++++ b/src/Tests/InstrumentStats.cpp
+@@ -89,10 +89,12 @@ void load()
+ 
+ void noteOn()
+ {
++    int total_notes = 0;
+     double t_on = tic(); // timer before calling func
+     for(int i=40; i<100; ++i)
+-        p->NoteOn(i,100,0);
++        total_notes += p->NoteOn(i,100,0);
+     double t_off = toc(); // timer when func returns
++    printf("%d, ", total_notes);
+     if(mode == MODE_PROFILE)
+         printf("%f, ", t_off - t_on);
+ }
+@@ -136,10 +138,12 @@ int main(int argc, char **argv)
+         return 1;
+     }
+ 
+-    mode = MODE_TEST;
++    mode = MODE_PROFILE;
+     setup();
+     xml(argv[1]);
+     load();
++    memUsage();
++    printf(", ");
+     noteOn();
+     speed();
+     noteOff();
+diff --git a/src/Tests/test-all.rb b/src/Tests/test-all.rb
+index 47047aef..a4340b04 100644
+--- a/src/Tests/test-all.rb
++++ b/src/Tests/test-all.rb
+@@ -3,7 +3,7 @@
+ files = Dir.glob("/usr/local/share/zynaddsubfx/banks/*/*.xiz")
+ f = open("out.csv", "w+")
+ files.each do |input|
+-    res = `ins-test "#{input}"`
++    res = `./ins-test "#{input}"`
+     res = "\"#{input}\", #{res}"
+     puts res
+     f.puts res
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index 522be743..1fb39484 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -47,7 +47,7 @@ int WidgetPDial::handle(int event)
+             do_callback();
+         return 1;
+     }
+-    
++
+     switch(event) {
+         case FL_PUSH:
+             if (integer_step)
+-- 
+2.47.0
+

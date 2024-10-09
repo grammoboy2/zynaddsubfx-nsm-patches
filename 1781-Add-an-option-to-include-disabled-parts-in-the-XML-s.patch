@@ -1,0 +1,213 @@
+From e82d466538bed4617198be34b8274cbf742252b3 Mon Sep 17 00:00:00 2001
+From: Zynmuse <zynmuse.gmail.com>
+Date: Sun, 7 Nov 2021 14:46:34 +0000
+Subject: [PATCH 1781/1936] Add an option to include disabled parts in the XML
+ save file
+
+---
+ src/Misc/Config.cpp     |  8 ++++++++
+ src/Misc/Config.h       |  1 +
+ src/Misc/Master.cpp     |  7 ++++++-
+ src/Misc/Master.h       |  1 +
+ src/Misc/Part.cpp       | 18 +++++++++---------
+ src/Misc/XMLwrapper.cpp |  1 +
+ src/Misc/XMLwrapper.h   |  4 ++--
+ src/UI/ConfigUI.fl      |  8 +++++++-
+ 8 files changed, 35 insertions(+), 13 deletions(-)
+
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 1160f77a..a4eebe7b 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -51,6 +51,7 @@ static const rtosc::Ports ports = {
+     rToggle(cfg.BankUIAutoClose, "Automatic Closing of BackUI After Patch Selection"),
+     rParamI(cfg.GzipCompression, "Level of Gzip Compression For Save Files"),
+     rParamI(cfg.Interpolation, "Level of Interpolation, Linear/Cubic"),
++    rToggle(cfg.SaveFullXml, "Include Disabled parts in save"),
+     {"cfg.presetsDirList", rDoc("list of preset search directories"), 0,
+         [](const char *msg, rtosc::RtData &d)
+         {
+@@ -209,6 +210,7 @@ void Config::init()
+     cfg.GzipCompression = 3;
+ 
+     cfg.Interpolation = 0;
++    cfg.SaveFullXml = 0;
+     cfg.CheckPADsynth = 1;
+     cfg.IgnoreProgramChange = 0;
+ 
+@@ -342,6 +344,11 @@ void Config::readConfig(const char *filename)
+                                            0,
+                                            1);
+ 
++        cfg.SaveFullXml  = xmlcfg.getpar("SaveFullXml",
++                                           cfg.SaveFullXml,
++                                           0,
++                                           1);
++
+         cfg.CheckPADsynth = xmlcfg.getpar("check_pad_synth",
+                                           cfg.CheckPADsynth,
+                                           0,
+@@ -453,6 +460,7 @@ void Config::saveConfig(const char *filename) const
+         }
+ 
+     xmlcfg->addpar("interpolation", cfg.Interpolation);
++    xmlcfg->addpar("SaveFullXml", cfg.SaveFullXml);
+ 
+     //linux stuff
+     xmlcfg->addparstr("linux_oss_wave_out_dev", cfg.oss_devs.linux_wave_out);
+diff --git a/src/Misc/Config.h b/src/Misc/Config.h
+index a2ead1ce..c5fe01c2 100644
+--- a/src/Misc/Config.h
++++ b/src/Misc/Config.h
+@@ -47,6 +47,7 @@ class Config
+             int   BankUIAutoClose;
+             int   GzipCompression;
+             int   Interpolation;
++            int   SaveFullXml; // when saving to a file save entire tree including disabled parts (Zynmuse)
+             std::string bankRootDirList[MAX_BANK_ROOT_DIRS], currentBankDir;
+             std::string presetsDirList[MAX_BANK_ROOT_DIRS];
+             std::string favoriteList[MAX_BANK_ROOT_DIRS];
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index f687a8f2..be741f8d 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -768,6 +768,7 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+     frozenState(false), pendingMemory(false),
+     synth(synth_), gzip_compression(config->cfg.GzipCompression)
+ {
++    SaveFullXml=(config->cfg.SaveFullXml==1);
+     bToU = NULL;
+     uToB = NULL;
+     
+@@ -1594,8 +1595,12 @@ void Master::add2XML(XMLwrapper& xml)
+     microtonal.add2XML(xml);
+     xml.endbranch();
+ 
+-    saveAutomation(xml, automate);
++    if (SaveFullXml) {
++        xml.SaveFullXml=true; // save disabled parts
++        xml.minimal=false;
++    }
+ 
++    saveAutomation(xml, automate);
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) {
+         xml.beginbranch("PART", npart);
+         part[npart]->add2XML(xml);
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 6588c24a..fc9827ab 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -211,6 +211,7 @@ class Master
+         bool pendingMemory;
+         const SYNTH_T &synth;
+         const int& gzip_compression; //!< value from config
++        bool SaveFullXml; // value from config
+ 
+         //Heartbeat for identifying plugin offline modes
+         //in units of 10 ms (done s.t. overflow is in 497 days)
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 8dbd7a59..33e8fa02 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -1075,7 +1075,7 @@ void Part::add2XMLinstrument(XMLwrapper& xml)
+     for(int i = 0; i < NUM_KIT_ITEMS; ++i) {
+         xml.beginbranch("INSTRUMENT_KIT_ITEM", i);
+         xml.addparbool("enabled", kit[i].Penabled);
+-        if(kit[i].Penabled != 0) {
++        if(kit[i].Penabled != 0 || xml.SaveFullXml) {
+             xml.addparstr("name", (char *)kit[i].Pname);
+ 
+             xml.addparbool("muted", kit[i].Pmuted);
+@@ -1085,21 +1085,21 @@ void Part::add2XMLinstrument(XMLwrapper& xml)
+             xml.addpar("send_to_instrument_effect", kit[i].Psendtoparteffect);
+ 
+             xml.addparbool("add_enabled", kit[i].Padenabled);
+-            if(kit[i].Padenabled && kit[i].adpars) {
+-                xml.beginbranch("ADD_SYNTH_PARAMETERS");
++            if((kit[i].Padenabled  || xml.SaveFullXml) && kit[i].adpars) {
++               xml.beginbranch("ADD_SYNTH_PARAMETERS");
+                 kit[i].adpars->add2XML(xml);
+                 xml.endbranch();
+             }
+ 
+             xml.addparbool("sub_enabled", kit[i].Psubenabled);
+-            if(kit[i].Psubenabled && kit[i].subpars) {
++            if((kit[i].Psubenabled || xml.SaveFullXml) && kit[i].subpars) {
+                 xml.beginbranch("SUB_SYNTH_PARAMETERS");
+                 kit[i].subpars->add2XML(xml);
+                 xml.endbranch();
+             }
+ 
+             xml.addparbool("pad_enabled", kit[i].Ppadenabled);
+-            if(kit[i].Ppadenabled && kit[i].padpars) {
++            if((kit[i].Ppadenabled || xml.SaveFullXml) && kit[i].padpars) {
+                 xml.beginbranch("PAD_SYNTH_PARAMETERS");
+                 kit[i].padpars->add2XML(xml);
+                 xml.endbranch();
+@@ -1276,10 +1276,10 @@ void Part::getfromXMLinstrument(XMLwrapper& xml)
+             if(xml.enterbranch("INSTRUMENT_KIT_ITEM", i) == 0)
+                 continue;
+             setkititemstatus(i, xml.getparbool("enabled", kit[i].Penabled));
+-            if(kit[i].Penabled == 0) {
+-                xml.exitbranch();
+-                continue;
+-            }
++//           if(kit[i].Penabled == 0) { // Remove this as it loses data that may be in the xml file but disabled!
++//                xml.exitbranch();
++//                continue;
++//            }
+ 
+             xml.getparstr("name", (char *)kit[i].Pname, PART_MAX_NAME_LEN);
+ 
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index 6dc57486..e1c55a49 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -90,6 +90,7 @@ const char *mxmlElementGetAttr(const mxml_node_t *node, const char *name)
+ XMLwrapper::XMLwrapper()
+ {
+     minimal = true;
++    SaveFullXml=false;
+ 
+     node = tree = mxmlNewElement(MXML_NO_PARENT,
+                                  "?xml version=\"1.0f\" encoding=\"UTF-8\"?");
+diff --git a/src/Misc/XMLwrapper.h b/src/Misc/XMLwrapper.h
+index 58ebff7c..14a0d2af 100644
+--- a/src/Misc/XMLwrapper.h
++++ b/src/Misc/XMLwrapper.h
+@@ -230,8 +230,8 @@ class XMLwrapper
+                          float min,
+                          float max) const;
+ 
+-        bool minimal; /**<false if all parameters will be stored (used only for clipboard)*/
+-
++        bool minimal; /**<false if all parameters will be stored (used for clipboard, also false to SaveFullXML)*/
++        bool SaveFullXml; /**<true to ensure disabled parts also get saved. Altered by configuration parameter of the same name. */
+         /**
+          * Sets the current tree's PAD Synth usage
+          */
+diff --git a/src/UI/ConfigUI.fl b/src/UI/ConfigUI.fl
+index de2464de..919287d2 100644
+--- a/src/UI/ConfigUI.fl
++++ b/src/UI/ConfigUI.fl
+@@ -143,10 +143,16 @@ class ConfigUI {} {
+           }
+           Fl_Counter {} {
+             label {XML compression level}
+-            tooltip {gzip compression level (0 - uncompressed)} xywh {20 215 65 15} type Simple labelsize 11 align 8 minimum 0 maximum 9 step 1
++            tooltip {gzip compression level (0 - uncompressed)} xywh {20 190 65 15} type Simple labelsize 11 align 8 minimum 0 maximum 9 step 1
+             code0 {o->init("cfg.GzipCompression");}
+             class Fl_Osc_Counter
+           }
++          Fl_Check_Button {} {
++            label {XML full save}
++            tooltip {Xml Full Save (save disabled parts)} xywh {20 210 125 15} down_box DOWN_BOX
++            code0 {o->init("cfg.SaveFullXml");}
++            class Fl_Osc_Check
++          } 
+           Fl_Choice {} {
+             label {PADsynth Interpolation}
+             xywh {175 105 75 15} down_box BORDER_BOX labelsize 10 textsize 11
+-- 
+2.47.0
+

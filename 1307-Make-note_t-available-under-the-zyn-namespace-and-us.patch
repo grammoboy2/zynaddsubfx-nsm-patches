@@ -1,0 +1,509 @@
+From d08bbf38af2da1284a7dc97dbfc058b5949533f6 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sun, 3 Feb 2019 21:18:08 +0100
+Subject: [PATCH 1307/1936] Make note_t available under the zyn namespace and
+ use it where applicable. This makes understanding where the MIDI note events
+ propagate easier.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Containers/NotePool.cpp | 10 +++++-----
+ src/Containers/NotePool.h   | 11 ++++++-----
+ src/Misc/Master.cpp         | 10 +++++-----
+ src/Misc/Master.h           |  6 +++---
+ src/Misc/Microtonal.cpp     |  2 +-
+ src/Misc/Microtonal.h       |  3 ++-
+ src/Misc/Part.cpp           | 20 ++++++++++----------
+ src/Misc/Part.h             | 14 +++++++-------
+ src/Synth/ADnote.cpp        |  1 +
+ src/Synth/ADnote.h          |  2 +-
+ src/Synth/PADnote.cpp       |  3 ++-
+ src/Synth/PADnote.h         |  2 +-
+ src/Synth/SUBnote.cpp       |  3 ++-
+ src/Synth/SUBnote.h         |  2 +-
+ src/Synth/SynthNote.cpp     |  4 ++--
+ src/Synth/SynthNote.h       | 12 +++++++-----
+ 16 files changed, 56 insertions(+), 49 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index decaa882..f8f43e7f 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -94,7 +94,7 @@ bool NotePool::NoteDescriptor::operator==(NoteDescriptor nd)
+ 
+ //return either the first unused descriptor or the last valid descriptor which
+ //matches note/sendto
+-static int getMergeableDescriptor(uint8_t note, uint8_t sendto, bool legato,
++static int getMergeableDescriptor(note_t note, uint8_t sendto, bool legato,
+         NotePool::NoteDescriptor *ndesc)
+ {
+     int desc_id = 0;
+@@ -151,7 +151,7 @@ int NotePool::usedSynthDesc(void) const
+     return cnt;
+ }
+ 
+-void NotePool::insertNote(uint8_t note, uint8_t sendto, SynthDescriptor desc, bool legato)
++void NotePool::insertNote(note_t note, uint8_t sendto, SynthDescriptor desc, bool legato)
+ {
+     //Get first free note descriptor
+     int desc_id = getMergeableDescriptor(note, sendto, legato, ndesc);
+@@ -181,7 +181,7 @@ void NotePool::upgradeToLegato(void)
+                 insertLegatoNote(d.note, d.sendto, s);
+ }
+ 
+-void NotePool::insertLegatoNote(uint8_t note, uint8_t sendto, SynthDescriptor desc)
++void NotePool::insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor desc)
+ {
+     assert(desc.note);
+     try {
+@@ -206,7 +206,7 @@ void NotePool::applyLegato(LegatoParams &par)
+     }
+ }
+ 
+-void NotePool::makeUnsustainable(uint8_t note)
++void NotePool::makeUnsustainable(note_t note)
+ {
+     for(auto &desc:activeDesc()) {
+         if(desc.note == note) {
+@@ -313,7 +313,7 @@ void NotePool::killAllNotes(void)
+         kill(d);
+ }
+ 
+-void NotePool::killNote(uint8_t note)
++void NotePool::killNote(note_t note)
+ {
+     for(auto &d:activeDesc()) {
+         if(d.note == note)
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 0bbfdf99..42222a4a 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -19,18 +19,19 @@
+ 
+ namespace zyn {
+ 
++typedef uint8_t note_t; //Global MIDI note definition
++
+ struct LegatoParams;
+ class NotePool
+ {
+     public:
+-        typedef uint8_t note_t;
+         //Currently this wastes a ton of bits due ot the legatoMirror flag
+         struct NoteDescriptor {
+             //acceptable overlap after 2 minutes
+             //run time at 48kHz 8 samples per buffer
+             //19 bit minimum
+             uint32_t age;
+-            uint8_t note;
++            note_t note;
+             uint8_t sendto;
+             //max of 16 kit elms and 3 kit items per
+             uint8_t size;
+@@ -117,13 +118,13 @@ class NotePool
+         NotePool(void);
+ 
+         //Operations
+-        void insertNote(uint8_t note, uint8_t sendto, SynthDescriptor desc, bool legato=false);
+-        void insertLegatoNote(uint8_t note, uint8_t sendto, SynthDescriptor desc);
++        void insertNote(note_t note, uint8_t sendto, SynthDescriptor desc, bool legato=false);
++        void insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor desc);
+ 
+         void upgradeToLegato(void);
+         void applyLegato(LegatoParams &par);
+ 
+-        void makeUnsustainable(uint8_t note);
++        void makeUnsustainable(note_t note);
+ 
+         bool full(void) const;
+         bool synthFull(int sdesc_count) const;
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index cdda44a3..bc66e955 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -879,7 +879,7 @@ void Master::defaults()
+ /*
+  * Note On Messages (velocity=0 for NoteOff)
+  */
+-void Master::noteOn(char chan, char note, char velocity)
++void Master::noteOn(char chan, note_t note, char velocity)
+ {
+     if(velocity) {
+         for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) {
+@@ -889,7 +889,7 @@ void Master::noteOn(char chan, char note, char velocity)
+                     part[npart]->NoteOn(note, velocity, keyshift);
+             }
+         }
+-        activeNotes[(int)note] = 1;
++        activeNotes[note] = 1;
+         HDDRecorder.triggernow();
+     }
+     else
+@@ -899,18 +899,18 @@ void Master::noteOn(char chan, char note, char velocity)
+ /*
+  * Note Off Messages
+  */
+-void Master::noteOff(char chan, char note)
++void Master::noteOff(char chan, note_t note)
+ {
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
+         if((chan == part[npart]->Prcvchn) && part[npart]->Penabled)
+             part[npart]->NoteOff(note);
+-    activeNotes[(int)note] = 0;
++    activeNotes[note] = 0;
+ }
+ 
+ /*
+  * Pressure Messages (velocity=0 for NoteOff)
+  */
+-void Master::polyphonicAftertouch(char chan, char note, char velocity)
++void Master::polyphonicAftertouch(char chan, note_t note, char velocity)
+ {
+     if(velocity) {
+         for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index da8c466a..efe4ec3f 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -104,9 +104,9 @@ class Master
+         void putalldata(const char *data);
+ 
+         //Midi IN
+-        void noteOn(char chan, char note, char velocity);
+-        void noteOff(char chan, char note);
+-        void polyphonicAftertouch(char chan, char note, char velocity);
++        void noteOn(char chan, note_t note, char velocity);
++        void noteOff(char chan, note_t note);
++        void polyphonicAftertouch(char chan, note_t note, char velocity);
+         void setController(char chan, int type, int par);
+         //void NRPN...
+ 
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 1e09884c..c7103e03 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -257,7 +257,7 @@ unsigned char Microtonal::getoctavesize() const
+ /*
+  * Get the frequency according the note number
+  */
+-float Microtonal::getnotefreq(int note, int keyshift) const
++float Microtonal::getnotefreq(note_t note, int keyshift) const
+ {
+     // in this function will appears many times things like this:
+     // var=(a+b*100)%b
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index 032ece1d..2c3b2255 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -17,6 +17,7 @@
+ #include <cstdio>
+ #include <stdint.h>
+ #include "../globals.h"
++#include "../Containers/NotePool.h"
+ 
+ #define MAX_OCTAVE_SIZE 128
+ #define MICROTONAL_MAX_NAME_LEN 120
+@@ -67,7 +68,7 @@ class Microtonal
+         void defaults();
+         /**Calculates the frequency for a given note
+          */
+-        float getnotefreq(int note, int keyshift) const;
++        float getnotefreq(note_t note, int keyshift) const;
+ 
+ 
+         //Parameters
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index d8e656e6..96811304 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -450,7 +450,7 @@ static int kit_usage(const Part::Kit *kits, int note, int mode)
+ /*
+  * Note On Messages
+  */
+-bool Part::NoteOn(unsigned char note,
++bool Part::NoteOn(note_t note,
+                   unsigned char velocity,
+                   int masterkeyshift)
+ {
+@@ -558,7 +558,7 @@ bool Part::NoteOn(unsigned char note,
+ /*
+  * Note Off Messages
+  */
+-void Part::NoteOff(unsigned char note) //release the key
++void Part::NoteOff(note_t note) //release the key
+ {
+     // This note is released, so we remove it from the list.
+     if(!monomemEmpty())
+@@ -582,9 +582,9 @@ void Part::NoteOff(unsigned char note) //release the key
+     }
+ }
+ 
+-void Part::PolyphonicAftertouch(unsigned char note,
+-                                unsigned char velocity,
+-                                int masterkeyshift)
++void Part::PolyphonicAftertouch(note_t note,
++				unsigned char velocity,
++				int masterkeyshift)
+ {
+     (void) masterkeyshift;
+ 
+@@ -727,13 +727,13 @@ void Part::ReleaseAllKeys()
+ // (Made for Mono/Legato).
+ void Part::MonoMemRenote()
+ {
+-    unsigned char mmrtempnote = monomemBack(); // Last list element.
++    note_t mmrtempnote = monomemBack(); // Last list element.
+     monomemPop(mmrtempnote); // We remove it, will be added again in NoteOn(...).
+     NoteOn(mmrtempnote, monomem[mmrtempnote].velocity,
+             monomem[mmrtempnote].mkeyshift);
+ }
+ 
+-float Part::getBaseFreq(int note, int keyshift) const
++float Part::getBaseFreq(note_t note, int keyshift) const
+ {
+     if(Pdrummode)
+         return 440.0f * powf(2.0f, (note - 69.0f) / 12.0f);
+@@ -1053,7 +1053,7 @@ void Part::kill_rt(void)
+     notePool.killAllNotes();
+ }
+ 
+-void Part::monomemPush(char note)
++void Part::monomemPush(note_t note)
+ {
+     for(int i=0; i<256; ++i)
+         if(monomemnotes[i]==note)
+@@ -1064,7 +1064,7 @@ void Part::monomemPush(char note)
+     monomemnotes[0] = note;
+ }
+ 
+-void Part::monomemPop(char note)
++void Part::monomemPop(note_t note)
+ {
+     int note_pos=-1;
+     for(int i=0; i<256; ++i)
+@@ -1077,7 +1077,7 @@ void Part::monomemPop(char note)
+     }
+ }
+ 
+-char Part::monomemBack(void) const
++note_t Part::monomemBack(void) const
+ {
+     return monomemnotes[0];
+ }
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 2d9d5e1e..7be3cf39 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -43,11 +43,11 @@ class Part
+         // Midi commands implemented
+ 
+         //returns true when note is successfully applied
+-        bool NoteOn(unsigned char note,
++        bool NoteOn(note_t note,
+                     unsigned char velocity,
+                     int masterkeyshift) REALTIME;
+-        void NoteOff(unsigned char note) REALTIME;
+-        void PolyphonicAftertouch(unsigned char note,
++        void NoteOff(note_t note) REALTIME;
++        void PolyphonicAftertouch(note_t note,
+                                   unsigned char velocity,
+                                   int masterkeyshift) REALTIME;
+         void AllNotesOff() REALTIME; //panic
+@@ -159,7 +159,7 @@ class Part
+ 
+     private:
+         void MonoMemRenote(); // MonoMem stuff.
+-        float getBaseFreq(int note, int keyshift) const;
++        float getBaseFreq(note_t note, int keyshift) const;
+         float getVelocity(uint8_t velocity, uint8_t velocity_sense,
+                 uint8_t velocity_offset) const;
+         void verifyKeyMode(void);
+@@ -177,9 +177,9 @@ class Part
+         bool lastlegatomodevalid; // To keep track of previous legatomodevalid.
+ 
+         // MonoMem stuff
+-        void monomemPush(char note);
+-        void monomemPop(char note);
+-        char monomemBack(void) const;
++        void monomemPush(note_t note);
++        void monomemPop(note_t note);
++        note_t monomemBack(void) const;
+         bool monomemEmpty(void) const;
+         void monomemClear(void);
+ 
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index cdc6b209..e61572c9 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -23,6 +23,7 @@
+ #include "../Misc/Allocator.h"
+ #include "../Params/ADnoteParameters.h"
+ #include "../Containers/ScratchString.h"
++#include "../Containers/NotePool.h"
+ #include "ModFilter.h"
+ #include "OscilGen.h"
+ #include "ADnote.h"
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index f41feef7..da74d7f2 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -110,7 +110,7 @@ class ADnote:public SynthNote
+         //GLOBALS
+         ADnoteParameters &pars;
+         unsigned char     stereo; //if the note is stereo (allows note Panning)
+-        int   midinote;
++        note_t midinote;
+         float velocity, basefreq;
+ 
+         ONOFFTYPE   NoteEnabled;
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index c990687f..506adb34 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -20,6 +20,7 @@
+ #include "../Params/Controller.h"
+ #include "../Params/FilterParams.h"
+ #include "../Containers/ScratchString.h"
++#include "../Containers/NotePool.h"
+ #include "../Misc/Util.h"
+ 
+ namespace zyn {
+@@ -40,7 +41,7 @@ PADnote::PADnote(const PADnoteParameters *parameters,
+ void PADnote::setup(float freq,
+                     float velocity_,
+                     int portamento_,
+-                    int midinote,
++                    note_t midinote,
+                     bool legato,
+                     WatchManager *wm,
+                     const char *prefix)
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index d0d4b100..80ef464c 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -38,7 +38,7 @@ class PADnote:public SynthNote
+         void releasekey();
+     private:
+         void setup(float freq, float velocity, int portamento_,
+-                   int midinote, bool legato = false, WatchManager *wm=0, const char *prefix=0);
++                   note_t midinote, bool legato = false, WatchManager *wm=0, const char *prefix=0);
+         void fadein(float *smps);
+         void computecurrentparameters();
+         bool finished_;
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index d6ce4ada..16acff68 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -21,6 +21,7 @@
+ #include "Envelope.h"
+ #include "ModFilter.h"
+ #include "../Containers/ScratchString.h"
++#include "../Containers/NotePool.h"
+ #include "../Params/Controller.h"
+ #include "../Params/SUBnoteParameters.h"
+ #include "../Params/FilterParams.h"
+@@ -90,7 +91,7 @@ float SUBnote::setupFilters(int *pos, bool automation)
+ void SUBnote::setup(float freq,
+                     float velocity,
+                     int portamento_,
+-                    int midinote,
++                    note_t midinote,
+                     bool legato,
+                     WatchManager *wm,
+                     const char *prefix)
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 15bc18ae..22318960 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -38,7 +38,7 @@ class SUBnote:public SynthNote
+         void setup(float freq,
+                    float velocity,
+                    int portamento_,
+-                   int midinote,
++                   note_t midinote,
+                    bool legato = false, WatchManager *wm = 0, const char *prefix = 0);
+         float setupFilters(int *pos, bool automation);
+         void computecurrentparameters();
+diff --git a/src/Synth/SynthNote.cpp b/src/Synth/SynthNote.cpp
+index ccb1957d..46394565 100644
+--- a/src/Synth/SynthNote.cpp
++++ b/src/Synth/SynthNote.cpp
+@@ -25,7 +25,7 @@ SynthNote::SynthNote(SynthParams &pars)
+ {}
+ 
+ SynthNote::Legato::Legato(const SYNTH_T &synth_, float freq, float vel, int port,
+-                          int note, bool quiet, prng_t seed)
++                          note_t note, bool quiet, prng_t seed)
+     :synth(synth_)
+ {
+     // Initialise some legato-specific vars
+@@ -154,7 +154,7 @@ void SynthNote::Legato::apply(SynthNote &note, float *outl, float *outr)
+ void SynthNote::setVelocity(float velocity_) {
+     legato.setSilent(true); //Let legato.update(...) returns 0.
+     LegatoParams pars{legato.getFreq(), velocity_,
+-               legato.getPortamento(), legato.getMidinote(), true, legato.getSeed()};
++               legato.getPortamento(), legato.getMidiNote(), true, legato.getSeed()};
+     try {
+         legatonote(pars);
+     } catch (std::bad_alloc &ba) {
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index c1fe4bcb..2fa935f0 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -14,6 +14,8 @@
+ #define SYNTH_NOTE_H
+ #include "../globals.h"
+ #include "../Misc/Util.h"
++#include "../Containers/NotePool.h"
++
+ namespace zyn {
+ 
+ class Allocator;
+@@ -27,7 +29,7 @@ struct SynthParams
+     float     frequency; //Note base frequency
+     float     velocity;  //Velocity of the Note
+     bool      portamento;//True if portamento is used for this note
+-    int       note;      //Integer value of the note
++    note_t    note;      //Integer value of the note
+     bool      quiet;     //Initial output condition for legato notes
+     prng_t    seed;      //Random seed
+ };
+@@ -37,7 +39,7 @@ struct LegatoParams
+     float frequency;
+     float velocity;
+     bool portamento;
+-    int midinote;
++    note_t midinote;
+     bool externcall;
+     prng_t seed;
+ };
+@@ -82,7 +84,7 @@ class SynthNote
+         {
+             public:
+                 Legato(const SYNTH_T &synth_, float freq, float vel, int port,
+-                       int note, bool quiet, prng_t seed);
++                       note_t note, bool quiet, prng_t seed);
+ 
+                 void apply(SynthNote &note, float *outl, float *outr);
+                 int update(LegatoParams pars);
+@@ -100,7 +102,7 @@ class SynthNote
+                 struct { // Note parameters
+                     float  freq, vel;
+                     bool   portamento;
+-                    int    midinote;
++                    note_t midinote;
+                     prng_t seed;
+                 } param;
+                 const SYNTH_T &synth;
+@@ -109,7 +111,7 @@ class SynthNote
+                 float getFreq() {return param.freq; }
+                 float getVelocity() {return param.vel; }
+                 bool  getPortamento() {return param.portamento; }
+-                int getMidinote() {return param.midinote; }
++                note_t getMidiNote() {return param.midinote; }
+                 prng_t getSeed() {return param.seed;}
+                 void setSilent(bool silent_) {silent = silent_; }
+                 void setDecounter(int decounter_) {decounter = decounter_; }
+-- 
+2.47.0
+

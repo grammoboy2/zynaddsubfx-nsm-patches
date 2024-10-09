@@ -1,0 +1,69 @@
+From 602b8f68310aad6c29c70553e8167c864c320c7c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 10 Aug 2013 15:02:33 -0400
+Subject: [PATCH 0110/1936] Fix Oscprompt interactions
+
+---
+ rtosc                   |  2 +-
+ src/CMakeLists.txt      |  2 +-
+ src/Misc/MiddleWare.cpp | 19 +++++++++++++++----
+ 3 files changed, 17 insertions(+), 6 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 7a0262d6..fbfc2c43 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 7a0262d6ade61c875a92febd1bf8b94a7974bbf2
++Subproject commit fbfc2c43d2ab7135a5c57c9314d187871a0a9799
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 5211f92c..11198f52 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -26,7 +26,7 @@ pkg_search_module(LASH lash-1.0)
+ mark_as_advanced(LASH_LIBRARIES)
+ pkg_search_module(DSSI dssi>=0.9.0)
+ mark_as_advanced(DSSI_LIBRARIES)
+-pkg_search_module(LIBLO liblo>=0.26)
++pkg_search_module(LIBLO liblo>=0.26 REQUIRED)
+ mark_as_advanced(LIBLO_LIBRARIES)
+ 
+ ######### Settings ###########
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index f871a4cd..dc5bdf18 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -68,15 +68,26 @@ void path_search(const char *m)
+         for(const Port &p:*ports) {
+             if(strstr(p.name, needle)!=p.name)
+                 continue;
+-            types[pos]    = types[pos+1] = 's';
++            printf("Reporting '%s'\n", p.name);
++            types[pos]    = 's';
+             args[pos++].s = p.name;
+-            args[pos++].s = p.metadata;
++            types[pos]    = 'b';
++            if(p.metadata && *p.metadata) {
++                args[pos].b.data = (unsigned char*) p.metadata;
++                auto tmp = rtosc::Port::MetaContainer(p.metadata);
++                args[pos++].b.len  = tmp.length();
++            } else {
++                args[pos].b.data = (unsigned char*) NULL;
++                args[pos++].b.len  = 0;
++            }
+         }
+     }
+ 
++
+     //Reply to requester
+-    char buffer[1024];
+-    size_t length = rtosc_amessage(buffer, 1024, "/paths", types, args);
++    char buffer[1024*4];
++    size_t length = rtosc_amessage(buffer, sizeof(buffer), "/paths", types, args);
++    printf("ARG COUNT = %d\n", rtosc_narguments(buffer));
+     if(length) {
+         lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
+         lo_address addr = lo_address_new_from_url(last_url.c_str());
+-- 
+2.47.0
+

@@ -1,0 +1,52 @@
+From 41733fe669c4c80c199b471b5d1c4d4badd9db8b Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Wed, 4 Nov 2015 14:30:49 -0500
+Subject: [PATCH 0678/1936] Fix off-by-one error in display for adaptive
+ harmonics
+
+---
+ src/Synth/OscilGen.cpp    | 7 ++++---
+ src/UI/Fl_OscilSpectrum.h | 4 ++--
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 2ede7530..37cbca35 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -1127,14 +1127,15 @@ void OscilGen::getspectrum(int n, float *spc, int what)
+ 
+     for(int i = 1; i < n; ++i) {
+         if(what == 0)
+-            spc[i - 1] = abs(pendingfreqs, i);
++            spc[i] = abs(pendingfreqs, i);
+         else {
+             if(Pcurrentbasefunc == 0)
+-                spc[i - 1] = ((i == 1) ? (1.0f) : (0.0f));
++                spc[i] = ((i == 1) ? (1.0f) : (0.0f));
+             else
+-                spc[i - 1] = abs(basefuncFFTfreqs, i);
++                spc[i] = abs(basefuncFFTfreqs, i);
+         }
+     }
++    spc[0]=0;
+ 
+     if(what == 0) {
+         for(int i = 0; i < n; ++i)
+diff --git a/src/UI/Fl_OscilSpectrum.h b/src/UI/Fl_OscilSpectrum.h
+index 757b9750..8d5bd53b 100644
+--- a/src/UI/Fl_OscilSpectrum.h
++++ b/src/UI/Fl_OscilSpectrum.h
+@@ -106,8 +106,8 @@ class Fl_OscilSpectrum : public Fl_Box, public Fl_Osc_Widget
+             if(!spc)
+                 return;
+             //draws the spectrum
+-            for(int i=0; i<n; i++){
+-                int tmp=i*GX+2;
++            for(int i=1; i<n; i++){
++                int tmp=(i-1)*GX+2;
+                 float x=spc[i];
+ 
+                 if (x>dB2rap(-maxdb)) x=rap2dB(x)/maxdb+1;
+-- 
+2.47.0
+

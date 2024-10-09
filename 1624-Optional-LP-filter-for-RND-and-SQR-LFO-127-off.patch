@@ -1,0 +1,293 @@
+From 5a507e08631898a7540eba2cf20778225e8f676b Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sat, 14 Sep 2019 23:11:38 +0200
+Subject: [PATCH 1624/1936] Optional LP filter for RND and SQR LFO (127=off)
+
+---
+ src/Params/LFOParams.cpp | 25 +++++++++++++++++--------
+ src/Params/LFOParams.h   |  3 +++
+ src/Synth/LFO.cpp        | 37 +++++++++++++++++++++++++++++++++----
+ src/Synth/LFO.h          | 11 +++++++++++
+ src/UI/LFOUI.fl          | 11 +++++++++--
+ 5 files changed, 73 insertions(+), 14 deletions(-)
+
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 39d90ace..9189a17d 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -68,6 +68,8 @@ static const rtosc::Ports _ports = {
+     rParamZyn(Pstartphase, rShort("start"), rSpecial(random),
+               rDefaultDepends(loc), rDefault(64), rPreset(ad_voice_freq, 0),
+               "Starting Phase"),
++    rParamZyn(Pcutoff, rShort("lp"), rDefault(127), 
++            "RND/SQR lp-filter freq"),
+     rOption(PLFOtype, rShort("type"), rOptions(sine, triangle, square, up, down,
+                 exp1, exp2, random), rDefault(sine), "Shape of LFO"),
+     rParamZyn(Prandomness, rShort("a.r."), rSpecial(disable), rDefault(0),
+@@ -143,13 +145,14 @@ void LFOParams::setup()
+ 
+ // TODO: reuse
+ LFOParams::LFOParams(const AbsTime *time_) :
+-    LFOParams(2.65, 0, 0, 0, 0, 0, 0, loc_unspecified, time_)
++    LFOParams(2.65, 0, 0, 127, 0, 0, 0, 0, loc_unspecified, time_)
+ {
+ }
+ 
+ LFOParams::LFOParams(float freq_,
+                      char Pintensity_,
+                      char Pstartphase_,
++                     char Pcutoff_,
+                      char PLFOtype_,
+                      char Prandomness_,
+                      float Pdelay_,
+@@ -161,6 +164,7 @@ LFOParams::LFOParams(float freq_,
+     Dfreq       = freq_;
+     Dintensity  = Pintensity_;
+     Dstartphase = Pstartphase_;
++    Dcutoff     = Pcutoff_;
+     DLFOtype    = PLFOtype_;
+     Drandomness = Prandomness_;
+     Ddelay      = Pdelay_;
+@@ -175,12 +179,13 @@ LFOParams::LFOParams(consumer_location_t loc,
+                                              last_update_timestamp(0) {
+ 
+     auto init =
+-        [&](float freq_, char Pintensity_, char Pstartphase_, char PLFOtype_,
++        [&](float freq_, char Pintensity_, char Pstartphase_, char Pcutoff_, char PLFOtype_,
+             char Prandomness_, float delay_, char Pcontinous_)
+     {
+         Dfreq       = freq_;
+         Dintensity  = Pintensity_;
+         Dstartphase = Pstartphase_;
++        Dcutoff     = Pcutoff_;
+         DLFOtype    = PLFOtype_;
+         Drandomness = Prandomness_;
+         Ddelay      = delay_;
+@@ -189,12 +194,12 @@ LFOParams::LFOParams(consumer_location_t loc,
+ 
+     switch(loc)
+     {
+-        case ad_global_amp:    init(6.49, 0, 64, 0, 0, 0, 0); break;
+-        case ad_global_freq:   init(3.71, 0, 64, 0, 0, 0, 0); break;
+-        case ad_global_filter: init(6.49, 0, 64, 0, 0, 0, 0); break;
+-        case ad_voice_amp:     init(11.25, 32, 64, 0, 0, 0.94, 0); break;
+-        case ad_voice_freq:    init(1.19, 40,  0, 0, 0,  0, 0); break;
+-        case ad_voice_filter:  init(1.19, 20, 64, 0, 0,  0, 0); break;
++        case ad_global_amp:    init(6.49, 0, 64, 127, 0, 0, 0, 0); break;
++        case ad_global_freq:   init(3.71, 0, 64, 127, 0, 0, 0, 0); break;
++        case ad_global_filter: init(6.49, 0, 64, 127, 0, 0, 0, 0); break;
++        case ad_voice_amp:     init(11.25, 32, 64, 127, 0, 0, 0.94, 0); break;
++        case ad_voice_freq:    init(1.19, 40,  0, 127, 0, 0,  0, 0); break;
++        case ad_voice_filter:  init(1.19, 20, 64, 127, 0, 0,  0, 0); break;
+         default: throw std::logic_error("Invalid LFO consumer location");
+     }
+ 
+@@ -209,6 +214,7 @@ void LFOParams::defaults()
+     freq        = Dfreq;
+     Pintensity  = Dintensity;
+     Pstartphase = Dstartphase;
++    Pcutoff     = Dcutoff;
+     PLFOtype    = DLFOtype;
+     Prandomness = Drandomness;
+     delay       = Ddelay;
+@@ -223,6 +229,7 @@ void LFOParams::add2XML(XMLwrapper& xml)
+     xml.addparreal("freq", freq);
+     xml.addpar("intensity", Pintensity);
+     xml.addpar("start_phase", Pstartphase);
++    xml.addpar("cutoff", Pcutoff);
+     xml.addpar("lfo_type", PLFOtype);
+     xml.addpar("randomness_amplitude", Prandomness);
+     xml.addpar("randomness_frequency", Pfreqrand);
+@@ -240,6 +247,7 @@ void LFOParams::getfromXML(XMLwrapper& xml)
+     }
+     Pintensity  = xml.getpar127("intensity", Pintensity);
+     Pstartphase = xml.getpar127("start_phase", Pstartphase);
++    Pcutoff = xml.getpar127("cutoff", Pcutoff);
+     PLFOtype    = xml.getpar127("lfo_type", PLFOtype);
+     Prandomness = xml.getpar127("randomness_amplitude", Prandomness);
+     Pfreqrand   = xml.getpar127("randomness_frequency", Pfreqrand);
+@@ -259,6 +267,7 @@ void LFOParams::paste(LFOParams &x)
+     COPY(freq);
+     COPY(Pintensity);
+     COPY(Pstartphase);
++    COPY(Pcutoff);
+     COPY(PLFOtype);
+     COPY(Prandomness);
+     COPY(Pfreqrand);
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index 56972ba7..ed1119a7 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -40,6 +40,7 @@ class LFOParams:public Presets
+         LFOParams(float freq_,
+                   char Pintensity_,
+                   char Pstartphase_,
++                  char Pcutoff_,
+                   char PLFOtype_,
+                   char Prandomness_,
+                   float delay_,
+@@ -58,6 +59,7 @@ class LFOParams:public Presets
+         float         freq;      /**<frequency*/
+         unsigned char Pintensity; /**<intensity*/
+         unsigned char Pstartphase; /**<start phase (0=random)*/
++        unsigned char Pcutoff; /**<cutoff */
+         unsigned char PLFOtype; /**<LFO type (sin,triangle,square,ramp,...)*/
+         unsigned char Prandomness; /**<randomness (0=off)*/
+         unsigned char Pfreqrand; /**<frequency randomness (0=off)*/
+@@ -81,6 +83,7 @@ class LFOParams:public Presets
+         float         Dfreq;
+         unsigned char Dintensity;
+         unsigned char Dstartphase;
++        unsigned char Dcutoff;
+         unsigned char DLFOtype;
+         unsigned char Drandomness;
+         float         Ddelay;
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index 916fbc4f..7e76d901 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -79,6 +79,8 @@ LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManage
+     incrnd   = nextincrnd = 1.0f;
+     computeNextFreqRnd();
+     computeNextFreqRnd(); //twice because I want incrnd & nextincrnd to be random
++    z1 = 0.0;
++    z2 = 0.0;
+ }
+ 
+ LFO::~LFO()
+@@ -86,6 +88,7 @@ LFO::~LFO()
+ 
+ float LFO::baseOut(const char waveShape, const float phase)
+ {
++    float lfo_out;
+     switch(waveShape) {
+         case LFO_TRIANGLE:
+             if(phase >= 0.0f && phase < 0.25f)
+@@ -97,9 +100,11 @@ float LFO::baseOut(const char waveShape, const float phase)
+             break;
+         case LFO_SQUARE:
+             if(phase < 0.5f)
+-                return -1;
++                lfo_out = -1;
+             else
+-                return  1;
++                lfo_out = 1;
++                
++            return biquad(lfo_out);
+             break;
+         case LFO_RAMPUP:    return (phase - 0.5f) * 2.0f;
+         case LFO_RAMPDOWN:  return (0.5f - phase) * 2.0f;
+@@ -110,12 +115,36 @@ float LFO::baseOut(const char waveShape, const float phase)
+                 first_half = phase < 0.5;
+                 last_random = 2*RND-1;
+             }
+-            return last_random;
+-        default:            return cosf(phase * 2.0f * PI); //LFO_SINE
++            
++            
++            return biquad(last_random);
++            break;
++        default:
++            return cosf(phase * 2.0f * PI); //LFO_SINE
+     }
+ }
+ 
+ 
++float LFO::biquad(float input)
++{
++    float output;
++    // calculate biquad coefficients
++    Fc = powf(lfopars_.Pcutoff + 7.0f, 2.0f)/127.0f;
++    K = tan(PI * Fc * dt_);
++    norm = 1 / (1 + K / 0.7071f + K * K);
++    a0 = K * K * norm;
++    a1 = 2 * a0;
++    a2 = a0;
++    b1 = 2 * (K * K - 1) * norm;
++    b2 = (1 - K / 0.7071f + K * K) * norm;            
++    // lp filter the (s&h) random LFO
++    output = input * a0 + z1;
++    z1 = input * a1 + z2 - b1 * output;
++    z2 = input * a2 - b2 * output;
++    return (lfopars_.Pcutoff==127) ? input : output;
++}
++
++
+ float LFO::lfoout()
+ {
+     //update internals XXX TODO cleanup
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index 7ed9679c..dcbcabca 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -37,6 +37,7 @@ class LFO
+         float amplfoout();
+     private:
+         float baseOut(const char waveShape, const float phase);
++        float biquad(float input);
+         //Phase of Oscillator
+         float phase;
+         //Phase Increment Per Frame
+@@ -49,6 +50,7 @@ class LFO
+         // RND mode
+         int first_half;
+         float last_random;
++        float z1, z2, noisy_out;
+ 
+         //Intensity of the wave
+         float lfointensity;
+@@ -66,6 +68,15 @@ class LFO
+         const float     dt_;
+         const LFOParams &lfopars_;
+         const float basefreq_;
++        
++        float Fc, K, norm;
++        
++        //biquad coefficients for lp filtering in noise-LFO
++        float a0 = 0.0007508914611009499;
++        float a1 = 0.0015017829222018998;
++        float a2 = 0.0007508914611009499;
++        float b1 = -1.519121359805288;
++        float b2 =  0.5221249256496917;
+ 
+         VecWatchPoint watchOut;
+ 
+diff --git a/src/UI/LFOUI.fl b/src/UI/LFOUI.fl
+index a2c77ada..14f6ae29 100644
+--- a/src/UI/LFOUI.fl
++++ b/src/UI/LFOUI.fl
+@@ -79,15 +79,21 @@ hide();} {}
+           code0 {o->init("Pintensity");}
+           class Fl_Osc_Dial
+         }
++        Fl_Dial cutoff {
++          label LP
++          tooltip {LP cutoff} xywh {70 30 20 20} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
++          code0 {o->init("Pcutoff");}
++          class Fl_Osc_Dial
++        }
+         Fl_Dial delay {
+           label Delay
+-          tooltip {LFO delay} xywh {110 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
++          tooltip {LFO delay} xywh {120 30 20 20} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+           code0 {o->init("Pdelay");}
+           class Fl_Osc_Dial
+         }
+         Fl_Dial startphase {
+           label Start
+-          tooltip {LFO Startphase (leftmost is Random)} xywh {75 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
++          tooltip {LFO Startphase (leftmost is Random)} xywh {95 20 20 20} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+           code0 {o->init("Pstartphase");}
+           class Fl_Osc_Dial
+         }
+@@ -172,6 +178,7 @@ hide();} {}
+     code {freq->update();
+ intensity->update();
+ startphase->update();
++cutoff->update();
+ delay->update();
+ continous->update();
+ stretch->update();
+-- 
+2.47.0
+

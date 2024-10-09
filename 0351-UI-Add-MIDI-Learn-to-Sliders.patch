@@ -1,0 +1,117 @@
+From 729164aa379a457be7137e6d630b80485dae50c0 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 22 Feb 2015 15:40:00 -0500
+Subject: [PATCH 0351/1936] UI: Add MIDI Learn to Sliders
+
+---
+ src/UI/Fl_Osc_Dial.cpp    |  1 -
+ src/UI/Fl_Osc_Slider.H    |  3 +++
+ src/UI/Fl_Osc_Slider.cpp  | 13 ++++++++++++-
+ src/UI/Fl_Osc_VSlider.H   |  3 +++
+ src/UI/Fl_Osc_VSlider.cpp | 11 +++++++++++
+ 5 files changed, 29 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/Fl_Osc_Dial.cpp b/src/UI/Fl_Osc_Dial.cpp
+index 4350da68..bacd30e3 100644
+--- a/src/UI/Fl_Osc_Dial.cpp
++++ b/src/UI/Fl_Osc_Dial.cpp
+@@ -104,7 +104,6 @@ void Fl_Osc_Dial::mark_dead(void)
+     dead = true;
+ }
+ 
+-
+ void Fl_Osc_Dial::rebase(std::string new_base)
+ {
+     if(dead || loc == "/")
+diff --git a/src/UI/Fl_Osc_Slider.H b/src/UI/Fl_Osc_Slider.H
+index 09d7e5e8..b743de8d 100644
+--- a/src/UI/Fl_Osc_Slider.H
++++ b/src/UI/Fl_Osc_Slider.H
+@@ -20,6 +20,9 @@ class Fl_Osc_Slider:public Fl_Slider, public Fl_Osc_Widget
+         //Refetch parameter information
+         void update(void);
+         void callback(Fl_Callback *cb, void *p = NULL);
++        
++        //MIDI Learn
++        int handle(int);
+ 
+         void cb(void);
+         static void _cb(Fl_Widget *w, void *);
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index f0e930d7..b11162ab 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -1,3 +1,4 @@
++#include <FL/Fl.H>
+ #include "Fl_Osc_Slider.H"
+ #include "Fl_Osc_Interface.h"
+ #include "Fl_Osc_Pane.H"
+@@ -60,7 +61,7 @@ void Fl_Osc_Slider::cb(void)
+ 	oscWrite(ext, "i", (int)(val-min_));
+     }
+     //OSC_value(val);
+-    
++
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+ }
+@@ -71,6 +72,16 @@ void Fl_Osc_Slider::callback(Fl_Callback *cb, void *p)
+     cb_data.second = p;
+ }
+ 
++int Fl_Osc_Slider::handle(int ev)
++{
++    if(ev == FL_PUSH && Fl::event_state(FL_BUTTON2)) {
++        printf("Trying to learn...\n");
++        osc->write("/learn", "s", (loc+ext).c_str());
++        return 1;
++    }
++    return Fl_Slider::handle(ev);
++}
++
+ void Fl_Osc_Slider::update(void)
+ {
+     oscWrite(ext, "");
+diff --git a/src/UI/Fl_Osc_VSlider.H b/src/UI/Fl_Osc_VSlider.H
+index 5cf23682..edbdc1b8 100644
+--- a/src/UI/Fl_Osc_VSlider.H
++++ b/src/UI/Fl_Osc_VSlider.H
+@@ -18,6 +18,9 @@ class Fl_Osc_VSlider:public Fl_Value_Slider, public Fl_Osc_Widget
+         //Refetch parameter information
+         void update(void);
+         void callback(Fl_Callback *cb, void *p = NULL);
++        
++        //MIDI Learn
++        int handle(int);
+ 
+         void cb(void);
+         static void _cb(Fl_Widget *w, void *);
+diff --git a/src/UI/Fl_Osc_VSlider.cpp b/src/UI/Fl_Osc_VSlider.cpp
+index b58496ea..8c3eca91 100644
+--- a/src/UI/Fl_Osc_VSlider.cpp
++++ b/src/UI/Fl_Osc_VSlider.cpp
+@@ -1,3 +1,4 @@
++#include <FL/Fl.H>
+ #include "Fl_Osc_VSlider.H"
+ #include "Fl_Osc_Interface.h"
+ #include "Fl_Osc_Pane.H"
+@@ -62,6 +63,16 @@ void Fl_Osc_VSlider::callback(Fl_Callback *cb, void *p)
+     cb_data.second = p;
+ }
+ 
++int Fl_Osc_VSlider::handle(int ev)
++{
++    if(ev == FL_PUSH && Fl::event_state(FL_BUTTON2)) {
++        printf("Trying to learn...\n");
++        osc->write("/learn", "s", (loc+ext).c_str());
++        return 1;
++    }
++    return Fl_Value_Slider::handle(ev);
++}
++
+ void Fl_Osc_VSlider::update(void)
+ {
+     oscWrite(ext, "");
+-- 
+2.47.0
+

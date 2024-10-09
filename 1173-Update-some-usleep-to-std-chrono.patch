@@ -1,0 +1,94 @@
+From 144086d004b798b52d50c91014a6b52ef1efffd5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 23 Jul 2017 14:05:04 -0400
+Subject: [PATCH 1173/1936] Update some usleep() to std::chrono
+
+Ideally this fixes some issues on windows where usleep
+appears to misfunction, but if not there will be another
+commit for lower resolution systems.
+---
+ src/Misc/MiddleWare.cpp | 8 ++++++--
+ src/Nio/NulEngine.cpp   | 6 ++++--
+ 2 files changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index a00b8332..d1817d42 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -48,6 +48,8 @@
+ #include <string>
+ #include <future>
+ #include <atomic>
++#include <chrono>
++#include <thread>
+ #include <list>
+ 
+ #define errx(...) {}
+@@ -1554,6 +1556,7 @@ MiddleWareImpl::~MiddleWareImpl(void)
+ 
+ void MiddleWareImpl::doReadOnlyOp(std::function<void()> read_only_fn)
+ {
++    using namespace std::chrono;
+     assert(uToB);
+     uToB->write("/freeze_state","");
+ 
+@@ -1561,7 +1564,7 @@ void MiddleWareImpl::doReadOnlyOp(std::function<void()> read_only_fn)
+     int tries = 0;
+     while(tries++ < 10000) {
+         if(!bToU->hasNext()) {
+-            usleep(500);
++            std::this_thread::sleep_for(microseconds(500));
+             continue;
+         }
+         const char *msg = bToU->read();
+@@ -1667,6 +1670,7 @@ void MiddleWareImpl::doReadOnlyOpPlugin(std::function<void()> read_only_fn)
+ 
+ bool MiddleWareImpl::doReadOnlyOpNormal(std::function<void()> read_only_fn, bool canfail)
+ {
++    using namespace std::chrono;
+     assert(uToB);
+     uToB->write("/freeze_state","");
+ 
+@@ -1674,7 +1678,7 @@ bool MiddleWareImpl::doReadOnlyOpNormal(std::function<void()> read_only_fn, bool
+     int tries = 0;
+     while(tries++ < 2000) {
+         if(!bToU->hasNext()) {
+-            usleep(500);
++            std::this_thread::sleep_for(microseconds(500));
+             continue;
+         }
+         const char *msg = bToU->read();
+diff --git a/src/Nio/NulEngine.cpp b/src/Nio/NulEngine.cpp
+index d850c6bb..e9aa260a 100644
+--- a/src/Nio/NulEngine.cpp
++++ b/src/Nio/NulEngine.cpp
+@@ -14,7 +14,8 @@
+ #include "NulEngine.h"
+ #include "../globals.h"
+ 
+-#include <unistd.h>
++#include <thread>
++#include <chrono>
+ #include <iostream>
+ using namespace std;
+ 
+@@ -35,6 +36,7 @@ void *NulEngine::_AudioThread(void *arg)
+ 
+ void *NulEngine::AudioThread()
+ {
++    using namespace std::chrono;
+     while(pThread) {
+         getNext();
+ 
+@@ -50,7 +52,7 @@ void *NulEngine::AudioThread()
+                         + (playing_until.tv_sec - now.tv_sec) * 1000000;
+             if(remaining > 10000) //Don't sleep() less than 10ms.
+                 //This will add latency...
+-                usleep(remaining - 10000);
++                std::this_thread::sleep_for(std::chrono::microseconds(remaining  - 10000));
+             if(remaining < 0)
+                 cerr << "WARNING - too late" << endl;
+         }
+-- 
+2.47.0
+

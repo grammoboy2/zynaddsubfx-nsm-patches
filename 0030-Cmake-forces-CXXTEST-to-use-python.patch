@@ -1,0 +1,28 @@
+From 216a6e20878180ef6a9fac459689763983676b15 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 24 Oct 2012 10:58:29 -0400
+Subject: [PATCH 0030/1936] Cmake: forces CXXTEST to use python
+
+- Should fix errors of finding perl with some versions of cmake and some
+  versions of cxxtest
+---
+ src/CMakeLists.txt | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 8ab8e741..da431f34 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -16,6 +16,9 @@ set(FLTK_SKIP_OPENGL true)
+ find_package(FLTK)
+ find_package(OpenGL) #for FLTK
+ find_package(CxxTest)
++if(CXXTEST_FOUND)
++    set(CXXTEST_USE_PYTHON TRUE)
++endif()
+ # lash
+ pkg_search_module(LASH lash-1.0)
+ mark_as_advanced(LASH_LIBRARIES)
+-- 
+2.47.0
+

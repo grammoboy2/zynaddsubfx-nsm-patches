@@ -1,0 +1,958 @@
+From 601124401721b71632faedfacc9cf6bb447439f9 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 14 Feb 2016 20:21:11 +0100
+Subject: [PATCH 0860/1936] Finish dpf external-ui sync, remove custom files
+ and hacks
+
+---
+ src/Plugin/ZynAddSubFX/CMakeLists.txt        |  12 +-
+ src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h   |   5 -
+ src/Plugin/ZynAddSubFX/DistrhoUI.cpp         | 147 ------
+ src/Plugin/ZynAddSubFX/DistrhoUI.hpp         | 253 -----------
+ src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp | 444 -------------------
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp    |   8 -
+ 6 files changed, 6 insertions(+), 863 deletions(-)
+ delete mode 100644 src/Plugin/ZynAddSubFX/DistrhoUI.cpp
+ delete mode 100644 src/Plugin/ZynAddSubFX/DistrhoUI.hpp
+ delete mode 100644 src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
+
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 247e8ead..648ff235 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -11,14 +11,14 @@ add_library(ZynAddSubFX_lv2 SHARED
+     ZynAddSubFX.cpp)
+ 
+ add_library(ZynAddSubFX_lv2_ui SHARED
+-    DistrhoUI.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoUIMain.cpp
+     ZynAddSubFX-UI.cpp)
+ 
+ add_library(ZynAddSubFX_vst SHARED
+     ${CMAKE_SOURCE_DIR}/src/globals.cpp
+     ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
+     ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
+-    DistrhoUI.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoUIMain.cpp
+     ZynAddSubFX.cpp
+     ZynAddSubFX-UI.cpp)
+ 
+@@ -57,12 +57,12 @@ install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+ 
+ add_custom_command(TARGET ZynAddSubFX_lv2 POST_BUILD
+     COMMAND lv2-ttl-generator $<TARGET_FILE:ZynAddSubFX_lv2>
+-	WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lv2)
++    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lv2)
+ 
+ install(FILES
+-	${CMAKE_CURRENT_BINARY_DIR}/lv2/manifest.ttl
+-	${CMAKE_CURRENT_BINARY_DIR}/lv2/presets.ttl
+-	${CMAKE_CURRENT_BINARY_DIR}/lv2/ZynAddSubFX.ttl
++    ${CMAKE_CURRENT_BINARY_DIR}/lv2/manifest.ttl
++    ${CMAKE_CURRENT_BINARY_DIR}/lv2/presets.ttl
++    ${CMAKE_CURRENT_BINARY_DIR}/lv2/ZynAddSubFX.ttl
+     DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
+ 
+ if(NtkGui)
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+index 5b2dbf57..93713ebe 100644
+--- a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
++++ b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+@@ -48,9 +48,4 @@ enum Parameters {
+     kParamCount
+ };
+ 
+-// Needed for dpf code, external-ui is not official yet
+-#ifdef NTK_GUI
+- #include "DistrhoUIInternal.hpp"
+-#endif
+-
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUI.cpp b/src/Plugin/ZynAddSubFX/DistrhoUI.cpp
+deleted file mode 100644
+index aa209679..00000000
+--- a/src/Plugin/ZynAddSubFX/DistrhoUI.cpp
++++ /dev/null
+@@ -1,147 +0,0 @@
+-/*
+- * DISTRHO Plugin Framework (DPF)
+- * Copyright (C) 2012-2016 Filipe Coelho <falktx@falktx.com>
+- *
+- * Permission to use, copy, modify, and/or distribute this software for any purpose with
+- * or without fee is hereby granted, provided that the above copyright notice and this
+- * permission notice appear in all copies.
+- *
+- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD
+- * TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN
+- * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+- * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+- * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+- */
+-
+-#include "DistrhoUIInternal.hpp"
+-
+-#ifdef HAVE_DGL
+-# include "src/WidgetPrivateData.hpp"
+-#endif
+-
+-START_NAMESPACE_DISTRHO
+-
+-/* ------------------------------------------------------------------------------------------------------------
+- * Static data, see DistrhoUIInternal.hpp */
+-
+-double    d_lastUiSampleRate = 0.0;
+-void*     d_lastUiDspPtr     = nullptr;
+-#ifdef HAVE_DGL
+-Window*   d_lastUiWindow     = nullptr;
+-#endif
+-uintptr_t g_nextWindowId     = 0;
+-
+-/* ------------------------------------------------------------------------------------------------------------
+- * UI */
+-
+-#ifdef HAVE_DGL
+-UI::UI(uint width, uint height)
+-    : UIWidget(*d_lastUiWindow),
+-      pData(new PrivateData())
+-{
+-    ((UIWidget*)this)->pData->needsFullViewport = false;
+-
+-    if (width > 0 && height > 0)
+-        setSize(width, height);
+-}
+-#else
+-UI::UI(uint width, uint height)
+-    : UIWidget(width, height),
+-      pData(new PrivateData()) {}
+-#endif
+-
+-UI::~UI()
+-{
+-    delete pData;
+-}
+-
+-/* ------------------------------------------------------------------------------------------------------------
+- * Host state */
+-
+-double UI::getSampleRate() const noexcept
+-{
+-    return pData->sampleRate;
+-}
+-
+-void UI::editParameter(uint32_t index, bool started)
+-{
+-    pData->editParamCallback(index + pData->parameterOffset, started);
+-}
+-
+-void UI::setParameterValue(uint32_t index, float value)
+-{
+-    pData->setParamCallback(index + pData->parameterOffset, value);
+-}
+-
+-#if DISTRHO_PLUGIN_WANT_STATE
+-void UI::setState(const char* key, const char* value)
+-{
+-    pData->setStateCallback(key, value);
+-}
+-#endif
+-
+-#if DISTRHO_PLUGIN_IS_SYNTH
+-void UI::sendNote(uint8_t channel, uint8_t note, uint8_t velocity)
+-{
+-    pData->sendNoteCallback(channel, note, velocity);
+-}
+-#endif
+-
+-#if DISTRHO_PLUGIN_WANT_DIRECT_ACCESS
+-/* ------------------------------------------------------------------------------------------------------------
+- * Direct DSP access */
+-
+-void* UI::getPluginInstancePointer() const noexcept
+-{
+-    return pData->dspPtr;
+-}
+-#endif
+-
+-#if DISTRHO_PLUGIN_HAS_EMBED_UI && DISTRHO_PLUGIN_HAS_EXTERNAL_UI
+-/* ------------------------------------------------------------------------------------------------------------
+- * External embeddable UI helpers */
+-
+-uintptr_t UI::getNextWindowId() noexcept
+-{
+-    return g_nextWindowId;
+-}
+-#endif
+-
+-/* ------------------------------------------------------------------------------------------------------------
+- * DSP/Plugin Callbacks (optional) */
+-
+-void UI::sampleRateChanged(double) {}
+-
+-#ifdef HAVE_DGL
+-/* ------------------------------------------------------------------------------------------------------------
+- * UI Callbacks (optional) */
+-
+-void UI::uiFileBrowserSelected(const char*)
+-{
+-}
+-
+-void UI::uiReshape(uint width, uint height)
+-{
+-    glEnable(GL_BLEND);
+-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+-    glMatrixMode(GL_PROJECTION);
+-    glLoadIdentity();
+-    glOrtho(0.0, static_cast<GLdouble>(width), static_cast<GLdouble>(height), 0.0, 0.0, 1.0);
+-    glViewport(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+-    glMatrixMode(GL_MODELVIEW);
+-    glLoadIdentity();
+-}
+-
+-/* ------------------------------------------------------------------------------------------------------------
+- * UI Resize Handling, internal */
+-
+-void UI::onResize(const ResizeEvent& ev)
+-{
+-    pData->setSizeCallback(ev.size.getWidth(), ev.size.getHeight());
+-}
+-#endif
+-
+-// -----------------------------------------------------------------------------------------------------------
+-
+-END_NAMESPACE_DISTRHO
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUI.hpp b/src/Plugin/ZynAddSubFX/DistrhoUI.hpp
+deleted file mode 100644
+index d9c3ba7e..00000000
+--- a/src/Plugin/ZynAddSubFX/DistrhoUI.hpp
++++ /dev/null
+@@ -1,253 +0,0 @@
+-/*
+- * DISTRHO Plugin Framework (DPF)
+- * Copyright (C) 2012-2016 Filipe Coelho <falktx@falktx.com>
+- *
+- * Permission to use, copy, modify, and/or distribute this software for any purpose with
+- * or without fee is hereby granted, provided that the above copyright notice and this
+- * permission notice appear in all copies.
+- *
+- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD
+- * TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN
+- * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+- * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+- * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+- */
+-
+-#ifndef DISTRHO_UI_HPP_INCLUDED
+-#define DISTRHO_UI_HPP_INCLUDED
+-
+-#include "extra/LeakDetector.hpp"
+-
+-// FIXME: uncomment this after DPF gets official external-ui support
+-//#include "src/DistrhoPluginChecks.h"
+-
+-// FIXME: remove all those too
+-#ifdef NTK_GUI
+- #define DISTRHO_PLUGIN_HAS_UI          1
+- #define DISTRHO_PLUGIN_HAS_EMBED_UI    1
+- #define DISTRHO_PLUGIN_HAS_EXTERNAL_UI 1
+-#else
+- #define DISTRHO_PLUGIN_HAS_UI          0
+-#endif
+-
+-#define DISTRHO_PLUGIN_IS_RT_SAFE       1
+-#define DISTRHO_PLUGIN_IS_SYNTH         1
+-#define DISTRHO_PLUGIN_NUM_INPUTS       0
+-#define DISTRHO_PLUGIN_NUM_OUTPUTS      2
+-#define DISTRHO_PLUGIN_WANT_PROGRAMS    1
+-#define DISTRHO_PLUGIN_WANT_STATE       1
+-#define DISTRHO_PLUGIN_WANT_FULL_STATE  1
+-
+-#ifndef HAVE_DGL
+-# include "extra/ExternalWindow.hpp"
+-typedef DISTRHO_NAMESPACE::ExternalWindow UIWidget;
+-#elif DISTRHO_UI_USE_NANOVG
+-# include "../dgl/NanoVG.hpp"
+-typedef DGL::NanoWidget UIWidget;
+-#else
+-# include "../dgl/Widget.hpp"
+-typedef DGL::Widget UIWidget;
+-#endif
+-
+-START_NAMESPACE_DISTRHO
+-
+-/* ------------------------------------------------------------------------------------------------------------
+- * DPF UI */
+-
+-/**
+-   @addtogroup MainClasses
+-   @{
+- */
+-
+-/**
+-   DPF UI class from where UI instances are created.
+-
+-   @note You must call setSize during construction,
+-   @TODO Detailed information about this class.
+- */
+-class UI : public UIWidget
+-{
+-public:
+-   /**
+-      UI class constructor.
+-      The UI should be initialized to a default state that matches the plugin side.
+-    */
+-    UI(uint width = 0, uint height = 0);
+-
+-   /**
+-      Destructor.
+-    */
+-    virtual ~UI();
+-
+-   /* --------------------------------------------------------------------------------------------------------
+-    * Host state */
+-
+-   /**
+-      Get the current sample rate used in plugin processing.
+-      @see sampleRateChanged(double)
+-    */
+-    double getSampleRate() const noexcept;
+-
+-   /**
+-      editParameter.
+-      @TODO Document this.
+-    */
+-    void editParameter(uint32_t index, bool started);
+-
+-   /**
+-      setParameterValue.
+-      @TODO Document this.
+-    */
+-    void setParameterValue(uint32_t index, float value);
+-
+-#if DISTRHO_PLUGIN_WANT_STATE
+-   /**
+-      setState.
+-      @TODO Document this.
+-    */
+-    void setState(const char* key, const char* value);
+-#endif
+-
+-#if DISTRHO_PLUGIN_IS_SYNTH
+-   /**
+-      sendNote.
+-      @TODO Document this.
+-    */
+-    void sendNote(uint8_t channel, uint8_t note, uint8_t velocity);
+-#endif
+-
+-#if DISTRHO_PLUGIN_WANT_DIRECT_ACCESS
+-   /* --------------------------------------------------------------------------------------------------------
+-    * Direct DSP access - DO NOT USE THIS UNLESS STRICTLY NECESSARY!! */
+-
+-   /**
+-      getPluginInstancePointer.
+-      @TODO Document this.
+-    */
+-    void* getPluginInstancePointer() const noexcept;
+-#endif
+-
+-#if DISTRHO_PLUGIN_HAS_EMBED_UI && DISTRHO_PLUGIN_HAS_EXTERNAL_UI
+-   /* --------------------------------------------------------------------------------------------------------
+-    * External embeddable UI helpers */
+-
+-   /**
+-      Get the Window Id that will be used for the next created window.
+-      @note: This function is only valid during createUI(),
+-             it will return 0 when called from anywhere else.
+-    */
+-    static uintptr_t getNextWindowId() noexcept;
+-#endif
+-
+-protected:
+-   /* --------------------------------------------------------------------------------------------------------
+-    * DSP/Plugin Callbacks */
+-
+-   /**
+-      A parameter has changed on the plugin side.@n
+-      This is called by the host to inform the UI about parameter changes.
+-    */
+-    virtual void parameterChanged(uint32_t index, float value) = 0;
+-
+-#if DISTRHO_PLUGIN_WANT_PROGRAMS
+-   /**
+-      A program has been loaded on the plugin side.@n
+-      This is called by the host to inform the UI about program changes.
+-    */
+-    virtual void programLoaded(uint32_t index) = 0;
+-#endif
+-
+-#if DISTRHO_PLUGIN_WANT_STATE
+-   /**
+-      A state has changed on the plugin side.@n
+-      This is called by the host to inform the UI about state changes.
+-    */
+-    virtual void stateChanged(const char* key, const char* value) = 0;
+-#endif
+-
+-   /* --------------------------------------------------------------------------------------------------------
+-    * DSP/Plugin Callbacks (optional) */
+-
+-   /**
+-      Optional callback to inform the UI about a sample rate change on the plugin side.
+-      @see getSampleRate()
+-    */
+-    virtual void sampleRateChanged(double newSampleRate);
+-
+-#ifdef HAVE_DGL
+-   /* --------------------------------------------------------------------------------------------------------
+-    * UI Callbacks (optional) */
+-
+-   /**
+-      uiIdle.
+-      @TODO Document this.
+-    */
+-    virtual void uiIdle() {}
+-
+-   /**
+-      File browser selected function.
+-      @see Window::fileBrowserSelected(const char*)
+-    */
+-    virtual void uiFileBrowserSelected(const char* filename);
+-
+-   /**
+-      OpenGL window reshape function, called when parent window is resized.
+-      You can reimplement this function for a custom OpenGL state.
+-      @see Window::onReshape(uint,uint)
+-    */
+-    virtual void uiReshape(uint width, uint height);
+-
+-   /* --------------------------------------------------------------------------------------------------------
+-    * UI Resize Handling, internal */
+-
+-   /**
+-      OpenGL widget resize function, called when the widget is resized.
+-      This is overriden here so the host knows when the UI is resized by you.
+-      @see Widget::onResize(const ResizeEvent&)
+-    */
+-    void onResize(const ResizeEvent& ev) override;
+-#endif
+-
+-    // -------------------------------------------------------------------------------------------------------
+-
+-private:
+-    struct PrivateData;
+-    PrivateData* const pData;
+-    friend class UIExporter;
+-    friend class UIExporterWindow;
+-
+-#ifdef HAVE_DGL
+-    // these should not be used
+-    void setAbsoluteX(int) const noexcept {}
+-    void setAbsoluteY(int) const noexcept {}
+-    void setAbsolutePos(int, int) const noexcept {}
+-    void setAbsolutePos(const DGL::Point<int>&) const noexcept {}
+-#endif
+-
+-    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UI)
+-};
+-
+-/** @} */
+-
+-/* ------------------------------------------------------------------------------------------------------------
+- * Create UI, entry point */
+-
+-/**
+-   @addtogroup EntryPoints
+-   @{
+- */
+-
+-/**
+-   createUI.
+-   @TODO Document this.
+- */
+-extern UI* createUI();
+-
+-/** @} */
+-
+-// -----------------------------------------------------------------------------------------------------------
+-
+-END_NAMESPACE_DISTRHO
+-
+-#endif // DISTRHO_UI_HPP_INCLUDED
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp b/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
+deleted file mode 100644
+index 40f90886..00000000
+--- a/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
++++ /dev/null
+@@ -1,444 +0,0 @@
+-/*
+- * DISTRHO Plugin Framework (DPF)
+- * Copyright (C) 2012-2016 Filipe Coelho <falktx@falktx.com>
+- *
+- * Permission to use, copy, modify, and/or distribute this software for any purpose with
+- * or without fee is hereby granted, provided that the above copyright notice and this
+- * permission notice appear in all copies.
+- *
+- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD
+- * TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN
+- * NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+- * DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER
+- * IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+- * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+- */
+-
+-#ifndef DISTRHO_UI_INTERNAL_HPP_INCLUDED
+-#define DISTRHO_UI_INTERNAL_HPP_INCLUDED
+-
+-#include "DistrhoUI.hpp"
+-
+-#ifdef HAVE_DGL
+-# include "../../dgl/Application.hpp"
+-# include "../../dgl/Window.hpp"
+-using DGL::Application;
+-using DGL::IdleCallback;
+-using DGL::Window;
+-#endif
+-
+-START_NAMESPACE_DISTRHO
+-
+-// -----------------------------------------------------------------------
+-// Static data, see DistrhoUI.cpp
+-
+-extern double    d_lastUiSampleRate;
+-extern void*     d_lastUiDspPtr;
+-#ifdef HAVE_DGL
+-extern Window*   d_lastUiWindow;
+-#endif
+-extern uintptr_t g_nextWindowId;
+-
+-// -----------------------------------------------------------------------
+-// UI callbacks
+-
+-typedef void (*editParamFunc) (void* ptr, uint32_t rindex, bool started);
+-typedef void (*setParamFunc)  (void* ptr, uint32_t rindex, float value);
+-typedef void (*setStateFunc)  (void* ptr, const char* key, const char* value);
+-typedef void (*sendNoteFunc)  (void* ptr, uint8_t channel, uint8_t note, uint8_t velo);
+-typedef void (*setSizeFunc)   (void* ptr, uint width, uint height);
+-
+-// -----------------------------------------------------------------------
+-// UI private data
+-
+-struct UI::PrivateData {
+-    // DSP
+-    double   sampleRate;
+-    uint32_t parameterOffset;
+-#if DISTRHO_PLUGIN_WANT_DIRECT_ACCESS
+-    void*    dspPtr;
+-#endif
+-
+-    // Callbacks
+-    editParamFunc editParamCallbackFunc;
+-    setParamFunc  setParamCallbackFunc;
+-    setStateFunc  setStateCallbackFunc;
+-    sendNoteFunc  sendNoteCallbackFunc;
+-    setSizeFunc   setSizeCallbackFunc;
+-    void*         ptr;
+-
+-    PrivateData() noexcept
+-        : sampleRate(d_lastUiSampleRate),
+-          parameterOffset(0),
+-#if DISTRHO_PLUGIN_WANT_DIRECT_ACCESS
+-          dspPtr(d_lastUiDspPtr),
+-#endif
+-          editParamCallbackFunc(nullptr),
+-          setParamCallbackFunc(nullptr),
+-          setStateCallbackFunc(nullptr),
+-          sendNoteCallbackFunc(nullptr),
+-          setSizeCallbackFunc(nullptr),
+-          ptr(nullptr)
+-    {
+-        DISTRHO_SAFE_ASSERT(d_isNotZero(sampleRate));
+-
+-#if defined(DISTRHO_PLUGIN_TARGET_DSSI) || defined(DISTRHO_PLUGIN_TARGET_LV2)
+-        parameterOffset += DISTRHO_PLUGIN_NUM_INPUTS + DISTRHO_PLUGIN_NUM_OUTPUTS;
+-# if DISTRHO_PLUGIN_WANT_LATENCY
+-        parameterOffset += 1;
+-# endif
+-#endif
+-
+-#ifdef DISTRHO_PLUGIN_TARGET_LV2
+-# if (DISTRHO_PLUGIN_IS_SYNTH || DISTRHO_PLUGIN_WANT_TIMEPOS || DISTRHO_PLUGIN_WANT_STATE)
+-        parameterOffset += 1;
+-#  if DISTRHO_PLUGIN_WANT_STATE
+-        parameterOffset += 1;
+-#  endif
+-# endif
+-#endif
+-    }
+-
+-    void editParamCallback(const uint32_t rindex, const bool started)
+-    {
+-        if (editParamCallbackFunc != nullptr)
+-            editParamCallbackFunc(ptr, rindex, started);
+-    }
+-
+-    void setParamCallback(const uint32_t rindex, const float value)
+-    {
+-        if (setParamCallbackFunc != nullptr)
+-            setParamCallbackFunc(ptr, rindex, value);
+-    }
+-
+-    void setStateCallback(const char* const key, const char* const value)
+-    {
+-        if (setStateCallbackFunc != nullptr)
+-            setStateCallbackFunc(ptr, key, value);
+-    }
+-
+-    void sendNoteCallback(const uint8_t channel, const uint8_t note, const uint8_t velocity)
+-    {
+-        if (sendNoteCallbackFunc != nullptr)
+-            sendNoteCallbackFunc(ptr, channel, note, velocity);
+-    }
+-
+-    void setSizeCallback(const uint width, const uint height)
+-    {
+-        if (setSizeCallbackFunc != nullptr)
+-            setSizeCallbackFunc(ptr, width, height);
+-    }
+-};
+-
+-// -----------------------------------------------------------------------
+-// Plugin Window, needed to take care of resize properly
+-
+-#ifdef HAVE_DGL
+-static inline
+-UI* createUiWrapper(void* const dspPtr, Window* const window)
+-{
+-    d_lastUiDspPtr = dspPtr;
+-    d_lastUiWindow = window;
+-    UI* const ret  = createUI();
+-    d_lastUiDspPtr = nullptr;
+-    d_lastUiWindow = nullptr;
+-    return ret;
+-}
+-
+-class UIExporterWindow : public Window
+-{
+-public:
+-    UIExporterWindow(Application& app, const intptr_t winId, void* const dspPtr)
+-        : Window(app, winId),
+-          fUI(createUiWrapper(dspPtr, this)),
+-          fIsReady(false)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-
+-        // set window size
+-        setResizable(false);
+-        setSize(fUI->getWidth(), fUI->getHeight());
+-    }
+-
+-    ~UIExporterWindow()
+-    {
+-        delete fUI;
+-    }
+-
+-    UI* getUI() const noexcept
+-    {
+-        return fUI;
+-    }
+-
+-    bool isReady() const noexcept
+-    {
+-        return fIsReady;
+-    }
+-
+-protected:
+-    // custom window reshape
+-    void onReshape(uint width, uint height) override
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-
+-        fUI->uiReshape(width, height);
+-        fIsReady = true;
+-    }
+-
+-    // custom file-browser selected
+-    void fileBrowserSelected(const char* filename) override
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-
+-        fUI->uiFileBrowserSelected(filename);
+-    }
+-
+-private:
+-    UI* const fUI;
+-    bool fIsReady;
+-};
+-#else
+-static inline
+-UI* createUiWrapper(void* const dspPtr, const uintptr_t winId)
+-{
+-    d_lastUiDspPtr = dspPtr;
+-    g_nextWindowId = winId;
+-    UI* const ret  = createUI();
+-    d_lastUiDspPtr = nullptr;
+-    g_nextWindowId = 0;
+-    return ret;
+-}
+-#endif
+-
+-// -----------------------------------------------------------------------
+-// UI exporter class
+-
+-class UIExporter
+-{
+-public:
+-    UIExporter(void* const ptr, const intptr_t winId,
+-               const editParamFunc editParamCall, const setParamFunc setParamCall, const setStateFunc setStateCall, const sendNoteFunc sendNoteCall, const setSizeFunc setSizeCall,
+-               void* const dspPtr = nullptr)
+-#ifdef HAVE_DGL
+-        : glApp(),
+-          glWindow(glApp, winId, dspPtr),
+-          fChangingSize(false),
+-          fUI(glWindow.getUI()),
+-#else
+-        : fUI(createUiWrapper(dspPtr, winId)),
+-#endif
+-          fData((fUI != nullptr) ? fUI->pData : nullptr)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-        DISTRHO_SAFE_ASSERT_RETURN(fData != nullptr,);
+-
+-        fData->ptr = ptr;
+-        fData->editParamCallbackFunc = editParamCall;
+-        fData->setParamCallbackFunc  = setParamCall;
+-        fData->setStateCallbackFunc  = setStateCall;
+-        fData->sendNoteCallbackFunc  = sendNoteCall;
+-        fData->setSizeCallbackFunc   = setSizeCall;
+-    }
+-
+-    // -------------------------------------------------------------------
+-
+-    uint getWidth() const noexcept
+-    {
+-#ifdef HAVE_DGL
+-        return glWindow.getWidth();
+-#else
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr, 1);
+-        return fUI->getWidth();
+-#endif
+-    }
+-
+-    uint getHeight() const noexcept
+-    {
+-#ifdef HAVE_DGL
+-        return glWindow.getHeight();
+-#else
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr, 1);
+-        return fUI->getHeight();
+-#endif
+-    }
+-
+-    bool isVisible() const noexcept
+-    {
+-#ifdef HAVE_DGL
+-        return glWindow.isVisible();
+-#else
+-        return true;
+-#endif
+-    }
+-
+-    // -------------------------------------------------------------------
+-
+-    intptr_t getWindowId() const noexcept
+-    {
+-#ifdef HAVE_DGL
+-        return glWindow.getWindowId();
+-#else
+-        return 0;
+-#endif
+-    }
+-
+-    // -------------------------------------------------------------------
+-
+-    uint32_t getParameterOffset() const noexcept
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fData != nullptr, 0);
+-
+-        return fData->parameterOffset;
+-    }
+-
+-    // -------------------------------------------------------------------
+-
+-    void parameterChanged(const uint32_t index, const float value)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-
+-        fUI->parameterChanged(index, value);
+-    }
+-
+-#if DISTRHO_PLUGIN_WANT_PROGRAMS
+-    void programLoaded(const uint32_t index)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-
+-        fUI->programLoaded(index);
+-    }
+-#endif
+-
+-#if DISTRHO_PLUGIN_WANT_STATE
+-    void stateChanged(const char* const key, const char* const value)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-        DISTRHO_SAFE_ASSERT_RETURN(key != nullptr && key[0] != '\0',);
+-        DISTRHO_SAFE_ASSERT_RETURN(value != nullptr,);
+-
+-        fUI->stateChanged(key, value);
+-    }
+-#endif
+-
+-    // -------------------------------------------------------------------
+-
+-#ifdef HAVE_DGL
+-    void exec(IdleCallback* const cb)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(cb != nullptr,);
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-
+-        glWindow.addIdleCallback(cb);
+-        glWindow.setVisible(true);
+-        glApp.exec();
+-    }
+-
+-    void exec_idle()
+-    {
+-        if (glWindow.isReady())
+-            fUI->uiIdle();
+-    }
+-
+-    bool idle()
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr, false);
+-
+-        glApp.idle();
+-
+-        if (glWindow.isReady())
+-            fUI->uiIdle();
+-
+-        return ! glApp.isQuiting();
+-    }
+-
+-    void quit()
+-    {
+-        glWindow.close();
+-        glApp.quit();
+-    }
+-
+-    // -------------------------------------------------------------------
+-
+-    void setWindowSize(const uint width, const uint height, const bool updateUI = false)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-        DISTRHO_SAFE_ASSERT_RETURN(! fChangingSize,);
+-
+-        fChangingSize = true;
+-
+-        if (updateUI)
+-            fUI->setSize(width, height);
+-
+-        glWindow.setSize(width, height);
+-
+-        fChangingSize = false;
+-    }
+-
+-    void setWindowTitle(const char* const uiTitle)
+-    {
+-        glWindow.setTitle(uiTitle);
+-    }
+-
+-    void setWindowTransientWinId(const uintptr_t winId)
+-    {
+-        glWindow.setTransientWinId(winId);
+-    }
+-
+-    bool setWindowVisible(const bool yesNo)
+-    {
+-        glWindow.setVisible(yesNo);
+-
+-        return ! glApp.isQuiting();
+-    }
+-#else
+-    bool idle() { return true; }
+-    void quit() {}
+-    void setWindowSize(const uint width, const uint height, const bool updateUI = false) {}
+-    void setWindowTitle(const char* const uiTitle) {}
+-    void setWindowTransientWinId(const uintptr_t winId) {}
+-    bool setWindowVisible(const bool yesNo) { return true; }
+-#endif
+-
+-    // -------------------------------------------------------------------
+-
+-    void setSampleRate(const double sampleRate, const bool doCallback = false)
+-    {
+-        DISTRHO_SAFE_ASSERT_RETURN(fData != nullptr,);
+-        DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+-        DISTRHO_SAFE_ASSERT(sampleRate > 0.0);
+-
+-        if (d_isEqual(fData->sampleRate, sampleRate))
+-            return;
+-
+-        fData->sampleRate = sampleRate;
+-
+-        if (doCallback)
+-            fUI->sampleRateChanged(sampleRate);
+-    }
+-
+-private:
+-#ifdef HAVE_DGL
+-    // -------------------------------------------------------------------
+-    // DGL Application and Window for this widget
+-
+-    Application      glApp;
+-    UIExporterWindow glWindow;
+-
+-    // prevent recursion
+-    bool fChangingSize;
+-#endif
+-
+-    // -------------------------------------------------------------------
+-    // Widget and DistrhoUI data
+-
+-    UI* const fUI;
+-    UI::PrivateData* const fData;
+-
+-    DISTRHO_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(UIExporter)
+-};
+-
+-// -----------------------------------------------------------------------
+-
+-END_NAMESPACE_DISTRHO
+-
+-#endif // DISTRHO_UI_INTERNAL_HPP_INCLUDED
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+index b69d7361..81b6ef99 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+@@ -23,9 +23,6 @@
+ // DPF includes
+ #include "DistrhoUI.hpp"
+ 
+-// FIXME: remove this after DPF gets official external-ui support
+-#include "src/DistrhoPluginChecks.h"
+-
+ // Custom includes
+ #include <cerrno>
+ #include <sys/wait.h>
+@@ -211,8 +208,3 @@ UI* createUI()
+ }
+ 
+ END_NAMESPACE_DISTRHO
+-
+-#ifdef DISTRHO_PLUGIN_TARGET_LV2
+-#include "DistrhoUIInternal.hpp"
+-#include "src/DistrhoUILV2.cpp"
+-#endif
+-- 
+2.47.0
+

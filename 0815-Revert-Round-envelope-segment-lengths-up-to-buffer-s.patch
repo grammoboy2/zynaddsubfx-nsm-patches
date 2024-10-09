@@ -1,0 +1,34 @@
+From 3b38e362d97d475242cd57effc4b14938d3c5574 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Wed, 6 Jan 2016 11:15:41 -0500
+Subject: [PATCH 0815/1936] Revert "Round envelope segment lengths up to buffer
+ size multiple."
+
+This reverts commit ec54033ad59833e1c037f87ebabe995c7eed71e7.
+
+Let's leave this alone until I've got the bigger hacks done.
+---
+ src/Synth/Envelope.cpp | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/Envelope.cpp b/src/Synth/Envelope.cpp
+index 6b3152c4..4199e495 100644
+--- a/src/Synth/Envelope.cpp
++++ b/src/Synth/Envelope.cpp
+@@ -45,11 +45,10 @@ Envelope::Envelope(EnvelopeParams &pars, float basefreq, float bufferdt)
+     if((mode == 2) && linearenvelope)
+         mode = 1;                              //change to linear
+ 
+-    for(int i = 0; i < envpoints; ++i) {
++    for(int i = 0; i < MAX_ENVELOPE_POINTS; ++i) {
+         const float tmp = pars.getdt(i) / 1000.0f * envstretch;
+         if(tmp > bufferdt)
+-            envdt[i] =
+-                i == envpoints ? bufferdt / tmp : 1 / ceil(tmp / bufferdt);
++            envdt[i] = bufferdt / tmp;
+         else
+             envdt[i] = 2.0f;  //any value larger than 1
+ 
+-- 
+2.47.0
+

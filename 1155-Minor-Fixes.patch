@@ -1,0 +1,108 @@
+From 426b9b218bcf33f0538982b6693e530f651c96b5 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 8 Jul 2017 21:07:57 +0200
+Subject: [PATCH 1155/1936] Minor Fixes
+
+Details:
+* rNoWalk for some automate ports (temporary solution)
+* use rDefaultId for default identifiers with space (fix for clang compilers)
+---
+ rtosc                            | 2 +-
+ src/Misc/Master.cpp              | 5 ++++-
+ src/Misc/Part.cpp                | 2 +-
+ src/Params/PADnoteParameters.cpp | 4 ++--
+ src/Params/SUBnoteParameters.cpp | 2 +-
+ src/Synth/OscilGen.cpp           | 2 +-
+ 6 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 3feeabad..7367e612 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 3feeabad90e5fcc7e19506c3ebe2d8e0b672b853
++Subproject commit 7367e612da08788a46be0c74166a378715cf2ad9
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 47ed561f..f55ba9dd 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -297,7 +297,8 @@ static const Ports automate_ports = {
+         if(a.active_slot >= 0)
+             a.createBinding(a.active_slot, rtosc_argument(msg, 0).s, true);
+         rEnd},
+-    {"slot#16/", rDoc("Parameters of individual automation slots"), &slot_ports,
++    // TODO: remove rNoWalk
++    {"slot#16/", rNoWalk rDoc("Parameters of individual automation slots"), &slot_ports,
+         rBegin;
+         (void)a;
+         d.push_index(get_next_int(msg));
+@@ -1522,6 +1523,8 @@ int Master::saveOSC(const char *filename)
+     if(rval < 0)
+     {
+         std::cerr << "invalid savefile!" << std::endl;
++        std::cerr << "complete savefile:" << std::endl;
++        std::cerr << savefile << std::endl;
+         std::cerr << "first entry that could not be parsed:" << std::endl;
+ 
+         for(int i = -rval + 1; savefile[i]; ++i)
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 32bfc857..830d66e2 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -88,7 +88,7 @@ static const Ports partPorts = {
+         "Instrument comments"),
+     rString(Pname, PART_MAX_NAME_LEN, rDefault(""), "User specified label"),
+     rArrayI(Pefxroute, NUM_PART_EFX,
+-            rOptions(Next Effect,Part Out,Dry Out), rDefault("Next Effect"S),
++            rOptions(Next Effect,Part Out,Dry Out), rDefaultId(Next Effect),
+             "Effect Routing"),
+     rArrayT(Pefxbypass, NUM_PART_EFX, rDefault(false),
+         "If an effect is bypassed"),
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 2d544bf7..25c95507 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -215,12 +215,12 @@ static const rtosc::Ports non_realtime_ports =
+     rOption(Pquality.samplesize, rShort("quality"),
+             rOptions(16k (Tiny), 32k, 64k (Small), 128k,
+               256k (Normal), 512k, 1M (Big)),
+-            rDefault("128k"S),
++            rDefaultId(128k),
+             "Size of each wavetable element"),
+     rOption(Pquality.basenote, rShort("basenote"),
+             rOptions(C-2, G-2, C-3, G-3, C-4,
+                 G-4, C-5, G-5, G-6,),
+-            rDefault("C-4"S),
++            rDefaultId(C-4),
+             "Base note for wavetable"),
+     rOption(Pquality.smpoct, rShort("smp/oct"),
+             rOptions(0.5, 1, 2, 3, 4, 6, 12),
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index b7d2d628..245ac33f 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -48,7 +48,7 @@ static const rtosc::Ports SUBnotePorts = {
+     //Real values needed
+     rOption(PDetuneType,               rShort("det. scl."),
+             rOptions(L35 cents, L10 cents, E100 cents, E1200 cents),
+-            rDefault("L10 cents"S), "Detune Scale"),
++            rDefaultId(L10 cents), "Detune Scale"),
+     rToggle(PFreqEnvelopeEnabled,      rShort("enable"), rDefault(false),
+         "Enable for Frequency Envelope"),
+     rToggle(PBandWidthEnvelopeEnabled, rShort("enable"), rDefault(false),
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 0b3369cf..48a37f03 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -69,7 +69,7 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+             "Shape of distortion to be applied"),
+     rOption(Pfiltertype, rShort("filter"), rOptions(No Filter,
+             lp, hp1, hp1b, bp1, bs1, lp2, hp2, bp2, bs2,
+-            cos, sin, low_shelf, s), rDefault("No Filter"S), "Harmonic Filter"),
++            cos, sin, low_shelf, s), rDefaultId(No Filter), "Harmonic Filter"),
+     rParamZyn(Pfilterpar1, rShort("p1"), rDefault(64), "Filter parameter"),
+     rParamZyn(Pfilterpar2, rShort("p2"), rDefault(64), "Filter parameter"),
+     rToggle(Pfilterbeforews, rShort("pre/post"), rDefault(false),
+-- 
+2.47.0
+

@@ -1,0 +1,34 @@
+From af3ee479b9e37fe099871118ba60108aff245ae4 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 13 Sep 2014 15:19:46 -0400
+Subject: [PATCH 0238/1936] Disable non-portable Test
+
+---
+ src/Tests/CMakeLists.txt | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 8d4d2844..a251258f 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -14,7 +14,7 @@ CXXTEST_ADD_TEST(RandTest RandTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RandTest.h)
+ CXXTEST_ADD_TEST(PADnoteTest PadNoteTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/PadNoteTest.h)
+ CXXTEST_ADD_TEST(PluginTest PluginTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/PluginTest.h)
+ CXXTEST_ADD_TEST(UnisonTest UnisonTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/UnisonTest.h)
+-CXXTEST_ADD_TEST(RtAllocTest RtAllocTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RtAllocTest.h)
++#CXXTEST_ADD_TEST(RtAllocTest RtAllocTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RtAllocTest.h)
+ 
+ #Extra libraries added to make test and full compilation use the same library
+ #links for quirky compilers
+@@ -33,7 +33,7 @@ target_link_libraries(PADnoteTest    ${test_lib})
+ target_link_libraries(PluginTest     zynaddsubfx_core zynaddsubfx_nio
+     ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+ target_link_libraries(UnisonTest    ${test_lib})
+-target_link_libraries(RtAllocTest    ${test_lib})
++#target_link_libraries(RtAllocTest    ${test_lib})
+ 
+ #message(STATUS "Plugin Test ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES}")
+ 
+-- 
+2.47.0
+

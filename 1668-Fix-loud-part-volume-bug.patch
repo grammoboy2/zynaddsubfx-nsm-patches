@@ -1,0 +1,42 @@
+From 14ad0e73b75b0c2d9f00ad1bf921cc7ced2dbdb6 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 10 Dec 2020 22:12:28 -0500
+Subject: [PATCH 1668/1936] Fix loud part volume bug
+
+Resolves behavior for when part volume is missing in XML files.
+As some invalid results may have been written to save files, it remaps
++50.0dB to 0.0dB as +50dB is out-of-range anyhow.
+---
+ src/Misc/Part.cpp | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 39fedd66..356dbcc5 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -944,6 +944,13 @@ float Part::volume127ToFloat(unsigned char volume_)
+ 
+ void Part::setVolume(float Volume_)
+ {
++    //Fixes bug with invalid loading
++    if(fabs(Volume_ - 50.0f) < 0.001)
++        Volume_ = 0.0f;
++
++    Volume_ = limit(Volume_, -40.0f, 13.333f);
++
++    assert(Volume_ < 40.0);
+     Volume = Volume_;
+     volume =
+         dB2rap(Volume) * ctl.expression.relvolume;
+@@ -1284,7 +1291,7 @@ void Part::getfromXML(XMLwrapper& xml)
+     if (xml.hasparreal("volume")) {
+         setVolume(xml.getparreal("volume", Volume));
+     } else {
+-        setVolume(volume127ToFloat(xml.getpar127("volume", -40.0f)));
++        setVolume(volume127ToFloat(xml.getpar127("volume", 96)));
+     }
+     setPpanning(xml.getpar127("panning", Ppanning));
+ 
+-- 
+2.47.0
+

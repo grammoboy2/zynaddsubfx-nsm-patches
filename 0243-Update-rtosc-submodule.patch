@@ -1,0 +1,19 @@
+From 3efbafdd53546cdbc21c9939fe3190ff7102bb26 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Oct 2014 11:25:15 -0400
+Subject: [PATCH 0243/1936] Update rtosc submodule
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index d20d6f76..2be2f15e 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit d20d6f76490d21a78b5b32d26b3551ef0cff277b
++Subproject commit 2be2f15e7378f8f3cfb69fcc6512b47de16140e6
+-- 
+2.47.0
+

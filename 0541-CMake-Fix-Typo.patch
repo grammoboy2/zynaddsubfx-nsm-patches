@@ -1,0 +1,25 @@
+From abe236c03d0234ddf68e098a98981461d4835c58 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 29 Sep 2015 12:07:24 -0400
+Subject: [PATCH 0541/1936] CMake: Fix Typo
+
+---
+ src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 46af62bf..c3eabccf 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -87,7 +87,7 @@ if(NOT "Darwin" STREQUAL ${CMAKE_SYSTEM_NAME})
+     add_definitions(-DHAVE_SCHEDULER=${HAVE_SCHEDULER})
+ endif()
+ 
+-add_definitions(-DHAVE_FUTURE=${HAVE_FUTURE})
++add_definitions(-DHAVE_ASYNC=${HAVE_ASYNC})
+ 
+ 
+ # Give a good guess on the best Input/Output default backends
+-- 
+2.47.0
+

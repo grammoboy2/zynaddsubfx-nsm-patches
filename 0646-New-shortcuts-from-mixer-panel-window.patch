@@ -1,0 +1,91 @@
+From 679b0122449cd6a95559c1cc0dccd57757cff45c Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 27 Oct 2015 18:58:34 -0400
+Subject: [PATCH 0646/1936] New shortcuts from mixer panel window:
+
+	shift + edit: corresponding main edit window
+	ctrl + edit:  corresponding kit
+---
+ src/UI/MasterUI.fl | 16 ++++++++++++----
+ src/UI/PartUI.fl   |  6 +++---
+ 2 files changed, 15 insertions(+), 7 deletions(-)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 7aaae833..c2e07f3f 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -161,7 +161,12 @@ bankui->show();}
+           callback {if ((int)bankui->cbwig->value()!=(npart+1)){
+    bankui->cbwig->value(npart+1);
+    bankui->cbwig->do_callback();
+-};}
++   }
++   if (Fl::event_shift())
++        partui->instrumenteditwindow->show();
++   else if (Fl::event_ctrl())
++        partui->instrumentkitlist->show();
++}
+           xywh {15 235 40 20} labelsize 10
+         }
+         Fl_Choice partrcv {
+@@ -196,9 +201,10 @@ o->redraw();}
+     code {npart=0;
+ bankui=NULL;} {}
+   }
+-  Function {init(int npart_,BankUI *bankui_)} {} {
++  Function {init(int npart_,BankUI *bankui_, PartUI *partui_)} {} {
+     code {npart=npart_;
+ bankui=bankui_;
++partui=partui_;
+ ext = "part"+to_s(npart)+"/";
+ 
+ make_window();
+@@ -227,6 +233,8 @@ panellistitemgroup->redraw();} {}
+   }
+   decl {BankUI *bankui;} {private local
+   }
++  decl {PartUI *partui;} {private local
++  }
+ } 
+ 
+ class MasterUI {open
+@@ -903,7 +911,7 @@ GNU General Public License for details.}
+       } {
+         Fl_Pack {} {open
+           xywh {5 10 560 285} type HORIZONTAL
+-          code0 {for (int i=0;i<NUM_MIDI_PARTS/2;i++){panellistitem[i]=new Panellistitem(0,0,70,260,"");panellistitem[i]->init(i,bankui);}}
++          code0 {for (int i=0;i<NUM_MIDI_PARTS/2;i++){panellistitem[i]=new Panellistitem(0,0,70,260,"");panellistitem[i]->init(i,bankui,partui);}}
+         } {}
+       }
+       Fl_Scroll {} {open
+@@ -911,7 +919,7 @@ GNU General Public License for details.}
+       } {
+         Fl_Pack {} {open
+           xywh {5 325 560 285} type HORIZONTAL
+-          code0 {for (int i=NUM_MIDI_PARTS/2;i<NUM_MIDI_PARTS;i++){panellistitem[i]=new Panellistitem(0,0,70,260,"");panellistitem[i]->init(i,bankui);}}
++          code0 {for (int i=NUM_MIDI_PARTS/2;i<NUM_MIDI_PARTS;i++){panellistitem[i]=new Panellistitem(0,0,70,260,"");panellistitem[i]->init(i,bankui,partui);}}
+         } {}
+       }
+       Fl_Button {} {
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index fb126b37..6aef31ef 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -137,11 +137,11 @@ maxkcounter->do_callback();}
+         Fl_Button adeditbutton {
+           label edit
+           callback {
+-	  if (Fl::event_shift()) {
++	  if (Fl::event_shift())
+ 	      partui->showvoiceparams(n, true);
+-	  } else if (Fl::event_ctrl()) {
++	  else if (Fl::event_ctrl())
+ 	      partui->showvoiceparams(n, false);
+-	  } else
++	  else
+ 	      partui->showparameters(n,0);
+ 	  }
+           xywh {420 0 40 15} box THIN_UP_BOX labelsize 11
+-- 
+2.47.0
+

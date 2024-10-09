@@ -1,0 +1,34 @@
+From 8ea8e931e656a618ce6a90d857f62fb9ca1d4fac Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 2 Sep 2014 15:39:07 -0400
+Subject: [PATCH 0233/1936] Fix Minor oschema Validation Failure
+
+---
+ rtosc        | 2 +-
+ src/main.cpp | 3 ++-
+ 2 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 76c93eb0..399a787e 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 76c93eb0b4992c3cfc658bfa9b87c8e447fde875
++Subproject commit 399a787e24b70fbb7e27507957e74d3b7bfbe27a
+diff --git a/src/main.cpp b/src/main.cpp
+index 2e09ee33..fd402620 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -331,7 +331,8 @@ int main(int argc, char *argv[])
+                     ofstream outfile(optarguments);
+                     s.prog_name    = "ZynAddSubFX";
+                     s.p            = &Master::ports;
+-                    s.uri          = "http://example.com/fake/url.xml";
++                    s.uri          = "http://example.com/fake/";
++                    s.doc_origin   = "http://example.com/fake/url.xml";
+                     s.author_first = "Mark";
+                     s.author_last  = "McCurry";
+                     outfile << s;
+-- 
+2.47.0
+

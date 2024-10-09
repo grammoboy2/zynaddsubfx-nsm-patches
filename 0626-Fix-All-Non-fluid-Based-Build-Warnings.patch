@@ -1,0 +1,52 @@
+From dbc94ddf01717056018c6a3b883a14fcd080ac4e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 23 Oct 2015 10:55:56 -0400
+Subject: [PATCH 0626/1936] Fix All Non-fluid Based Build Warnings
+
+---
+ rtosc              |  2 +-
+ src/UI/MasterUI.fl | 14 ++++++++++----
+ 2 files changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index f509907e..e77cd1e4 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit f509907e7ffad402a569e940dfc08122eaf8f871
++Subproject commit e77cd1e4cd573a0781418eb976ab69264d32a9fd
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 77be35bb..7aaae833 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -19,7 +19,7 @@ decl {\#include <string.h>} {public local
+ 
+ decl {\#if ! defined(PLUGINVERSION) && HAS_X11
+ \#include "zynaddsubfx.xpm"
+-\#endif} {public local
++\#endif} {private local
+ } 
+ 
+ decl {\#include "WidgetPDial.h"} {public local
+@@ -1522,9 +1522,15 @@ last_xmz->callback = [this](std::string filestr) {
+     } else
+        last_loaded[0] = 0;
+     last_loaded[XMZ_PATH_MAX - 1] = 0;
+-    char *label = last_loaded[0] == 0 ? NULL
+-                  : ((label = strrchr(last_loaded, '/'))) ? label+1
+-		  : last_loaded;
++    char *label = NULL;
++    if(last_loaded[0] != 0) {
++        label = strrchr(last_loaded, '/');
++        if(label && *label)
++            label = label+1;
++        else
++            label = last_loaded;
++    }
++
+     setfilelabel(label);
+ };
+ last_xmz->doUpdate("/last_xmz");
+-- 
+2.47.0
+

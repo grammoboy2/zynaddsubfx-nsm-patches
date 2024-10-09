@@ -1,0 +1,24 @@
+From b99006a89a8f7c2d0c4ba248607e8fbe06bb8b40 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 7 Nov 2020 23:23:38 +0100
+Subject: [PATCH 1646/1936] Part.cpp: Add rSelf with rEnabledBy
+
+---
+ src/Misc/Part.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 786f916e..39fedd66 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -44,6 +44,7 @@ using rtosc::RtData;
+ 
+ #define rObject Part
+ static const Ports partPorts = {
++    rSelf(Part, rEnabledBy(Penabled)),
+     rRecurs(kit, 16, "Kit"),//NUM_KIT_ITEMS
+     rRecursp(partefx, 3, "Part Effect"),
+     rRecur(ctl,       "Controller"),
+-- 
+2.47.0
+

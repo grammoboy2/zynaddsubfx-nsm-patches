@@ -1,0 +1,25 @@
+From 4a4662009f024dc9f654b9fd15632f73208a5ec3 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Tue, 10 Mar 2020 20:29:09 +0100
+Subject: [PATCH 1476/1936] fix for saving float dt values at free ENV points
+
+---
+ src/Params/EnvelopeParams.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index f40cfdd4..64b61df7 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -483,7 +483,7 @@ void EnvelopeParams::add2XML(XMLwrapper& xml)
+         for(int i = 0; i < Penvpoints; ++i) {
+             xml.beginbranch("POINT", i);
+             if(i != 0)
+-                xml.addpar("dt", envdt[i]);
++                xml.addparreal("dt", envdt[i]);
+             xml.addpar("val", Penvval[i]);
+             xml.endbranch();
+         }
+-- 
+2.47.0
+

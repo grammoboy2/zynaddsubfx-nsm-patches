@@ -1,0 +1,31 @@
+From 0722f70b03c306ea4d3ca0c7acd02f7b37cfe6d5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 17 Jul 2017 14:12:54 -0400
+Subject: [PATCH 1162/1936] Add WIP HISTORY.txt Entry For 3.0.2
+
+---
+ HISTORY.txt | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/HISTORY.txt b/HISTORY.txt
+index 5c66eaad..8466b20f 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,3 +1,14 @@
++3.0.2 (TBD)
++        - Upgrade MIDI learn system to include host automations and macro
++          learned controls
++        - Upgrade analog filter parameters to floating point resolution
++        - Add default values to OSC metadata
++        - Fix exit when closing zyn-fusion subprocess
++        - Fix crash with large number of pad synth samples
++        - Silence 0 volume effects
++        - Silence 0 volume add synth voices
++        - Fix minor bugs
++
+ 3.0.1 (28 November 2016)
+         - Fix bank screen with Zyn-Fusion
+         - Fix crash on startup with GL 2.1 to 3.1
+-- 
+2.47.0
+

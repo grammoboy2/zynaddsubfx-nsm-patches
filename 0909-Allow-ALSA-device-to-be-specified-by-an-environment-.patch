@@ -1,0 +1,40 @@
+From ce9f78d2bdc0c1efd4bde02d2603204746ac13b7 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Wed, 18 May 2016 21:51:13 +0200
+Subject: [PATCH 0909/1936] Allow ALSA device to be specified by an environment
+ variable.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/AlsaEngine.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index de5ed32b..f157f5a1 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -11,6 +11,7 @@
+   of the License, or (at your option) any later version.
+ */
+ 
++#include <stdlib.h>
+ #include <iostream>
+ #include <cmath>
+ 
+@@ -273,7 +274,12 @@ bool AlsaEngine::openAudio()
+     int rc = 0;
+     /* Open PCM device for playback. */
+     audio.handle = NULL;
+-    rc = snd_pcm_open(&audio.handle, "hw:0",
++
++    const char *device = getenv("ALSA_DEVICE");
++    if(device == 0)
++        device = "hw:0";
++
++    rc = snd_pcm_open(&audio.handle, device,
+                       SND_PCM_STREAM_PLAYBACK, 0);
+     if(rc < 0) {
+         fprintf(stderr,
+-- 
+2.47.0
+

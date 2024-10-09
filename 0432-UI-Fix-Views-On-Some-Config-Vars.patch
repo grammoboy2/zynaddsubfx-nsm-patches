@@ -1,0 +1,457 @@
+From e5323029713599fa8f46b4045b375479317e067f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 30 Apr 2015 21:36:37 -0400
+Subject: [PATCH 0432/1936] UI: Fix Views On Some Config Vars
+
+---
+ src/Misc/Config.cpp        | 70 +++++++++++++++++++++++++++++++++-----
+ src/Misc/Config.h          |  1 +
+ src/Misc/Master.cpp        |  6 +++-
+ src/Misc/MiddleWare.cpp    | 18 ++++++++++
+ src/UI/BankUI.fl           |  2 +-
+ src/UI/CMakeLists.txt      |  1 +
+ src/UI/ConfigUI.fl         | 60 ++++++++------------------------
+ src/UI/Fl_Osc_ListView.H   | 25 ++++++++++++++
+ src/UI/Fl_Osc_ListView.cpp | 53 +++++++++++++++++++++++++++++
+ src/UI/VirKeyboard.fl      |  4 +--
+ 10 files changed, 181 insertions(+), 59 deletions(-)
+ create mode 100644 src/UI/Fl_Osc_ListView.H
+ create mode 100644 src/UI/Fl_Osc_ListView.cpp
+
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 699f0581..ed219f0e 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -44,11 +44,11 @@
+ 
+ 
+ 
+-#if 0
++#if 1
+ #define rObject Config
+-rtosc::Ports port = {
+-    rString(cfg.LinuxOSSWaveOutDev),
+-    rString(cfg.LinuxOSSSeqInDev),
++static rtosc::Ports ports = {
++    //rString(cfg.LinuxOSSWaveOutDev),
++    //rString(cfg.LinuxOSSSeqInDev),
+     rParamI(cfg.SampleRate),
+     rParamI(cfg.SoundBufferSize),
+     rParamI(cfg.OscilSize),
+@@ -56,16 +56,68 @@ rtosc::Ports port = {
+     rToggle(cfg.BankUIAutoClose),
+     rParamI(cfg.GzipCompression),
+     rParamI(cfg.Interpolation),
+-    rArrayS(cfg.bankRootDirList,MAX_BANK_ROOT_DIRS),
+-    rString(cfg.currentBankDir),
+-    rArrayS(cfg.presetsDirList,MAX_BANK_ROOT_DIRS),
++    {"cfg.presetsDirList", 0, 0,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            Config &c = *(Config*)d.obj;
++            if(rtosc_narguments(msg) != 0)
++                return;
++            char         types[MAX_BANK_ROOT_DIRS+1];
++            rtosc_arg_t  args[MAX_BANK_ROOT_DIRS];
++            size_t       pos    = 0;
++
++            //zero out data
++            memset(types, 0, sizeof(types));
++            memset(args,  0, sizeof(args));
++
++            for(int i=0; i<MAX_BANK_ROOT_DIRS; ++i) {
++                if(!c.cfg.presetsDirList[i].empty()) {
++                    types[pos] = 's';
++                    args[pos].s  = c.cfg.presetsDirList[i].c_str();
++                    pos++;
++                }
++            }
++            char buffer[1024*5];
++            rtosc_amessage(buffer, sizeof(buffer), d.loc, types, args);
++            d.reply(buffer);
++        }},
++    {"cfg.bankRootDirList", 0, 0,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            Config &c = *(Config*)d.obj;
++            if(rtosc_narguments(msg) != 0)
++                return;
++            char         types[MAX_BANK_ROOT_DIRS+1];
++            rtosc_arg_t  args[MAX_BANK_ROOT_DIRS];
++            size_t       pos    = 0;
++
++            //zero out data
++            memset(types, 0, sizeof(types));
++            memset(args,  0, sizeof(args));
++
++            for(int i=0; i<MAX_BANK_ROOT_DIRS; ++i) {
++                if(!c.cfg.bankRootDirList[i].empty()) {
++                    types[pos] = 's';
++                    args[pos].s  = c.cfg.bankRootDirList[i].c_str();
++                    pos++;
++                }
++            }
++            char buffer[1024*5];
++            rtosc_amessage(buffer, sizeof(buffer), d.loc, types, args);
++            d.reply(buffer);
++        }},
++
++    //rArrayS(cfg.bankRootDirList,MAX_BANK_ROOT_DIRS),
++    //rString(cfg.currentBankDir),
++    //rArrayS(cfg.presetsDirList,MAX_BANK_ROOT_DIRS),
+     rToggle(cfg.CheckPADsynth),
+     rToggle(cfg.IgnoreProgramChange),
+     rParamI(cfg.UserInterfaceMode),
+     rParamI(cfg.VirKeybLayout),
+-    rParamS(cfg.LinuxALSAaudioDev),
+-    rParamS(cfg.nameTag)
++    //rParamS(cfg.LinuxALSAaudioDev),
++    //rParamS(cfg.nameTag)
+ };
++rtosc::Ports &Config::ports = ::ports;
+ #endif
+ 
+ Config::Config()
+diff --git a/src/Misc/Config.h b/src/Misc/Config.h
+index febf8c18..d21fec44 100644
+--- a/src/Misc/Config.h
++++ b/src/Misc/Config.h
+@@ -64,6 +64,7 @@ class Config
+         void init();
+         void save();
+ 
++        static rtosc::Ports &ports;
+     private:
+         void readConfig(const char *filename);
+         void saveConfig(const char *filename);
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index ce5fe42e..6894d7d9 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -208,6 +208,10 @@ static const Ports master_ports = {
+             m.memory->addMemory(mem, i);
+             m.pendingMemory = false;
+         }},
++    {"samplerate:", rMap(unit, Hz) rDoc("Synthesizer Global Sample Rate"), 0, [](const char *, RtData &d) {
++            //Master &m = *(Master*)d.obj;
++            d.reply("/samplerate", "f", synth->samplerate_f);
++        }},
+     {"undo_pause",0,0,[](const char *, rtosc::RtData &d)
+         {d.reply("/undo_pause", "");}},
+     {"undo_resume",0,0,[](const char *, rtosc::RtData &d)
+@@ -607,7 +611,7 @@ void Master::AudioOut(float *outl, float *outr)
+         }
+ 
+         //XXX yes, this is not realtime safe, but it is useful...
+-        if(strcmp(msg, "/get-vu") && true) {
++        if(strcmp(msg, "/get-vu") && false) {
+             fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 5 + 30, 0 + 40);
+             fprintf(stdout, "backend[%d]: '%s'<%s>\n", msg_id++, msg,
+                     rtosc_argument_string(msg));
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d2b541d9..f21acdc0 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -714,6 +714,22 @@ public:
+         return true;
+     }
+ 
++    void handleConfig(const char *msg)
++    {
++        char buffer[1024];
++        memset(buffer, 0, sizeof(buffer));
++        DummyDataObj d(buffer, 1024, (void*)&config, cb, ui, osc, uToB);
++        strcpy(buffer, "/config/");
++
++        Config::ports.dispatch(msg+8, d);
++        if(!d.matches) {
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 1, 7 + 30, 0 + 40);
++            fprintf(stderr, "Unknown location '%s'<%s>\n",
++                    msg, rtosc_argument_string(msg));
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++        }
++    }
++
+     bool handleOscil(string path, const char *msg, void *v);
+ 
+     void kitEnable(const char *msg);
+@@ -1124,6 +1140,8 @@ void MiddleWareImpl::handleMsg(const char *msg)
+         swapBankSlot(rtosc_argument(msg,0).i, rtosc_argument(msg,1).i, master, osc);
+     } else if(strstr(msg, "clear-bank-slot") && !strcmp(rtosc_argument_string(msg), "i")) {
+         clearBankSlot(rtosc_argument(msg,0).i, master, osc);
++    } else if(strstr(msg, "/config/")) {
++        handleConfig(msg);
+     } else if(strstr(msg, "Padenabled") || strstr(msg, "Ppadenabled") || strstr(msg, "Psubenabled")) {
+         kitEnable(msg);
+         uToB->raw_write(msg);
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index ba0e905b..6d401369 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -80,7 +80,7 @@ refreshmainwindow();}
+       Fl_Check_Button {} {
+         label {auto close}
+         tooltip {automatically close the bank window if the instrument is loaded} xywh {705 529 60 15} down_box DOWN_BOX labelsize 10
+-        code0 {o->init("cfg.BankUIAutoClose");}
++        code0 {o->init("config/cfg.BankUIAutoClose");}
+         class Fl_Osc_Check
+       }
+       Fl_Choice banklist {
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index 730ca0b1..e7a424d8 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -56,6 +56,7 @@ add_library(zynaddsubfx_gui STATIC
+         Fl_Osc_Counter.cpp
+         Fl_Osc_Input.cpp
+         Fl_Osc_Value.cpp
++        Fl_Osc_ListView.cpp
+         Fl_Resonance_Graph.cpp
+         Fl_EQGraph.cpp
+         FormantFilterGraph.cpp
+diff --git a/src/UI/ConfigUI.fl b/src/UI/ConfigUI.fl
+index db649391..54b48c53 100644
+--- a/src/UI/ConfigUI.fl
++++ b/src/UI/ConfigUI.fl
+@@ -35,6 +35,9 @@ decl {\#include "Fl_Osc_Check.H"} {public local
+ decl {\#include "Fl_Osc_Input.H"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_ListView.H"} {public local
++} 
++
+ decl {\#include "../globals.h"} {public local
+ } 
+ 
+@@ -45,15 +48,14 @@ class ConfigUI {} {
+   Function {make_window()} {} {
+     Fl_Window configwindow {
+       label {ZynAddSubFX Settings}
+-      callback {writebankcfg();
+-o->hide();}
++      callback {o->hide();}
+       xywh {554 443 510 370} type Double visible
+       class Fl_Osc_Window
+     } {
+       Fl_Box dummy {
+         xywh {25 25 25 25}
+         code0 {configwindow->osc = osc;}
+-        code1 {configwindow->base = "/";}
++        code1 {configwindow->base = "/config/";}
+       }
+       Fl_Tabs {} {
+         xywh {5 5 500 330}
+@@ -189,6 +191,8 @@ o->hide();}
+           Fl_Browser rootsbrowse {
+             callback {activatebutton_rootdir(o->value()!=0);}
+             xywh {15 35 485 220} type Hold
++            code0 {o->init("cfg.bankRootDirList");}
++            class Fl_Osc_ListView
+           }
+           Fl_Button {} {
+             label {Add root directory...}
+@@ -196,13 +200,13 @@ o->hide();}
+ dirname=fl_dir_chooser("Add a root directory for banks:",NULL,0);
+ if (dirname==NULL) return;
+ 
+-rootsbrowse->add(dirname);}
++rootsbrowse->append(dirname);}
+             xywh {15 265 80 35} box THIN_UP_BOX align 128
+           }
+           Fl_Button removerootdirbutton {
+             label {Remove root dir...}
+             callback {if (rootsbrowse->value()!=0) {
+-   rootsbrowse->remove(rootsbrowse->value());
++   rootsbrowse->doRemove(rootsbrowse->value());
+ };
+ activatebutton_rootdir(false);}
+             xywh {105 265 80 35} box THIN_UP_BOX align 128
+@@ -213,7 +217,7 @@ activatebutton_rootdir(false);}
+             callback {int n=rootsbrowse->value();
+ 
+ if (n!=0) {
+-   rootsbrowse->move(1,n);
++   rootsbrowse->doMove(1,n);
+    rootsbrowse->value(1);
+    rootsbrowse->redraw();
+ };
+@@ -229,6 +233,8 @@ activatebutton_rootdir(true);}
+           Fl_Browser presetbrowse {
+             callback {activatebutton_presetdir(o->value()!=0);}
+             xywh {15 35 485 220} type Hold
++            code0 {o->init("cfg.presetsDirList");}
++            class Fl_Osc_ListView
+           }
+           Fl_Button {} {
+             label {Add preset directory...}
+@@ -265,9 +271,7 @@ activatebutton_presetdir(true);}
+       }
+       Fl_Button {} {
+         label Close
+-        callback {configwindow->hide();
+-writebankcfg();
+-writepresetcfg();}
++        callback {configwindow->hide();}
+         xywh {200 345 105 20} box THIN_UP_BOX
+       }
+     }
+@@ -275,9 +279,7 @@ writepresetcfg();}
+   Function {ConfigUI(Fl_Osc_Interface *osc_)} {} {
+     code {
+     osc = osc_;
+-    make_window();
+-readbankcfg();
+-readpresetcfg();} {}
++    make_window();} {}
+   }
+   Function {activatebutton_rootdir(bool active)} {} {
+     code {if (active) {
+@@ -296,40 +298,6 @@ readpresetcfg();} {}
+ 	removepresetbutton->deactivate();
+ 	makedefaultpresetbutton->deactivate();
+ };} {}
+-  }
+-  Function {readbankcfg()} {} {
+-    code {rootsbrowse->clear();
+-
+-//for (int i=0;i<MAX_BANK_ROOT_DIRS;i++){
+-//  if (!config.cfg.bankRootDirList[i].empty())
+-//    rootsbrowse->add(config.cfg.bankRootDirList[i].c_str());
+-//};
+-} {}
+-  }
+-  Function {writebankcfg()} {} {
+-    code {
+-//config.clearbankrootdirlist();
+-//
+-//for (int n=0;n<rootsbrowse->size();n++){ 
+-//     config.cfg.bankRootDirList[n] = rootsbrowse->text(n+1);
+-//};
+-} {}
+-  }
+-  Function {readpresetcfg()} {} {
+-    code {presetbrowse->clear();
+-
+-//for(int i=0;i<MAX_BANK_ROOT_DIRS;i++){
+-//  if(!config.cfg.presetsDirList[i].empty())
+-//   presetbrowse->add(config.cfg.presetsDirList[i].c_str());
+-//};
+-} {}
+-  }
+-  Function {writepresetcfg()} {} {
+-    code {
+-//config.clearpresetsdirlist();
+-//
+-//for (int n=0;n<presetbrowse->size();n++)
+-//     config.cfg.presetsDirList[n] = presetbrowse->text(n+1);} {}
+   }
+   Function {show()} {} {
+     code {configwindow->show();} {}
+diff --git a/src/UI/Fl_Osc_ListView.H b/src/UI/Fl_Osc_ListView.H
+new file mode 100644
+index 00000000..21e95539
+--- /dev/null
++++ b/src/UI/Fl_Osc_ListView.H
+@@ -0,0 +1,25 @@
++#pragma once
++#include <string>
++#include <vector>
++#include "Fl_Osc_Widget.H"
++#include <FL/Fl_Browser.H>
++
++class Fl_Osc_ListView:public Fl_Browser, public Fl_Osc_Widget
++{
++    public:
++        Fl_Osc_ListView(int x,int y, int w, int h, const char *label=0);
++        virtual ~Fl_Osc_ListView(void);
++        
++        void init(const char *path_);
++        void OSC_raw(const char *msg);
++        void update(void);
++
++        void insert(std::string s, int offset);
++        void append(std::string s);
++        void doMove(int i, int j);
++        void doRemove(int offset);
++    private:
++        void sendUpdate() const;
++        std::string path;
++        std::vector<std::string> data;
++};
+diff --git a/src/UI/Fl_Osc_ListView.cpp b/src/UI/Fl_Osc_ListView.cpp
+new file mode 100644
+index 00000000..1818b827
+--- /dev/null
++++ b/src/UI/Fl_Osc_ListView.cpp
+@@ -0,0 +1,53 @@
++#include "Fl_Osc_ListView.H"
++#include <cstdio>
++#include <rtosc/rtosc.h>
++
++Fl_Osc_ListView::Fl_Osc_ListView(int x,int y, int w, int h, const char *label)
++    :Fl_Browser(x,y,w,h,label)
++{}
++
++Fl_Osc_ListView::~Fl_Osc_ListView(void) {};
++        
++void Fl_Osc_ListView::init(const char *path_)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    assert(pane);
++    osc = pane->osc;
++    loc = pane->base;
++    assert(osc);
++    path = path_;
++    oscRegister(path_);
++}
++void Fl_Osc_ListView::OSC_raw(const char *msg)
++{
++    this->clear();
++    for(int i=0; i<(int)rtosc_narguments(msg); ++i) {
++        this->add(rtosc_argument(msg, i).s);
++    }
++}
++
++void Fl_Osc_ListView::update(void)
++{
++    osc->requestValue(path.c_str());
++}
++
++void Fl_Osc_ListView::insert(std::string s, int offset)
++{
++    fprintf(stderr, "UNIMPLEMENTED\n");
++}
++void Fl_Osc_ListView::append(std::string s)
++{
++    fprintf(stderr, "UNIMPLEMENTED\n");
++}
++void Fl_Osc_ListView::doMove(int i, int j)
++{
++    fprintf(stderr, "UNIMPLEMENTED\n");
++}
++void Fl_Osc_ListView::doRemove(int offset)
++{
++    fprintf(stderr, "UNIMPLEMENTED\n");
++}
++void Fl_Osc_ListView::sendUpdate() const
++{
++    fprintf(stderr, "UNIMPLEMENTED\n");
++}
+diff --git a/src/UI/VirKeyboard.fl b/src/UI/VirKeyboard.fl
+index b305c623..390a2545 100644
+--- a/src/UI/VirKeyboard.fl
++++ b/src/UI/VirKeyboard.fl
+@@ -83,8 +83,8 @@ class VirKeys {open : {public Fl_Box, public Fl_Osc_Widget}
+   Function {init(Fl_Osc_Interface *osc_, std::string loc_)} {open
+   } {
+     code {osc=osc_;
+-    osc->createLink("/cfg.VirKeybLayout", this);
+-    osc->requestValue("/cfg.VirKeybLayout");
++    osc->createLink("/config/cfg.VirKeybLayout", this);
++    osc->requestValue("/config/cfg.VirKeybLayout");
+ loc=loc_;
+ for (int i=0;i<N_OCT*12+1;i++) pressed[i]=0;
+ keylayout=0;
+-- 
+2.47.0
+

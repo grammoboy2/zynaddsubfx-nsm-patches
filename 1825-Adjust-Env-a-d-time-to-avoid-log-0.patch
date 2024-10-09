@@ -1,0 +1,36 @@
+From 2fcca0bd5ec1bb049755b87590b598f392e1a8cc Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 17 Feb 2022 14:11:35 -0500
+Subject: [PATCH 1825/1936] Adjust Env a/d time to avoid log(0)
+
+Should avoid NaN values appearing from invalid mappings
+derived from the automation macro system.
+---
+ src/Params/EnvelopeParams.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 0dd9f3db..999edb0b 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -117,7 +117,7 @@ static const rtosc::Ports localPorts = {
+     rToggle(Prepeating, rShort("repeat"), rDefault(false),
+             "Repeat the Envelope"),
+     rParamDT(A_dt ,  rShort("a.dt"), rLinear(0,127), "Attack Time"),
+-    rParamF(A_dt,  rShort("a.dt"), rLog(0.0f,41.0f), rDefaultDepends(loc),
++    rParamF(A_dt,  rShort("a.dt"), rLog(0.0001f,41.0f), rDefaultDepends(loc),
+               rPreset(ad_global_freq, 0.254f),   rPreset(ad_global_filter, 0.127f),
+               rPreset(ad_voice_freq, 0.127f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_freq, 3.620f), rPreset(ad_voice_fm_amp, 1.876f),
+@@ -132,7 +132,7 @@ static const rtosc::Ports localPorts = {
+               rDefault(64),
+               "Attack Value"),
+     rParamDT(D_dt, rShort("d.dt"), rLinear(0,127), "Decay Time"),
+-    rParamF(D_dt,  rShort("d.dt"), rLog(0.0f,41.0f),  rDefaultDepends(loc),
++    rParamF(D_dt,  rShort("d.dt"), rLog(0.0001f,41.0f),  rDefaultDepends(loc),
+               rPreset(ad_global_amp, 0.127f),    rPreset(ad_global_filter, 0.970f),
+               rPreset(ad_voice_amp, 6.978f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_amp, 3.620f),
+-- 
+2.47.0
+

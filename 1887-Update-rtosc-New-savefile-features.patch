@@ -1,0 +1,19 @@
+From 17f79553e94925e62cfa609b7c49e9a676064164 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 28 Apr 2023 21:10:24 +0200
+Subject: [PATCH 1887/1936] Update rtosc: New savefile features
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 54a523fe..69ccb8fc 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 54a523feb73847eba5d1a2304dbc53ea80a34af0
++Subproject commit 69ccb8fc30aae40e7838364c557fbf2871db140a
+-- 
+2.47.0
+

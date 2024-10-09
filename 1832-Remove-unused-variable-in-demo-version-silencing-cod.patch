@@ -1,0 +1,26 @@
+From 8c89ba9a5345b0ae6e87a2a6221db08d7fa2e61b Mon Sep 17 00:00:00 2001
+From: Nik Nyby <nikolas@gnu.org>
+Date: Sat, 12 Mar 2022 23:33:46 -0500
+Subject: [PATCH 1832/1936] Remove unused variable in demo version silencing
+ code
+
+This `tmp` var doesn't appear to be doing anything, and is throwing a compiler warning. Can it be removed?
+---
+ src/Misc/Master.cpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 654b19bc..63dd44e2 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1442,7 +1442,6 @@ bool Master::AudioOut(float *outl, float *outr)
+     if(seconds > 10*60) {//10 minute trial
+         shutup = true;
+         for(int i = 0; i < synth.buffersize; ++i) {
+-            float tmp = (synth.buffersize_f - i) / synth.buffersize_f;
+             outl[i] *= 0.0f;
+             outr[i] *= 0.0f;
+         }
+-- 
+2.47.0
+

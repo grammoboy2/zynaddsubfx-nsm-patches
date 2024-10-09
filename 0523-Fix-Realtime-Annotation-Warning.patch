@@ -1,0 +1,33 @@
+From 000cfb047f6a3284f9508fc311036ddf554c95c9 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 3 Aug 2015 13:57:34 -0400
+Subject: [PATCH 0523/1936] Fix Realtime Annotation Warning
+
+---
+ src/Nio/OutMgr.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/Nio/OutMgr.h b/src/Nio/OutMgr.h
+index f059b88d..19950287 100644
+--- a/src/Nio/OutMgr.h
++++ b/src/Nio/OutMgr.h
+@@ -2,6 +2,7 @@
+ #define OUTMGR_H
+ 
+ #include "../Misc/Stereo.h"
++#include "../globals.h"
+ #include <list>
+ #include <string>
+ #include <semaphore.h>
+@@ -16,7 +17,7 @@ class OutMgr
+         ~OutMgr();
+ 
+         /**Execute a tick*/
+-        const Stereo<float *> tick(unsigned int frameSize) __attribute__((annotate("realtime")));
++        const Stereo<float *> tick(unsigned int frameSize) REALTIME;
+ 
+         /**Request a new set of samples
+          * @param n number of requested samples (defaults to 1)
+-- 
+2.47.0
+

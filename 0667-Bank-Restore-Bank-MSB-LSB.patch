@@ -1,0 +1,171 @@
+From 42927b5e9f1c42405c45c36409168ff361e2f634 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 2 Nov 2015 11:00:45 -0500
+Subject: [PATCH 0667/1936] Bank: Restore Bank MSB/LSB
+
+In response to http://sourceforge.net/p/zynaddsubfx/code/merge-requests/4/
+---
+ src/Misc/Bank.cpp       | 21 ++++++++++++++++++++-
+ src/Misc/Bank.h         |  7 +++++++
+ src/Misc/Master.cpp     | 12 +++---------
+ src/Misc/MiddleWare.cpp | 17 ++++++++++++++---
+ src/Nio/InMgr.cpp       |  7 ++++++-
+ 5 files changed, 50 insertions(+), 14 deletions(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index a04f6d4f..e936d9d5 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -47,7 +47,8 @@
+ using namespace std;
+ 
+ Bank::Bank(Config *config)
+-    :bankpos(0), defaultinsname(" "), config(config)
++    :bankpos(0), defaultinsname(" "), config(config),
++     bank_msb(0), bank_lsb(0)
+ {
+     clearbank();
+     bankfiletitle = dirname;
+@@ -222,6 +223,12 @@ int Bank::loadbank(string bankdirname)
+     if(dir == NULL)
+         return -1;
+ 
++    //set msb when possible
++    bank_msb = 0;
++    for(unsigned i=0; i<banks.size(); i++)
++        if(banks[i].dir == bankdirname)
++            bank_msb = i;
++
+     dirname = bankdirname;
+ 
+     bankfiletitle = dirname;
+@@ -385,6 +392,18 @@ void Bank::rescanforbanks()
+         }
+ }
+ 
++void Bank::setMsb(uint8_t msb)
++{
++    if(msb < banks.size() && banks[msb].dir != bankfiletitle)
++        loadbank(banks[msb].dir);
++}
++
++void Bank::setLsb(uint8_t lsb)
++{
++    //should only involve values of 0/1 for the time being...
++    bank_lsb = limit<uint8_t>(lsb,0,1);
++}
++
+ 
+ // private stuff
+ 
+diff --git a/src/Misc/Bank.h b/src/Misc/Bank.h
+index d958251d..a41fea62 100644
+--- a/src/Misc/Bank.h
++++ b/src/Misc/Bank.h
+@@ -66,6 +66,9 @@ class Bank
+ 
+         void rescanforbanks();
+ 
++        void setMsb(uint8_t msb);
++        void setLsb(uint8_t lsb);
++
+         struct bankstruct {
+             bool operator<(const bankstruct &b) const;
+             std::string dir;
+@@ -99,6 +102,10 @@ class Bank
+         void scanrootdir(std::string rootdir); //scans a root dir for banks
+         
+         Config* const config;
++
++    public:
++        uint8_t bank_msb;
++        uint8_t bank_lsb;
+ };
+ 
+ #endif
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 39b0f93b..4af64862 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -453,7 +453,7 @@ void Master::setController(char chan, int type, int par)
+         ctl.setparameternumber(type, par);
+ 
+         int parhi = -1, parlo = -1, valhi = -1, vallo = -1;
+-        if(ctl.getnrpn(&parhi, &parlo, &valhi, &vallo) == 0) //this is NRPN
++        if(ctl.getnrpn(&parhi, &parlo, &valhi, &vallo) == 0) { //this is NRPN
+             switch(parhi) {
+                 case 0x04: //System Effects
+                     if(parlo < NUM_SYS_EFX)
+@@ -464,14 +464,8 @@ void Master::setController(char chan, int type, int par)
+                         insefx[parlo]->seteffectparrt(valhi, vallo);
+                     break;
+             }
+-    }
+-    else
+-    if(type == C_bankselectmsb) {      // Change current bank
+-        //if(((unsigned int)par < bank.banks.size())
+-        //   && (bank.banks[par].dir != bank.bankfiletitle))
+-        //    bank.loadbank(bank.banks[par].dir);
+-    }
+-    else {  //other controllers
++        }
++    } else {  //other controllers
+         for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) //Send the controller to all part assigned to the channel
+             if((chan == part[npart]->Prcvchn) && (part[npart]->Penabled != 0))
+                 part[npart]->SetController(type, par);
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index b29254eb..0c3e29a6 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -835,6 +835,14 @@ rtosc::Ports bankPorts = {
+             d.reply("/alert", "s",
+                     "Failed To Clear Bank Slot, please check file permissions");
+         rEnd},
++    {"msb:i", 0, 0,
++        rBegin;
++        impl.setMsb(rtosc_argument(msg, 0).i);
++        rEnd},
++    {"lsb:i", 0, 0,
++        rBegin;
++        impl.setLsb(rtosc_argument(msg, 0).i);
++        rEnd},
+ };
+ 
+ /******************************************************************************
+@@ -961,9 +969,12 @@ static rtosc::Ports middwareSnoopPorts = {
+         rEnd},
+     {"setprogram:i:c", 0, 0,
+         rBegin;
+-        const int slot = rtosc_argument(msg, 0).i;
+-        impl.pending_load[0]++;
+-        impl.loadPart(0, impl.master->bank.ins[slot].filename.c_str(), impl.master);
++        Bank &bank     = impl.master->bank;
++        const int slot = rtosc_argument(msg, 0).i + 128*bank.bank_lsb;
++        if(slot < BANK_SIZE) {
++            impl.pending_load[0]++;
++            impl.loadPart(0, impl.master->bank.ins[slot].filename.c_str(), impl.master);
++        }
+         rEnd},
+     {"part#16/clear:", 0, 0,
+         rBegin;
+diff --git a/src/Nio/InMgr.cpp b/src/Nio/InMgr.cpp
+index 08333bba..45b08f70 100644
+--- a/src/Nio/InMgr.cpp
++++ b/src/Nio/InMgr.cpp
+@@ -88,7 +88,12 @@ void InMgr::flush(unsigned frameStart, unsigned frameStop)
+                 break;
+ 
+             case M_CONTROLLER:
+-                master->setController(ev.channel, ev.num, ev.value);
++                if(ev.num == C_bankselectmsb)         // Change current bank
++                    middleware->spawnMaster()->bToU->write("/bank/msb", "i", ev.value);
++                 else if(ev.num == C_bankselectlsb)  // Change current bank (LSB)
++                    middleware->spawnMaster()->bToU->write("/bank/lsb", "i", ev.value);
++                 else
++                    master->setController(ev.channel, ev.num, ev.value);
+                 break;
+ 
+             case M_PGMCHANGE:
+-- 
+2.47.0
+

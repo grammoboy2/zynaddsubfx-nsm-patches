@@ -1,0 +1,39 @@
+From 3c233820f5cf94c811d475a348e3bd045ffb95b3 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 4 Jan 2015 13:29:48 -0500
+Subject: [PATCH 0302/1936] CMake: Checkout Rtosc Submodule When Missing
+
+Users seem to forget about the git submodule stuff a ton, so this
+commit automatically runs 'git submodule update --init" if rtosc
+is missing.
+---
+ CMakeLists.txt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 281d54d8..81890093 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -5,6 +5,19 @@ set(VERSION "2.4.4")
+ 
+ 
+ #Include RTOSC
++if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rtosc/CMakeLists.txt")
++    message(STATUS "RTOSC NOT FOUND")
++    message(STATUS "Attempting to checkout submodule")
++    find_package(Git REQUIRED)
++    execute_process(COMMAND git submodule update --init)
++    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rtosc/CMakeLists.txt")
++        message(FATAL_ERROR "FAILED TO CHECKOUT RTOSC\n"
++        "please check file permissions and your network")
++    endif()
++else()
++    message(STATUS "Found Rtosc Submodule...")
++endif()
++
+ add_subdirectory(rtosc)
+ include_directories(rtosc/include)
+ 
+-- 
+2.47.0
+

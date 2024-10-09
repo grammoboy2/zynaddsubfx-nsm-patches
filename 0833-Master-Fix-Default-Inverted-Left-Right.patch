@@ -1,0 +1,28 @@
+From 14a287917136a662384b416098f0ffae0693d67e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 28 Jan 2016 19:15:33 -0500
+Subject: [PATCH 0833/1936] Master: Fix Default Inverted Left Right
+
+Somewhere left and right audio channels were flipped.
+This fixes that long standing issue.
+http://sourceforge.net/p/zynaddsubfx/bugs/117/
+---
+ src/Misc/Master.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index ff152e5c..4ba7bb6d 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -631,7 +631,7 @@ int msg_id=0;
+ /*
+  * Master audio out (the final sound)
+  */
+-void Master::AudioOut(float *outl, float *outr)
++void Master::AudioOut(float *outr, float *outl)
+ {
+     //Danger Limits
+     if(memory->lowMemory(2,1024*1024))
+-- 
+2.47.0
+

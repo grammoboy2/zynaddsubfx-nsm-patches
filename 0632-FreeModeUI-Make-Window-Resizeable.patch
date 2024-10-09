@@ -1,0 +1,25 @@
+From 7d4abc4b892baff6a4b8903420a82346925ae58d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 23 Oct 2015 22:20:49 -0400
+Subject: [PATCH 0632/1936] FreeModeUI: Make Window Resizeable
+
+---
+ src/UI/EnvelopeUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index 1e990597..164edb22 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -91,7 +91,7 @@ delete (freemodeeditwindow);} {}
+   } {
+     Fl_Window freemodeeditwindow {
+       label Envelope open
+-      xywh {702 801 575 180} type Double
++      xywh {702 801 575 180} type Double resizable
+       class Fl_Osc_Window visible
+     } {
+       Fl_Button {} {
+-- 
+2.47.0
+

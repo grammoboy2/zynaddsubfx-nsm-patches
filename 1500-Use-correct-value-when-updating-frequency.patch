@@ -1,0 +1,32 @@
+From 38f5b4fee10f9ddb57b95e5c4f9c14390774dcc9 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 14:41:18 +0200
+Subject: [PATCH 1500/1936] Use correct value when updating frequency.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/SUBnote.cpp | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 192ba3f4..844239b8 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -185,8 +185,12 @@ void SUBnote::setup(float freq,
+             initparameters(basefreq / 440.0f * freq, wm, prefix);
+     }
+     else {
+-        if(GlobalFilter)
+-            GlobalFilter->updateNoteFreq(basefreq);
++        if(GlobalFilter) {
++            if(pars.Pfixedfreq == 0)
++                GlobalFilter->updateNoteFreq(basefreq);
++            else
++                GlobalFilter->updateNoteFreq(basefreq / 440.0f * freq);
++        }
+     }
+ 
+     oldamplitude = newamplitude;
+-- 
+2.47.0
+

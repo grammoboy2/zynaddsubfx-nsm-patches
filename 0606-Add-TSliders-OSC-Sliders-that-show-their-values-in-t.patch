@@ -1,0 +1,128 @@
+From c68f50a086c9fce6539dd1857f18319c1beb445b Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sat, 17 Oct 2015 03:51:51 -0400
+Subject: [PATCH 0606/1936] Add TSliders, OSC Sliders that show their values in
+ tipwins.
+
+---
+ src/UI/CMakeLists.txt     |  2 ++
+ src/UI/Fl_Osc_TSlider.H   | 21 +++++++++++++
+ src/UI/Fl_Osc_TSlider.cpp | 65 +++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 88 insertions(+)
+ create mode 100644 src/UI/Fl_Osc_TSlider.H
+ create mode 100644 src/UI/Fl_Osc_TSlider.cpp
+
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index 56a054b9..f5c9152e 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -66,6 +66,8 @@ add_library(zynaddsubfx_gui STATIC
+         Fl_Osc_Dial.cpp
+         Fl_Osc_DialF.cpp
+         Fl_Osc_Slider.cpp
++        Fl_Osc_TSlider.cpp
++        Fl_Osc_DSlider.cpp
+         Fl_Osc_VSlider.cpp
+         Fl_Osc_Button.cpp
+         Fl_Osc_Check.cpp
+diff --git a/src/UI/Fl_Osc_TSlider.H b/src/UI/Fl_Osc_TSlider.H
+new file mode 100644
+index 00000000..2f496414
+--- /dev/null
++++ b/src/UI/Fl_Osc_TSlider.H
+@@ -0,0 +1,21 @@
++#ifndef FL_OSC_TSLIDER_H
++#define FL_OSC_TSLIDER_H
++#include "Fl_Osc_Slider.H"
++#include "TipWin.h"
++
++
++class Fl_Osc_TSlider:public Fl_Osc_Slider
++{
++    public:
++        Fl_Osc_TSlider(int x, int y, int w, int h, const char *label = 0);
++        ~Fl_Osc_TSlider();
++        int handle(int event);
++	void set_transform(float scale = 1.0, float offset = 0.0);
++	float transform(float x);
++        void setRounding(unsigned int digits = 0);
++    private:
++        class TipWin * tipwin;
++        float value_offset;
++        float value_scale;
++};
++#endif
+diff --git a/src/UI/Fl_Osc_TSlider.cpp b/src/UI/Fl_Osc_TSlider.cpp
+new file mode 100644
+index 00000000..19dbe854
+--- /dev/null
++++ b/src/UI/Fl_Osc_TSlider.cpp
+@@ -0,0 +1,65 @@
++#include <cmath>
++#include <Fl_Osc_TSlider.H>
++//Copyright (c) 2015 Christopher Oliver
++//License: GNU GPL version 2 or later
++
++
++Fl_Osc_TSlider::Fl_Osc_TSlider(int x, int y, int w, int h, const char *label)
++    :Fl_Osc_Slider(x, y, w, h, label), value_offset(0.0), value_scale(1.0)
++{
++    Fl_Group *save = Fl_Group::current();
++    tipwin = new TipWin();
++    tipwin->hide();
++    Fl_Group::current(save);
++    tipwin->setRounding();
++}
++
++Fl_Osc_TSlider::~Fl_Osc_TSlider()
++{
++    if (tipwin)
++        delete tipwin;
++}
++
++void Fl_Osc_TSlider::setRounding(unsigned int digits)
++{
++    tipwin->setRounding(digits);
++}
++
++
++int Fl_Osc_TSlider::handle(int event)
++{
++    int super = 1;
++
++    super = Fl_Osc_Slider::handle(event);
++
++    switch(event) {
++        case FL_PUSH:
++        case FL_MOUSEWHEEL:
++            if (!Fl::event_inside(x(),y(),w(),h()))
++                return(1);
++            tipwin->position(Fl::event_x_root()-Fl::event_x()+x(),
++                             Fl::event_y_root()-Fl::event_y()+h()+y()+5);
++        case FL_DRAG:
++            tipwin->showValue(transform(value()));
++            break;
++        case FL_RELEASE:
++        case FL_HIDE:
++        case FL_LEAVE:
++            if (tipwin)
++                tipwin->hide();
++            return 1;
++    }
++    
++    return super;
++}
++
++void Fl_Osc_TSlider::set_transform(float scale, float offset)
++{
++    value_offset = offset;
++    value_scale = scale;
++}
++
++float Fl_Osc_TSlider::transform(float x)
++{
++    return value_scale * x + value_offset;
++}
+-- 
+2.47.0
+

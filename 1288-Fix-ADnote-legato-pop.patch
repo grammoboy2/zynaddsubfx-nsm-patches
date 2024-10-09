@@ -1,0 +1,140 @@
+From a102e9921444ee56a6fa078164f6691265a183dd Mon Sep 17 00:00:00 2001
+From: Daniel Sheeler <dsheeler@pobox.com>
+Date: Fri, 28 Sep 2018 16:39:24 -0500
+Subject: [PATCH 1288/1936] Fix ADnote legato pop.
+
+Using different randomness in oscilgen caused it.
+---
+ src/Synth/ADnote.cpp    | 10 +++++-----
+ src/Synth/OscilGen.cpp  |  9 ++++++---
+ src/Synth/SynthNote.cpp |  8 ++++++--
+ src/Synth/SynthNote.h   |  3 ++-
+ 4 files changed, 19 insertions(+), 11 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 5ae0621e..cdc6b209 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -55,7 +55,7 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
+     bandwidthDetuneMultiplier = pars.getBandwidthDetuneMultiplier();
+ 
+     if(pars.GlobalPar.PPanning == 0)
+-        NoteGlobalPar.Panning = getRandom();
++        NoteGlobalPar.Panning = getRandomFloat();
+      else
+         NoteGlobalPar.Panning = pars.GlobalPar.PPanning / 128.0f;
+ 
+@@ -543,7 +543,7 @@ void ADnote::legatonote(LegatoParams lpars)
+     bandwidthDetuneMultiplier = pars.getBandwidthDetuneMultiplier();
+ 
+     if(pars.GlobalPar.PPanning == 0) {
+-        NoteGlobalPar.Panning = getRandom();
++        NoteGlobalPar.Panning = getRandomFloat();
+     } else
+         NoteGlobalPar.Panning = pars.GlobalPar.PPanning / 128.0f;
+ 
+@@ -596,7 +596,7 @@ void ADnote::legatonote(LegatoParams lpars)
+         if(pars.VoicePar[nvoice].Pextoscil != -1)
+             vc = pars.VoicePar[nvoice].Pextoscil;
+         if(!pars.GlobalPar.Hrandgrouping)
+-            pars.VoicePar[vc].OscilSmp->newrandseed(prng());
++            pars.VoicePar[vc].OscilSmp->newrandseed(getRandomUint());
+ 
+         pars.VoicePar[vc].OscilSmp->get(NoteVoicePar[nvoice].OscilSmp,
+                                          getvoicebasefreq(nvoice),
+@@ -706,7 +706,7 @@ void ADnote::legatonote(LegatoParams lpars)
+             NoteVoicePar[nvoice].Volume = -NoteVoicePar[nvoice].Volume;
+ 
+         if(pars.VoicePar[nvoice].PPanning == 0) {
+-            NoteVoicePar[nvoice].Panning = getRandom();
++            NoteVoicePar[nvoice].Panning = getRandomFloat();
+         } else
+             NoteVoicePar[nvoice].Panning =
+                 pars.VoicePar[nvoice].PPanning / 128.0f;
+@@ -865,7 +865,7 @@ void ADnote::initparameters(WatchManager *wm, const char *prefix)
+             vce.Volume = -vce.Volume;
+ 
+         if(param.PPanning == 0) {
+-            vce.Panning = getRandom();
++            vce.Panning = getRandomFloat();
+         } else
+             vce.Panning = param.PPanning / 128.0f;
+ 
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 92f5573b..5b8aacd8 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -1045,6 +1045,9 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+ 
+     fft_t *input = freqHz > 0.0f ? oscilFFTfreqs : pendingfreqs;
+ 
++    unsigned int realrnd = prng();
++    sprng(randseed);
++
+     int outpos =
+         (int)((RND * 2.0f
+                - 1.0f) * synth.oscilsize_f * (Prand - 64.0f) / 64.0f);
+@@ -1090,8 +1093,7 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+ 
+     //Harmonic Amplitude Randomness
+     if((freqHz > 0.1f) && (!ADvsPAD)) {
+-        unsigned int realrnd = prng();
+-        sprng(randseed);
++
+         float power     = Pamprandpower / 127.0f;
+         float normalize = 1.0f / (1.2f - power);
+         switch(Pamprandtype) {
+@@ -1110,7 +1112,6 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+                                            * normalize;
+                 break;
+         }
+-        sprng(realrnd + 1);
+     }
+ 
+     if((freqHz > 0.1f) && (resonance != 0))
+@@ -1127,6 +1128,8 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+             smps[i] *= 0.25f;                     //correct the amplitude
+     }
+ 
++    sprng(realrnd + 1);
++
+     if(Prand < 64)
+         return outpos;
+     else
+diff --git a/src/Synth/SynthNote.cpp b/src/Synth/SynthNote.cpp
+index 777b4e43..ccb1957d 100644
+--- a/src/Synth/SynthNote.cpp
++++ b/src/Synth/SynthNote.cpp
+@@ -163,9 +163,13 @@ void SynthNote::setVelocity(float velocity_) {
+     legato.setDecounter(0); //avoid chopping sound due fade-in
+ }
+ 
+-float SynthNote::getRandom() {
++float SynthNote::getRandomFloat() {
++    return (getRandomUint() / (INT32_MAX * 1.0f));
++}
++
++prng_t SynthNote::getRandomUint() {
+     current_prng_state = prng_r(current_prng_state);
+-    return (current_prng_state / (INT32_MAX * 1.0f));
++    return current_prng_state;
+ }
+ 
+ }
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index 76c7142b..c1fe4bcb 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -71,7 +71,8 @@ class SynthNote
+         void setVelocity(float velocity_);
+ 
+         /* Random numbers with own seed */
+-        float getRandom();
++        float getRandomFloat();
++        prng_t getRandomUint();
+ 
+         //Realtime Safe Memory Allocator For notes
+         class Allocator  &memory;
+-- 
+2.47.0
+

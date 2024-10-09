@@ -1,0 +1,142 @@
+From 56616cf369a8193ca8843d59f134dd7eacd31992 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sat, 17 Oct 2020 11:43:23 +0200
+Subject: [PATCH 1619/1936] make ENVs repeatable beautify Envelope code
+
+---
+ src/Params/EnvelopeParams.cpp |  6 +++++-
+ src/Params/EnvelopeParams.h   |  3 ++-
+ src/Synth/Envelope.cpp        | 33 +++++++++++++++++++++------------
+ src/Synth/Envelope.h          |  1 +
+ 4 files changed, 29 insertions(+), 14 deletions(-)
+
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 80c92ca8..743d3c72 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -111,8 +111,11 @@ static const rtosc::Ports localPorts = {
+             rPresetAtMulti(true, ad_global_amp, ad_global_filter, ad_voice_amp,
+                                  ad_voice_fm_amp),
+             rDefault(false),
+-            "Force Envelope to fully evaluate"),    rToggle(Plinearenvelope, rShort("lin/log"), rDefault(false),
++            "Force Envelope to fully evaluate"),    
++    rToggle(Plinearenvelope, rShort("lin/log"), rDefault(false),
+             "Linear or Logarithmic Envelopes"),
++    rToggle(Prepeating, rShort("repeat"), rDefault(false),
++            "Repeat the Envelope"),
+     rParamDT(A_dt ,  rShort("a.dt"), rLinear(0,127), "Attack Time"),
+     rParamF(A_dt,  rShort("a.dt"), rLog(0.0f,41.0f), rDefaultDepends(loc),
+               rPreset(ad_global_freq, 0.254),   rPreset(ad_global_filter, 0.127),
+@@ -280,6 +283,7 @@ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+     Pforcedrelease  = Pforcedrelease_;
+     Pfreemode       = 1;
+     Plinearenvelope = 0;
++    Prepeating      = 0;
+ 
+     store2defaults();
+ }
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index 004d17bf..37fcc924 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -57,7 +57,8 @@ class EnvelopeParams:public Presets
+         unsigned char Penvval[MAX_ENVELOPE_POINTS];
+         unsigned char Penvstretch; //64=normal stretch (piano-like), 0=no stretch
+         unsigned char Pforcedrelease; //0 - OFF, 1 - ON
+-        unsigned char Plinearenvelope; //if the amplitude envelope is linear
++        unsigned char Plinearenvelope; //1 for linear AMP ENV, 0 otherwise
++        unsigned char Prepeating; //0 - OFF, 1 - ON
+ 
+         float A_dt, D_dt, R_dt;
+         unsigned char PA_val, PD_val, PS_val, PR_val;
+diff --git a/src/Synth/Envelope.cpp b/src/Synth/Envelope.cpp
+index 903997a0..85b37bdb 100644
+--- a/src/Synth/Envelope.cpp
++++ b/src/Synth/Envelope.cpp
+@@ -28,6 +28,7 @@ Envelope::Envelope(EnvelopeParams &pars, float basefreq, float bufferdt,
+     forcedrelease   = pars.Pforcedrelease;
+     envstretch     = powf(440.0f / basefreq, pars.Penvstretch / 64.0f);
+     linearenvelope = pars.Plinearenvelope;
++    repeating = pars.Prepeating;
+ 
+     if(!pars.Pfreemode)
+         pars.converttofree();
+@@ -41,9 +42,9 @@ Envelope::Envelope(EnvelopeParams &pars, float basefreq, float bufferdt,
+         mode = 1;                              //change to linear
+ 
+     for(int i = 0; i < MAX_ENVELOPE_POINTS; ++i) {
+-        const float tmp = pars.getdt(i) * envstretch;
+-        if(tmp > bufferdt)
+-            envdt[i] = bufferdt / tmp;
++        const float dtstretched = pars.getdt(i) * envstretch;
++        if(dtstretched > bufferdt)
++            envdt[i] = bufferdt / dtstretched;
+         else
+             envdt[i] = 2.0f;  //any value larger than 1
+ 
+@@ -162,14 +163,14 @@ float Envelope::envout(bool doWatch)
+     }
+ 
+     if(keyreleased && forcedrelease) { //do the forced release
+-        int tmp = (envsustain < 0) ? (envpoints - 1) : (envsustain + 1); //if there is no sustain point, use the last point for release
++        int releaseindex = (envsustain < 0) ? (envpoints - 1) : (envsustain + 1); //if there is no sustain point, use the last point for release
+ 
+-        if(envdt[tmp] < 0.00000001f)
+-            out = envval[tmp];
++        if(envdt[releaseindex] < 0.00000001f)
++            out = envval[releaseindex];
+         else
+-            out = envoutval + (envval[tmp] - envoutval) * t; // linear interpolation envoutval and envval[tmp]
++            out = envoutval + (envval[releaseindex] - envoutval) * t; // linear interpolation envoutval and envval[releaseindex]
+ 
+-        t += envdt[tmp] * envstretch;
++        t += envdt[releaseindex] * envstretch;
+ 
+         if(t >= 1.0f) { // move to the next segment
+             currentpoint = envsustain + 2;
+@@ -181,7 +182,7 @@ float Envelope::envout(bool doWatch)
+         }
+ 
+         if(doWatch) {
+-            watch(tmp + t, envoutval);
++            watch(releaseindex + t, envoutval);
+         }
+ 
+         return out;
+@@ -195,10 +196,18 @@ float Envelope::envout(bool doWatch)
+     t += inct;
+ 
+     if(t >= 1.0f) {
+-        if(currentpoint >= envpoints - 1)
++        if(currentpoint >= envpoints - 1) // if last point reached
+             envfinish = true;
+-        else
+-            currentpoint++;
++        // but if reached sustain point, repeating activated and key still pressed or sustained
++        else if (repeating && currentpoint == envsustain && !keyreleased) {
++            // set first value to sustain value to prevent jump
++            envval[0] = envval[currentpoint]; 
++            // reset current point
++            currentpoint = 1;
++        }
++        // otherwise proceed to the next segment
++        else currentpoint++;
++
+         t    = 0.0f;
+         inct = envdt[currentpoint];
+     }
+diff --git a/src/Synth/Envelope.h b/src/Synth/Envelope.h
+index 9512aec4..3f9e79d6 100644
+--- a/src/Synth/Envelope.h
++++ b/src/Synth/Envelope.h
+@@ -46,6 +46,7 @@ class Envelope
+         float envstretch;
+         int   linearenvelope;
+         int   mode;
++        bool  repeating;
+ 
+         int   currentpoint;    //current envelope point (starts from 1)
+         bool  forcedrelease;
+-- 
+2.47.0
+

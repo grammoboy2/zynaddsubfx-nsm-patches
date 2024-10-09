@@ -1,0 +1,35 @@
+From 5f38b94d5c6e299eb8b7a8d1543ca643defb1de8 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Fri, 8 Jan 2016 06:52:06 +0000
+Subject: [PATCH 0820/1936] Disable main settings group when running as plugin
+
+---
+ src/UI/ConfigUI.fl | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/ConfigUI.fl b/src/UI/ConfigUI.fl
+index 5d01b634..e2a53684 100644
+--- a/src/UI/ConfigUI.fl
++++ b/src/UI/ConfigUI.fl
+@@ -68,7 +68,7 @@ class ConfigUI {} {
+       Fl_Tabs {} {
+         xywh {5 5 500 330}
+       } {
+-        Fl_Group {} {
++        Fl_Group mainsettings {
+           label {Main settings}
+           xywh {5 25 500 310}
+         } {
+@@ -317,6 +317,9 @@ activatebutton_presetdir(true);}
+   }
+   Function {show()} {} {
+     code {
++if (isPlugin) {
++    mainsettings->deactivate();
++}
+     rootsbrowse->update();
+     presetbrowse->update();
+     configwindow->show();
+-- 
+2.47.0
+

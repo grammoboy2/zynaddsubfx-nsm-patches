@@ -1,0 +1,1333 @@
+From 36c960e012a65a9f4c8b4fd0b3734f9400b96d3a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 11 May 2013 22:20:41 -0400
+Subject: [PATCH 0082/1936] ABS: MIDI controls now enabled
+
+While only one control /volume works via the UI, the rest of the connections
+should work if the address is specified correctly. The issue is the basic
+handling code in Fl_Osc_Tree does not understand the enumerable port names.
+
+For those reading along on this stream of verbose commits, this adds some
+utilities from librtosc's examples that simply store a list of midi addresses
+and osc addresses. Once a control is 'learned', then whenever the midi
+addressing table sees the event it will be able to construct the corresponding
+OSC event to get dispatched immediately.
+
+Now, the next step should be enhancing Fl_Osc_Tree and verifying the above
+assertions are actually accurate.
+---
+ src/Misc/Master.cpp     | 117 ++++---
+ src/Misc/Master.h       |   4 +
+ src/Misc/MiddleWare.cpp |  10 +-
+ src/UI/Connection.cpp   |  10 +-
+ src/UI/Fl_Osc_Tree.H    |  84 +++++
+ src/UI/MasterUI.fl      | 745 ++++++++++++++++++++--------------------
+ 6 files changed, 555 insertions(+), 415 deletions(-)
+ create mode 100644 src/UI/Fl_Osc_Tree.H
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index ff760ad8..78119d49 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -61,12 +61,69 @@ static Ports localports = {
+        d.reply("/free", "sb", "Part", sizeof(void*), &p);
+        m->part[i] = p;
+        printf("part %d is now pointer %p\n", i, p);}},
+-
+-    PARAMF(Master, volume, volume, log, 0.01, 4.42, "Master Volume"),
++    {"volume::c", ":'old-param':", 0,
++        [](const char *m, rtosc::RtData &d) {
++        if(rtosc_narguments(m)==0) {
++            d.reply(d.loc, "c", ((Master*)d.obj)->Pvolume);
++        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='c') {
++            printf("looking at value %d\n", rtosc_argument(m,0).i);
++            printf("limited value is %d\n", limit<char>(
++                        rtosc_argument(m,0).i, 0,127));
++            ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
++            printf("sets volume to value %d\n", ((Master*)d.obj)->Pvolume);
++            d.broadcast(d.loc, "c", ((Master*)d.obj)->Pvolume);}}},
+     RECURSP(Master, Part, part, part, 16, "Part"),//NUM_MIDI_PARTS
++
++    {"register:iis","::", 0,
++        [](const char *m,RtData &d){
++            Master *M =  (Master*)d.obj;
++            M->midi.addElm(rtosc_argument(m,0).i, rtosc_argument(m,1).i,rtosc_argument(m,2).s);}},
++    {"learn:s", "::", 0,
++        [](const char *m, RtData &d){
++            Master *M =  (Master*)d.obj;
++            printf("learning '%s'\n", rtosc_argument(m,0).s);
++            M->midi.learn(rtosc_argument(m,0).s);}}
+ };
+ 
+ Ports &Master::ports = localports;
++Master *the_master;
++
++class DataObj:public rtosc::RtData
++{
++    public:
++        DataObj(char *loc_, size_t loc_size_, void *obj_, rtosc::ThreadLink *bToU_)
++        {
++            memset(loc_, 0, sizeof(loc_size_));
++            loc      = loc_;
++            loc_size = loc_size_;
++            obj      = obj_;
++            bToU     = bToU_;
++        }
++
++        virtual void reply(const char *path, const char *args, ...)
++        {
++            va_list va;
++            va_start(va,args);
++            char *buffer = bToU->buffer();
++            rtosc_vmessage(buffer,bToU->buffer_size(),path,args,va);
++            printf("sending reply of '%s'\n", buffer);
++            reply(buffer);
++        }
++        virtual void reply(const char *msg)
++        {
++            bToU->raw_write(msg);
++        }
++        virtual void broadcast(const char *path, const char *args, ...) override{
++            va_list va;
++            va_start(va,args);
++            char *buffer = bToU->buffer();
++            rtosc_vmessage(buffer,bToU->buffer_size(),path,args,va);
++            printf("sending reply of '%s'\n\n", buffer);
++            reply(buffer);}
++        virtual void broadcast(const char *msg) override{reply(msg);};
++    private:
++        rtosc::ThreadLink *bToU;
++};
+ 
+ vuData::vuData(void)
+     :outpeakl(0.0f), outpeakr(0.0f), maxoutpeakl(0.0f), maxoutpeakr(0.0f),
+@@ -74,7 +131,9 @@ vuData::vuData(void)
+ {}
+ 
+ Master::Master()
++:midi(Master::ports)
+ {
++    the_master = this;
+     swaplr = 0;
+ 
+     pthread_mutex_init(&mutex, NULL);
+@@ -99,6 +158,14 @@ Master::Master()
+ 
+ 
+     defaults();
++
++    midi.event_cb = [](const char *m)
++    {
++        char loc_buf[1024];
++        DataObj d{loc_buf, 1024, the_master, bToU};
++        memset(loc_buf, sizeof(loc_buf), 0);
++        Master::ports.dispatch(m+1, d);
++    };
+ }
+ 
+ void Master::defaults()
+@@ -195,26 +262,23 @@ void Master::polyphonicAftertouch(char chan, char note, char velocity)
+  */
+ void Master::setController(char chan, int type, int par)
+ {
++    midi.process(chan,type,par);
+     if((type == C_dataentryhi) || (type == C_dataentrylo)
+        || (type == C_nrpnhi) || (type == C_nrpnlo)) { //Process RPN and NRPN by the Master (ignore the chan)
+         ctl.setparameternumber(type, par);
+ 
+         int parhi = -1, parlo = -1, valhi = -1, vallo = -1;
+         if(ctl.getnrpn(&parhi, &parlo, &valhi, &vallo) == 0) //this is NRPN
+-            //fprintf(stderr,"rcv. NRPN: %d %d %d %d\n",parhi,parlo,valhi,vallo);
+             switch(parhi) {
+                 case 0x04: //System Effects
+                     if(parlo < NUM_SYS_EFX)
+                         sysefx[parlo]->seteffectpar_nolock(valhi, vallo);
+-                    ;
+                     break;
+                 case 0x08: //Insertion Effects
+                     if(parlo < NUM_INS_EFX)
+                         insefx[parlo]->seteffectpar_nolock(valhi, vallo);
+-                    ;
+                     break;
+             }
+-        ;
+     }
+     else
+     if(type == C_bankselectmsb) {      // Change current bank
+@@ -226,7 +290,6 @@ void Master::setController(char chan, int type, int par)
+         for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) //Send the controller to all part assigned to the channel
+             if((chan == part[npart]->Prcvchn) && (part[npart]->Penabled != 0))
+                 part[npart]->SetController(type, par);
+-        ;
+ 
+         if(type == C_allsoundsoff) { //cleanup insertion/system FX
+             for(int nefx = 0; nefx < NUM_SYS_EFX; ++nefx)
+@@ -322,36 +385,6 @@ void Master::partonoff(int npart, int what)
+     }
+ }
+ 
+-class DataObj:public rtosc::RtData
+-{
+-    public:
+-        DataObj(char *loc_, size_t loc_size_, void *obj_, rtosc::ThreadLink *bToU_)
+-        {
+-            memset(loc_, 0, sizeof(loc_size_));
+-            loc      = loc_;
+-            loc_size = loc_size_;
+-            obj      = obj_;
+-            bToU     = bToU_;
+-        }
+-
+-        virtual void reply(const char *path, const char *args, ...)
+-        {
+-            va_list va;
+-            va_start(va,args);
+-            char *buffer = bToU->buffer();
+-            rtosc_vmessage(buffer,bToU->buffer_size(),path,args,va);
+-            printf("sending reply of '%s'\n", buffer);
+-            reply(buffer);
+-        }
+-        virtual void reply(const char *msg)
+-        {
+-            bToU->raw_write(msg);
+-        }
+-        //virtual void broadcast(const char *path, const char *args, ...){(void)path;(void)args;};
+-        //virtual void broadcast(const char *msg){(void)msg;};
+-    private:
+-        rtosc::ThreadLink *bToU;
+-};
+ 
+ /*
+  * Master audio out (the final sound)
+@@ -365,12 +398,12 @@ void Master::AudioOut(float *outl, float *outr)
+     int events = 0;
+     while(uToB->hasNext()) {
+         const char *msg = uToB->read();
+-        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 5 + 30, 0 + 40);
+-        fprintf(stderr, "backend: '%s'<%s>\n", msg,
+-                rtosc_argument_string(msg));
+-        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++        //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 5 + 30, 0 + 40);
++        //fprintf(stdout, "backend: '%s'<%s>\n", msg,
++        //        rtosc_argument_string(msg));
++        //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+         d.matches = 0;
+-        //fprintf(stderr, "address '%s'\n", uToB->peak());
++        //fprintf(stdout, "address '%s'\n", uToB->peak());
+         ports.dispatch(msg+1, d);
+         events++;
+         if(!d.matches) {
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index c0bfbd89..81e36451 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -25,6 +25,7 @@
+ #define MASTER_H
+ #include "../globals.h"
+ #include "Microtonal.h"
++#include <rtosc/miditable.h>
+ 
+ #include "Bank.h"
+ #include "Recorder.h"
+@@ -166,11 +167,14 @@ class Master
+ 
+         //Statistics on output levels
+         vuData vu;
++
++        rtosc::MidiTable<64,64> midi;
+     private:
+         bool   nullRun;
+         float  sysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+         float  sysefxsend[NUM_SYS_EFX][NUM_SYS_EFX];
+         int    keyshift;
++
+ };
+ 
+ #endif
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 4ca362e2..eb3eec4c 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -139,7 +139,7 @@ void osc_check(cb_t cb, void *ui)
+     lo_server_recv_noblock(server, 0);
+     while(bToU->hasNext()) {
+         const char *rtmsg = bToU->read();
+-        puts(rtmsg);
++        printf("return: got a '%s'\n", rtmsg);
+         if(!strcmp(rtmsg, "/echo")
+                 && !strcmp(rtosc_argument_string(rtmsg),"ss")
+                 && !strcmp(rtosc_argument(rtmsg,0).s, "OSC_URL"))
+@@ -393,9 +393,9 @@ struct MiddleWareImpl
+     void handleMsg(const char *msg)
+     {
+         assert(!strstr(msg,"free"));
+-        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 6 + 30, 0 + 40);
+-        printf("middleware: '%s'\n", msg);
+-        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++        fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 6 + 30, 0 + 40);
++        fprintf(stdout, "middleware: '%s'\n", msg);
++        fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+         const char *last_path = rindex(msg, '/');
+         if(!last_path)
+             return;
+@@ -536,6 +536,8 @@ class UI_Interface:public Fl_Osc_Interface
+ 
+         void tryLink(const char *msg) override
+         {
++
++            printf("trying the link for a '%s'\\n", msg);
+             const char *handle = rindex(msg,'/');
+             if(handle)
+                 ++handle;
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index 698bf7cf..64ede106 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -6,6 +6,7 @@
+ #include <rtosc/ports.h>
+ 
+ #include <FL/Fl.H>
++#include "Fl_Osc_Tree.H"
+ #include "common.H"
+ #include "MasterUI.h"
+ 
+@@ -67,7 +68,14 @@ ui_handle_t GUI::createUi(Fl_Osc_Interface *osc, void *master, void *exit)
+     Fl::background2(70, 70,  70);
+     Fl::foreground(255, 255, 255);
+ #endif
+-    
++
++    Fl_Window *midi_win = new Fl_Double_Window(400, 400, "Midi connections");
++    Fl_Osc_Tree *tree   = new Fl_Osc_Tree(0,0,400,400);
++    midi_win->resizable(tree);
++    tree->root_ports    = &Master::ports;
++    tree->osc           = osc;
++    midi_win->show();
++
+     return (void*) (ui = new MasterUI((Master*)master, (int*)exit, osc));
+ }
+ void GUI::destroyUi(ui_handle_t ui)
+diff --git a/src/UI/Fl_Osc_Tree.H b/src/UI/Fl_Osc_Tree.H
+new file mode 100644
+index 00000000..a9dfe9d5
+--- /dev/null
++++ b/src/UI/Fl_Osc_Tree.H
+@@ -0,0 +1,84 @@
++#pragma once
++#include <rtosc/ports.h>
++#include "Fl_Osc_Interface.h"
++#include <FL/Fl_Tree.H>
++
++class Fl_Osc_Tree: public Fl_Tree
++{
++    public:
++        Fl_Osc_Tree(int X, int Y, int W, int H, const char *L=0)
++            :Fl_Tree(X,Y,W,H,L)
++        {
++            root_label("");
++            add("nil");
++            add("/nil/nil");
++            close(first());
++            callback(Fl_Osc_Tree::cb, NULL);
++        }
++
++        static void cb(Fl_Widget *w, void*)
++        {
++            using namespace rtosc;
++            Fl_Osc_Tree *t=(Fl_Osc_Tree*)w;
++            int reason = t->callback_reason();
++
++            char pathname[1024];
++            t->item_pathname(pathname, sizeof(pathname), t->callback_item());
++
++
++            if(reason==1) {
++                char *colon = index(pathname, ':');
++                if(colon) {
++                    *colon = 0;
++                    t->osc->writeValue("/learn", string(pathname));
++                }
++            }
++
++            if(reason==3) //Populate fields
++            {
++                const Ports &p = *Fl_Osc_Tree::subtree_lookup(t->root_ports,pathname+1);
++                if(auto *i = t->find_item((std::string(pathname)+"/"+"nil").c_str()))
++                    t->remove(i);
++                for(const Port &port : p) {
++                    bool subnodes = index(port.name, '/');
++                    string path = std::string(pathname)+"/"+port.name;
++                    if(subnodes) {
++                        if(!t->find_item(path.c_str()))
++                            t->add(path.c_str());
++                        if(!t->find_item((path+"nil").c_str()))
++                            t->add((path+"nil").c_str());
++                        t->close(path.c_str());
++                    } else {
++                        if(!t->find_item(path.c_str()))
++                            t->add(path.c_str());
++                    }
++                }
++
++            }
++        }
++
++        static const rtosc::Ports *subtree_lookup(const rtosc::Ports *p, std::string s)
++        {
++            using namespace rtosc;
++            if(s=="")
++                return p;
++
++            if(s[s.length()-1] != '/')
++                s += '/';
++
++            for(const Port &port : *p) {
++                const char *name  = port.name;
++                if(!index(name, '/'))//only accept objects that will have subports
++                    continue;
++                if(s.substr(0,strlen(name)) == name) {
++                    return subtree_lookup(port.ports, s.substr(strlen(name)));
++                }
++            }
++
++            //TODO else case
++            return p;
++        }
++
++        rtosc::Ports *root_ports;
++        Fl_Osc_Interface *osc;
++};
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 5046f3e8..6f761527 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -53,6 +53,9 @@ decl {\#include "NioUI.h"} {public global
+ decl {\#include "VuPartMeter.h"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Dial.H"} {private local
++} 
++
+ decl {\#include "VuMasterMeter.h"} {public local
+ } 
+ 
+@@ -123,7 +126,7 @@ class Panellistitem {open : {public Fl_Group}
+   Function {make_window()} {open private
+   } {
+     Fl_Window panellistitem {open
+-      private xywh {623 721 100 260} type Double box NO_BOX
++      private xywh {629 721 100 260} type Double box NO_BOX
+       class Fl_Group visible
+     } {
+       Fl_Group panellistitemgroup {open
+@@ -260,24 +263,28 @@ if ((
+     config.save();
+     *exitprogram=1;
+ };
+-\#endif}
+-      xywh {95 456 390 525} type Double xclass zynaddsubfx visible
++\#endif} open
++      xywh {324 319 390 525} type Double xclass zynaddsubfx visible
+     } {
+-      Fl_Menu_Bar mastermenu {
+-        xywh {-5 0 690 25}
++      Fl_Group win_root {open
++        xywh {0 0 390 525}
++        class Fl_Osc_Group
+       } {
+-        Submenu {} {
+-          label {&File}
+-          xywh {0 0 100 20}
++        Fl_Menu_Bar mastermenu {
++          xywh {0 5 690 25}
+         } {
+-          MenuItem {} {
+-            label {&New (erase all)...}
+-            callback {do_new_master();}
+-            xywh {20 20 100 20}
+-          }
+-          MenuItem {} {
+-            label {&Open Parameters...}
+-            callback {\#if USE_NSM
++          Submenu {} {
++            label {&File}
++            xywh {5 5 100 20}
++          } {
++            MenuItem {} {
++              label {&New (erase all)...}
++              callback {do_new_master();}
++              xywh {25 25 100 20}
++            }
++            MenuItem {} {
++              label {&Open Parameters...}
++              callback {\#if USE_NSM
+             if ( nsm && nsm->is_active() )
+             {
+                 do_load_master();
+@@ -288,11 +295,11 @@ if ((
+             {
+                 do_load_master();
+             }}
+-            xywh {20 20 100 20}
+-          }
+-          MenuItem {} {
+-            label {&Save All Parameters...}
+-            callback {\#if USE_NSM
++              xywh {25 25 100 20}
++            }
++            MenuItem {} {
++              label {&Save All Parameters...}
++              callback {\#if USE_NSM
+             if ( nsm && nsm->is_active() )
+             {
+                 do_save_master( nsm->project_filename );
+@@ -302,11 +309,11 @@ if ((
+             {
+                  do_save_master();
+             }}
+-            xywh {10 10 100 20} divider
+-          }
+-          MenuItem {} {
+-            label {&Load Scale Settings...}
+-            callback {char *filename;
++              xywh {15 15 100 20} divider
++            }
++            MenuItem {} {
++              label {&Load Scale Settings...}
++              callback {char *filename;
+ filename=fl_file_chooser("Open:","({*.xsz})",NULL,0);
+ if (filename==NULL) return;
+ 
+@@ -324,11 +331,11 @@ pthread_mutex_unlock(&master->mutex);
+ 
+ if (result==-10) fl_alert("Error: Could not load the file\\nbecause it is not a scale file.");
+       else if (result<0) fl_alert("Error: Could not load the file.");}
+-            xywh {35 35 100 20}
+-          }
+-          MenuItem {} {
+-            label {Save Sc&ale Settings ..}
+-            callback {char *filename;
++              xywh {40 40 100 20}
++            }
++            MenuItem {} {
++              label {Save Sc&ale Settings ..}
++              callback {char *filename;
+ int result=0;
+ 
+ filename=fl_file_chooser("Save:","({*.xsz})",NULL,0);
+@@ -351,42 +358,42 @@ if (result<0) fl_alert("Error: Could not save the file.");
+ 
+ 
+ updatepanel();}
+-            xywh {25 25 100 20}
+-          }
+-          MenuItem {} {
+-            label {Show Scale Settings...}
+-            callback {microtonalui->show();}
+-            xywh {0 0 100 20} divider
+-          }
+-          MenuItem {} {
+-            label {&Settings...}
+-            callback {configui->show();}
+-            xywh {25 25 100 20}
+-          }
+-          MenuItem {} {
+-            label {N&io Settings}
+-            callback {nioui.refresh();
++              xywh {30 30 100 20}
++            }
++            MenuItem {} {
++              label {Show Scale Settings...}
++              callback {microtonalui->show();}
++              xywh {5 5 100 20} divider
++            }
++            MenuItem {} {
++              label {&Settings...}
++              callback {configui->show();}
++              xywh {30 30 100 20}
++            }
++            MenuItem {} {
++              label {N&io Settings}
++              callback {nioui.refresh();
+ nioui.show();}
+-            xywh {0 0 36 21} divider
+-          }
+-          MenuItem {} {
+-            label {&Copyright...}
+-            callback {aboutwindow->show();}
+-            xywh {15 15 100 20} divider
+-          }
+-          MenuItem {} {
+-            label {E&xit}
+-            callback {masterwindow->do_callback();}
+-            xywh {10 10 100 20}
++              xywh {5 5 36 21} divider
++            }
++            MenuItem {} {
++              label {&Copyright...}
++              callback {aboutwindow->show();}
++              xywh {20 20 100 20} divider
++            }
++            MenuItem {} {
++              label {E&xit}
++              callback {masterwindow->do_callback();}
++              xywh {15 15 100 20}
++            }
+           }
+-        }
+-        Submenu {} {
+-          label {&Instrument}
+-          xywh {10 10 100 20}
+-        } {
+-          MenuItem {} {
+-            label {&Clear Instrument...}
+-            callback {if (fl_choice("Clear instrument's parameters ?","No","Yes",NULL)){
++          Submenu {} {
++            label {&Instrument}
++            xywh {15 15 100 20}
++          } {
++            MenuItem {} {
++              label {&Clear Instrument...}
++              callback {if (fl_choice("Clear instrument's parameters ?","No","Yes",NULL)){
+ //       int npart=(int)npartcounter->value()-1;
+        pthread_mutex_lock(&master->mutex);
+        master->part[npart]->defaultsinstrument();
+@@ -396,11 +403,11 @@ nioui.show();}
+ };
+ 
+ updatepanel();}
+-            xywh {35 35 100 20}
+-          }
+-          MenuItem {} {
+-            label {&Open Instrument...}
+-            callback {const char *filename;
++              xywh {40 40 100 20}
++            }
++            MenuItem {} {
++              label {&Open Instrument...}
++              callback {const char *filename;
+ filename=fl_file_chooser("Load:","({*.xiz})",NULL,0);
+ if (filename==NULL) return;
+ 
+@@ -422,11 +429,11 @@ updatepanel();
+ 
+ if (result==-10) fl_alert("Error: Could not load the file\\nbecause it is not an instrument file.");
+       else if (result<0) fl_alert("Error: Could not load the file.");}
+-            xywh {30 30 100 20}
+-          }
+-          MenuItem {} {
+-            label {&Save Instrument ...}
+-            callback {char *filename;
++              xywh {35 35 100 20}
++            }
++            MenuItem {} {
++              label {&Save Instrument ...}
++              callback {char *filename;
+ 
+ filename=fl_file_chooser("Save:","({*.xiz})",NULL,0);
+ if (filename==NULL) return;
+@@ -447,26 +454,26 @@ pthread_mutex_unlock(&master->mutex);
+ if (result<0) fl_alert("Error: Could not save the file.");
+ 
+ updatepanel();}
+-            xywh {20 20 100 20} divider
+-          }
+-          MenuItem {} {
+-            label {Show Instrument &Bank...}
+-            callback {bankui->show();}
+-            xywh {0 0 100 20} divider
+-          }
+-          MenuItem {} {
+-            label {&Virtual Keyboard...}
+-            callback {virkeyboard->show();}
+-            xywh {10 10 100 20}
++              xywh {25 25 100 20} divider
++            }
++            MenuItem {} {
++              label {Show Instrument &Bank...}
++              callback {bankui->show();}
++              xywh {5 5 100 20} divider
++            }
++            MenuItem {} {
++              label {&Virtual Keyboard...}
++              callback {virkeyboard->show();}
++              xywh {15 15 100 20}
++            }
+           }
+-        }
+-        Submenu recordmenu {
+-          label {&Record}
+-          xywh {0 0 100 20}
+-        } {
+-          MenuItem {} {
+-            label {&Choose WAV file...}
+-            callback {char *filename;
++          Submenu recordmenu {
++            label {&Record}
++            xywh {5 5 100 20}
++          } {
++            MenuItem {} {
++              label {&Choose WAV file...}
++              callback {char *filename;
+ recordbutton->deactivate();
+ pausebutton->deactivate();
+ pauselabel->deactivate();
+@@ -484,153 +491,154 @@ if (result==1) {
+ if (result==0) recordbutton->activate();
+ 
+ if (result!=0) fl_alert("Error: Could not save the file.");}
+-            xywh {0 0 100 20}
++              xywh {5 5 100 20}
++            }
+           }
+-        }
+-        Submenu {} {
+-          label Misc
+-          xywh {10 10 100 20}
+-        } {
+-          MenuItem {} {
+-            label {Switch User Interface Mode}
+-            callback {if (fl_choice("Switch the User Interface to Beginner mode ?","No","Yes",NULL)){
++          Submenu {} {
++            label Misc
++            xywh {15 15 100 20}
++          } {
++            MenuItem {} {
++              label {Switch User Interface Mode}
++              callback {if (fl_choice("Switch the User Interface to Beginner mode ?","No","Yes",NULL)){
+ 	masterwindow->hide();
+ 	refresh_master_ui();
+ 	simplemasterwindow->show();
+ 	config.cfg.UserInterfaceMode=2;
+ };}
+-            xywh {10 10 100 20}
++              xywh {15 15 100 20}
++            }
+           }
+         }
+-      }
+-      Fl_Dial mastervolumedial {
+-        label {Master Volume}
+-        callback {master->setPvolume((int) o->value());}
+-        tooltip {Master Volume} xywh {15 32 55 55} box ROUND_UP_BOX labelsize 9 align 130 maximum 127 step 1
+-        code0 {o->value(master->Pvolume);}
+-        class WidgetPDial
+-      }
+-      Fl_Counter masterkeyshiftcounter {
+-        label {Master KeyShift}
+-        callback {master->setPkeyshift((int) o->value()+64);}
+-        xywh {150 97 120 23} type Simple labelsize 9 minimum -64 maximum 64 step 1
+-        code0 {o->lstep(12);}
+-        code1 {o->value(master->Pkeyshift-64);}
+-      }
+-      Fl_Button {} {
+-        label {Panic!}
+-        callback {virkeyboard->relaseallkeys();
++        Fl_Dial mastervolumedial {
++          label {Master Volume} selected
++          tooltip {Master Volume} xywh {20 37 55 55} box ROUND_UP_BOX labelsize 9 align 130 maximum 127 step 1
++          code0 {win_root->osc = osc;}
++          code1 {win_root->pane_name = "/";}
++          code2 {o->init("volume");}
++          class Fl_Osc_Dial
++        }
++        Fl_Counter masterkeyshiftcounter {
++          label {Master KeyShift}
++          callback {master->setPkeyshift((int) o->value()+64);}
++          xywh {155 102 120 23} type Simple labelsize 9 minimum -64 maximum 64 step 1
++          code0 {o->lstep(12);}
++          code1 {o->value(master->Pkeyshift-64);}
++        }
++        Fl_Button {} {
++          label {Panic!}
++          callback {virkeyboard->relaseallkeys();
+ pthread_mutex_lock(&master->mutex);
+ master->shutup=1;
+ pthread_mutex_unlock(&master->mutex);}
+-        xywh {280 29 105 53} color 90 labelfont 1
+-      }
+-      Fl_Group partuigroup {
+-        xywh {0 310 390 205}
+-      } {
+-        Fl_Group partui {open
+-          xywh {0 310 383 175}
+-          code0 {o->init(master->part[0],"/part0/", master,0,bankui,"/part0/", osc);}
+-          code1 {o->show();}
+-          class PartUI
+-        } {}
+-      }
+-      Fl_Tabs {} {
+-        xywh {0 145 390 165} box UP_FRAME
+-      } {
+-        Fl_Group {} {
+-          label {System Effects}
+-          xywh {0 162 390 145} labelsize 15 align 9
++          xywh {285 34 105 53} color 90 labelfont 1
++        }
++        Fl_Group partuigroup {
++          xywh {5 315 390 205}
+         } {
+-          Fl_Counter syseffnocounter {
+-            label {Sys.Effect No.}
+-            callback {nsyseff=(int) o->value()-1;
++          Fl_Group partui {open
++            xywh {5 315 383 175}
++            code0 {o->init(master->part[0],"/part0/", master,0,bankui,"/part0/", osc);}
++            code1 {o->show();}
++            class PartUI
++          } {}
++        }
++        Fl_Tabs {} {
++          xywh {5 150 390 165} box UP_FRAME
++        } {
++          Fl_Group {} {
++            label {System Effects}
++            xywh {5 167 390 145} labelsize 15 align 9 hide
++          } {
++            Fl_Counter syseffnocounter {
++              label {Sys.Effect No.}
++              callback {nsyseff=(int) o->value()-1;
+ sysefftype->value(master->sysefx[nsyseff]->geteffect());
+ syseffectui->refresh(master->sysefx[nsyseff]);}
+-            xywh {5 181 80 22} type Simple labelfont 1 labelsize 10 align 1 minimum 0 maximum 127 step 1 value 1 textfont 1
+-            code0 {o->bounds(1,NUM_SYS_EFX);}
+-            code1 {o->value(nsyseff+1);}
+-          }
+-          Fl_Choice sysefftype {
+-            label EffType
+-            callback {pthread_mutex_lock(&master->mutex);
++              xywh {10 186 80 22} type Simple labelfont 1 labelsize 10 align 1 minimum 0 maximum 127 step 1 value 1 textfont 1
++              code0 {o->bounds(1,NUM_SYS_EFX);}
++              code1 {o->value(nsyseff+1);}
++            }
++            Fl_Choice sysefftype {
++              label EffType
++              callback {pthread_mutex_lock(&master->mutex);
+ master->sysefx[nsyseff]->changeeffect((int) o->value());
+ pthread_mutex_unlock(&master->mutex);
+ syseffectui->refresh(master->sysefx[nsyseff]);}
+-            xywh {285 176 100 22} down_box BORDER_BOX labelsize 10
+-            code0 {o->value(master->sysefx[nsyseff]->geteffect());}
+-          } {
+-            MenuItem {} {
+-              label {No Effect}
+-              xywh {10 10 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Reverb
+-              xywh {20 20 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Echo
+-              xywh {30 30 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Chorus
+-              xywh {40 40 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Phaser
+-              xywh {50 50 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label AlienWah
+-              xywh {60 60 100 20} labelfont 1 labelsize 10
++              xywh {290 181 100 22} down_box BORDER_BOX labelsize 10
++              code0 {o->value(master->sysefx[nsyseff]->geteffect());}
++            } {
++              MenuItem {} {
++                label {No Effect}
++                xywh {15 15 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Reverb
++                xywh {25 25 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Echo
++                xywh {35 35 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Chorus
++                xywh {45 45 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Phaser
++                xywh {55 55 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label AlienWah
++                xywh {65 65 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Distortion
++                xywh {75 75 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label EQ
++                xywh {85 85 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label DynFilter
++                xywh {95 95 100 20} labelfont 1 labelsize 10
++              }
+             }
+-            MenuItem {} {
+-              label Distortion
+-              xywh {70 70 100 20} labelfont 1 labelsize 10
++            Fl_Group syseffectuigroup {
++              xywh {10 208 380 95} color 48
++            } {
++              Fl_Group syseffectui {
++                xywh {10 208 380 95}
++                code0 {o->init(master->sysefx[nsyseff]);}
++                class EffUI
++              } {}
+             }
+-            MenuItem {} {
+-              label EQ
+-              xywh {80 80 100 20} labelfont 1 labelsize 10
++            Fl_Button {} {
++              label {Send to...}
++              callback {syseffsendwindow->show();}
++              xywh {95 186 85 22} box THIN_UP_BOX labelfont 1 labelsize 11
+             }
+-            MenuItem {} {
+-              label DynFilter
+-              xywh {90 90 100 20} labelfont 1 labelsize 10
++            Fl_Button {} {
++              label C
++              callback {presetsui->copy(master->sysefx[nsyseff]);}
++              xywh {185 192 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+             }
+-          }
+-          Fl_Group syseffectuigroup {
+-            xywh {5 203 380 95} color 48
+-          } {
+-            Fl_Group syseffectui {
+-              xywh {5 203 380 95}
+-              code0 {o->init(master->sysefx[nsyseff]);}
+-              class EffUI
+-            } {}
+-          }
+-          Fl_Button {} {
+-            label {Send to...}
+-            callback {syseffsendwindow->show();}
+-            xywh {90 181 85 22} box THIN_UP_BOX labelfont 1 labelsize 11
+-          }
+-          Fl_Button {} {
+-            label C
+-            callback {presetsui->copy(master->sysefx[nsyseff]);}
+-            xywh {180 187 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+-          }
+-          Fl_Button {} {
+-            label P
+-            callback {pthread_mutex_lock(&master->mutex);
++            Fl_Button {} {
++              label P
++              callback {pthread_mutex_lock(&master->mutex);
+ presetsui->paste(master->sysefx[nsyseff],syseffectui);
+ pthread_mutex_unlock(&master->mutex);}
+-            xywh {210 187 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++              xywh {215 192 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++            }
+           }
+-        }
+-        Fl_Group {} {
+-          label {Insertion Effects}
+-          xywh {0 165 390 145} labelsize 15 align 9 hide
+-        } {
+-          Fl_Counter inseffnocounter {
+-            label {Ins.Effect No.}
+-            callback {ninseff=(int) o->value()-1;
++          Fl_Group {} {
++            label {Insertion Effects}
++            xywh {5 170 390 145} labelsize 15 align 9
++          } {
++            Fl_Counter inseffnocounter {
++              label {Ins.Effect No.}
++              callback {ninseff=(int) o->value()-1;
+ insefftype->value(master->insefx[ninseff]->geteffect());
+ inseffpart->value(master->Pinsparts[ninseff]+2);
+ inseffectui->refresh(master->insefx[ninseff]);
+@@ -644,71 +652,71 @@ if (master->Pinsparts[ninseff]!=-1) {
+  	inseffectui->deactivate();
+         inseffectuigroup->deactivate();
+ };}
+-            xywh {5 183 80 22} type Simple labelfont 1 labelsize 10 align 1 minimum 0 maximum 127 step 1 value 1 textfont 1
+-            code0 {o->bounds(1,NUM_INS_EFX);}
+-            code1 {o->value(ninseff+1);}
+-          }
+-          Fl_Choice insefftype {
+-            label EffType
+-            callback {pthread_mutex_lock(&master->mutex);
++              xywh {10 188 80 22} type Simple labelfont 1 labelsize 10 align 1 minimum 0 maximum 127 step 1 value 1 textfont 1
++              code0 {o->bounds(1,NUM_INS_EFX);}
++              code1 {o->value(ninseff+1);}
++            }
++            Fl_Choice insefftype {
++              label EffType
++              callback {pthread_mutex_lock(&master->mutex);
+ master->insefx[ninseff]->changeeffect((int) o->value());
+ pthread_mutex_unlock(&master->mutex);
+ inseffectui->refresh(master->insefx[ninseff]);
+ inseffectui->show();}
+-            xywh {285 173 100 22} down_box BORDER_BOX labelsize 10
+-            code0 {o->value(master->insefx[ninseff]->geteffect());}
+-            code1 {if (master->Pinsparts[ninseff]== -1) o->deactivate();}
+-          } {
+-            MenuItem {} {
+-              label {No Effect}
+-              xywh {25 25 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Reverb
+-              xywh {35 35 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Echo
+-              xywh {45 45 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Chorus
+-              xywh {55 55 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Phaser
+-              xywh {60 60 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label AlienWah
+-              xywh {70 70 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label Distortion
+-              xywh {80 80 100 20} labelfont 1 labelsize 10
+-            }
+-            MenuItem {} {
+-              label EQ
+-              xywh {90 90 100 20} labelfont 1 labelsize 10
++              xywh {290 178 100 22} down_box BORDER_BOX labelsize 10
++              code0 {o->value(master->insefx[ninseff]->geteffect());}
++              code1 {if (master->Pinsparts[ninseff]== -1) o->deactivate();}
++            } {
++              MenuItem {} {
++                label {No Effect}
++                xywh {30 30 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Reverb
++                xywh {40 40 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Echo
++                xywh {50 50 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Chorus
++                xywh {60 60 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Phaser
++                xywh {65 65 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label AlienWah
++                xywh {75 75 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label Distortion
++                xywh {85 85 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label EQ
++                xywh {95 95 100 20} labelfont 1 labelsize 10
++              }
++              MenuItem {} {
++                label DynFilter
++                xywh {105 105 100 20} labelfont 1 labelsize 10
++              }
+             }
+-            MenuItem {} {
+-              label DynFilter
+-              xywh {100 100 100 20} labelfont 1 labelsize 10
++            Fl_Group inseffectuigroup {
++              xywh {10 210 380 95} box FLAT_BOX color 48
++            } {
++              Fl_Group inseffectui {
++                xywh {10 210 380 90} box UP_FRAME
++                code0 {o->init(master->insefx[ninseff]);}
++                code1 {if (master->Pinsparts[ninseff]== -1) o->deactivate();}
++                class EffUI
++              } {}
+             }
+-          }
+-          Fl_Group inseffectuigroup {
+-            xywh {5 205 380 95} box FLAT_BOX color 48
+-          } {
+-            Fl_Group inseffectui {
+-              xywh {5 205 380 90} box UP_FRAME
+-              code0 {o->init(master->insefx[ninseff]);}
+-              code1 {if (master->Pinsparts[ninseff]== -1) o->deactivate();}
+-              class EffUI
+-            } {}
+-          }
+-          Fl_Choice inseffpart {
+-            label {Insert To.}
+-            callback {master->Pinsparts[ninseff]=(int) o->value()-2;
++            Fl_Choice inseffpart {
++              label {Insert To.}
++              callback {master->Pinsparts[ninseff]=(int) o->value()-2;
+ if ((int) o->value()==1){
+     inseffectuigroup->deactivate();
+     insefftype->deactivate();
+@@ -719,36 +727,36 @@ if ((int) o->value()==1){
+     inseffectui->activate();
+ };
+ master->insefx[ninseff]->cleanup();} open
+-            xywh {95 183 80 22} down_box BORDER_BOX labelfont 1 labelsize 10 align 5 textsize 10
+-            code0 {o->add("Master Out");o->add("Off");}
+-            code1 {char tmp[50]; for (int i=0;i<NUM_MIDI_PARTS;i++) {sprintf(tmp,"Part %2d",i+1);o->add(tmp);};}
+-            code3 {o->value(master->Pinsparts[ninseff]+2);}
+-          } {}
+-          Fl_Button {} {
+-            label C
+-            callback {presetsui->copy(master->insefx[ninseff]);}
+-            xywh {180 185 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+-          }
+-          Fl_Button {} {
+-            label P
+-            callback {pthread_mutex_lock(&master->mutex);
++              xywh {100 188 80 22} down_box BORDER_BOX labelfont 1 labelsize 10 align 5 textsize 10
++              code0 {o->add("Master Out");o->add("Off");}
++              code1 {char tmp[50]; for (int i=0;i<NUM_MIDI_PARTS;i++) {sprintf(tmp,"Part %2d",i+1);o->add(tmp);};}
++              code3 {o->value(master->Pinsparts[ninseff]+2);}
++            } {}
++            Fl_Button {} {
++              label C
++              callback {presetsui->copy(master->insefx[ninseff]);}
++              xywh {185 190 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++            }
++            Fl_Button {} {
++              label P
++              callback {pthread_mutex_lock(&master->mutex);
+ presetsui->paste(master->insefx[ninseff],inseffectui);
+ pthread_mutex_unlock(&master->mutex);}
+-            xywh {210 185 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++              xywh {215 190 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++            }
+           }
+         }
+-      }
+-      Fl_Button {} {
+-        label Scales
+-        callback {microtonalui->show();}
+-        xywh {320 87 65 23} color 51 labelfont 1
+-      }
+-      Fl_Group {} {
+-        xywh {150 40 117 45} box UP_FRAME
+-      } {
+-        Fl_Button recordbutton {
+-          label {Rec.}
+-          callback {o->deactivate();
++        Fl_Button {} {
++          label Scales
++          callback {microtonalui->show();}
++          xywh {325 92 65 23} color 51 labelfont 1
++        }
++        Fl_Group {} {
++          xywh {155 45 117 45} box UP_FRAME
++        } {
++          Fl_Button recordbutton {
++            label {Rec.}
++            callback {o->deactivate();
+ recordmenu->deactivate();
+ recordmenu->label("&Record(*)");
+ stopbutton->activate();
+@@ -757,11 +765,11 @@ pauselabel->activate();
+ master->HDDRecorder.start();
+ master->vuresetpeaks();
+ mastermenu->redraw();}
+-          tooltip {Start Recording} xywh {159 46 21 21} box ROUND_UP_BOX color 88 labelfont 1 labelsize 10 align 2 deactivate
+-        }
+-        Fl_Button stopbutton {
+-          label Stop
+-          callback {o->deactivate();
++            tooltip {Start Recording} xywh {164 51 21 21} box ROUND_UP_BOX color 88 labelfont 1 labelsize 10 align 2 deactivate
++          }
++          Fl_Button stopbutton {
++            label Stop
++            callback {o->deactivate();
+ master->HDDRecorder.stop();
+ recordbutton->deactivate();
+ pausebutton->deactivate();
+@@ -769,39 +777,39 @@ pauselabel->deactivate();
+ recordmenu->activate();
+ recordmenu->label("&Record");
+ mastermenu->redraw();}
+-          tooltip {Stop Recording and close the audio file} xywh {237 46 21 21} box THIN_UP_BOX color 4 labelfont 1 labelsize 10 align 2 deactivate
+-        }
+-        Fl_Button pausebutton {
+-          label {@||}
+-          callback {o->deactivate();
++            tooltip {Stop Recording and close the audio file} xywh {242 51 21 21} box THIN_UP_BOX color 4 labelfont 1 labelsize 10 align 2 deactivate
++          }
++          Fl_Button pausebutton {
++            label {@||}
++            callback {o->deactivate();
+ master->HDDRecorder.pause();
+ recordbutton->activate();
+ mastermenu->redraw();}
+-          tooltip {Pause Recording} xywh {198 46 21 21} box THIN_UP_BOX color 4 selection_color 4 labelfont 1 labelcolor 3 align 16 deactivate
++            tooltip {Pause Recording} xywh {203 51 21 21} box THIN_UP_BOX color 4 selection_color 4 labelfont 1 labelcolor 3 align 16 deactivate
++          }
++          Fl_Box pauselabel {
++            label Pause
++            xywh {197 71 30 15} labelfont 1 labelsize 10 deactivate
++          }
+         }
+-        Fl_Box pauselabel {
+-          label Pause
+-          xywh {192 66 30 15} labelfont 1 labelsize 10 deactivate
++        Fl_Group {} {
++          xywh {6 495 389 55}
++        } {
++          Fl_Box mastervu {
++            label {VU-Meter}
++            xywh {10 495 380 30} box FLAT_BOX color 48 selection_color 75
++            code0 {o->init(osc);}
++            class VuMasterMeter
++          }
+         }
+-      }
+-      Fl_Group {} {
+-        xywh {1 490 389 55}
+-      } {
+-        Fl_Box mastervu {
+-          label {VU-Meter}
+-          xywh {5 490 380 30} box FLAT_BOX color 48 selection_color 75
+-          code0 {o->init(osc);}
+-          class VuMasterMeter
++        Fl_Check_Button nrpnbutton {
++          label NRPN
++          callback {master->ctl.NRPN.receive=(int) o->value();}
++          tooltip {Receive NRPNs} xywh {15 120 60 25} down_box DOWN_BOX labelsize 12
++          code0 {o->value(master->ctl.NRPN.receive);}
+         }
+-      }
+-      Fl_Check_Button nrpnbutton {
+-        label NRPN
+-        callback {master->ctl.NRPN.receive=(int) o->value();}
+-        tooltip {Receive NRPNs} xywh {10 115 60 25} down_box DOWN_BOX labelsize 12
+-        code0 {o->value(master->ctl.NRPN.receive);}
+-      }
+-      Fl_Counter npartcounter {
+-        callback {int nval=(int) o->value()-1;
++        Fl_Counter npartcounter {
++          callback {int nval=(int) o->value()-1;
+ partuigroup->remove(partui);
+ delete partui;
+ partui=new PartUI(0,0,765,525);
+@@ -816,41 +824,42 @@ npart=nval;
+ updatepanel();
+ simplenpartcounter->value(nval+1);
+ simplenpartcounter->do_callback();}
+-        tooltip {The part number} xywh {5 312 50 18} type Simple labelfont 1 minimum 0 maximum 127 step 1 value 1 textfont 1
+-        code0 {o->bounds(1,NUM_MIDI_PARTS);}
+-        code1 {bankui->init(o);}
+-      }
+-      Fl_Button {} {
+-        label vK
+-        callback {virkeyboard->show();}
+-        tooltip {Virtual Keyboard} xywh {280 87 40 23} color 51 labelfont 1
+-      }
+-      Fl_Group {} {
+-        xywh {85 32 55 110} box UP_FRAME
+-      } {
++          tooltip {The part number} xywh {10 317 50 18} type Simple labelfont 1 minimum 0 maximum 127 step 1 value 1 textfont 1
++          code0 {o->bounds(1,NUM_MIDI_PARTS);}
++          code1 {bankui->init(o);}
++        }
+         Fl_Button {} {
+-          label Reset
+-          callback {globalfinedetuneslider->value(64.0);
+-globalfinedetuneslider->do_callback();}
+-          tooltip {Master fine detune reset} xywh {90 37 45 23} box THIN_UP_BOX labelsize 10
++          label vK
++          callback {virkeyboard->show();}
++          tooltip {Virtual Keyboard} xywh {285 92 40 23} color 51 labelfont 1
+         }
+-        Fl_Dial globalfinedetuneslider {
+-          label {Fine Detune}
+-          callback {master->microtonal.Pglobalfinedetune=(int) o->value();}
+-          tooltip {global fine detune} xywh {90 68 45 45} box ROUND_UP_BOX labelsize 9 align 130 maximum 127 step 1 value 64
+-          code0 {o->value(master->microtonal.Pglobalfinedetune);}
+-          class WidgetPDial
++        Fl_Group {} {
++          xywh {90 37 55 110} box UP_FRAME
++        } {
++          Fl_Button {} {
++            label Reset
++            callback {globalfinedetuneslider->value(64.0);
++globalfinedetuneslider->do_callback();}
++            tooltip {Master fine detune reset} xywh {95 42 45 23} box THIN_UP_BOX labelsize 10
++          }
++          Fl_Dial globalfinedetuneslider {
++            label {Fine Detune}
++            callback {master->microtonal.Pglobalfinedetune=(int) o->value();}
++            tooltip {global fine detune} xywh {95 73 45 45} box ROUND_UP_BOX labelsize 9 align 130 maximum 127 step 1 value 64
++            code0 {o->value(master->microtonal.Pglobalfinedetune);}
++            class WidgetPDial
++          }
+         }
+-      }
+-      Fl_Button {} {
+-        label {Panel Window}
+-        callback {updatepanel();
++        Fl_Button {} {
++          label {Panel Window}
++          callback {updatepanel();
+ panelwindow->show();}
+-        tooltip {Panel Window} xywh {280 112 105 23} color 51 labelfont 1 labelsize 10
+-      }
+-      Fl_Button sm_indicator1 {
+-        label SM
+-        xywh {350 5 35 15} box ROUNDED_BOX down_box ROUNDED_BOX color 45 selection_color 93 labelfont 3 labelcolor 39 deactivate
++          tooltip {Panel Window} xywh {285 117 105 23} color 51 labelfont 1 labelsize 10
++        }
++        Fl_Button sm_indicator1 {
++          label SM
++          xywh {355 10 35 15} box ROUNDED_BOX down_box ROUNDED_BOX color 45 selection_color 93 labelfont 3 labelcolor 39 deactivate
++        }
+       }
+     }
+     Fl_Window aboutwindow {
+@@ -901,7 +910,7 @@ GNU General Public License for details.}
+     }
+     Fl_Window panelwindow {
+       label {ZynAddSubFX Panel} open
+-      xywh {98 128 630 635} type Double visible
++      xywh {612 184 630 635} type Double visible
+     } {
+       Fl_Scroll {} {open
+         xywh {0 5 570 310} type HORIZONTAL box THIN_UP_BOX
+@@ -941,7 +950,7 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
+ 	*exitprogram=1;
+ };
+ \#endif}
+-      xywh {298 377 600 335} type Double visible
++      xywh {655 338 600 335} type Double visible
+     } {
+       Fl_Menu_Bar simplemastermenu {
+         xywh {0 0 690 25}
+@@ -1709,6 +1718,6 @@ bankui->hide();} {}
+   }
+   decl {NioUI nioui;} {private local
+   }
+-  decl {class Fl_Osc_Interface *osc;} {selected public local
++  decl {class Fl_Osc_Interface *osc;} {public local
+   }
+ } 
+-- 
+2.47.0
+

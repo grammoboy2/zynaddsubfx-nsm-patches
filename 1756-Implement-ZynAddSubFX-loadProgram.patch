@@ -1,0 +1,79 @@
+From c19535569474756e2bd3e227fdc59d77acd4efaf Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 5 Feb 2021 06:31:28 +0100
+Subject: [PATCH 1756/1936] Implement ZynAddSubFX::loadProgram
+
+---
+ src/Misc/MiddleWare.cpp                   | 5 +++++
+ src/Misc/MiddleWare.h                     | 2 ++
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp | 1 +
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp    | 5 +++--
+ 4 files changed, 11 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 11c5af7a..2f6a2662 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -2545,6 +2545,11 @@ void MiddleWare::pendingSetProgram(int part, int program)
+     impl->bToU->write("/setprogram", "cc", part, program);
+ }
+ 
++std::string zyn::MiddleWare::getProgramName(int program) const
++{
++    return impl->master->bank.ins[program].name;
++}
++
+ std::string MiddleWare::activeUrl(void) const
+ {
+     return impl->last_url;
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index a36ab2c0..cbfd42de 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -76,6 +76,8 @@ class MiddleWare
+         //NOTE: Can only be called by realtime thread
+         void pendingSetProgram(int part, int program);
+ 
++        std::string getProgramName(int program) const;
++
+         //Get/Set the active bToU url
+         std::string activeUrl(void) const;
+         void activeUrl(std::string u);
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+index 891da19a..a5fcb6af 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+@@ -72,6 +72,7 @@ protected:
+     */
+     void programLoaded(uint32_t index) override
+     {
++        (void)index; // ZynAddSubFX::loadProgram already informs the UI
+     }
+ 
+    /**
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index 8615a38d..cf892cec 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -274,7 +274,7 @@ protected:
+     */
+     void initProgramName(uint32_t index, String& programName) override
+     {
+-        programName = "Default";
++        programName = middleware->getProgramName(index).c_str();
+     }
+ 
+    /**
+@@ -283,7 +283,8 @@ protected:
+     */
+     void loadProgram(uint32_t index) override
+     {
+-        setState(nullptr, defaultState);
++        //in plugin mode, only the first part is useful
++        middleware->pendingSetProgram(0, index);
+     }
+ 
+    /* --------------------------------------------------------------------------------------------------------
+-- 
+2.47.0
+

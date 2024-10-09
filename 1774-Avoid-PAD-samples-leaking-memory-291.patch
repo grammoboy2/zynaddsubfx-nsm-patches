@@ -1,0 +1,54 @@
+From a6d36b9f2d027efbc5544e7c9343b59232dc1d6c Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Sat, 25 Sep 2021 06:40:46 +0200
+Subject: [PATCH 1774/1936] Avoid PAD samples leaking memory (#291)
+
+Return samples to non-realtime thread for deallocation when new
+samples are installed to avoid old unused samples leaking memory.
+
+Fix suggested by Mark McCurry.
+---
+ src/Misc/MiddleWare.cpp          | 2 ++
+ src/Params/PADnoteParameters.cpp | 6 ++++--
+ 2 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 63b1bff2..7d9511f9 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -197,6 +197,8 @@ void deallocate(const char *str, void *v)
+         delete (SclInfo*)v;
+     else if(!strcmp(str, "Microtonal"))
+         delete (Microtonal*)v;
++    else if(!strcmp(str, "PADsample"))
++        delete[] (float*)v;
+     else
+         fprintf(stderr, "Unknown type '%s', leaking pointer %p!!\n", str, v);
+ }
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index de04fc75..3ff90e80 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -88,15 +88,17 @@ static const rtosc::Ports realtime_ports =
+         [](const char *m, rtosc::RtData &d)
+         {
+             // MiddleWare calls this to send the generated sample buffers to us
++            assert(rtosc_argument(m,2).b.len == sizeof(void*));
+             PADnoteParameters *p = (PADnoteParameters*)d.obj;
+             const char *mm = m;
+             while(!isdigit(*mm))++mm;
+             int n = atoi(mm);
++            float *oldsmp = p->sample[n].smp;
+             p->sample[n].size     = rtosc_argument(m,0).i;
+             p->sample[n].basefreq = rtosc_argument(m,1).f;
+             p->sample[n].smp      = *(float**)rtosc_argument(m,2).b.data;
+-
+-            //XXX TODO memory management (deallocation of smp buffer)
++            if (oldsmp)
++                d.reply("/free", "sb", "PADsample", sizeof(void*), &oldsmp);
+         }},
+     //weird stuff for PCoarseDetune
+     {"detunevalue:", rMap(unit,cents) rDoc("Get detune value"), NULL,
+-- 
+2.47.0
+

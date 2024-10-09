@@ -1,0 +1,27 @@
+From 31a5c1fd5a949e3d4c1905a39328b29eb1845a1d Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Fri, 29 Jan 2016 19:53:28 +0100
+Subject: [PATCH 0837/1936] Proper buffer clear when busy with state load
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index b61d0811..501fbb22 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -333,8 +333,8 @@ protected:
+         {
+             //if (! isOffline())
+             {
+-                std::memset(outputs[0], 0, frames);
+-                std::memset(outputs[1], 0, frames);
++                std::memset(outputs[0], 0, sizeof(float)*frames);
++                std::memset(outputs[1], 0, sizeof(float)*frames);
+                 return;
+             }
+ 
+-- 
+2.47.0
+

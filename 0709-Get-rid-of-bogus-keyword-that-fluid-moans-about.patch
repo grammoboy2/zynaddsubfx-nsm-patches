@@ -1,0 +1,25 @@
+From f4301e4032aee17c4328bfb20a2a25015bd9ee77 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 8 Nov 2015 02:04:50 -0500
+Subject: [PATCH 0709/1936] Get rid of bogus keyword that fluid moans about.
+
+---
+ src/UI/OscilGenUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index f78898a5..9fca9b13 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -1007,7 +1007,7 @@ oscils->update();
+ oscilo_base->update();
+ oscils_base->update();} {}
+   }
+-  Function {setbfmodstatus(int menuentry)} {open public
++  Function {setbfmodstatus(int menuentry)} {open
+   } {
+     code {
+     switch (menuentry){
+-- 
+2.47.0
+

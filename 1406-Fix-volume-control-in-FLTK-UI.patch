@@ -1,0 +1,45 @@
+From 55f771b6238ab8f8f5b9c28f0f3d705972d9a2e1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 4 Aug 2019 09:33:36 -0400
+Subject: [PATCH 1406/1936] Fix volume control in FLTK UI
+
+The legacy volume port did not call a needed callback when updating
+the volume parameter. The callback has been added and the fix has been
+confirmed.
+---
+ src/Misc/Part.cpp | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index d3a6e17a..107cbd53 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -62,11 +62,13 @@ static const Ports partPorts = {
+     {"Pvolume::i", rShort("Vol") rProp(parameter) rLinear(0,127)
+         rDefault(96) rDoc("Part Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
++            Part *obj = (Part*)d.obj;
+         if(rtosc_narguments(m)==0) {
+-            d.reply(d.loc, "i", (int) roundf(96.0f * ((Part*)d.obj)->Volume / 40.0f + 96.0f));
++            d.reply(d.loc, "i", (int) roundf(96.0f * obj->Volume / 40.0f + 96.0f));
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
+-            ((Part *)d.obj)->Volume  = ((Part *)d.obj)->volume127ToFloat(limit<unsigned char>(rtosc_argument(m, 0).i, 0, 127));
+-             d.broadcast(d.loc, "i", limit<char>(rtosc_argument(m, 0).i, 0, 127));
++            obj->Volume  = obj->volume127ToFloat(limit<unsigned char>(rtosc_argument(m, 0).i, 0, 127));
++            obj->setVolume(obj->Volume);
++            d.broadcast(d.loc, "i", limit<char>(rtosc_argument(m, 0).i, 0, 127));
+         }}},
+ #define rChangeCb obj->setPpanning(obj->Ppanning);
+     rParamZyn(Ppanning, rShort("pan"), rDefault(64), "Set Panning"),
+@@ -876,7 +878,7 @@ float Part::volume127ToFloat(unsigned char volume_)
+ void Part::setVolume(float Volume_)
+ {
+     Volume = Volume_;
+-    volume  =
++    volume =
+         dB2rap(Volume) * ctl.expression.relvolume;
+ }
+ 
+-- 
+2.47.0
+

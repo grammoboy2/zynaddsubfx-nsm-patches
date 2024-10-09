@@ -1,0 +1,165 @@
+From 20ed6166c0ebeb61323ffad0b0b2fc06cf2320f5 Mon Sep 17 00:00:00 2001
+From: friedolino78 <34608315+friedolino78@users.noreply.github.com>
+Date: Tue, 23 Aug 2022 03:10:21 +0200
+Subject: [PATCH 1860/1936] Pfilter fc ctl bypass (#205)
+
+Add Fc Filter Bypass
+
+* cherry-pick fcctl
+
+* fix test for fcctl_bypass
+
+* fix bad naming
+
+* declare voicerelfreq const
+
+Co-authored-by: Friedolino <mkirchn@freenet.de>
+---
+ src/Params/ADnoteParameters.cpp | 7 ++++++-
+ src/Params/ADnoteParameters.h   | 1 +
+ src/Synth/ADnote.cpp            | 6 +++++-
+ src/Synth/ADnote.h              | 2 ++
+ src/Tests/guitar-adnote.xmz     | 4 ++++
+ 5 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 68f50539..522ae8fe 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -101,7 +101,8 @@ static const Ports voicePorts = {
+         "FM Oscillator Phase"),
+     rToggle(Pfilterbypass,   rShort("bypass"), rDefault(false),
+         "Filter Bypass"),
+-
++    rToggle(PfilterFcCtlBypass,   rShort("CtlBypass"), rDefault(false),
++        "Filter Fc Controll Bypass"),
+     //Freq Stuff
+     rToggle(Pfixedfreq,      rShort("fixed"),  rDefault(false),
+         "If frequency is fixed"),
+@@ -564,6 +565,7 @@ void ADnoteVoiceParam::defaults()
+     POffsetHz     = 64;
+     Presonance    = 1;
+     Pfilterbypass = 0;
++    PfilterFcCtlBypass = 0;
+     Pextoscil     = -1;
+     PextFMoscil   = -1;
+     Poscilphase   = 64;
+@@ -771,6 +773,7 @@ void ADnoteVoiceParam::add2XML(XMLwrapper& xml, bool fmoscilused)
+ 
+     xml.addparbool("filter_enabled", PFilterEnabled);
+     xml.addparbool("filter_bypass", Pfilterbypass);
++    xml.addparbool("filter_fcctl_bypass", PfilterFcCtlBypass);
+ 
+     xml.addpar("fm_enabled", (int)PFMEnabled);
+ 
+@@ -1123,6 +1126,7 @@ void ADnoteVoiceParam::paste(ADnoteVoiceParam &a)
+     copy(PFMoscilphase);
+     copy(PFilterEnabled);
+     copy(Pfilterbypass);
++    copy(PfilterFcCtlBypass);
+     copy(PFMEnabled);
+     copy(PFMFixedFreq);
+ 
+@@ -1260,6 +1264,7 @@ void ADnoteVoiceParam::getfromXML(XMLwrapper& xml, unsigned nvoice)
+     PFMoscilphase  = xml.getpar127("oscil_fm_phase", PFMoscilphase);
+     PFilterEnabled = xml.getparbool("filter_enabled", PFilterEnabled);
+     Pfilterbypass  = xml.getparbool("filter_bypass", Pfilterbypass);
++    PfilterFcCtlBypass  = xml.getparbool("filter_fcctl_bypass", PfilterFcCtlBypass);
+     PFMEnabled     = (FMTYPE)xml.getpar127("fm_enabled", (int)PFMEnabled);
+ 
+     if(xml.enterbranch("OSCIL")) {
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index 5274299a..7a488ea0 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -162,6 +162,7 @@ struct ADnoteVoiceParam {
+ 
+     // filter bypass
+     unsigned char Pfilterbypass;
++    unsigned char PfilterFcCtlBypass;
+ 
+     /** Voice oscillator */
+     OscilGen *OscilGn;
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 5a0d58a4..f5626117 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -220,6 +220,7 @@ void ADnote::setupVoice(int nvoice)
+     voice.FilterLfo      = NULL;
+ 
+     voice.filterbypass = param.Pfilterbypass;
++    voice.filterFcCtlBypass = param.PfilterFcCtlBypass;
+ 
+     setupVoiceMod(nvoice);
+ 
+@@ -593,6 +594,8 @@ void ADnote::legatonote(const LegatoParams &lpars)
+ 
+         voice.filterbypass =
+             pars.VoicePar[nvoice].Pfilterbypass;
++        voice.filterFcCtlBypass =
++            pars.VoicePar[nvoice].PfilterFcCtlBypass;
+ 
+ 
+         voice.FMVoice = pars.VoicePar[nvoice].PFMVoice;
+@@ -1125,7 +1128,8 @@ void ADnote::computecurrentparameters()
+         /****************/
+         auto *voiceFilter = NoteVoicePar[nvoice].Filter;
+         if(voiceFilter) {
+-            voiceFilter->update(relfreq, ctl.filterq.relq);
++            const float voicerelfreq = NoteVoicePar[nvoice].filterFcCtlBypass == 0 ? relfreq : 0.0f;
++            voiceFilter->update(voicerelfreq, ctl.filterq.relq);
+         }
+ 
+         if(NoteVoicePar[nvoice].noisetype == 0) { //compute only if the voice isn't noise
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 6063df11..9e27ab42 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -186,6 +186,8 @@ class ADnote:public SynthNote
+ 
+             /* Filter Bypass */
+             int filterbypass;
++            /* Filter Fq Control Bypass */
++            int filterFcCtlBypass;
+ 
+             /* Delay (ticks) */
+             int DelayTicks;
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 42161578..1d20d019 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -213,6 +213,7 @@ version-revision="7" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="oscil_fm_phase" value="93" />
+ <par_bool name="filter_enabled" value="yes" />
+ <par_bool name="filter_bypass" value="no" />
++<par_bool name="filter_fcctl_bypass" value="no" />
+ <par name="fm_enabled" value="1" />
+ <OSCIL>
+ <par name="harmonic_mag_type" value="0" />
+@@ -485,6 +486,7 @@ version-revision="7" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="oscil_fm_phase" value="64" />
+ <par_bool name="filter_enabled" value="no" />
+ <par_bool name="filter_bypass" value="no" />
++<par_bool name="filter_fcctl_bypass" value="no" />
+ <par name="fm_enabled" value="0" />
+ <OSCIL>
+ <par name="harmonic_mag_type" value="0" />
+@@ -576,6 +578,7 @@ version-revision="7" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="oscil_fm_phase" value="64" />
+ <par_bool name="filter_enabled" value="no" />
+ <par_bool name="filter_bypass" value="no" />
++<par_bool name="filter_fcctl_bypass" value="no" />
+ <par name="fm_enabled" value="0" />
+ <OSCIL>
+ <par name="harmonic_mag_type" value="0" />
+@@ -667,6 +670,7 @@ version-revision="7" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="oscil_fm_phase" value="64" />
+ <par_bool name="filter_enabled" value="no" />
+ <par_bool name="filter_bypass" value="no" />
++<par_bool name="filter_fcctl_bypass" value="no" />
+ <par name="fm_enabled" value="0" />
+ <OSCIL>
+ <par name="harmonic_mag_type" value="0" />
+-- 
+2.47.0
+

@@ -1,0 +1,109 @@
+From 359e1174cbe9119b6beda16b8da52cff5cf0e772 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Mon, 26 Mar 2018 19:54:55 +0200
+Subject: [PATCH 1259/1936] Add docs about output engines
+
+---
+ .gitignore          |  2 ++
+ doc/intro.txt       |  4 +++-
+ doc/output.txt      | 49 +++++++++++++++++++++++++++++++++++++++++++++
+ doc/zynaddsubfx.txt |  2 ++
+ 4 files changed, 56 insertions(+), 1 deletion(-)
+ create mode 100644 doc/output.txt
+
+diff --git a/.gitignore b/.gitignore
+index d85a3af1..e2033350 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -13,3 +13,5 @@ src/Tests/runner.cpp
+ CMakeCache.txt
+ CMakeFiles
+ build
++doc/gen/
++doc/zynaddsubfx.html
+diff --git a/doc/intro.txt b/doc/intro.txt
+index dc19a8a9..e960f1e0 100644
+--- a/doc/intro.txt
++++ b/doc/intro.txt
+@@ -14,7 +14,9 @@ zynaddsubfx -I alsa -O jack -a
+ ------------------------------
+ 
+ This sets the input driver to be alsa and the output driver to be jack, which
+-should attempt to autoconnect to your soundcard as per the '-a' flag.
++should attempt to autoconnect to your soundcard as per the '-a' flag. For more
++details, see the <<Output engines>> chapter.
++
+ If this is your first time running ZynAddSubFX, you will see a screen that lets
+ you choose between the advanced and beginner interface.
+ Currently the beginner interface is deprecated, so the advanced one is
+diff --git a/doc/output.txt b/doc/output.txt
+new file mode 100644
+index 00000000..b92c2acb
+--- /dev/null
++++ b/doc/output.txt
+@@ -0,0 +1,49 @@
++Output engines
++--------------
++
++There are different output engines for zynaddsubfx.
++
++ALSA
++~~~~
++Simply start zyn using `zynaddsubfx -O alsa`.
++
++NOTE: If your system is using PulseAudio, this may not work. Even if it does,
++and ALSA redirects to PulseAudio, realtime guarantees can not be made. It is
++recommended to follow the steps in the <<PulseAudio>> section.
++
++Jack
++~~~~
++NOTE: If your system is using PulseAudio, this is the suggested way, but may
++not work out of the box, or it may not do what you want. Please seee the
++<<PulseAudio>> section.
++
++There are different ways to forward zyn to jack:
++
++* Automatic connecting with `zynaddsfubx -O jack -a` will usually do what you
++  want
++* Manual selective connecting can be done by using `zynaddsfubx -O jack` and
++  then using one of
++  - the `qjackctl` gui
++  - the `jack_connect` commandline utility
++* Automatic selective connecting can be done using
++  http://www.rncbc.org/drupal/node/76[jack's patchbays]
++
++PulseAudio
++~~~~~~~~~~
++PulseAudio is *not* **directly** implemented in zyn. While PulseAudio can be
++really practical in many cases, it has no realtime guarantees. Running zyn
++right through pulse is thus not intended. In case you want to keep
++PulseAudio and still use zyn, the suggested way is to route PulseAudio through
++jack. You need to
++
++* Install jack2
++* Route pulse through jack2 using cadence
++  
++These steps should be described for your distribution. Check out one of the
++following links.
++
++* https://wiki.archlinux.org/index.php/PulseAudio/Examples#The_KXStudio_method[Arch Linux]
++* please add more here ...
++ 
++After that, follow the usual steps described under <<Jack>>.
++
+diff --git a/doc/zynaddsubfx.txt b/doc/zynaddsubfx.txt
+index 26cd2dd2..cb4f9e7a 100644
+--- a/doc/zynaddsubfx.txt
++++ b/doc/zynaddsubfx.txt
+@@ -6,6 +6,8 @@ This documentation is a work in progress
+ 
+ include::intro.txt[]
+ 
++include::output.txt[]
++
+ include::filter.txt[]
+ 
+ include::lfo.txt[]
+-- 
+2.47.0
+

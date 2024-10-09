@@ -1,0 +1,24 @@
+From 7b42f8788b52767f582adfcd1aa7a309f2e11312 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 14 Oct 2017 21:42:59 -0400
+Subject: [PATCH 1212/1936] Fix std::mutex+mingw Build Error
+
+---
+ src/Misc/MiddleWare.cpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index e5198661..343eb850 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -60,7 +60,6 @@
+ namespace zyn {
+ 
+ using std::string;
+-using std::mutex;
+ int Pexitprogram = 0;
+ 
+ /******************************************************************************
+-- 
+2.47.0
+

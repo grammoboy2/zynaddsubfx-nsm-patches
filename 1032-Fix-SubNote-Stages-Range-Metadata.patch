@@ -1,0 +1,25 @@
+From b4e38da7d4d7c95b97316d622cfdcf9b7ccd13a8 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 22 Sep 2016 09:40:59 -0400
+Subject: [PATCH 1032/1936] Fix SubNote Stages Range Metadata
+
+---
+ src/Params/SUBnoteParameters.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index b9da5fbb..17f25349 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -70,7 +70,7 @@ static const rtosc::Ports SUBnotePorts = {
+             "Overtone Parameter"),
+ #undef rChangeCb
+ #define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+-    rParamZyn(Pnumstages, rShort("stages"), rMap(min, 1), rMap(max, 5), "Number of filter stages"),
++    rParamI(Pnumstages, rShort("stages"), rMap(min, 1), rMap(max, 5), "Number of filter stages"),
+     rParamZyn(Pbandwidth, rShort("bandwidth"), "Bandwidth of filters"),
+     rParamZyn(Phmagtype,  rShort("mag. type"), rOptions(linear, -40dB, -60dB, -80dB, -100dB), "Magnitude scale"),
+     rArray(Phmag, MAX_SUB_HARMONICS, "Harmonic magnitudes"),
+-- 
+2.47.0
+

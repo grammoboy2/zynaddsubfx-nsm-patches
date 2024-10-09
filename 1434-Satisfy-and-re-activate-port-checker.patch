@@ -1,0 +1,287 @@
+From c40d5014c75be85e562392ee0565e723c490a3cd Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Thu, 30 May 2019 19:37:28 +0200
+Subject: [PATCH 1434/1936] Satisfy and re-activate port-checker
+
+This requires adding a few missing broadcasts.
+---
+ rtosc                           |  2 +-
+ src/Misc/Master.cpp             | 15 ++++++++---
+ src/Misc/Part.cpp               | 13 ++++++---
+ src/Params/ADnoteParameters.cpp | 48 ++++++++++++++++++++++++---------
+ src/Synth/OscilGen.cpp          |  2 ++
+ src/Synth/PADnote.cpp           |  2 +-
+ src/Tests/CMakeLists.txt        |  3 +--
+ 7 files changed, 62 insertions(+), 23 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index eed63261..d54496f1 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit eed63261d3bbf2ff16e3336842eee01da4d41c3c
++Subproject commit d54496f13c08ee511995516bdd10ce85da453f1a
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 26c25059..b9525c98 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -76,8 +76,8 @@ static const Ports sysefxPort =
+             Master &mast = *(Master*)d.obj;
+ 
+             if(rtosc_narguments(m)) {
+-             mast.setPsysefxvol(ind2, ind1, rtosc_argument(m,0).i);
+-             d.broadcast(d.loc, "i", mast.Psysefxvol[ind1][ind2]);
++                mast.setPsysefxvol(ind2, ind1, rtosc_argument(m,0).i);
++                d.broadcast(d.loc, "i", mast.Psysefxvol[ind1][ind2]);
+             } else
+                 d.reply(d.loc, "i", mast.Psysefxvol[ind1][ind2]);
+         }}
+@@ -108,7 +108,10 @@ static const Ports sysefsendto =
+             Master &master = *(Master*)d.obj;
+ 
+             if(rtosc_narguments(m))
++            {
+                 master.setPsysefxsend(ind1, ind2, rtosc_argument(m,0).i);
++                d.broadcast(d.loc, "i", master.Psysefxsend[ind1][ind2]);
++            }
+             else
+                 d.reply(d.loc, "i", master.Psysefxsend[ind1][ind2]);
+         }}
+@@ -169,8 +172,10 @@ static const Ports auto_param_ports = {
+         rBegin;
+         int slot  = d.idx[1];
+         int param = d.idx[0];
+-        if(rtosc_narguments(msg))
++        if(rtosc_narguments(msg)) {
+             a.slots[slot].automations[param].active = rtosc_argument(msg, 0).T;
++            d.broadcast(d.loc, a.slots[slot].automations[param].active ? "T" : "F");
++        }
+         else
+             d.reply(d.loc, a.slots[slot].automations[param].active ? "T" : "F");
+         rEnd},
+@@ -270,8 +275,10 @@ static const Ports slot_ports = {
+     {"active::T:F",  rProp(parameter) rMap(default, F) rDoc("If Slot is enabled"), 0,
+         rBegin;
+         int slot = d.idx[0];
+-        if(rtosc_narguments(msg))
++        if(rtosc_narguments(msg)) {
+             a.slots[slot].active = rtosc_argument(msg, 0).T;
++            d.broadcast(d.loc, a.slots[slot].active ? "T" : "F");
++        }
+         else
+             d.reply(d.loc, a.slots[slot].active ? "T" : "F");
+         rEnd},
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 107cbd53..14302462 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -125,11 +125,15 @@ static const Ports partPorts = {
+         [](const char *msg, RtData &d)
+         {
+             Part *p = (Part*)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_polytype = [&p](){
+                 int res = 0;
+                 if(!p->Ppolymode)
+                     res = p->Plegatomode ? 2 : 1;
+-                d.reply(d.loc, "i", res);
++                return res;
++            };
++
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_polytype());
+                 return;
+             }
+ 
+@@ -143,7 +147,10 @@ static const Ports partPorts = {
+             } else {
+                 p->Ppolymode = 0;
+                 p->Plegatomode = 1;
+-            }}},
++            }
++            d.broadcast(d.loc, "i", get_polytype());
++        }
++    },
+     {"clear:", rProp(internal) rDoc("Reset Part To Defaults"), 0,
+         [](const char *, RtData &d)
+         {
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index c3b549ab..b0017104 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -218,14 +218,18 @@ static const Ports voicePorts = {
+         [](const char *msg, RtData &d)
+         {
+             rObject *obj = (rObject *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_octave = [&obj](){
+                 int k=obj->PCoarseDetune/1024;
+                 if (k>=8) k-=16;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_octave());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=16;
+                 obj->PCoarseDetune = k*1024 + obj->PCoarseDetune%1024;
++                d.broadcast(d.loc, "i", get_octave());
+             }
+         }},
+     {"coarsedetune::c:i", rProp(parameter) rShort("coarse") rLinear(-64,63) rDefault(0)
+@@ -233,14 +237,18 @@ static const Ports voicePorts = {
+         [](const char *msg, RtData &d)
+         {
+             rObject *obj = (rObject *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_coarse = [&obj](){
+                 int k=obj->PCoarseDetune%1024;
+                 if (k>=512) k-=1024;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_coarse());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=1024;
+                 obj->PCoarseDetune = k + (obj->PCoarseDetune/1024)*1024;
++                d.broadcast(d.loc, "i", get_coarse());
+             }
+         }},
+     {"PFMVolume::i", rShort("vol.") rLinear(0,127)
+@@ -269,14 +277,18 @@ static const Ports voicePorts = {
+         [](const char *msg, RtData &d)
+         {
+             rObject *obj = (rObject *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_octave = [&obj](){
+                 int k=obj->PFMCoarseDetune/1024;
+                 if (k>=8) k-=16;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_octave());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=16;
+                 obj->PFMCoarseDetune = k*1024 + obj->PFMCoarseDetune%1024;
++                d.broadcast(d.loc, "i", get_octave());
+             }
+         }},
+     {"FMcoarsedetune::c:i", rProp(parameter) rShort("coarse") rLinear(-64,63)
+@@ -284,14 +296,18 @@ static const Ports voicePorts = {
+         NULL, [](const char *msg, RtData &d)
+         {
+             rObject *obj = (rObject *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_coarse = [&obj](){
+                 int k=obj->PFMCoarseDetune%1024;
+                 if (k>=512) k-=1024;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_coarse());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=1024;
+                 obj->PFMCoarseDetune = k + (obj->PFMCoarseDetune/1024)*1024;
++                d.broadcast(d.loc, "i", get_coarse());
+             }
+         }},
+ 
+@@ -384,14 +400,18 @@ static const Ports globalPorts = {
+         [](const char *msg, RtData &d)
+         {
+             rObject *obj = (rObject *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_octave = [&obj](){
+                 int k=obj->PCoarseDetune/1024;
+                 if (k>=8) k-=16;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_octave());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=16;
+                 obj->PCoarseDetune = k*1024 + obj->PCoarseDetune%1024;
++                d.broadcast(d.loc, "i", get_octave());
+             }
+         }},
+     {"coarsedetune::c:i", rProp(parameter) rShort("coarse") rLinear(-64, 63)
+@@ -399,14 +419,18 @@ static const Ports globalPorts = {
+         [](const char *msg, RtData &d)
+         {
+             rObject *obj = (rObject *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_coarse = [&obj](){
+                 int k=obj->PCoarseDetune%1024;
+                 if (k>=512) k-=1024;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_coarse());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=1024;
+                 obj->PCoarseDetune = k + (obj->PCoarseDetune/1024)*1024;
++                d.broadcast(d.loc, "i", get_coarse());
+             }
+         }},
+ 
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 5b8aacd8..985056b6 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -119,6 +119,7 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+                 // fprintf(stderr, "sending '%p' of fft data\n", data);
+                 d.chain(repath, "b", sizeof(fft_t*), &data);
+                 o.pendingfreqs = data;
++                d.broadcast(d.loc, "i", phase);
+             }
+         }},
+     //TODO update to rArray and test
+@@ -145,6 +146,7 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+                 // fprintf(stderr, "sending '%p' of fft data\n", data);
+                 d.chain(repath, "b", sizeof(fft_t*), &data);
+                 o.pendingfreqs = data;
++                d.broadcast(d.loc, "i", mag);
+             }
+         }},
+     {"base-spectrum:", rProp(non-realtime) rDoc("Returns spectrum of base waveshape"),
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 928fb5f0..08af217b 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -281,7 +281,7 @@ int PADnote::Compute_Linear(float *outl,
+                             int freqhi,
+                             float freqlo)
+ {
+-    float *smps = pars.sample[nsample].smp;
++    const float *smps = pars.sample[nsample].smp;
+     if(smps == NULL) {
+         finished_ = true;
+         return 1;
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 0f4881a8..98dd4e47 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -74,8 +74,7 @@ target_link_libraries(ins-test ${test_lib} rt)
+ 
+ if(LIBLO_FOUND)
+     cp_script(check-ports.rb)
+-#   Currently fails due to zynaddsubfx issues?
+-#   add_test(PortChecker check-ports.rb)
++    add_test(PortChecker check-ports.rb)
+ endif()
+ 
+ add_executable(save-osc SaveOSC.cpp)
+-- 
+2.47.0
+

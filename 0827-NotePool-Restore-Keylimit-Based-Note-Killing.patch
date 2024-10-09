@@ -1,0 +1,202 @@
+From 135f54fc219c9953795be3a638716cc4abdad10b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 19 Jan 2016 20:55:32 -0500
+Subject: [PATCH 0827/1936] NotePool: Restore Keylimit Based Note Killing
+
+---
+ src/Containers/NotePool.cpp | 54 +++++++++++++++++--------
+ src/Containers/NotePool.h   |  6 ++-
+ src/Tests/KitTest.h         | 80 +++++++++++++++++++++++++++++++++++++
+ 3 files changed, 123 insertions(+), 17 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index e1535fb6..891de4be 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -65,6 +65,28 @@ NotePool::constActiveDescIter NotePool::activeDesc(void) const
+     return constActiveDescIter{*this};
+ }
+ 
++int NotePool::usedNoteDesc(void) const
++{
++    if(needs_cleaning)
++        const_cast<NotePool*>(this)->cleanup();
++
++    int cnt = 0;
++    for(int i=0; i<POLYPHONY; ++i)
++        cnt += (ndesc[i].size != 0);
++    return cnt;
++}
++
++int NotePool::usedSynthDesc(void) const
++{
++    if(needs_cleaning)
++        const_cast<NotePool*>(this)->cleanup();
++
++    int cnt = 0;
++    for(int i=0; i<POLYPHONY*EXPECTED_USAGE; ++i)
++        cnt += (bool)sdesc[i].note;
++    return cnt;
++}
++
+ void NotePool::insertNote(uint8_t note, uint8_t sendto, SynthDescriptor desc, bool legato)
+ {
+     //Get first free note descriptor
+@@ -160,23 +182,23 @@ int NotePool::getRunningNotes(void) const
+ 
+     return running_count;
+ }
+-int NotePool::enforceKeyLimit(int limit) const
++void NotePool::enforceKeyLimit(int limit)
+ {
+-        //{
+-        //int oldestnotepos = -1;
+-        //if(notecount > keylimit)   //find out the oldest note
+-        //    for(int i = 0; i < POLYPHONY; ++i) {
+-        //        int maxtime = 0;
+-        //        if(((partnote[i].status == KEY_PLAYING) || (partnote[i].status == KEY_RELEASED_AND_SUSTAINED)) && (partnote[i].time > maxtime)) {
+-        //            maxtime = partnote[i].time;
+-        //            oldestnotepos = i;
+-        //        }
+-        //    }
+-        //if(oldestnotepos != -1)
+-        //    ReleaseNotePos(oldestnotepos);
+-        //}
+-    //printf("Unimplemented enforceKeyLimit()\n");
+-    return -1;
++    int notes_to_kill = getRunningNotes() - limit;
++    if(notes_to_kill < 0)
++        return;
++
++    NoteDescriptor *to_kill = NULL;
++    unsigned oldest = 0;
++    for(auto &nd : activeDesc()) {
++        if(nd.age > oldest || to_kill == NULL) {
++            oldest  = nd.age;
++            to_kill = &nd;
++        }
++    }
++
++    if(to_kill)
++        kill(*to_kill);
+ }
+ 
+ void NotePool::releasePlayingNotes(void)
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 866479fa..5fe3abf7 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -84,6 +84,10 @@ class NotePool
+         activeDescIter activeDesc(void);
+         constActiveDescIter activeDesc(void) const;
+ 
++        //Counts of descriptors used for tests
++        int usedNoteDesc(void) const;
++        int usedSynthDesc(void) const;
++
+         NotePool(void);
+ 
+         //Operations
+@@ -99,7 +103,7 @@ class NotePool
+         //Note that isn't KEY_PLAYING or KEY_RELASED_AND_SUSTAINING
+         bool existsRunningNote(void) const;
+         int getRunningNotes(void) const;
+-        int enforceKeyLimit(int limit) const;
++        void enforceKeyLimit(int limit);
+ 
+         void releasePlayingNotes(void);
+         void releaseNote(note_t note);
+diff --git a/src/Tests/KitTest.h b/src/Tests/KitTest.h
+index 93f55727..d3bf70eb 100644
+--- a/src/Tests/KitTest.h
++++ b/src/Tests/KitTest.h
+@@ -527,6 +527,86 @@ class KitTest:public CxxTest::TestSuite
+             TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  0)
+         }
+ 
++        void testKeyLimit(void)
++        {
++            auto &pool = part->notePool;
++            //Verify that without a key limit, several notes can be run
++            part->NoteOn(64, 127, 0);
++            part->NoteOn(65, 127, 0);
++            part->NoteOn(66, 127, 0);
++            part->NoteOn(67, 127, 0);
++            part->NoteOn(68, 127, 0);
++
++            //Verify that notes are spawned as expected
++            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  5);
++            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 5);
++
++            //Reset the part
++            part->monomemClear();
++            pool.killAllNotes();
++
++            //Verify that notes are despawned
++            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  0);
++            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 0);
++
++            //Enable keylimit
++            part->setkeylimit(3);
++
++            //Replay notes
++            part->NoteOn(64, 127, 0);
++            part->NoteOn(65, 127, 0);
++            part->NoteOn(66, 127, 0);
++            part->NoteOn(67, 127, 0);
++            part->NoteOn(68, 127, 0);
++
++            //Verify that notes are spawned as expected with limit
++            TS_ASSERT_EQUALS(pool.getRunningNotes(),  3);
++            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  3);
++            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 3);
++
++            //Reset the part
++            part->monomemClear();
++            pool.killAllNotes();
++
++            //Verify that notes are despawned
++            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  0);
++            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 0);
++
++            //Now to test note stealing
++
++            //Replay notes
++            part->NoteOn(64, 127, 0);
++            part->NoteOn(65, 127, 0);
++            part->NoteOn(66, 127, 0);
++
++            //Verify that note pool is full
++            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  3);
++            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 3);
++
++            //Age the notes
++            pool.ndesc[1].age = 50;
++            pool.ndesc[2].age = 500;
++
++            //Inject two more notes which should steal the note
++            //descriptors for #66 and #65
++            part->NoteOn(67, 127, 0);
++            pool.cleanup();
++            TS_ASSERT_EQUALS(pool.ndesc[0].note, 64);
++            TS_ASSERT_EQUALS(pool.ndesc[1].note, 65);
++            TS_ASSERT_EQUALS(pool.ndesc[2].note, 67);
++
++            part->NoteOn(68, 127, 0);
++
++            //Verify that note pool is still full
++            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  3);
++            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 3);
++
++            //Check that the result is {64, 68, 67}
++            TS_ASSERT_EQUALS(pool.ndesc[0].note, 64);
++            TS_ASSERT_EQUALS(pool.ndesc[1].note, 67);
++            TS_ASSERT_EQUALS(pool.ndesc[2].note, 68);
++        }
++
+         void tearDown() {
+             delete part;
+             delete[] outL;
+-- 
+2.47.0
+

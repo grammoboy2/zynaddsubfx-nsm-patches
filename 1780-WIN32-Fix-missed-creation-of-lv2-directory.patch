@@ -1,0 +1,179 @@
+From adb2d8552320910f84df7fa7c0be5f48e7453d7e Mon Sep 17 00:00:00 2001
+From: Carlo Bramini <30959007+carlo-bramini@users.noreply.github.com>
+Date: Mon, 25 Oct 2021 11:51:39 +0200
+Subject: [PATCH 1780/1936] [WIN32] Fix missed creation of lv2 directory.
+
+This patch fixes issue 200:
+https://sourceforge.net/p/zynaddsubfx/bugs/200/
+
+The explanation of the defect is described into this page:
+https://cmake.org/cmake/help/v3.9/manual/cmake-buildsystem.7.html
+
+In short:
+- All versions of Windows are "DLL platforms", and DLL are targets for "bin" directory.
+- On all other "non-DLL platforms", the shared libraries are targets for "lib" directory.
+
+This means that:
+- On DLL platforms: RUNTIME_OUTPUT_DIRECTORY and RUNTIME_OUTPUT_NAME target properties are used.
+- On non-DLL platforms: LIBRARY_OUTPUT_DIRECTORY and LIBRARY_OUTPUT_NAME target properties are used.
+
+So, RUNTIME_OUTPUT_DIRECTORY must be set in addition to LIBRARY_OUTPUT_DIRECTORY for supporting "DLL platforms".
+---
+ src/Plugin/AlienWah/CMakeLists.txt      | 2 ++
+ src/Plugin/Chorus/CMakeLists.txt        | 2 ++
+ src/Plugin/Distortion/CMakeLists.txt    | 2 ++
+ src/Plugin/DynamicFilter/CMakeLists.txt | 2 ++
+ src/Plugin/Echo/CMakeLists.txt          | 2 ++
+ src/Plugin/Phaser/CMakeLists.txt        | 2 ++
+ src/Plugin/Reverb/CMakeLists.txt        | 2 ++
+ src/Plugin/ZynAddSubFX/CMakeLists.txt   | 2 ++
+ 8 files changed, 16 insertions(+)
+
+diff --git a/src/Plugin/AlienWah/CMakeLists.txt b/src/Plugin/AlienWah/CMakeLists.txt
+index 85b5768f..50bef9dc 100644
+--- a/src/Plugin/AlienWah/CMakeLists.txt
++++ b/src/Plugin/AlienWah/CMakeLists.txt
+@@ -6,11 +6,13 @@ add_library(ZynAlienWah_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPlugin
+ 
+ set_target_properties(ZynAlienWah_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynAlienWah_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynAlienWah_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynAlienWah_lv2 PROPERTIES OUTPUT_NAME "ZynAlienWah")
+ set_target_properties(ZynAlienWah_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynAlienWah_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynAlienWah_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynAlienWah_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynAlienWah_vst PROPERTIES OUTPUT_NAME "ZynAlienWah")
+ set_target_properties(ZynAlienWah_vst PROPERTIES PREFIX "")
+ 
+diff --git a/src/Plugin/Chorus/CMakeLists.txt b/src/Plugin/Chorus/CMakeLists.txt
+index 07a24e81..959979dc 100644
+--- a/src/Plugin/Chorus/CMakeLists.txt
++++ b/src/Plugin/Chorus/CMakeLists.txt
+@@ -6,11 +6,13 @@ add_library(ZynChorus_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMa
+ 
+ set_target_properties(ZynChorus_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynChorus_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynChorus_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynChorus_lv2 PROPERTIES OUTPUT_NAME "ZynChorus")
+ set_target_properties(ZynChorus_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynChorus_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynChorus_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynChorus_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynChorus_vst PROPERTIES OUTPUT_NAME "ZynChorus")
+ set_target_properties(ZynChorus_vst PROPERTIES PREFIX "")
+ 
+diff --git a/src/Plugin/Distortion/CMakeLists.txt b/src/Plugin/Distortion/CMakeLists.txt
+index 3337829e..ee94b7e4 100644
+--- a/src/Plugin/Distortion/CMakeLists.txt
++++ b/src/Plugin/Distortion/CMakeLists.txt
+@@ -6,11 +6,13 @@ add_library(ZynDistortion_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPlug
+ 
+ set_target_properties(ZynDistortion_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynDistortion_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynDistortion_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynDistortion_lv2 PROPERTIES OUTPUT_NAME "ZynDistortion")
+ set_target_properties(ZynDistortion_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynDistortion_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynDistortion_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynDistortion_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynDistortion_vst PROPERTIES OUTPUT_NAME "ZynDistortion")
+ set_target_properties(ZynDistortion_vst PROPERTIES PREFIX "")
+ 
+diff --git a/src/Plugin/DynamicFilter/CMakeLists.txt b/src/Plugin/DynamicFilter/CMakeLists.txt
+index cc080207..97b45b1e 100644
+--- a/src/Plugin/DynamicFilter/CMakeLists.txt
++++ b/src/Plugin/DynamicFilter/CMakeLists.txt
+@@ -6,11 +6,13 @@ add_library(ZynDynamicFilter_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoP
+ 
+ set_target_properties(ZynDynamicFilter_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynDynamicFilter_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynDynamicFilter_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynDynamicFilter_lv2 PROPERTIES OUTPUT_NAME "ZynDynamicFilter")
+ set_target_properties(ZynDynamicFilter_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynDynamicFilter_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES OUTPUT_NAME "ZynDynamicFilter")
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES PREFIX "")
+ 
+diff --git a/src/Plugin/Echo/CMakeLists.txt b/src/Plugin/Echo/CMakeLists.txt
+index a202da07..0c8cd013 100644
+--- a/src/Plugin/Echo/CMakeLists.txt
++++ b/src/Plugin/Echo/CMakeLists.txt
+@@ -6,11 +6,13 @@ add_library(ZynEcho_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain
+ 
+ set_target_properties(ZynEcho_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynEcho_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynEcho_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynEcho_lv2 PROPERTIES OUTPUT_NAME "ZynEcho")
+ set_target_properties(ZynEcho_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynEcho_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynEcho_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynEcho_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynEcho_vst PROPERTIES OUTPUT_NAME "ZynEcho")
+ set_target_properties(ZynEcho_vst PROPERTIES PREFIX "")
+ 
+diff --git a/src/Plugin/Phaser/CMakeLists.txt b/src/Plugin/Phaser/CMakeLists.txt
+index 6dc59366..8adfa59f 100644
+--- a/src/Plugin/Phaser/CMakeLists.txt
++++ b/src/Plugin/Phaser/CMakeLists.txt
+@@ -6,11 +6,13 @@ add_library(ZynPhaser_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMa
+ 
+ set_target_properties(ZynPhaser_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynPhaser_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynPhaser_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynPhaser_lv2 PROPERTIES OUTPUT_NAME "ZynPhaser")
+ set_target_properties(ZynPhaser_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynPhaser_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynPhaser_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynPhaser_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynPhaser_vst PROPERTIES OUTPUT_NAME "ZynPhaser")
+ set_target_properties(ZynPhaser_vst PROPERTIES PREFIX "")
+ 
+diff --git a/src/Plugin/Reverb/CMakeLists.txt b/src/Plugin/Reverb/CMakeLists.txt
+index d15f2a70..f74dd68a 100644
+--- a/src/Plugin/Reverb/CMakeLists.txt
++++ b/src/Plugin/Reverb/CMakeLists.txt
+@@ -6,11 +6,13 @@ add_library(ZynReverb_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMa
+ 
+ set_target_properties(ZynReverb_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+ set_target_properties(ZynReverb_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++set_target_properties(ZynReverb_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynReverb_lv2 PROPERTIES OUTPUT_NAME "ZynReverb")
+ set_target_properties(ZynReverb_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynReverb_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynReverb_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynReverb_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynReverb_vst PROPERTIES OUTPUT_NAME "ZynReverb")
+ set_target_properties(ZynReverb_vst PROPERTIES PREFIX "")
+ 
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 757a3a5a..9f036f26 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -135,12 +135,14 @@ endif()
+ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+     set_target_properties(ZynAddSubFX_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+     set_target_properties(ZynAddSubFX_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++    set_target_properties(ZynAddSubFX_lv2 PROPERTIES RUNTIME_OUTPUT_DIRECTORY "lv2")
+     set_target_properties(ZynAddSubFX_lv2 PROPERTIES OUTPUT_NAME "ZynAddSubFX")
+     set_target_properties(ZynAddSubFX_lv2 PROPERTIES PREFIX "")
+ endif()
+ 
+ set_target_properties(ZynAddSubFX_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
++set_target_properties(ZynAddSubFX_vst PROPERTIES RUNTIME_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES OUTPUT_NAME "ZynAddSubFX")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES PREFIX "")
+ 
+-- 
+2.47.0
+

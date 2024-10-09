@@ -1,0 +1,84 @@
+From 8849b23f1ccccd7658f97a687b6ebc7efec0e411 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sun, 5 Apr 2020 13:20:25 +0200
+Subject: [PATCH 1520/1936] Fix icon file for NTK GUI. NTK doesn't have the
+ needed XPM to Fl_Pixmap conversion function.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/CMakeLists.txt | 11 ++++-------
+ src/UI/MasterUI.fl | 13 ++++++++++++-
+ 2 files changed, 16 insertions(+), 8 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index f92fbe51..087898e2 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -430,9 +430,6 @@ if(FltkGui)
+ 
+ 
+ 	set(GUI_LIBRARIES zynaddsubfx_gui ${FLTK_LIBRARIES} ${FLTK_LIBRARIES} ${OPENGL_LIBRARIES})
+-    if(X11_FOUND AND X11_Xpm_FOUND)
+-        set(GUI_LIBRARIES ${GUI_LIBRARIES} ${X11_LIBRARIES} -lXpm)
+-    endif()
+ 
+ 	add_definitions(-DFLTK_GUI)
+ 	message(STATUS "Will build FLTK gui")
+@@ -448,15 +445,15 @@ endif()
+ 
+ if(NtkGui)
+ 
+-    find_program( FLTK_FLUID_EXECUTABLE ntk-fluid)
++    find_program(FLTK_FLUID_EXECUTABLE ntk-fluid)
+ 
+ 	message(STATUS ${NTK_LDFLAGS} ${NTK_IMAGES_LDFLAGS})
+ 
+ 	set(GUI_LIBRARIES zynaddsubfx_gui ${NTK_LIBRARIES} ${NTK_IMAGES_LIBRARIES} ${OPENGL_LIBRARIES})
+ 
+-    if(X11_FOUND AND X11_Xpm_FOUND)
+-        set(GUI_LIBRARIES ${GUI_LIBRARIES} ${X11_LIBRARIES} -lXpm)
+-    endif()
++	if(X11_FOUND AND X11_Xpm_FOUND)
++	     set(GUI_LIBRARIES ${GUI_LIBRARIES} ${X11_LIBRARIES} -lXpm)
++	endif()
+ 
+ 	add_definitions(-DNTK_GUI)
+ 
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 8475bdb6..05347282 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -82,6 +82,11 @@ extern NSM_Client *nsm;
+ \#endif} {public local
+ } 
+ 
++decl {\#if !defined(PLUGINVERSION) && defined(NTK_GUI)
++\#include <X11/xpm.h>
++\#endif} {public local
++}
++
+ decl {\#if !defined(PLUGINVERSION) && HAS_X11
+ \#include <FL/Fl_RGB_Image.H>
+ \#endif} {private local
+@@ -1590,11 +1595,17 @@ configui=new ConfigUI(osc);
+ make_window();
+ fl_open_display();
+ 
+-\#if !defined(PLUGINVERSION) && HAS_X11
++\#if !defined(PLUGINVERSION) && defined(FLTK_GUI)
+ Fl_Pixmap *pixmap = new Fl_Pixmap(zynaddsubfx_xpm);
+ Fl_RGB_Image *p = new Fl_RGB_Image(pixmap, FL_GRAY);
+ masterwindow->icon(p);
+ \#endif
++\#if !defined(PLUGINVERSION) && defined(NTK_GUI)
++Pixmap p, mask;
++XCreatePixmapFromData(fl_display, DefaultRootWindow(fl_display),
++                      (char**)zynaddsubfx_xpm, &p, &mask, NULL);
++masterwindow->icon((char *)p);
++\#endif
+ assert(osc);
+ presetsui=new PresetsUI(osc);
+ setfilelabel(NULL);
+-- 
+2.47.0
+

@@ -1,0 +1,58 @@
+From a322d9a53190455b8843f509530948efb3c4f328 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Wed, 5 Jan 2022 00:54:32 +0100
+Subject: [PATCH 1803/1936] Misc/Part: Only create silent output buffer once
+
+When the part is disabled, it is only necessary to create the zeroed
+output buffer once.
+---
+ src/Misc/Part.cpp | 11 +++++++++--
+ src/Misc/Part.h   |  1 +
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 0f52117d..e7410871 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -317,6 +317,7 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+     }
+ 
+     killallnotes = false;
++    silent = false;
+     oldfreq_log2 = -1.0f;
+     oldportamento = NULL;
+     legatoportamento = NULL;
+@@ -1001,10 +1002,16 @@ void Part::ComputePartSmps()
+      * subsequent output buffers will be set to 0 until we are enabled again.
+      */
+     if (!Penabled && !killallnotes) {
+-        memset(partoutl, 0, synth.bufferbytes);
+-        memset(partoutr, 0, synth.bufferbytes);
++        /* We only need to clear the output buffer once when disabled; since
++         * it's static within the part it's wasteful to do it every time. */
++        if (!silent) {
++            memset(partoutl, 0, synth.bufferbytes);
++            memset(partoutr, 0, synth.bufferbytes);
++            silent = true;
++        }
+         return;
+     }
++    silent = false;
+ 
+     assert(partefx[0]);
+     for(unsigned nefx = 0; nefx < NUM_PART_EFX + 1; ++nefx) {
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 0a70def2..167ab26a 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -194,6 +194,7 @@ class Part
+         bool isSingleKit(void)  const {return Pkitmode == 2;}
+ 
+         bool killallnotes;
++        bool silent; // An output buffer with zeros has been generated
+ 
+         NotePool notePool;
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,46 @@
+From b8deba64422d2913517e700b4335830ef1c3f3cf Mon Sep 17 00:00:00 2001
+From: Daniel Sheeler <dsheeler@pobox.com>
+Date: Fri, 9 Mar 2018 20:35:28 -0600
+Subject: [PATCH 1254/1936] Rolling back a bug in last commit.
+
+---
+ src/Synth/ADnote.cpp  | 1 -
+ src/Synth/SUBnote.cpp | 3 ++-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 6d6cddb2..f3b2d6c4 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -669,7 +669,6 @@ void ADnote::legatonote(LegatoParams lpars)
+                            * VelF(
+         velocity,
+         pars.GlobalPar.PAmpVelocityScaleFunction); //velocity sensing
+-    globaloldamplitude = globalnewamplitude;
+     globalnewamplitude = NoteGlobalPar.Volume
+                          * NoteGlobalPar.AmpEnvelope->envout_dB()
+                          * NoteGlobalPar.AmpLfo->amplfoout();
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index b9ce72b1..0e3f9ae3 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -190,6 +190,8 @@ void SUBnote::setup(float freq,
+         if(GlobalFilter)
+             GlobalFilter->updateNoteFreq(basefreq);
+     }
++
++    oldamplitude = newamplitude;
+ }
+ 
+ SynthNote *SUBnote::cloneLegato(void)
+@@ -477,7 +479,6 @@ void SUBnote::computecurrentparameters()
+         oldbandwidth  = ctl.bandwidth.data;
+         oldpitchwheel = ctl.pitchwheel.data;
+     }
+-    oldamplitude = newamplitude;
+     newamplitude = volume * AmpEnvelope->envout_dB() * 2.0f;
+ 
+     //Filter
+-- 
+2.47.0
+

@@ -1,0 +1,47 @@
+From 400486c1578952be60bb96d61879db57fbbcaaf5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 26 Jul 2016 15:59:59 -0400
+Subject: [PATCH 0975/1936] Add Platform Independent Case-Insensitive Compare
+
+---
+ src/Misc/BankDb.cpp | 21 +++++++++++++++++++++
+ 1 file changed, 21 insertions(+)
+
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index 57fdc056..83b27d01 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -14,9 +14,30 @@ BankEntry::BankEntry(void)
+     :id(0), add(false), pad(false), sub(false)
+ {}
+ 
++bool platform_strcasestr(const char *hay, const char *needle)
++{
++    int n = strlen(hay);
++    int m = strlen(needle);
++    for(int i=0; i<n; i++) {
++        int good = 1;
++        for(int j=0; j<m; ++j) {
++            if(toupper(hay[i+j]) != toupper(needle[j])) {
++                good = 0;
++break;
++}
++
++        }
++        if(good)
++            return 1;
++    }
++    return 0;
++
++}
++
+ bool sfind(std::string hay, std::string needle)
+ {
+     //return strcasestr(hay.c_str(), needle.c_str());
++    return platform_strcasestr(hay.c_str(), needle.c_str());
+     return false;
+ }
+ 
+-- 
+2.47.0
+

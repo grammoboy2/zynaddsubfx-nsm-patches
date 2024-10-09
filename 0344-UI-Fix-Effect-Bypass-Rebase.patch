@@ -1,0 +1,24 @@
+From 3928ba56fa4327a9579092ab267a416f4dd0a7e1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 21 Feb 2015 14:04:13 -0500
+Subject: [PATCH 0344/1936] UI: Fix Effect Bypass Rebase
+
+---
+ src/UI/PartUI.fl | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 57f6b220..1dfec8ea 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -600,6 +600,7 @@ else {propta->deactivate();proptb->deactivate();}}
+         callback {ninseff=(int) o->value()-1;
+         insefftype->oscMove("partefx"+to_s(ninseff)+"/efftype");
+         inseffectuigroup->reext("partefx"+to_s(ninseff)+"/");
++        bypasseff->oscMove("Pefxbypass"+to_s(ninseff));
+ /*insefftype->value(part->partefx[ninseff]->geteffect());*/
+ //insefftype->do_callback();
+ inseffectui->refresh();
+-- 
+2.47.0
+

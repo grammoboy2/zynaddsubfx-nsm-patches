@@ -1,0 +1,25 @@
+From 31d7df350320bcf1d56dc416cd9813786637fdb6 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 24 Jul 2014 23:39:23 -0400
+Subject: [PATCH 0218/1936] Fix NTK Based Label Redraw Glitch
+
+---
+ src/UI/Connection.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index 89f04224..c49c71b3 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -34,6 +34,8 @@ set_module_parameters ( Fl_Widget *o )
+     o->color( FL_BLACK );
+     o->image( module_backdrop );
+     o->labeltype( FL_SHADOW_LABEL );
++    o->parent()->labeltype(FL_NO_LABEL);
++    o->parent()->box(FL_NO_BOX);
+ #else
+     o->box( FL_PLASTIC_UP_BOX );
+     o->color( FL_CYAN );
+-- 
+2.47.0
+

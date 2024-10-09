@@ -1,0 +1,69 @@
+From 193ea810491aedc0c51b1013f087c863b38c69fd Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 5 Jan 2014 16:47:10 -0500
+Subject: [PATCH 0139/1936] Enable Tooltips/Fine modes in NTK UI
+
+---
+ src/UI/WidgetPDial.cpp | 10 +++++-----
+ src/main.cpp           |  3 +++
+ 2 files changed, 8 insertions(+), 5 deletions(-)
+
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index 87f4955b..ff8760e3 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -41,7 +41,7 @@ void TipWin::draw()
+ {
+     //setup window
+     draw_box(FL_BORDER_BOX, 0, 0, w(), h(), Fl_Color(175));
+-    fl_color(FL_BLACK);
++    fl_color(Fl_Tooltip::textcolor());
+     fl_font(labelfont(), labelsize());
+ 
+     //Draw the current string
+@@ -115,9 +115,9 @@ WidgetPDial::~WidgetPDial()
+ 
+ int WidgetPDial::handle(int event)
+ {
+-#ifdef NTK_GUI
+-    return Fl_Dial::handle( event );
+-#else
++//#ifdef NTK_GUI
++//    return Fl_Dial::handle( event );
++//#else
+     double dragsize, min = minimum(), max = maximum();
+     int    my;
+ 
+@@ -156,7 +156,7 @@ int WidgetPDial::handle(int event)
+             break;
+     }
+     return 0;
+-#endif
++//#endif
+ }
+ 
+ void WidgetPDial::drawgradient(int cx, int cy, int sx, double m1, double m2)
+diff --git a/src/main.cpp b/src/main.cpp
+index cfc6031b..d0adfd93 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -60,6 +60,7 @@ QApplication *app;
+ #include <FL/Fl_Shared_Image.H>
+ #include <FL/Fl_Tiled_Image.H>
+ #include <FL/Fl_Dial.H>
++#include <FL/Fl_Tooltip.H>
+ #endif // FLTK_GUI
+ 
+ MasterUI *ui;
+@@ -438,6 +439,8 @@ int main(int argc, char *argv[])
+ #ifdef NTK_GUI
+     fl_register_images();
+ 
++    Fl_Tooltip::textcolor(0x0);
++
+     Fl_Dial::default_style(Fl_Dial::PIXMAP_DIAL);
+ 
+     if(Fl_Shared_Image *img = Fl_Shared_Image::get(PIXMAP_PATH "/knob.png"))
+-- 
+2.47.0
+

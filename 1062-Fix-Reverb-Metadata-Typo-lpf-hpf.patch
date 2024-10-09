@@ -1,0 +1,25 @@
+From 479cd6e27011a09421b93642d5fe342d6e48fab7 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 16 Oct 2016 09:29:11 -0400
+Subject: [PATCH 1062/1936] Fix Reverb Metadata Typo lpf->hpf
+
+---
+ src/Effects/Reverb.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index 049fb70f..f1c5b841 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -42,7 +42,7 @@ rtosc::Ports Reverb::ports = {
+     rEffPar(Pidelay,  3, rShort("i.time"),   "Delay for first impulse"),
+     rEffPar(Pidelayfb,4, rShort("i.fb"),     "Feedback for first impulse"),
+     rEffPar(Plpf,     7, rShort("lpf"),      "Low pass filter"),
+-    rEffPar(Phpf,     8, rShort("lpf"),      "High pass filter"),
++    rEffPar(Phpf,     8, rShort("hpf"),      "High pass filter"),
+     rEffPar(Plohidamp,9, rShort("damp"),     "Dampening"),
+     //Todo make this a selector
+     rEffPar(Ptype,    10,rShort("type"),
+-- 
+2.47.0
+

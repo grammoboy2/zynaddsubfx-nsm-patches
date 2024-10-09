@@ -1,0 +1,182 @@
+From b86baa28b38bf8303268ea7e6344075fd818d379 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Mon, 1 Jul 2019 19:28:17 +0300
+Subject: [PATCH 1386/1936] fix trigger
+
+---
+ src/Synth/WatchPoint.cpp | 28 +++++++++++++---------------
+ src/Tests/AdNoteTest.h   | 19 +++++++------------
+ src/Tests/SubNoteTest.h  | 20 +++++++++++---------
+ 3 files changed, 31 insertions(+), 36 deletions(-)
+
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index 29a0290f..83efdc2b 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -101,7 +101,7 @@ void WatchManager::tick(void)
+     for(int i=0; i<MAX_WATCH; ++i) {
+         int framesize = 2;
+         if(strstr(active_list[i], "noteout") != NULL)
+-            framesize = 128;
++            framesize = MAX_SAMPLE-1;
+         if(sample_list[i] >= framesize-1) {
+             char        arg_types[MAX_SAMPLE+1] = {0};
+             rtosc_arg_t arg_val[MAX_SAMPLE];
+@@ -121,9 +121,9 @@ void WatchManager::tick(void)
+     //Clear deleted slots
+     for(int i=0; i<MAX_WATCH; ++i) {
+         if(deactivate[i]) {
+-            memset(active_list[i], 0, 128);
+-            memset(data_list[i], 0, sizeof(float)*MAX_SAMPLE);
++            memset(active_list[i], 0, MAX_SAMPLE);
+             sample_list[i] = 0;
++            memset(data_list[i], 0, sizeof(float)*MAX_SAMPLE);
+             deactivate[i]  = false;
+             trigger[i] = false;
+         }
+@@ -169,28 +169,26 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+     if(selected == -1)
+         return;
+ 
+-    int space = 128 - sample_list[selected];
++    int space = MAX_SAMPLE - sample_list[selected];
+     
+     if(space >= n)
+         space = n;
+ 
++    if(n == 2)
++        trigger[selected] = true;
++
+     //FIXME buffer overflow
+     if(space){
+         for(int i=0; i<space; ++i){
+-            if(strstr(active_list[i], "noteout") == NULL)
+-                {   
+-                    data_list[selected][sample_list[selected]] = f[i];
+-                    sample_list[selected]++;
++                if(!trigger[selected])
++                {   if(i == 0)
++                    i ++;
++                    if (f[i-1] <= 0 && f[i] > 0)
++                        trigger[selected] = true;
+                 }
+-            else{
+-                if(i == 0)
+-                    i += 1;
+-
+-                if(trigger[selected] || f[i-1] <= 0 && f[i] > 0){
++                if(trigger[selected]){
+                     data_list[selected][sample_list[selected]] = f[i];
+                     sample_list[selected]++;
+-                    trigger[selected] = true;
+-                }
+             }
+         }
+     }
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index bbfdbd2e..252a7b93 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -127,9 +127,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+ #endif
+             sampleCount += synth->buffersize;
+-
+             TS_ASSERT_DELTA(outL[255], 0.2555f, 0.0001f);
+-
+             note->releasekey();
+ 
+             TS_ASSERT(!tr->hasNext());
+@@ -138,32 +136,29 @@ class AdNoteTest:public CxxTest::TestSuite
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.4688f, 0.0001f);
+             w->tick();
+-            TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
++            w->tick();
+             TS_ASSERT_DELTA(outL[255], 0.0613f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], 0.0971f, 0.0001f);
++            w->tick();
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.0901f, 0.0001f);
+-
+-        
+-            TS_ASSERT(!tr->hasNext());
+-            w->add_watch("noteout1");
+-            note->noteout(outL, outR);
+-            sampleCount += synth->buffersize;
+             w->tick();
++            
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout1"), tr->read());
++            TS_ASSERT_EQUALS(string("noteout"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+-        
++
++            note->noteout(outL, outR);
++            sampleCount += synth->buffersize;
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index 24e4ec0a..057fbd12 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -122,34 +122,36 @@ class SubNoteTest:public CxxTest::TestSuite
+ 
+             note->releasekey();
+ 
+-
++            TS_ASSERT(!tr->hasNext());
++            w->add_watch("noteout");
++            
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], 0.0029f, 0.0001f);
++            w->tick();
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.0011f, 0.0001f);
+-            
+-            TS_ASSERT(!tr->hasNext());
+-            w->add_watch("noteout");
+-            note->noteout(outL, outR);
+-            sampleCount += synth->buffersize;
+             w->tick();
++
+             TS_ASSERT(tr->hasNext());
+             TS_ASSERT_EQUALS(string("noteout"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+-            TS_ASSERT_DELTA(outL[255], -0.0017f, 0.0001f);
+ 
+-            TS_ASSERT(!tr->hasNext());
+             w->add_watch("noteout1");
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
++            TS_ASSERT_DELTA(outL[255], -0.0017f, 0.0001f);
++            w->tick();
++            
++            note->noteout(outL, outR);
++            sampleCount += synth->buffersize;
++            TS_ASSERT_DELTA(outL[255], -0.0005f, 0.0001f);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+             TS_ASSERT_EQUALS(string("noteout1"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+-            TS_ASSERT_DELTA(outL[255], -0.0005f, 0.0001f);
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From f71829b03ad8fb70557046c658e6222ab9b4d427 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 28 Nov 2016 08:05:58 -0500
+Subject: [PATCH 1097/1936] Fix ALSA MIDI Input
+
+---
+ src/Nio/AlsaEngine.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index a5e0b077..9b50b187 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -108,7 +108,7 @@ void *AlsaEngine::MidiThread(void)
+     while(1) {
+         if(midi.exiting)
+             break;
+-        if(snd_seq_event_input_pending(midi.handle, 0) <= 0) {
++        if(snd_seq_event_input_pending(midi.handle, 1) <= 0) {
+             usleep(10);
+             continue;
+         }
+-- 
+2.47.0
+

@@ -1,0 +1,107 @@
+From 76daaa238145080a399c334910395c3b46104ce1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 15 Feb 2014 13:48:17 -0500
+Subject: [PATCH 0149/1936] Restore XIZ Load/Save
+
+- The load/save menu works with the save being a lockless operation
+---
+ src/Misc/MiddleWare.cpp | 34 +++++++++++++++++++++++++++-------
+ src/UI/MasterUI.fl      |  4 ++--
+ 2 files changed, 29 insertions(+), 9 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index f7fbf28b..41883a8a 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -371,12 +371,9 @@ struct MiddleWareImpl
+      *   4) Observe /thaw_state and resume normal processing
+      */
+ 
+-
+-    void saveMaster(const char *filename)
++    void doReadOnlyOp(std::function<void()> read_only_fn)
+     {
+         //Copy is needed as filename WILL get trashed during the rest of the run
+-        std::string fname = filename;
+-        printf("saving master('%s')\n", filename);
+         uToB->write("/freeze_state","");
+ 
+         std::list<const char *> fico;
+@@ -400,10 +397,8 @@ struct MiddleWareImpl
+         std::atomic_thread_fence(std::memory_order_acquire);
+ 
+         //Now it is safe to do any read only operation
++        read_only_fn();
+ 
+-        int res = master->saveXML(fname.c_str());
+-        printf("results: '%s' '%d'\n",fname.c_str(), res);
+-        
+         //Now to resume normal operations
+         uToB->write("/thaw_state","");
+         for(auto x:fico) {
+@@ -412,6 +407,27 @@ struct MiddleWareImpl
+         }
+     }
+ 
++
++    void saveMaster(const char *filename)
++    {
++        //Copy is needed as filename WILL get trashed during the rest of the run
++        std::string fname = filename;
++        printf("saving master('%s')\n", filename);
++        doReadOnlyOp([this,fname](){
++                int res = master->saveXML(fname.c_str());
++                printf("results: '%s' '%d'\n",fname.c_str(), res);});
++    }
++
++    void savePart(int npart, const char *filename)
++    {
++        //Copy is needed as filename WILL get trashed during the rest of the run
++        std::string fname = filename;
++        printf("saving part(%d,'%s')\n", npart, filename);
++        doReadOnlyOp([this,fname,npart](){
++                int res = master->part[npart]->saveXML(fname.c_str());
++                printf("results: '%s' '%d'\n",fname.c_str(), res);});
++    }
++
+     void loadPart(int npart, const char *filename, Master *master, Fl_Osc_Interface *osc)
+     {
+         printf("loading part...\n");
+@@ -650,8 +666,12 @@ struct MiddleWareImpl
+                 uToB->raw_write(msg);
+         } else if(strstr(msg, "/save_xmz") && !strcmp(rtosc_argument_string(msg), "s")) {
+             saveMaster(rtosc_argument(msg,0).s);
++        } else if(strstr(msg, "/save_xiz") && !strcmp(rtosc_argument_string(msg), "is")) {
++            savePart(rtosc_argument(msg,0).i,rtosc_argument(msg,1).s);
+         } else if(strstr(msg, "/load_xmz") && !strcmp(rtosc_argument_string(msg), "s")) {
+             loadMaster(rtosc_argument(msg,0).s);
++        } else if(!strcmp(msg, "/load_xiz") && !strcmp(rtosc_argument_string(msg), "is")) {
++            loadPart(rtosc_argument(msg,0).i, rtosc_argument(msg,1).s, master, osc);
+         } else if(strstr(msg, "load-part") && !strcmp(rtosc_argument_string(msg), "is"))
+             loadPart(rtosc_argument(msg,0).i, rtosc_argument(msg,1).s, master, osc);
+         else
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index c3b76885..ff7d2172 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -363,7 +363,7 @@ filename=fl_file_chooser("Load:","({*.xiz})",NULL,0);
+ if (filename==NULL) return;
+ 
+ 
+-osc->write("/load_xiz", "si", filename, npart);
++osc->write("/load_xiz", "is", npart, filename);
+ npartcounter->do_callback();
+ updatepanel();
+ 
+@@ -387,7 +387,7 @@ if (result) {
+        
+ };
+ 
+-osc->write("/save_xiz", "si", filename, npart);
++osc->write("/save_xiz", "is", npart, filename);
+ /*if (result<0) fl_alert("Error: Could not save the file.");*/
+ }
+               xywh {25 25 100 20} divider
+-- 
+2.47.0
+

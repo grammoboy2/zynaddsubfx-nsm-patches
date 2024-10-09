@@ -1,0 +1,78 @@
+From 51f628efd8f1ca06c3beede0860c6914e09b6716 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Fri, 7 Jun 2019 20:15:59 +0300
+Subject: [PATCH 1362/1936] add 2 watchpoint to ADNOTE
+
+---
+ src/Synth/ADnote.cpp |  9 ++++++---
+ src/Synth/ADnote.h   | 10 +++++++++-
+ 2 files changed, 15 insertions(+), 4 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 7e9f8847..a9fc62bc 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -30,9 +30,10 @@
+ 
+ namespace zyn {
+ 
++
+ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
+         WatchManager *wm, const char *prefix)
+-    :SynthNote(spars), pars(*pars_)
++    :SynthNote(spars), pars(*pars_), watchOut(wm, prefix, "out"), watchOut1(wm,prefix,"out1")
+ {
+     memory.beginTransaction();
+     tmpwavel = memory.valloc<float>(synth.buffersize);
+@@ -1701,9 +1702,11 @@ int ADnote::noteout(float *outl, float *outr)
+             else
+                 for(int i = 0; i < synth.buffersize; ++i)
+                     tmpwavel[i] += tw[i];
++            if(nvoice == 0)
++                watchOut(tmpwavel,synth.buffersize);
++            if(nvoice == 1)
++                watchOut1(tmpwavel,synth.buffersize);
+         }
+-
+-
+         float unison_amplitude = 1.0f / sqrt(unison_size[nvoice]); //reduce the amplitude for large unison sizes
+         // Amplitude
+         float oldam = oldamplitude[nvoice] * unison_amplitude;
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index ac402930..3d5b9a63 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -19,6 +19,7 @@
+ #include "LFO.h"
+ #include "../Params/ADnoteParameters.h"
+ #include "../Params/Controller.h"
++#include "WatchPoint.h"
+ 
+ //Globals
+ 
+@@ -29,6 +30,13 @@
+ 
+ namespace zyn {
+ 
++class voicewatch{
++    public:
++        voicewatch(WatchManager *m, const char *watch_prefix);
++        VecWatchPoint watchOut;
++
++};
++
+ /**The "additive" synthesizer*/
+ class ADnote:public SynthNote
+ {
+@@ -57,7 +65,7 @@ class ADnote:public SynthNote
+         int  setupVoiceUnison(int nvoice);
+         void setupVoiceDetune(int nvoice);
+         void setupVoiceMod(int nvoice, bool first_run = true);
+-
++        VecWatchPoint watchOut,watchOut1;
+         /**Changes the frequency of an oscillator.
+          * @param nvoice voice to run computations on
+          * @param in_freq new frequency*/
+-- 
+2.47.0
+

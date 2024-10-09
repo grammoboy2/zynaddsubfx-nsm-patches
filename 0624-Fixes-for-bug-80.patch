@@ -1,0 +1,47 @@
+From bc7e7f6f10a79c703b19a822fd3267b7c325429c Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Thu, 22 Oct 2015 14:46:56 -0400
+Subject: [PATCH 0624/1936] Fixes for bug #80
+
+---
+ src/Synth/OscilGen.cpp | 3 +--
+ src/UI/OscilGenUI.fl   | 2 +-
+ 2 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index ab224783..c41d5059 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -408,7 +408,6 @@ void OscilGen::convert2sine()
+     float  mag[MAX_AD_HARMONICS], phase[MAX_AD_HARMONICS];
+     float  oscil[synth.oscilsize];
+     fft_t *freqs = new fft_t[synth.oscilsize / 2];
+-
+     get(oscil, -1.0f);
+     FFTwrapper *fft = new FFTwrapper(synth.oscilsize);
+     fft->smps2freqs(oscil, freqs);
+@@ -429,7 +428,7 @@ void OscilGen::convert2sine()
+         float newmag   = mag[i];
+         float newphase = phase[i];
+ 
+-        Phmag[i] = (int) ((newmag) * 64.0f) + 64;
++        Phmag[i] = (int) ((newmag) * 63.0f) + 64;
+ 
+         Phphase[i] = 64 - (int) (64.0f * newphase / PI);
+         if(Phphase[i] > 127)
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 8b0b661a..4504845b 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -823,7 +823,7 @@ redrawoscil();}
+             class Fl_Osc_Dial
+           }
+           Fl_Slider adhrpar {
+-            code0 {o->init("Padaptiveharmonicspar");o->reset_value=50;}
++            code0 {o->init("Padaptiveharmonicspar", 'i');o->reset_value=50;}
+             callback {redrawoscil();}
+             xywh {675 450 55 10} type {Horz Knob} box NO_BOX maximum 100 step 1 value 50
+             class Fl_Osc_TSlider
+-- 
+2.47.0
+

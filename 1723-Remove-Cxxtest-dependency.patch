@@ -1,0 +1,2811 @@
+From b8075712de243bee774f8e7ebe94b00c035b4246 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 25 Apr 2021 16:26:34 -0400
+Subject: [PATCH 1723/1936] Remove Cxxtest dependency
+
+Looks like upstream is now a dead project.
+Rather than try to revive that in any way, let's remove one dependency.
+---
+ .github/workflows/ccpp.yml                    |   2 -
+ .travis.yml                                   |   1 -
+ README.adoc                                   |   3 +-
+ src/CMakeLists.txt                            |   5 -
+ src/Tests/{AdNoteTest.h => AdNoteTest.cpp}    |  18 +-
+ .../{AllocatorTest.h => AllocatorTest.cpp}    |  18 +-
+ src/Tests/CMakeLists.txt                      |  96 ++---
+ .../{ControllerTest.h => ControllerTest.cpp}  |  17 +-
+ src/Tests/{EchoTest.h => EchoTest.cpp}        |  24 +-
+ src/Tests/{EffectTest.h => EffectTest.cpp}    |  42 ++-
+ src/Tests/{KitTest.h => KitTest.cpp}          | 353 ++++++++++--------
+ ...emoryStressTest.h => MemoryStressTest.cpp} |  13 +-
+ src/Tests/{MessageTest.h => MessageTest.cpp}  |  83 ++--
+ .../{MicrotonalTest.h => MicrotonalTest.cpp}  |  49 +--
+ .../{MiddlewareTest.h => MiddlewareTest.cpp}  |  16 +-
+ src/Tests/{MqTest.h => MqTest.cpp}            |  27 +-
+ .../{MsgParseTest.h => MsgParseTest.cpp}      |  30 +-
+ .../{OscilGenTest.h => OscilGenTest.cpp}      |  14 +-
+ src/Tests/{PadNoteTest.h => PadNoteTest.cpp}  |  34 +-
+ src/Tests/{PluginTest.h => PluginTest.cpp}    |  16 +-
+ src/Tests/RandTest.cpp                        |  26 ++
+ src/Tests/RandTest.h                          |  31 --
+ src/Tests/{RtAllocTest.h => RtAllocTest.cpp}  |   0
+ src/Tests/{SubNoteTest.h => SubNoteTest.cpp}  |  17 +-
+ src/Tests/{TriggerTest.h => TriggerTest.cpp}  |  73 ++--
+ src/Tests/{UnisonTest.h => UnisonTest.cpp}    |  11 +-
+ src/Tests/{WatchTest.h => WatchTest.cpp}      |  14 +-
+ .../{XMLwrapperTest.h => XMLwrapperTest.cpp}  |  16 +-
+ src/Tests/common.h                            | 250 +++++++++++++
+ src/Tests/test-suite.h                        |  26 ++
+ 30 files changed, 880 insertions(+), 445 deletions(-)
+ rename src/Tests/{AdNoteTest.h => AdNoteTest.cpp} (96%)
+ rename src/Tests/{AllocatorTest.h => AllocatorTest.cpp} (92%)
+ rename src/Tests/{ControllerTest.h => ControllerTest.cpp} (90%)
+ rename src/Tests/{EchoTest.h => EchoTest.cpp} (89%)
+ rename src/Tests/{EffectTest.h => EffectTest.cpp} (60%)
+ rename src/Tests/{KitTest.h => KitTest.cpp} (60%)
+ rename src/Tests/{MemoryStressTest.h => MemoryStressTest.cpp} (95%)
+ rename src/Tests/{MessageTest.h => MessageTest.cpp} (80%)
+ rename src/Tests/{MicrotonalTest.h => MicrotonalTest.cpp} (73%)
+ rename src/Tests/{MiddlewareTest.h => MiddlewareTest.cpp} (94%)
+ rename src/Tests/{MqTest.h => MqTest.cpp} (86%)
+ rename src/Tests/{MsgParseTest.h => MsgParseTest.cpp} (79%)
+ rename src/Tests/{OscilGenTest.h => OscilGenTest.cpp} (95%)
+ rename src/Tests/{PadNoteTest.h => PadNoteTest.cpp} (93%)
+ rename src/Tests/{PluginTest.h => PluginTest.cpp} (96%)
+ create mode 100644 src/Tests/RandTest.cpp
+ delete mode 100644 src/Tests/RandTest.h
+ rename src/Tests/{RtAllocTest.h => RtAllocTest.cpp} (100%)
+ rename src/Tests/{SubNoteTest.h => SubNoteTest.cpp} (94%)
+ rename src/Tests/{TriggerTest.h => TriggerTest.cpp} (78%)
+ rename src/Tests/{UnisonTest.h => UnisonTest.cpp} (97%)
+ rename src/Tests/{WatchTest.h => WatchTest.cpp} (91%)
+ rename src/Tests/{XMLwrapperTest.h => XMLwrapperTest.cpp} (84%)
+ create mode 100644 src/Tests/common.h
+ create mode 100644 src/Tests/test-suite.h
+
+diff --git a/.github/workflows/ccpp.yml b/.github/workflows/ccpp.yml
+index c81dc05e..44023605 100644
+--- a/.github/workflows/ccpp.yml
++++ b/.github/workflows/ccpp.yml
+@@ -16,8 +16,6 @@ jobs:
+     - name: install_deps2
+       run: sudo apt-get install liblo-dev
+     - name: install_test_deps1
+-      run: sudo apt-get install --force-yes cxxtest python3
+-    - name: install_test_deps2
+       run: sudo apt-get install ruby
+     - name: submodule
+       run: git submodule update --init
+diff --git a/.travis.yml b/.travis.yml
+index 58696562..b316e5a9 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -9,7 +9,6 @@ before_install:
+     - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev fluid libxpm-dev
+     - sudo apt-get install liblo-dev
+     - sudo apt-get install libsndio-dev
+-    - sudo apt-get install --force-yes cxxtest
+ 
+ 
+ script:
+diff --git a/README.adoc b/README.adoc
+index d11f902b..5ac882ae 100644
+--- a/README.adoc
++++ b/README.adoc
+@@ -58,7 +58,6 @@ Optional:
+ - ALSA
+ - LASH
+ - DSSI
+-- CxxTest (for unit tests)
+ 
+ Sibling projects
+ ~~~~~~~~~~~~~~~~
+@@ -74,4 +73,4 @@ ZynAddSubFX is available under the GPL-2.0-or-later license.
+ 
+ Have fun! :-)
+ 
+---The ZynAddSubFX team
+\ No newline at end of file
++--The ZynAddSubFX team
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 24862d31..7d9e6a3c 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -18,10 +18,6 @@ find_package(Alsa)
+ find_package(Sndio)
+ find_package(FLTK)
+ find_package(OpenGL) #for FLTK
+-find_package(CxxTest)
+-if(CXXTEST_FOUND)
+-    set(CXXTEST_USE_PYTHON TRUE)
+-endif()
+ # lash
+ if(PKG_CONFIG_FOUND AND NOT (${CMAKE_SYSTEM_NAME} STREQUAL "Windows"))
+     message("Looking For pkg config modules")
+@@ -680,7 +676,6 @@ package_status(PORTAUDIO_FOUND  "PA       " "found"   ${Yellow})
+ package_status(SNDIO_FOUND      "SNDIO    " "found"   ${Yellow})
+ package_status(LASH_FOUND       "Lash     " "found"   ${Yellow})
+ package_status(DSSI_FOUND       "DSSI     " "found"   ${Yellow})
+-package_status(CXXTEST_FOUND    "CxxTest  " "found"   ${Yellow})
+ package_status(LashEnable       "Lash     " "enabled" ${Yellow})
+ package_status(DssiEnable       "DSSI     " "enabled" ${Yellow})
+ package_status(CompileTests     "tests    " "enabled" ${Yellow})
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.cpp
+similarity index 96%
+rename from src/Tests/AdNoteTest.h
+rename to src/Tests/AdNoteTest.cpp
+index 7e7ae977..6fcee421 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.cpp
+@@ -11,7 +11,7 @@
+ */
+ 
+ 
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <iostream>
+ #include <fstream>
+ #include <ctime>
+@@ -33,7 +33,7 @@ using namespace zyn;
+ SYNTH_T *synth;
+ 
+ 
+-class AdNoteTest:public CxxTest::TestSuite
++class AdNoteTest
+ {
+     public:
+         rtosc::ThreadLink *tr;
+@@ -197,7 +197,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             w->tick();
+ 
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout/be4_mix"), tr->read());
++            TS_ASSERT_EQUAL_STR("noteout/be4_mix", tr->read());
+             TS_ASSERT(!tr->hasNext());
+ 
+             note->noteout(outL, outR);
+@@ -217,7 +217,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             file.close();
+ #endif
+ 
+-            TS_ASSERT_EQUALS(sampleCount, 30208);
++            TS_ASSERT_EQUAL_INT(sampleCount, 30208);
+ 
+               lfop = new LFOParams();
+             lfop->fel  = zyn::consumer_location_type_t::amp;
+@@ -246,3 +246,13 @@ class AdNoteTest:public CxxTest::TestSuite
+         }
+ #endif
+ };
++
++int main()
++{
++    tap_quiet = 1;
++    AdNoteTest test;
++    test.setUp();
++    test.testDefaults();
++    test.tearDown();
++    return test_summary();
++}
+diff --git a/src/Tests/AllocatorTest.h b/src/Tests/AllocatorTest.cpp
+similarity index 92%
+rename from src/Tests/AllocatorTest.h
+rename to src/Tests/AllocatorTest.cpp
+index 443c24cd..93406045 100644
+--- a/src/Tests/AllocatorTest.h
++++ b/src/Tests/AllocatorTest.cpp
+@@ -11,7 +11,7 @@
+ */
+ 
+ 
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <iostream>
+ #include <fstream>
+ #include <ctime>
+@@ -23,7 +23,7 @@
+ using std::vector;
+ using namespace zyn;
+ 
+-class AllocatorTest:public CxxTest::TestSuite
++class AllocatorTest
+ {
+     public:
+         Allocator     *memory_;
+@@ -40,7 +40,7 @@ class AllocatorTest:public CxxTest::TestSuite
+         void testBasic() {
+             Allocator &memory = *memory_;
+             char *d = (char*)memory.alloc_mem(128);
+-            TS_ASSERT(d);
++            TS_NON_NULL(d);
+             d[0]   = 0;
+             d[127] = 0;
+             memory.dealloc_mem(d);
+@@ -83,13 +83,13 @@ class AllocatorTest:public CxxTest::TestSuite
+             //We should be able to see that a chunk enters and exits the free
+             //state
+             char *mem2 = (char*)memory.alloc_mem(10*1024*1024);
+-            TS_ASSERT(mem2);
++            TS_NON_NULL(mem2);
+             TS_ASSERT(!memory.memFree(bufA));
+             memory.dealloc_mem(mem2);
+             TS_ASSERT(memory.memFree(bufA));
+             mem2 = (char*)memory.alloc_mem(10*1024*1024);
+             char *mem3 = (char*)memory.alloc_mem(10*1024*1024);
+-            TS_ASSERT(mem3);
++            TS_NON_NULL(mem3);
+             memory.dealloc_mem(mem2);
+             TS_ASSERT(!memory.memFree(bufA));
+             TS_ASSERT(memory.freePools() == 0);
+@@ -106,3 +106,11 @@ class AllocatorTest:public CxxTest::TestSuite
+         }
+ 
+ };
++
++int main()
++{
++    AllocatorTest test;
++    RUN_TEST(testBasic);
++    RUN_TEST(testTooBig);
++    RUN_TEST(testEnlarge);
++}
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 1b25e8f1..5597dcc2 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -3,72 +3,51 @@ function(cp_script script_name)
+ 		${CMAKE_CURRENT_BINARY_DIR}/${script_name} COPYONLY)
+ endfunction()
+ 
++function(quick_test test_name link)
++    add_executable(${test_name} "${test_name}.cpp")
++    add_test(NAME ${test_name}
++             COMMAND ${test_name})
++     target_link_libraries(${test_name} ${link} ${ARGN})
++endfunction()
++
+ #for tests looking for files stored in the source dir
+ add_definitions(-DSOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+ 
+-CXXTEST_ADD_TEST(ControllerTest ControllerTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ControllerTest.h)
+-CXXTEST_ADD_TEST(EchoTest EchoTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/EchoTest.h)
+-#CXXTEST_ADD_TEST(SampleTest SampleTest.h)
+-CXXTEST_ADD_TEST(MicrotonalTest MicrotonalTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MicrotonalTest.h)
+-CXXTEST_ADD_TEST(XMLwrapperTest XMLwrapper.cpp ${CMAKE_CURRENT_SOURCE_DIR}/XMLwrapperTest.h)
+-CXXTEST_ADD_TEST(ADnoteTest AdNoteTest.cpp
+-    ${CMAKE_CURRENT_SOURCE_DIR}/AdNoteTest.h)
+-CXXTEST_ADD_TEST(SUBnoteTest SubNoteTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/SubNoteTest.h)
+-CXXTEST_ADD_TEST(OscilGenTest OscilGenTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/OscilGenTest.h)
+-CXXTEST_ADD_TEST(RandTest RandTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RandTest.h)
+-CXXTEST_ADD_TEST(PADnoteTest PadNoteTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/PadNoteTest.h)
+-CXXTEST_ADD_TEST(PluginTest PluginTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/PluginTest.h)
+-CXXTEST_ADD_TEST(MsgParseTest MsgParseTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MsgParseTest.h)
+-CXXTEST_ADD_TEST(MiddlewareTest MiddlewareTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MiddlewareTest.h)
+-CXXTEST_ADD_TEST(MessageTest MessageTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MessageTest.h)
+-CXXTEST_ADD_TEST(UnisonTest UnisonTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/UnisonTest.h)
+-CXXTEST_ADD_TEST(MqTest MqTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MqTest.h)
+-CXXTEST_ADD_TEST(WatchTest WatchTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/WatchTest.h)
+-#CXXTEST_ADD_TEST(RtAllocTest RtAllocTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RtAllocTest.h)
+-CXXTEST_ADD_TEST(AllocatorTest AllocatorTest.cpp
+-    ${CMAKE_CURRENT_SOURCE_DIR}/AllocatorTest.h)
+-CXXTEST_ADD_TEST(EffectTest EffectTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/EffectTest.h)
+-CXXTEST_ADD_TEST(KitTest KitTest.cpp
+-    ${CMAKE_CURRENT_SOURCE_DIR}/KitTest.h)
+-CXXTEST_ADD_TEST(MemoryStressTest MemoryStressTest.cpp
+-    ${CMAKE_CURRENT_SOURCE_DIR}/MemoryStressTest.h)
+-CXXTEST_ADD_TEST(TriggerTest TriggerTest.cpp
+-    ${CMAKE_CURRENT_SOURCE_DIR}/TriggerTest.h)
+-
+ #Extra libraries added to make test and full compilation use the same library
+ #links for quirky compilers
+ set(test_lib zynaddsubfx_core ${GUI_LIBRARIES} ${ZLIB_LIBRARY} ${FFTW_LIBRARIES}
+     ${MXML_LIBRARIES} pthread "-Wl,--no-as-needed -lpthread")
+ 
+ message(STATUS "Linking tests with: ${test_lib}")
+-target_link_libraries(ADnoteTest     ${test_lib})
+-target_link_libraries(SUBnoteTest    ${test_lib})
+-target_link_libraries(ControllerTest ${test_lib})
+-target_link_libraries(EchoTest       ${test_lib})
+-target_link_libraries(MicrotonalTest ${test_lib})
+-target_link_libraries(OscilGenTest   ${test_lib})
+-target_link_libraries(XMLwrapperTest ${test_lib})
+-target_link_libraries(RandTest       ${test_lib})
+-target_link_libraries(PADnoteTest    ${test_lib})
+-target_link_libraries(MqTest         ${test_lib})
+-target_link_libraries(WatchTest      ${test_lib})
+-target_link_libraries(TriggerTest      ${test_lib})
+-target_link_libraries(PluginTest     zynaddsubfx_core zynaddsubfx_nio
+-    zynaddsubfx_gui_bridge
+-    ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+-target_link_libraries(MsgParseTest ${test_lib})
+-target_link_libraries(MiddlewareTest zynaddsubfx_core zynaddsubfx_nio
+-    zynaddsubfx_gui_bridge
+-    ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+-target_link_libraries(MessageTest zynaddsubfx_core zynaddsubfx_nio
+-    zynaddsubfx_gui_bridge
+-    ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+-target_link_libraries(UnisonTest    ${test_lib})
+-#target_link_libraries(RtAllocTest    ${test_lib})
+-target_link_libraries(AllocatorTest    ${test_lib})
+-target_link_libraries(KitTest    ${test_lib})
+-target_link_libraries(MemoryStressTest ${test_lib})
+-target_link_libraries(EffectTest ${test_lib})
++
++quick_test(AdNoteTest       ${test_lib})
++quick_test(AllocatorTest    ${test_lib})
++quick_test(ControllerTest   ${test_lib})
++quick_test(EchoTest         ${test_lib})
++quick_test(EffectTest       ${test_lib})
++quick_test(KitTest          ${test_lib})
++quick_test(MemoryStressTest ${test_lib})
++quick_test(MicrotonalTest   ${test_lib})
++quick_test(MsgParseTest     ${test_lib})
++quick_test(MqTest           ${test_lib})
++quick_test(OscilGenTest     ${test_lib})
++quick_test(PadNoteTest      ${test_lib})
++quick_test(RandTest         ${test_lib})
++quick_test(SubNoteTest      ${test_lib})
++quick_test(TriggerTest      ${test_lib})
++quick_test(UnisonTest       ${test_lib})
++quick_test(WatchTest        ${test_lib})
++quick_test(XMLwrapperTest   ${test_lib})
++
++quick_test(PluginTest     zynaddsubfx_core zynaddsubfx_nio
++                          zynaddsubfx_gui_bridge
++                          ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
++quick_test(MiddlewareTest zynaddsubfx_core zynaddsubfx_nio
++                          zynaddsubfx_gui_bridge
++                          ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
++quick_test(MessageTest zynaddsubfx_core zynaddsubfx_nio
++                       zynaddsubfx_gui_bridge
++                       ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+ 
+ #Testbed app
+ add_executable(ins-test InstrumentStats.cpp)
+@@ -86,6 +65,3 @@ target_link_libraries(save-osc
+                       ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+ #this will be replaced with a for loop when the code will get more stable:
+ add_test(SaveOsc save-osc ${CMAKE_CURRENT_SOURCE_DIR}/../../instruments/examples/Arpeggio\ 1.xmz)
+-
+-#message(STATUS "Plugin Test ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES}")
+-
+diff --git a/src/Tests/ControllerTest.h b/src/Tests/ControllerTest.cpp
+similarity index 90%
+rename from src/Tests/ControllerTest.h
+rename to src/Tests/ControllerTest.cpp
+index 0861bca1..34900e22 100644
+--- a/src/Tests/ControllerTest.h
++++ b/src/Tests/ControllerTest.cpp
+@@ -10,7 +10,8 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
++#include <cmath>
+ #include <iostream>
+ #include "../Params/Controller.h"
+ #include "../globals.h"
+@@ -19,7 +20,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class ControllerTest:public CxxTest::TestSuite
++class ControllerTest
+ {
+     public:
+         void setUp() {
+@@ -61,10 +62,18 @@ class ControllerTest:public CxxTest::TestSuite
+             for(i = 0; i < 10; ++i)
+                 testCtl->updateportamento();
+             //Assert that the numbers are the same as they were at release
+-            TS_ASSERT_DELTA(testCtl->portamento.x, 0.0290249f, 0.000001f)
+-            TS_ASSERT_DELTA(testCtl->portamento.freqdelta_log2, -3.2255092, 0.000001f)
++            TS_ASSERT_DELTA(testCtl->portamento.x, 0.0290249f, 0.000001f);
++            TS_ASSERT_DELTA(testCtl->portamento.freqdelta_log2, -3.2255092, 0.000001f);
+         }
+ 
+     private:
+         Controller *testCtl;
+ };
++
++int main()
++{
++    ControllerTest test;
++    RUN_TEST(testPortamentoRange);
++    RUN_TEST(testPortamentoValue);
++    return test_summary();
++}
+diff --git a/src/Tests/EchoTest.h b/src/Tests/EchoTest.cpp
+similarity index 89%
+rename from src/Tests/EchoTest.h
+rename to src/Tests/EchoTest.cpp
+index bcb2a82b..5a5f0d76 100644
+--- a/src/Tests/EchoTest.h
++++ b/src/Tests/EchoTest.cpp
+@@ -11,7 +11,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstdlib>
+ #include <iostream>
+@@ -24,7 +24,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class EchoTest:public CxxTest::TestSuite
++class EchoTest
+ {
+     public:
+         void setUp() {
+@@ -75,8 +75,8 @@ class EchoTest:public CxxTest::TestSuite
+             for(int i = 0; i < 500; ++i)
+                 testFX->out(*input);
+             for(int i = 0; i < synth->buffersize; ++i) {
+-                TS_ASSERT_DIFFERS(outL[i], 0.0f);
+-                TS_ASSERT_DIFFERS(outR[i], 0.0f)
++                TS_ASSERT(outL[i] != 0.0f);
++                TS_ASSERT(outR[i] != 0.0f);
+             }
+             //After making sure the internal buffer has a nonzero value
+             //cleanup
+@@ -99,8 +99,8 @@ class EchoTest:public CxxTest::TestSuite
+             for(int i = 0; i < 100; ++i)
+                 testFX->out(*input);
+             for(int i = 0; i < synth->buffersize; ++i) {
+-                TS_ASSERT_DIFFERS(outL[i], 0.0f);
+-                TS_ASSERT_DIFFERS(outR[i], 0.0f)
++                TS_ASSERT(outL[i] != 0.0f);
++                TS_ASSERT(outR[i] != 0.0f);
+             }
+             float amp = abs(outL[0] + outR[0]) / 2;
+             //reset input to zero
+@@ -110,7 +110,7 @@ class EchoTest:public CxxTest::TestSuite
+             //give the echo time to fade based upon zero input and high feedback
+             for(int i = 0; i < 50; ++i)
+                 testFX->out(*input);
+-            TS_ASSERT_LESS_THAN_EQUALS(abs(outL[0] + outR[0]) / 2, amp);
++            TS_ASSERT(abs(outL[0] + outR[0]) / 2 <= amp);
+         }
+ 
+ 
+@@ -120,3 +120,13 @@ class EchoTest:public CxxTest::TestSuite
+         Echo  *testFX;
+         Alloc alloc;
+ };
++
++int main()
++{
++    tap_quiet = 1;
++    EchoTest test;
++    RUN_TEST(testInit);
++    RUN_TEST(testClear);
++    RUN_TEST(testDecaywFb);
++    return test_summary();
++}
+diff --git a/src/Tests/EffectTest.h b/src/Tests/EffectTest.cpp
+similarity index 60%
+rename from src/Tests/EffectTest.h
+rename to src/Tests/EffectTest.cpp
+index 5d9be7f9..9a3b47e8 100644
+--- a/src/Tests/EffectTest.h
++++ b/src/Tests/EffectTest.cpp
+@@ -9,7 +9,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstdio>
+ #include "../Misc/Allocator.h"
+@@ -22,7 +22,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class EchoTest:public CxxTest::TestSuite
++class EffectTest
+ {
+     public:
+         void setUp() {
+@@ -38,38 +38,45 @@ class EchoTest:public CxxTest::TestSuite
+         }
+ 
+         void testInit() {
+-            TS_ASSERT_EQUALS(mgr->nefx, 0);
++            TS_ASSERT_EQUAL_INT(mgr->nefx, 0);
+             mgr->changeeffect(1);
+-            TS_ASSERT_EQUALS(mgr->nefx, 1);
+-            TS_ASSERT_EQUALS(mgr->efx, nullptr);
++            TS_ASSERT_EQUAL_INT(mgr->nefx, 1);
++            assert_ptr_eq(mgr->efx, nullptr,
++                    "nothing before init", __LINE__);
+             mgr->init();
+-            TS_ASSERT_DIFFERS(mgr->efx, nullptr);
++            TS_NON_NULL(mgr->efx);
+         }
+ 
+         void testClear() {
+             mgr->changeeffect(1);
+             mgr->init();
+-            TS_ASSERT_DIFFERS(mgr->efx, nullptr);
++            TS_NON_NULL(mgr->efx);
+             mgr->changeeffect(0);
+             mgr->init();
+-            TS_ASSERT_EQUALS(mgr->efx, nullptr);
++            assert_ptr_eq(mgr->efx, nullptr,
++                    "nothing after clearing", __LINE__);
+         }
+ 
+         void testSwap() {
+             //Initially the effect is NULL
+-            TS_ASSERT_EQUALS(mgr->efx, nullptr);
++            assert_ptr_eq(mgr->efx, nullptr,
++                    "initially null", __LINE__);
+ 
+             //A Reverb is selected
+             mgr->changeeffect(1);
+             mgr->init();
+-            TS_ASSERT_DIFFERS(dynamic_cast<Reverb*>(mgr->efx), nullptr);
+-            TS_ASSERT_EQUALS(dynamic_cast<Echo*>(mgr->efx), nullptr);
++            TS_NON_NULL(dynamic_cast<Reverb*>(mgr->efx));
++            assert_ptr_eq(dynamic_cast<Echo*>(mgr->efx),
++                    nullptr,
++                    "not an echo", __LINE__);
+ 
+             //An Echo is selected
+             mgr->changeeffect(2);
+             mgr->init();
+-            TS_ASSERT_EQUALS(dynamic_cast<Reverb*>(mgr->efx), nullptr);
+-            TS_ASSERT_DIFFERS(dynamic_cast<Echo*>(mgr->efx), nullptr);
++            assert_ptr_eq(dynamic_cast<Reverb*>(mgr->efx),
++                    nullptr,
++                    "not a reverb", __LINE__);
++            TS_NON_NULL(dynamic_cast<Echo*>(mgr->efx));
+         }
+ 
+     private:
+@@ -77,3 +84,12 @@ class EchoTest:public CxxTest::TestSuite
+         Allocator *alloc;
+         SYNTH_T   *synth;
+ };
++
++int main()
++{
++    EffectTest test;
++    RUN_TEST(testInit);
++    RUN_TEST(testClear);
++    RUN_TEST(testSwap);
++    return test_summary();
++}
+diff --git a/src/Tests/KitTest.h b/src/Tests/KitTest.cpp
+similarity index 60%
+rename from src/Tests/KitTest.h
+rename to src/Tests/KitTest.cpp
+index 084fc55f..9a5d7bdc 100644
+--- a/src/Tests/KitTest.h
++++ b/src/Tests/KitTest.cpp
+@@ -9,7 +9,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstring>
+ #include <cstdlib>
+@@ -39,7 +39,7 @@ enum PrivateNoteStatus {
+ };
+ 
+ 
+-class KitTest:public CxxTest::TestSuite
++class KitTest
+ {
+     private:
+         Alloc      alloc;
+@@ -76,7 +76,7 @@ class KitTest:public CxxTest::TestSuite
+             //first note has moved to release state
+             //second note has moved to sustain state
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -85,7 +85,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_RELEASED|SUSTAIN_BIT,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -94,7 +94,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_RELEASED_AND_SUSTAINED,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -115,7 +115,7 @@ class KitTest:public CxxTest::TestSuite
+             //first note has moved to release state
+             //second note has stayed in playing state
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -124,7 +124,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_RELEASED|SUSTAIN_BIT,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -133,7 +133,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -157,7 +157,7 @@ class KitTest:public CxxTest::TestSuite
+             //first note has moved to release state
+             //second note has stayed in playing state
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -166,7 +166,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_RELEASED,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -175,7 +175,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -196,7 +196,7 @@ class KitTest:public CxxTest::TestSuite
+             part->NoteOn(64, 127, 0);
+             part->NoteOn(65, 127, 0);
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -205,7 +205,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -214,7 +214,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -230,7 +230,7 @@ class KitTest:public CxxTest::TestSuite
+             part->NoteOn(64, 127, 0);
+             part->NoteOn(65, 127, 0);
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -239,7 +239,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -248,7 +248,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -257,16 +257,16 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
++            TS_NON_NULL(part->notePool.sdesc[1].note);
+             if(part->notePool.sdesc[1].note)
+-                TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, true);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  0)
++                TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, true);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  0);
+         }
+ 
+         void testNoKitNoLegatoYesMono() {
+@@ -276,7 +276,7 @@ class KitTest:public CxxTest::TestSuite
+             part->NoteOn(65, 127, 0);
+ 
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -285,7 +285,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_RELEASED,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -294,7 +294,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -303,15 +303,15 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[1].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  0);
+         }
+ 
+         //Normal Kit
+@@ -328,7 +328,7 @@ class KitTest:public CxxTest::TestSuite
+ 
+             part->notePool.dump();
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -337,7 +337,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -346,7 +346,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -355,29 +355,31 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  1)
++            TS_NON_NULL(part->notePool.sdesc[1].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  1);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[2].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[2].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[3].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].kit,  1)
++            TS_NON_NULL(part->notePool.sdesc[3].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].kit,  1);
+ 
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].kit,  0)
++            assert_ptr_eq(part->notePool.sdesc[4].note,
++                          nullptr,
++                          "note free", __LINE__);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[4].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[4].kit,  0);
+         }
+ 
+         void testYesKitYesLegatoNoMono() {
+@@ -394,7 +396,7 @@ class KitTest:public CxxTest::TestSuite
+ 
+             part->notePool.dump();
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -403,7 +405,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -412,7 +414,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -421,29 +423,31 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  1)
++            TS_NON_NULL(part->notePool.sdesc[1].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  1);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[2].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].note->legato.silent, true);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[2].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].note->legato.silent, true);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[3].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].note->legato.silent, true);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].kit,  1)
++            TS_NON_NULL(part->notePool.sdesc[3].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].note->legato.silent, true);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].kit,  1);
+ 
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].kit,  0)
++            assert_ptr_eq(part->notePool.sdesc[4].note,
++                          nullptr,
++                          "note free", __LINE__);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[4].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[4].kit,  0);
+         }
+ 
+         void testYesKitNoLegatoYesMono() {
+@@ -460,7 +464,7 @@ class KitTest:public CxxTest::TestSuite
+ 
+             part->notePool.dump();
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -469,7 +473,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_RELEASED,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -478,7 +482,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -487,29 +491,31 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  1)
++            TS_NON_NULL(part->notePool.sdesc[1].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  1);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[2].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[2].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[3].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[3].kit,  1)
++            TS_NON_NULL(part->notePool.sdesc[3].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[3].kit,  1);
+ 
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[4].kit,  0)
++            assert_ptr_eq(part->notePool.sdesc[4].note,
++                          nullptr,
++                          "note free", __LINE__);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[4].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[4].kit,  0);
+         }
+ 
+         //Single Kit
+@@ -525,7 +531,7 @@ class KitTest:public CxxTest::TestSuite
+ 
+             part->notePool.dump();
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -534,7 +540,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -543,7 +549,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -552,19 +558,21 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[1].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  0);
+ 
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[2].kit,  0)
++            assert_ptr_eq(part->notePool.sdesc[2].note,
++                          nullptr,
++                          "note free", __LINE__);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[2].kit,  0);
+         }
+ 
+         void testSingleKitYesLegatoNoMono() {
+@@ -579,7 +587,7 @@ class KitTest:public CxxTest::TestSuite
+             part->NoteOn(64, 127, 0);
+             part->NoteOn(65, 127, 0);
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -588,7 +596,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -597,7 +605,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -606,16 +614,16 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
++            TS_NON_NULL(part->notePool.sdesc[1].note);
+             if(part->notePool.sdesc[1].note)
+-                TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, true);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  0)
++                TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, true);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  0);
+         }
+ 
+         void testSingleKitNoLegatoYesMono() {
+@@ -632,7 +640,7 @@ class KitTest:public CxxTest::TestSuite
+ 
+ 
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[0],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=64,
+@@ -641,7 +649,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_RELEASED,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=65,
+@@ -650,7 +658,7 @@ class KitTest:public CxxTest::TestSuite
+                     .status=KEY_PLAYING,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++            TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+                     .age=0,
+                     .note=0,
+@@ -659,15 +667,15 @@ class KitTest:public CxxTest::TestSuite
+                     .status=0,
+                     .legatoMirror=false}));
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[0].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[0].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[0].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].kit,  0);
+ 
+-            TS_ASSERT_DIFFERS(part->notePool.sdesc[1].note, nullptr);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].note->legato.silent, false);
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].type, 0)
+-            TS_ASSERT_EQUALS(part->notePool.sdesc[1].kit,  0)
++            TS_NON_NULL(part->notePool.sdesc[1].note);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].note->legato.silent, false);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].type, 0);
++            TS_ASSERT_EQUAL_INT(part->notePool.sdesc[1].kit,  0);
+         }
+ 
+         void testKeyLimit(void)
+@@ -681,16 +689,16 @@ class KitTest:public CxxTest::TestSuite
+             part->NoteOn(68, 127, 0);
+ 
+             //Verify that notes are spawned as expected
+-            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  5);
+-            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 5);
++            TS_ASSERT_EQUAL_INT(pool.usedNoteDesc(),  5);
++            TS_ASSERT_EQUAL_INT(pool.usedSynthDesc(), 5);
+ 
+             //Reset the part
+             part->monomemClear();
+             pool.killAllNotes();
+ 
+             //Verify that notes are despawned
+-            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  0);
+-            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 0);
++            TS_ASSERT_EQUAL_INT(pool.usedNoteDesc(),  0);
++            TS_ASSERT_EQUAL_INT(pool.usedSynthDesc(), 0);
+ 
+             //Enable keylimit
+             part->setkeylimit(3);
+@@ -703,17 +711,17 @@ class KitTest:public CxxTest::TestSuite
+             part->NoteOn(68, 127, 0);
+ 
+             //Verify that notes are spawned as expected with limit
+-            TS_ASSERT_EQUALS(pool.getRunningNotes(),  3);//2 entombed
+-            TS_ASSERT_EQUALS(pool.usedNoteDesc(),     5);
+-            TS_ASSERT_EQUALS(pool.usedSynthDesc(),    5);
++            TS_ASSERT_EQUAL_INT(pool.getRunningNotes(),  3);//2 entombed
++            TS_ASSERT_EQUAL_INT(pool.usedNoteDesc(),     5);
++            TS_ASSERT_EQUAL_INT(pool.usedSynthDesc(),    5);
+ 
+             //Reset the part
+             part->monomemClear();
+             pool.killAllNotes();
+ 
+             //Verify that notes are despawned
+-            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  0);
+-            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 0);
++            TS_ASSERT_EQUAL_INT(pool.usedNoteDesc(),  0);
++            TS_ASSERT_EQUAL_INT(pool.usedSynthDesc(), 0);
+ 
+             //Now to test note stealing
+ 
+@@ -723,8 +731,8 @@ class KitTest:public CxxTest::TestSuite
+             part->NoteOn(66, 127, 0);
+ 
+             //Verify that note pool is full
+-            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  3);
+-            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 3);
++            TS_ASSERT_EQUAL_INT(pool.usedNoteDesc(),  3);
++            TS_ASSERT_EQUAL_INT(pool.usedSynthDesc(), 3);
+ 
+             //Age the notes
+             pool.ndesc[1].age = 50;
+@@ -736,26 +744,26 @@ class KitTest:public CxxTest::TestSuite
+             //descriptors for #66 and #65
+             part->NoteOn(67, 127, 0);
+             pool.cleanup();
+-            TS_ASSERT_EQUALS(pool.ndesc[0].note, 64);
+-            TS_ASSERT_EQUALS(pool.ndesc[1].note, 65);
+-            TS_ASSERT_EQUALS(pool.ndesc[2].note, 66);
+-            TS_ASSERT_EQUALS(pool.ndesc[2].status, KEY_RELEASED);
+-            TS_ASSERT_EQUALS(pool.ndesc[3].note, 67);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[0].note, 64);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[1].note, 65);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[2].note, 66);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[2].status, KEY_RELEASED);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[3].note, 67);
+ 
+             part->NoteOn(68, 127, 0);
+ 
+             //Verify that note pool is still full and entombed
+-            TS_ASSERT_EQUALS(pool.usedNoteDesc(),  5);
+-            TS_ASSERT_EQUALS(pool.usedSynthDesc(), 5);
++            TS_ASSERT_EQUAL_INT(pool.usedNoteDesc(),  5);
++            TS_ASSERT_EQUAL_INT(pool.usedSynthDesc(), 5);
+ 
+             //Check that the result is {64, 68, 67}
+-            TS_ASSERT_EQUALS(pool.ndesc[0].note, 64);
+-            TS_ASSERT_EQUALS(pool.ndesc[1].note, 65);
+-            TS_ASSERT_EQUALS(pool.ndesc[1].status, KEY_RELEASED);
+-            TS_ASSERT_EQUALS(pool.ndesc[2].note, 66);
+-            TS_ASSERT_EQUALS(pool.ndesc[2].status, KEY_RELEASED);
+-            TS_ASSERT_EQUALS(pool.ndesc[3].note, 67);
+-            TS_ASSERT_EQUALS(pool.ndesc[4].note, 68);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[0].note, 64);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[1].note, 65);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[1].status, KEY_RELEASED);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[2].note, 66);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[2].status, KEY_RELEASED);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[3].note, 67);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[4].note, 68);
+         }
+ 
+         void tearDown() {
+@@ -766,3 +774,22 @@ class KitTest:public CxxTest::TestSuite
+             delete synth;
+         }
+ };
++
++int main()
++{
++    KitTest test;
++    RUN_TEST(testSustainCase1);
++    RUN_TEST(testSustainCase2);
++    RUN_TEST(testMonoSustain);
++    RUN_TEST(testNoKitNoLegatoNoMono);
++    RUN_TEST(testNoKitYesLegatoNoMono);
++    RUN_TEST(testNoKitNoLegatoYesMono);
++    RUN_TEST(testYesKitNoLegatoNoMono);
++    RUN_TEST(testYesKitYesLegatoNoMono);
++    RUN_TEST(testYesKitNoLegatoYesMono);
++    RUN_TEST(testSingleKitNoLegatoNoMono);
++    RUN_TEST(testSingleKitYesLegatoNoMono);
++    RUN_TEST(testSingleKitNoLegatoYesMono);
++    RUN_TEST(testKeyLimit);
++    return test_summary();
++}
+diff --git a/src/Tests/MemoryStressTest.h b/src/Tests/MemoryStressTest.cpp
+similarity index 95%
+rename from src/Tests/MemoryStressTest.h
+rename to src/Tests/MemoryStressTest.cpp
+index d8d86b53..6db8909e 100644
+--- a/src/Tests/MemoryStressTest.h
++++ b/src/Tests/MemoryStressTest.cpp
+@@ -13,7 +13,7 @@
+ */
+ 
+ 
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <iostream>
+ #include <fstream>
+ #include <ctime>
+@@ -29,10 +29,9 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class AdNoteTest:public CxxTest::TestSuite
++class MemoryStressTest
+ {
+     public:
+-        ADnote       *note;
+         AbsTime      *time;
+         FFTwrapper   *fft;
+         ADnoteParameters *defaultPreset;
+@@ -74,7 +73,6 @@ class AdNoteTest:public CxxTest::TestSuite
+         }
+ 
+         void tearDown() {
+-            delete note;
+             delete controller;
+             delete defaultPreset;
+             delete fft;
+@@ -109,3 +107,10 @@ class AdNoteTest:public CxxTest::TestSuite
+         }
+ 
+ };
++
++int main()
++{
++    MemoryStressTest test;
++    RUN_TEST(testManySimultaneousNotes);
++    return test_summary();
++}
+diff --git a/src/Tests/MessageTest.h b/src/Tests/MessageTest.cpp
+similarity index 80%
+rename from src/Tests/MessageTest.h
+rename to src/Tests/MessageTest.cpp
+index 5e644735..779bdaff 100644
+--- a/src/Tests/MessageTest.h
++++ b/src/Tests/MessageTest.cpp
+@@ -10,7 +10,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstdlib>
+ #include <iostream>
+@@ -37,7 +37,7 @@ char *instance_name=(char*)"";
+ 
+ #define NUM_MIDDLEWARE 3
+ 
+-class MessageTest:public CxxTest::TestSuite
++class MessageTest
+ {
+     public:
+         Config config;
+@@ -59,10 +59,10 @@ class MessageTest:public CxxTest::TestSuite
+             mw->transmitMsg("/part0/kit0/Psubenabled", "T");
+             TS_ASSERT(ms->uToB->hasNext());
+             msg = ms->uToB->read();
+-            TS_ASSERT_EQUALS(string("/part0/kit0/subpars-data"), msg);
++            TS_ASSERT_EQUAL_STR("/part0/kit0/subpars-data", msg);
+             TS_ASSERT(ms->uToB->hasNext());
+             msg = ms->uToB->read();
+-            TS_ASSERT_EQUALS(string("/part0/kit0/Psubenabled"), msg);
++            TS_ASSERT_EQUAL_STR("/part0/kit0/Psubenabled", msg);
+         }
+ 
+         void testBankCapture(void)
+@@ -72,7 +72,7 @@ class MessageTest:public CxxTest::TestSuite
+             mw->transmitMsg("/bank/fake", "");
+             TS_ASSERT(ms->uToB->hasNext());
+             const char *msg = ms->uToB->read();
+-            TS_ASSERT_EQUALS(string("/bank/fake"), msg);
++            TS_ASSERT_EQUAL_STR("/bank/fake", msg);
+         }
+ 
+         void testOscCopyPaste(void)
+@@ -90,19 +90,20 @@ class MessageTest:public CxxTest::TestSuite
+             auto &osc_dst = *ms->part[0]->kit[0].padpars->oscilgen;
+             auto &osc_oth = *ms->part[0]->kit[0].adpars->VoicePar[1].OscilGn;
+ 
+-            TS_ASSERT_EQUALS(osc_src.Pbasefuncpar, 64);
++            TS_ASSERT_EQUAL_INT(osc_src.Pbasefuncpar, 64);
+             osc_src.Pbasefuncpar = 32;
+-            TS_ASSERT_EQUALS(osc_src.Pbasefuncpar, 32);
++            TS_ASSERT_EQUAL_INT(osc_src.Pbasefuncpar, 32);
+ 
+             //Copy From ADsynth modulator
+             printf("====Copy From ADsynth modulator\n");
+             start_realtime();
+             mw->transmitMsg("/presets/copy", "s", "/part0/kit0/adpars/VoicePar0/FMSmp/");
+ 
+-            TS_ASSERT_EQUALS(mw->getPresetsStore().clipboard.type.c_str(), string("Poscilgen"));
++            TS_ASSERT_EQUAL_STR("Poscilgen", mw->getPresetsStore().clipboard.type.c_str());
+             // a regex would be better here...
+             // hopefully, mxml will not change its whitespace behavior
+-            TS_ASSERT(strstr(mw->getPresetsStore().clipboard.data.c_str(), "<par name=\"base_function_par\" value=\"32\" />"));
++            assert_non_null(strstr(mw->getPresetsStore().clipboard.data.c_str(), "<par name=\"base_function_par\" value=\"32\" />"),
++                    "base_function_par at right value", __LINE__);
+ 
+             /* // better test this without string comparison:
+             {
+@@ -116,8 +117,8 @@ class MessageTest:public CxxTest::TestSuite
+             //printf("clipboard type: %s\n",mw->getPresetsStore().clipboard.type.c_str());
+             //printf("clipboard data:\n%s\n",mw->getPresetsStore().clipboard.data.c_str());
+ 
+-            TS_ASSERT_EQUALS(osc_dst.Pbasefuncpar, 64);
+-            TS_ASSERT_EQUALS(osc_oth.Pbasefuncpar, 64);
++            TS_ASSERT_EQUAL_INT(osc_dst.Pbasefuncpar, 64);
++            TS_ASSERT_EQUAL_INT(osc_oth.Pbasefuncpar, 64);
+ 
+             //Paste to PADsynth
+             printf("====Paste to PADsynth\n");
+@@ -127,8 +128,8 @@ class MessageTest:public CxxTest::TestSuite
+             mw->transmitMsg("/presets/paste", "s", "/part0/kit0/adpars/VoicePar1/OscilSmp/");
+ 
+             stop_realtime();
+-            TS_ASSERT_EQUALS(osc_dst.Pbasefuncpar, 32);
+-            TS_ASSERT_EQUALS(osc_oth.Pbasefuncpar, 32);
++            TS_ASSERT_EQUAL_INT(osc_dst.Pbasefuncpar, 32);
++            TS_ASSERT_EQUAL_INT(osc_oth.Pbasefuncpar, 32);
+         }
+ 
+ 
+@@ -169,7 +170,7 @@ class MessageTest:public CxxTest::TestSuite
+         {
+             mw->transmitMsg("/learn", "s", "/Pkeyshift");
+             mw->transmitMsg("/virtual_midi_cc", "iii", 0, 23, 108);
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 64);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 64);
+ 
+             //Perform a learning operation
+ 
+@@ -181,19 +182,19 @@ class MessageTest:public CxxTest::TestSuite
+             //Verify that the learning actually worked
+             mw->transmitMsg("/virtual_midi_cc", "iii", 0, 23, 13);
+             run_realtime();
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 13);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 13);
+ 
+             mw->transmitMsg("/virtual_midi_cc", "iii", 0, 23, 2);
+             run_realtime();
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 2);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 2);
+ 
+             mw->transmitMsg("/virtual_midi_cc", "iii", 0, 23, 0);
+             run_realtime();
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 0);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 0);
+ 
+             mw->transmitMsg("/virtual_midi_cc", "iii", 0, 23, 127);
+             run_realtime();
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 127);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 127);
+         }
+ 
+         void testMidiLearnSave(void)
+@@ -202,14 +203,14 @@ class MessageTest:public CxxTest::TestSuite
+             mw->transmitMsg("/virtual_midi_cc", "iii", 0, 23, 108);
+ 
+             //param is at default until rt-thread is run
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 64);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 64);
+ 
+ 
+             //Perform a learning operation
+             run_realtime();
+ 
+             //Verify binding affects control
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 108);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 108);
+ 
+ 
+             printf("# Trying to save automations\n");
+@@ -220,7 +221,7 @@ class MessageTest:public CxxTest::TestSuite
+             //Verify that some file exists
+             printf("# Verifying file exists\n");
+             FILE *f = fopen("test-midi-learn.xlz", "r");
+-            TS_ASSERT(f);
++            assert_non_null(f, "test file exists", __LINE__);
+ 
+             if(f)
+                 fclose(f);
+@@ -233,7 +234,7 @@ class MessageTest:public CxxTest::TestSuite
+             run_realtime();
+ 
+             //Verify automation table is clear
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 108);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 108);
+ 
+             printf("# Loading automation\n");
+             mw->transmitMsg("/load_xlz", "s", "test-midi-learn.xlz");
+@@ -242,26 +243,26 @@ class MessageTest:public CxxTest::TestSuite
+             run_realtime();
+ 
+             //Verify automation table is restored
+-            TS_ASSERT_EQUALS(ms->Pkeyshift, 28);
++            TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 28);
+         }
+ 
+         void testLfoPaste(void)
+         {
+             start_realtime();
+             ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand = 32;
+-            TS_ASSERT_EQUALS(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 32);
++            TS_ASSERT_EQUAL_INT(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 32);
+ 
+             //Copy
+             mw->transmitMsg("/presets/copy", "s", "/part0/kit0/adpars/GlobalPar/FreqLfo/");
+ 
+             ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand = 99;
+-            TS_ASSERT_EQUALS(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 99);
++            TS_ASSERT_EQUAL_INT(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 99);
+ 
+             //Paste
+             mw->transmitMsg("/presets/paste", "s", "/part0/kit0/adpars/GlobalPar/FreqLfo/");
+             stop_realtime();
+ 
+-            TS_ASSERT_EQUALS(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 32);
++            TS_ASSERT_EQUAL_INT(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 32);
+         }
+ 
+         void testPadPaste(void)
+@@ -274,24 +275,24 @@ class MessageTest:public CxxTest::TestSuite
+             auto &field1 = ms->part[0]->kit[0].padpars->PVolume;
+             auto &field2 = ms->part[0]->kit[0].padpars->oscilgen->Pfilterpar1;
+             field1 = 32;
+-            TS_ASSERT_EQUALS(field1, 32);
++            TS_ASSERT_EQUAL_INT(field1, 32);
+             field2 = 35;
+-            TS_ASSERT_EQUALS(field2, 35);
++            TS_ASSERT_EQUAL_INT(field2, 35);
+ 
+             //Copy
+             mw->transmitMsg("/presets/copy", "s", "/part0/kit0/padpars/");
+ 
+             field1 = 99;
+-            TS_ASSERT_EQUALS(field1, 99);
++            TS_ASSERT_EQUAL_INT(field1, 99);
+             field2 = 95;
+-            TS_ASSERT_EQUALS(field2, 95);
++            TS_ASSERT_EQUAL_INT(field2, 95);
+ 
+             //Paste
+             mw->transmitMsg("/presets/paste", "s", "/part0/kit0/padpars/");
+             stop_realtime();
+ 
+-            TS_ASSERT_EQUALS(field1, 32);
+-            TS_ASSERT_EQUALS(field2, 35);
++            TS_ASSERT_EQUAL_INT(field1, 32);
++            TS_ASSERT_EQUAL_INT(field2, 35);
+         }
+ 
+         void testFilterDepricated(void)
+@@ -320,10 +321,10 @@ class MessageTest:public CxxTest::TestSuite
+             while(ms->bToU->hasNext()) {
+                 const char *msg = ms->bToU->read();
+                 if(state == 0) {
+-                    TS_ASSERT_EQUALS(rtosc_narguments(msg), 0U);
++                    TS_ASSERT_EQUAL_INT(rtosc_narguments(msg), 0U);
+                     state = 1;
+                 } else if(state == 1) {
+-                    TS_ASSERT_EQUALS(rtosc_narguments(msg), 1U);
++                    TS_ASSERT_EQUAL_INT(rtosc_narguments(msg), 1U);
+                     value = rtosc_argument(msg, 0).i;
+                     state = 2;
+                 } else if(state == 2) {
+@@ -350,3 +351,17 @@ class MessageTest:public CxxTest::TestSuite
+         std::thread *realtime;
+         bool         do_exit;
+ };
++
++int main()
++{
++    MessageTest test;
++    RUN_TEST(testKitEnable);
++    RUN_TEST(testBankCapture);
++    RUN_TEST(testOscCopyPaste);
++    RUN_TEST(testMidiLearn);
++    RUN_TEST(testMidiLearnSave);
++    RUN_TEST(testLfoPaste);
++    RUN_TEST(testPadPaste);
++    RUN_TEST(testFilterDepricated);
++    return test_summary();
++}
+diff --git a/src/Tests/MicrotonalTest.h b/src/Tests/MicrotonalTest.cpp
+similarity index 73%
+rename from src/Tests/MicrotonalTest.h
+rename to src/Tests/MicrotonalTest.cpp
+index 4cae3c63..a1f77c6b 100644
+--- a/src/Tests/MicrotonalTest.h
++++ b/src/Tests/MicrotonalTest.cpp
+@@ -10,7 +10,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <iostream>
+ #include "../Misc/Microtonal.h"
+ #include "../Misc/XMLwrapper.h"
+@@ -23,7 +23,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class MicrotonalTest:public CxxTest::TestSuite
++class MicrotonalTest
+ {
+     public:
+         int compression;
+@@ -40,27 +40,26 @@ class MicrotonalTest:public CxxTest::TestSuite
+ 
+         //Verifies that the object is initialized correctly
+         void testinit() {
+-            TS_ASSERT_EQUALS(testMicro->Pinvertupdown, 0);
+-            TS_ASSERT_EQUALS(testMicro->Pinvertupdowncenter, 60);
+-            TS_ASSERT_EQUALS(testMicro->getoctavesize(), 12);
+-            TS_ASSERT_EQUALS(testMicro->Penabled, 0);
+-            TS_ASSERT_EQUALS(testMicro->PAnote, 69);
+-            TS_ASSERT_EQUALS(testMicro->PAfreq, 440.0f);
+-            TS_ASSERT_EQUALS(testMicro->Pscaleshift, 64);
+-            TS_ASSERT_EQUALS(testMicro->Pfirstkey, 0);
+-            TS_ASSERT_EQUALS(testMicro->Plastkey, 127);
+-            TS_ASSERT_EQUALS(testMicro->Pmiddlenote, 60);
+-            TS_ASSERT_EQUALS(testMicro->Pmapsize, 12);
+-            TS_ASSERT_EQUALS(testMicro->Pmappingenabled, 0);
+-            TS_ASSERT_EQUALS(testMicro->Pglobalfinedetune, 64);
+-
+-            TS_ASSERT_EQUALS(string((const char *)testMicro->Pname), "12tET");
+-            TS_ASSERT_EQUALS(string(
+-                                 (const char *)testMicro->Pcomment),
+-                             "Equal Temperament 12 notes per octave");
++            TS_ASSERT_EQUAL_INT(testMicro->Pinvertupdown, 0);
++            TS_ASSERT_EQUAL_INT(testMicro->Pinvertupdowncenter, 60);
++            TS_ASSERT_EQUAL_INT(testMicro->getoctavesize(), 12);
++            TS_ASSERT_EQUAL_INT(testMicro->Penabled, 0);
++            TS_ASSERT_EQUAL_INT(testMicro->PAnote, 69);
++            TS_ASSERT_EQUAL_INT(testMicro->PAfreq, 440.0f);
++            TS_ASSERT_EQUAL_INT(testMicro->Pscaleshift, 64);
++            TS_ASSERT_EQUAL_INT(testMicro->Pfirstkey, 0);
++            TS_ASSERT_EQUAL_INT(testMicro->Plastkey, 127);
++            TS_ASSERT_EQUAL_INT(testMicro->Pmiddlenote, 60);
++            TS_ASSERT_EQUAL_INT(testMicro->Pmapsize, 12);
++            TS_ASSERT_EQUAL_INT(testMicro->Pmappingenabled, 0);
++            TS_ASSERT_EQUAL_INT(testMicro->Pglobalfinedetune, 64);
++
++            TS_ASSERT_EQUAL_STR("12tET", (const char *)testMicro->Pname);
++            TS_ASSERT_EQUAL_STR("Equal Temperament 12 notes per octave",
++                    testMicro->Pcomment);
+ 
+             for(int i = 0; i < 128; ++i)
+-                TS_ASSERT_EQUALS(testMicro->Pmapping[i], i);
++                TS_ASSERT_EQUAL_INT(i, testMicro->Pmapping[i]);
+ 
+             TS_ASSERT_DELTA(testMicro->getnotefreq(19 / 12.0f, 0), 24.4997f, 0.0001f);
+         }
+@@ -129,3 +128,11 @@ class MicrotonalTest:public CxxTest::TestSuite
+     private:
+         Microtonal *testMicro;
+ };
++
++int main()
++{
++    MicrotonalTest test;
++    RUN_TEST(testinit);
++    RUN_TEST(testXML);
++    return test_summary();
++}
+diff --git a/src/Tests/MiddlewareTest.h b/src/Tests/MiddlewareTest.cpp
+similarity index 94%
+rename from src/Tests/MiddlewareTest.h
+rename to src/Tests/MiddlewareTest.cpp
+index a696900f..12543e43 100644
+--- a/src/Tests/MiddlewareTest.h
++++ b/src/Tests/MiddlewareTest.cpp
+@@ -10,7 +10,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstdlib>
+ #include <iostream>
+@@ -33,7 +33,7 @@ char *instance_name=(char*)"";
+ 
+ #define NUM_MIDDLEWARE 3
+ 
+-class PluginTest:public CxxTest::TestSuite
++class PluginTest
+ {
+     public:
+         Config config;
+@@ -94,7 +94,7 @@ class PluginTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 sum += fabsf(outL[i]);
+ 
+-            TS_ASSERT_LESS_THAN(0.1f, sum);
++            TS_ASSERT(0.1f < sum);
+         }
+ 
+         string loadfile(string fname) const
+@@ -144,3 +144,13 @@ class PluginTest:public CxxTest::TestSuite
+         MiddleWare *middleware[NUM_MIDDLEWARE];
+         Master *master[NUM_MIDDLEWARE];
+ };
++
++int main()
++{
++    PluginTest test;
++    RUN_TEST(testInit);
++    RUN_TEST(testPanic);
++    RUN_TEST(testLoad);
++    RUN_TEST(testChangeToOutOfRangeProgram);
++    return test_summary();
++}
+diff --git a/src/Tests/MqTest.h b/src/Tests/MqTest.cpp
+similarity index 86%
+rename from src/Tests/MqTest.h
+rename to src/Tests/MqTest.cpp
+index dbcff446..5f3f3650 100644
+--- a/src/Tests/MqTest.h
++++ b/src/Tests/MqTest.cpp
+@@ -10,7 +10,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstdlib>
+ #include <iostream>
+@@ -25,7 +25,7 @@ using namespace zyn;
+ 
+ char *instance_name=(char*)"";
+ 
+-class MessageTest:public CxxTest::TestSuite
++class MessageTest
+ {
+     public:
+         MultiQueue *s;
+@@ -40,24 +40,26 @@ class MessageTest:public CxxTest::TestSuite
+         void testBasic(void)
+         {
+             auto *mem = s->alloc();
+-            TS_ASSERT(mem);
+-            TS_ASSERT(mem->memory);
++            TS_NON_NULL(mem);
++            TS_NON_NULL(mem->memory);
+             TS_ASSERT(!s->read());
+             s->write(mem);
+             auto *mem2 = s->read();
+-            TS_ASSERT_EQUALS(mem, mem2);
++            assert_ptr_eq(mem, mem2,
++                    "both locations are the same", __LINE__);
+             s->free(mem2);
+         }
+         void testMed(void)
+         {
+             for(int i=0; i<100; ++i) {
+                 auto *mem = s->alloc();
+-                TS_ASSERT(mem);
+-                TS_ASSERT(mem->memory);
++                TS_NON_NULL(mem);
++                TS_NON_NULL(mem->memory);
+                 TS_ASSERT(!s->read());
+                 s->write(mem);
+                 auto *mem2 = s->read();
+-                TS_ASSERT_EQUALS(mem, mem2);
++                assert_ptr_eq(mem, mem2,
++                        "both locations are the same", __LINE__);
+                 s->free(mem2);
+             }
+         }
+@@ -122,3 +124,12 @@ class MessageTest:public CxxTest::TestSuite
+             TS_ASSERT(good);
+         }
+ };
++
++int main()
++{
++    MessageTest test;
++    RUN_TEST(testBasic);
++    RUN_TEST(testMed);
++    RUN_TEST(testThreads);
++    return test_summary();
++}
+diff --git a/src/Tests/MsgParseTest.h b/src/Tests/MsgParseTest.cpp
+similarity index 79%
+rename from src/Tests/MsgParseTest.h
+rename to src/Tests/MsgParseTest.cpp
+index ebb12d0d..378e3b81 100644
+--- a/src/Tests/MsgParseTest.h
++++ b/src/Tests/MsgParseTest.cpp
+@@ -1,10 +1,7 @@
+-#ifndef MSGPARSETEST_H
+-#define MSGPARSETEST_H
+-
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include "../Misc/MsgParsing.h"
+ 
+-class PluginTest:public CxxTest::TestSuite
++class PluginTest
+ {
+     public:
+         void setUp() {}
+@@ -19,24 +16,24 @@ class PluginTest:public CxxTest::TestSuite
+             // test a full string with OscilSmp
+             res = zyn::idsFromMsg("/part1/kit2/adpars/VoicePar3/OscilSmp", &part, &kit, &vc, &isFm);
+             TS_ASSERT(res);
+-            TS_ASSERT_EQUALS(part, 1);
+-            TS_ASSERT_EQUALS(kit, 2);
+-            TS_ASSERT_EQUALS(vc, 3);
++            TS_ASSERT_EQUAL_INT(part, 1);
++            TS_ASSERT_EQUAL_INT(kit, 2);
++            TS_ASSERT_EQUAL_INT(vc, 3);
+             TS_ASSERT(!isFm);
+             // translate back into string
+             std::string str = zyn::buildVoiceParMsg(&part, &kit, &vc, &isFm);
+-            TS_ASSERT_EQUALS(str, "/part1/kit2/adpars/VoicePar3/OscilSmp");
++            TS_ASSERT_EQUAL_STR("/part1/kit2/adpars/VoicePar3/OscilSmp", str.c_str());
+ 
+             // same with FMSmp
+             res = zyn::idsFromMsg("/part11/kit12/adpars/VoicePar13/FMSmp", &part, &kit, &vc, &isFm);
+             TS_ASSERT(res);
+-            TS_ASSERT_EQUALS(part, 11);
+-            TS_ASSERT_EQUALS(kit, 12);
+-            TS_ASSERT_EQUALS(vc, 13);
++            TS_ASSERT_EQUAL_INT(part, 11);
++            TS_ASSERT_EQUAL_INT(kit, 12);
++            TS_ASSERT_EQUAL_INT(vc, 13);
+             TS_ASSERT(isFm);
+             // translate back into string
+             str = zyn::buildVoiceParMsg(&part, &kit, &vc, &isFm);
+-            TS_ASSERT_EQUALS(str, "/part11/kit12/adpars/VoicePar13/FMSmp");
++            TS_ASSERT_EQUAL_STR("/part11/kit12/adpars/VoicePar13/FMSmp", str.c_str());
+ 
+             // check return values
+             TS_ASSERT(!zyn::idsFromMsg("/part", &part, &kit, nullptr));
+@@ -56,4 +53,9 @@ class PluginTest:public CxxTest::TestSuite
+         }
+ };
+ 
+-#endif // MSGPARSETEST_H
++int main()
++{
++    PluginTest test;
++    RUN_TEST(testExtracting);
++    return test_summary();
++}
+diff --git a/src/Tests/OscilGenTest.h b/src/Tests/OscilGenTest.cpp
+similarity index 95%
+rename from src/Tests/OscilGenTest.h
+rename to src/Tests/OscilGenTest.cpp
+index c54bee59..ec8df888 100644
+--- a/src/Tests/OscilGenTest.h
++++ b/src/Tests/OscilGenTest.cpp
+@@ -10,7 +10,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <string>
+ #include "../Synth/OscilGen.h"
+ #include "../Misc/XMLwrapper.h"
+@@ -22,7 +22,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class OscilGenTest:public CxxTest::TestSuite
++class OscilGenTest
+ {
+     public:
+         float  freq;
+@@ -126,3 +126,13 @@ class OscilGenTest:public CxxTest::TestSuite
+                    (static_cast<float>(t_off - t_on)) / CLOCKS_PER_SEC, samps);
+         }
+ };
++
++int main()
++{
++    OscilGenTest test;
++    RUN_TEST(testInit);
++    RUN_TEST(testOutput);
++    RUN_TEST(testSpectrum);
++    RUN_TEST(testSpeed);
++    return test_summary();
++}
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.cpp
+similarity index 93%
+rename from src/Tests/PadNoteTest.h
+rename to src/Tests/PadNoteTest.cpp
+index 0e7c6518..3a4d552d 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.cpp
+@@ -13,12 +13,13 @@
+ 
+ 
+ //Based Upon AdNoteTest.h and SubNoteTest.h
+-#include <cxxtest/TestSuite.h>
+-#include <iostream>
+-#include <fstream>
++#include "test-suite.h"
++#include <complex>
+ #include <ctime>
+ #include <string>
+ #define private public
++#include "../Synth/PADnote.h"
++#undef private
+ #include "../Misc/Master.h"
+ #include "../Misc/Util.h"
+ #include "../Misc/Allocator.h"
+@@ -39,7 +40,7 @@ SYNTH_T *synth;
+ #define SOURCE_DIR "BE QUIET COMPILER"
+ #endif
+ 
+-class PadNoteTest:public CxxTest::TestSuite
++class PadNoteTest
+ {
+     public:
+         PADnote      *note;
+@@ -83,8 +84,8 @@ class PadNoteTest:public CxxTest::TestSuite
+             ///TS_ASSERT(!defaultPreset->VoicePar[1].Enabled);
+ 
+             XMLwrapper wrap;
+-            cout << string(SOURCE_DIR) + string("/guitar-adnote.xmz")
+-                 << endl;
++            //cout << string(SOURCE_DIR) + string("/guitar-adnote.xmz")
++            //     << endl;
+             wrap.loadXMLfile(string(SOURCE_DIR)
+                               + string("/guitar-adnote.xmz"));
+             TS_ASSERT(wrap.enterbranch("MASTER"));
+@@ -190,22 +191,22 @@ class PadNoteTest:public CxxTest::TestSuite
+             file.close();
+ #endif
+ 
+-            TS_ASSERT_EQUALS(sampleCount, 5888);
++            TS_ASSERT_EQUAL_INT(sampleCount, 5888);
+         }
+ 
+         void testInitialization() {
+-            TS_ASSERT_EQUALS(pars->Pmode, PADnoteParameters::pad_mode::bandwidth);
++            TS_ASSERT(pars->Pmode == PADnoteParameters::pad_mode::bandwidth);
+ 
+-            TS_ASSERT_EQUALS(pars->PVolume, 90);
+-            TS_ASSERT(pars->oscilgen);
+-            TS_ASSERT(pars->resonance);
++            TS_ASSERT_EQUAL_INT(pars->PVolume, 90);
++            TS_NON_NULL(pars->oscilgen);
++            TS_NON_NULL(pars->resonance);
+ 
+             TS_ASSERT_DELTA(note->NoteGlobalPar.Volume, 2.597527f, 0.001f);
+             TS_ASSERT_DELTA(note->NoteGlobalPar.Panning, 0.500000f, 0.01f);
+ 
+ 
+             for(int i=0; i<8; ++i)
+-                TS_ASSERT(pars->sample[i].smp);
++                TS_NON_NULL(pars->sample[i].smp);
+             for(int i=8; i<PAD_MAX_SAMPLES; ++i)
+                 TS_ASSERT(!pars->sample[i].smp);
+ 
+@@ -287,3 +288,12 @@ class PadNoteTest:public CxxTest::TestSuite
+         }
+ #endif
+ };
++
++int main()
++{
++    PadNoteTest test;
++    RUN_TEST(testDefaults);
++    RUN_TEST(testInitialization);
++    RUN_TEST(testSpeed);
++    return test_summary();
++}
+diff --git a/src/Tests/PluginTest.h b/src/Tests/PluginTest.cpp
+similarity index 96%
+rename from src/Tests/PluginTest.h
+rename to src/Tests/PluginTest.cpp
+index b0f473b7..bb7e8fc4 100644
+--- a/src/Tests/PluginTest.h
++++ b/src/Tests/PluginTest.cpp
+@@ -10,7 +10,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstdlib>
+ #include <iostream>
+@@ -162,7 +162,7 @@ void print_string_differences(string orig, string next)
+     }
+ }
+ 
+-class PluginTest:public CxxTest::TestSuite
++class PluginTest
+ {
+     public:
+         Config config;
+@@ -211,7 +211,7 @@ class PluginTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 sum += fabsf(outL[i]);
+ 
+-            TS_ASSERT_LESS_THAN(0.1f, sum);
++            TS_ASSERT(0.1f < sum);
+         }
+ 
+         string loadfile(string fname) const
+@@ -231,7 +231,7 @@ class PluginTest:public CxxTest::TestSuite
+             master[0]->putalldata((char*)fdata.c_str());
+             int res = master[0]->getalldata(&result);
+ 
+-            TS_ASSERT_EQUALS((int)(fdata.length()+1), res);
++            TS_ASSERT_EQUAL_INT((int)(fdata.length()+1), res);
+             TS_ASSERT(fdata == result);
+             if(fdata != result)
+                 print_string_differences(fdata, result);
+@@ -242,3 +242,11 @@ class PluginTest:public CxxTest::TestSuite
+         float *outR, *outL;
+         Master *master[16];
+ };
++
++int main()
++{
++    PluginTest test;
++    RUN_TEST(testInit);
++    RUN_TEST(testPanic);
++    RUN_TEST(testLoadSave);
++}
+diff --git a/src/Tests/RandTest.cpp b/src/Tests/RandTest.cpp
+new file mode 100644
+index 00000000..78de1cb1
+--- /dev/null
++++ b/src/Tests/RandTest.cpp
+@@ -0,0 +1,26 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  RandTest.h - CxxTest for Pseudo-Random Number Generator
++  Copyright (C) 2009-2009 Mark McCurry
++  Author: Mark McCurry
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++#include "../Misc/Util.h"
++#include "test-suite.h"
++using namespace zyn;
++
++int main()
++{
++    TS_ASSERT_DELTA(RND, 0.607781, 0.00001);
++    TS_ASSERT_DELTA(RND, 0.591761, 0.00001);
++    TS_ASSERT_DELTA(RND, 0.186133, 0.00001);
++    TS_ASSERT_DELTA(RND, 0.286319, 0.00001);
++    TS_ASSERT_DELTA(RND, 0.511766, 0.00001);
++    return test_summary();
++};
+diff --git a/src/Tests/RandTest.h b/src/Tests/RandTest.h
+deleted file mode 100644
+index 0b31d6f7..00000000
+--- a/src/Tests/RandTest.h
++++ /dev/null
+@@ -1,31 +0,0 @@
+-/*
+-  ZynAddSubFX - a software synthesizer
+-
+-  RandTest.h - CxxTest for Pseudo-Random Number Generator
+-  Copyright (C) 2009-2009 Mark McCurry
+-  Author: Mark McCurry
+-
+-  This program is free software; you can redistribute it and/or
+-  modify it under the terms of the GNU General Public License
+-  as published by the Free Software Foundation; either version 2
+-  of the License, or (at your option) any later version.
+-*/
+-
+-#include "../Misc/Util.h"
+-#include <cstdlib>
+-#include <cstdio>
+-#include <cxxtest/TestSuite.h>
+-using namespace zyn;
+-
+-class RandTest:public CxxTest::TestSuite
+-{
+-    public:
+-        void testPRNG(void) {
+-            //verify RND returns expected pattern when unseeded
+-            TS_ASSERT_DELTA(RND, 0.607781, 0.00001);
+-            TS_ASSERT_DELTA(RND, 0.591761, 0.00001);
+-            TS_ASSERT_DELTA(RND, 0.186133, 0.00001);
+-            TS_ASSERT_DELTA(RND, 0.286319, 0.00001);
+-            TS_ASSERT_DELTA(RND, 0.511766, 0.00001);
+-        }
+-};
+diff --git a/src/Tests/RtAllocTest.h b/src/Tests/RtAllocTest.cpp
+similarity index 100%
+rename from src/Tests/RtAllocTest.h
+rename to src/Tests/RtAllocTest.cpp
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.cpp
+similarity index 94%
+rename from src/Tests/SubNoteTest.h
+rename to src/Tests/SubNoteTest.cpp
+index 5cde4440..4339427d 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.cpp
+@@ -12,7 +12,7 @@
+ */
+ 
+ //Based Upon AdNoteTest.h
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <iostream>
+ #include <fstream>
+ #include <ctime>
+@@ -32,7 +32,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class SubNoteTest:public CxxTest::TestSuite
++class SubNoteTest
+ {
+     public:
+ 
+@@ -135,7 +135,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             w->tick();
+ 
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout/filter"), tr->read());
++            TS_ASSERT_EQUAL_STR("noteout/filter", tr->read());
+             TS_ASSERT(!tr->hasNext());
+ 
+             w->add_watch("noteout/amp_int");
+@@ -149,7 +149,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             TS_ASSERT_DELTA(outL[255], -0.0013f, 0.0001f);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout/amp_int"), tr->read());
++            TS_ASSERT_EQUAL_STR("noteout/amp_int", tr->read());
+             TS_ASSERT(!tr->hasNext());
+ 
+             while(!note->finished()) {
+@@ -165,7 +165,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             file.close();
+ #endif
+ 
+-            TS_ASSERT_EQUALS(sampleCount, 5888);
++            TS_ASSERT_EQUAL_INT(sampleCount, 5888);
+         }
+ 
+ #define OUTPUT_PROFILE
+@@ -183,3 +183,10 @@ class SubNoteTest:public CxxTest::TestSuite
+         }
+ #endif
+ };
++
++int main(void)
++{
++    SubNoteTest test;
++    RUN_TEST(testDefaults);
++    return test_summary();
++}
+diff --git a/src/Tests/TriggerTest.h b/src/Tests/TriggerTest.cpp
+similarity index 78%
+rename from src/Tests/TriggerTest.h
+rename to src/Tests/TriggerTest.cpp
+index ec128559..0d3fd97f 100644
+--- a/src/Tests/TriggerTest.h
++++ b/src/Tests/TriggerTest.cpp
+@@ -12,7 +12,7 @@
+ */
+ 
+ //Based Upon AdNoteTest.h
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <iostream>
+ #include <fstream>
+ #include <ctime>
+@@ -33,7 +33,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class TriggerTest:public CxxTest::TestSuite
++class TriggerTest
+ {
+     public:
+ 
+@@ -117,8 +117,8 @@ class TriggerTest:public CxxTest::TestSuite
+             //- No active watch points
+             //
+             TS_ASSERT(!tr->hasNext());
+-            TS_ASSERT_EQUALS(string(""), w->active_list[0]);
+-            TS_ASSERT_EQUALS(0, w->sample_list[0]);
++            TS_ASSERT_EQUAL_STR("", w->active_list[0]);
++            TS_ASSERT_EQUAL_INT(0, w->sample_list[0]);
+             TS_ASSERT(!w->trigger_active("data"));
+ 
+ 
+@@ -129,8 +129,8 @@ class TriggerTest:public CxxTest::TestSuite
+             }
+             const char *msg1 = tr->read();
+             float buf1[128] = {};
+-            TS_ASSERT(msg1);
+-            TS_ASSERT_EQUALS(127, rtosc_narguments(msg1));
++            assert_non_null(msg1, "valid message", __LINE__);
++            TS_ASSERT_EQUAL_INT(127, rtosc_narguments(msg1));
+ 
+             printf("msg1 = %s\n",   msg1);
+             printf("msg1 = <%s>\n", rtosc_argument_string(msg1));
+@@ -144,16 +144,16 @@ class TriggerTest:public CxxTest::TestSuite
+                 w->tick();
+             }
+             const char *msg2 = tr->read();
+-            TS_ASSERT(msg2);
+-            TS_ASSERT_EQUALS(127, rtosc_narguments(msg2));
++            assert_non_null(msg2, "valid message", __LINE__);
++            TS_ASSERT_EQUAL_INT(127, rtosc_narguments(msg2));
+             float buf2[128] = {};
+             printf("nargs = %d\n", rtosc_narguments(msg2));
+             for(int i=0; i<127; ++i)
+                 buf2[i] = rtosc_argument(msg2, i).f;
+             for(int i=0; i<127; ++i){
+-               TS_ASSERT_EQUALS(buf1[i], buf2[i]);
+-                TS_ASSERT_EQUALS(buf1[i],data[450+i]);
+-                TS_ASSERT_EQUALS(buf2[i],data[450+i]);
++                TS_ASSERT_EQUAL_FLT(buf1[i], buf2[i]);
++                TS_ASSERT_EQUAL_FLT(buf1[i],data[450+i]);
++                TS_ASSERT_EQUAL_FLT(buf2[i],data[450+i]);
+             }
+         }
+ 
+@@ -168,10 +168,10 @@ class TriggerTest:public CxxTest::TestSuite
+             //- No active watch points
+             //
+             TS_ASSERT(!tr->hasNext());
+-            TS_ASSERT_EQUALS(string(""), w->active_list[0]);
+-            TS_ASSERT_EQUALS(string(""), w->active_list[1]);
+-            TS_ASSERT_EQUALS(0, w->sample_list[0]);
+-            TS_ASSERT_EQUALS(0, w->sample_list[1]);
++            TS_ASSERT_EQUAL_STR("", w->active_list[0]);
++            TS_ASSERT_EQUAL_STR("", w->active_list[1]);
++            TS_ASSERT_EQUAL_INT(0, w->sample_list[0]);
++            TS_ASSERT_EQUAL_INT(0, w->sample_list[1]);
+             TS_ASSERT(!w->trigger_active("noteout/filter"));
+             TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+ 
+@@ -184,10 +184,10 @@ class TriggerTest:public CxxTest::TestSuite
+             w->add_watch("noteout/amp_int");
+             TS_ASSERT(!w->trigger_active("noteout/filter"));
+             TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+-            TS_ASSERT_EQUALS(string("noteout/filter"),  w->active_list[0]);
+-            TS_ASSERT_EQUALS(string("noteout/amp_int"), w->active_list[1]);
+-            TS_ASSERT_EQUALS(0, w->sample_list[0]);
+-            TS_ASSERT_EQUALS(0, w->sample_list[1]);
++            TS_ASSERT_EQUAL_STR("noteout/filter",  w->active_list[0]);
++            TS_ASSERT_EQUAL_STR("noteout/amp_int", w->active_list[1]);
++            TS_ASSERT_EQUAL_INT(0, w->sample_list[0]);
++            TS_ASSERT_EQUAL_INT(0, w->sample_list[1]);
+             dump_samples("Initial pre-buffer");
+ 
+             //Run the system
+@@ -199,8 +199,8 @@ class TriggerTest:public CxxTest::TestSuite
+             TS_ASSERT(!w->trigger_active("noteout/filter"));   //not active as prebuffer is not filled
+             TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 0); // Is 0 as prebuffer not filled
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 0);
++            TS_ASSERT(w->sample_list[0] <= 0); // Is 0 as prebuffer not filled
++            TS_ASSERT(w->sample_list[1] <= 0);
+ 
+ 
+             //Both should continue to accumulate samples
+@@ -210,8 +210,8 @@ class TriggerTest:public CxxTest::TestSuite
+             TS_ASSERT(!w->trigger_active("noteout/filter"));   //not active as prebuffer is not filled
+             TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 0); // Is 0 as prebuffer not filled
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 0);
++            TS_ASSERT(w->sample_list[0] <= 0); // Is 0 as prebuffer not filled
++            TS_ASSERT(w->sample_list[1] <= 0);
+ 
+             //Continue accum samples
+             note->noteout(outL, outR);
+@@ -220,8 +220,8 @@ class TriggerTest:public CxxTest::TestSuite
+             TS_ASSERT(!w->trigger_active("noteout/filter"));
+             TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 0); // Is 0 as prebuffer not filled
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 0);
++            TS_ASSERT(w->sample_list[0] <= 0); // Is 0 as prebuffer not filled
++            TS_ASSERT(w->sample_list[1] <= 0);
+ 
+             //Finish accumulating samples
+             note->noteout(outL, outR);
+@@ -230,8 +230,8 @@ class TriggerTest:public CxxTest::TestSuite
+             TS_ASSERT(w->trigger_active("noteout/filter"));   // trigger activate and filling post buffer
+             TS_ASSERT(w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());  // post buffer not reach 128
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 128);   // prebuffer + postbuffer filled in
+-            TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 128);
++            TS_ASSERT(w->sample_list[1] <= 128);   // prebuffer + postbuffer filled in
++            TS_ASSERT(w->sample_list[0] <= 128);
+             note->noteout(outL, outR);
+             w->tick();
+             note->noteout(outL, outR);
+@@ -242,17 +242,24 @@ class TriggerTest:public CxxTest::TestSuite
+             //Verify the output to the user interface
+             //if 128 samples are requested, then 128 should be delivered
+             const char *msg1 = tr->read();
+-            TS_ASSERT_EQUALS(string("noteout/filter"), msg1);
+-            TS_ASSERT_EQUALS(string(f128), rtosc_argument_string(msg1));
+-            TS_ASSERT_EQUALS(128, strlen(rtosc_argument_string(msg1)));
++            TS_ASSERT_EQUAL_STR("noteout/filter", msg1);
++            TS_ASSERT_EQUAL_STR(f128, rtosc_argument_string(msg1));
++            TS_ASSERT_EQUAL_INT(128, strlen(rtosc_argument_string(msg1)));
+             note->noteout(outL, outR);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+             const char *msg2 = tr->read();
+-            TS_ASSERT_EQUALS(string("noteout/amp_int"), msg2);
+-            TS_ASSERT_EQUALS(128, strlen(rtosc_argument_string(msg2)));
+-            TS_ASSERT_EQUALS(string(f128), rtosc_argument_string(msg2));
++            TS_ASSERT_EQUAL_STR("noteout/amp_int", msg2);
++            TS_ASSERT_EQUAL_INT(128, strlen(rtosc_argument_string(msg2)));
++            TS_ASSERT_EQUAL_STR(f128, rtosc_argument_string(msg2));
+             TS_ASSERT(!tr->hasNext());
+         }
+ 
+ };
++
++int main()
++{
++    TriggerTest test;
++    RUN_TEST(testSine);
++    RUN_TEST(testCombinedTrigger);
++}
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.cpp
+similarity index 97%
+rename from src/Tests/UnisonTest.h
+rename to src/Tests/UnisonTest.cpp
+index 04fa499b..b599b908 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.cpp
+@@ -13,7 +13,7 @@
+ */
+ 
+ 
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <iostream>
+ #include <fstream>
+ #include <ctime>
+@@ -32,7 +32,7 @@ using namespace zyn;
+ SYNTH_T *synth;
+ 
+ #define BUF 256
+-class AdNoteTest:public CxxTest::TestSuite
++class UnisonTest
+ {
+     public:
+ 
+@@ -178,3 +178,10 @@ class AdNoteTest:public CxxTest::TestSuite
+ #endif
+         }
+ };
++
++int main()
++{
++    UnisonTest test;
++    RUN_TEST(testUnison);
++    return test_summary();
++}
+diff --git a/src/Tests/WatchTest.h b/src/Tests/WatchTest.cpp
+similarity index 91%
+rename from src/Tests/WatchTest.h
+rename to src/Tests/WatchTest.cpp
+index 4422c580..2a715692 100644
+--- a/src/Tests/WatchTest.h
++++ b/src/Tests/WatchTest.cpp
+@@ -19,7 +19,7 @@
+   Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+ 
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include <cmath>
+ #include <cstdlib>
+ #include <iostream>
+@@ -37,7 +37,7 @@ using namespace zyn;
+ 
+ char *instance_name=(char*)"";
+ 
+-class WatchTest:public CxxTest::TestSuite
++class WatchTest
+ {
+     public:
+         rtosc::ThreadLink *tr;
+@@ -76,8 +76,16 @@ class WatchTest:public CxxTest::TestSuite
+             l->lfoout();
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("out"), tr->read());
++            TS_ASSERT_EQUAL_STR("out", tr->read());
+             TS_ASSERT(!tr->hasNext());
+         }
+ 
+ };
++
++int main()
++{
++    WatchTest test;
++    RUN_TEST(testNoWatch);
++    RUN_TEST(testPhaseWatch);
++    return test_summary();
++}
+diff --git a/src/Tests/XMLwrapperTest.h b/src/Tests/XMLwrapperTest.cpp
+similarity index 84%
+rename from src/Tests/XMLwrapperTest.h
+rename to src/Tests/XMLwrapperTest.cpp
+index 5abdea75..d397989a 100644
+--- a/src/Tests/XMLwrapperTest.h
++++ b/src/Tests/XMLwrapperTest.cpp
+@@ -10,7 +10,7 @@
+   as published by the Free Software Foundation; either version 2
+   of the License, or (at your option) any later version.
+ */
+-#include <cxxtest/TestSuite.h>
++#include "test-suite.h"
+ #include "../Misc/XMLwrapper.h"
+ #include <string>
+ #include "../globals.h"
+@@ -19,7 +19,7 @@ using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+-class XMLwrapperTest:public CxxTest::TestSuite
++class XMLwrapperTest
+ {
+     public:
+         void setUp() {
+@@ -30,7 +30,7 @@ class XMLwrapperTest:public CxxTest::TestSuite
+ 
+         void testAddPar() {
+             xmla->addpar("my Pa*_ramet@er", 75);
+-            TS_ASSERT_EQUALS(xmla->getpar("my Pa*_ramet@er", 0, -200, 200), 75);
++            TS_ASSERT_EQUAL_INT(xmla->getpar("my Pa*_ramet@er", 0, -200, 200), 75);
+         }
+ 
+         //here to verify that no leaks occur
+@@ -61,3 +61,13 @@ version-revision=\"1\" ZynAddSubFX-author=\"Nasca Octavian Paul\">\n\
+         XMLwrapper *xmla;
+         XMLwrapper *xmlb;
+ };
++
++int main()
++{
++    XMLwrapperTest test;
++    RUN_TEST(testAddPar);
++    RUN_TEST(testLoad);
++    RUN_TEST(testAnotherLoad);
++    return test_summary();
++}
++
+diff --git a/src/Tests/common.h b/src/Tests/common.h
+new file mode 100644
+index 00000000..4b0a7912
+--- /dev/null
++++ b/src/Tests/common.h
+@@ -0,0 +1,250 @@
++#include <stdio.h>
++#include <string.h>
++#include <ctype.h>
++#include <stdlib.h>
++
++int tap_quiet    = 0;
++int global_err   = 0;
++int test_counter = 0;
++//expect a
++//actual b
++int assert_int_eq(int a, int b, const char *testcase, int line)
++{
++    test_counter++;
++    int err = a!=b;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected %d, but observed %d instead (line %d)\n", a, b, line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_char_eq(char a, char b, const char *testcase, int line)
++{
++    test_counter++;
++    int err = a!=b;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected %c, but observed %c instead (line %d)\n", a, b, line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_ptr_eq(const void* a, const void* b, const char *testcase, int line)
++{
++    test_counter++;
++    int err = a!=b;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected %p, but observed %p instead (line %d)\n", a, b, line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_true(int a, const char *testcase, int line)
++{
++    test_counter++;
++    int err = !a;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Failure on line %d\n", line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_false(int a, const char *testcase, int line)
++{
++    return assert_true(!a, testcase, line);
++}
++
++
++int assert_str_eq(const char *a, const char *b, const char *testcase, int line)
++{
++    test_counter++;
++    int err = strcmp(a,b);
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected '%s', but observed '%s' instead (line %d)\n", a, b, line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_null(const void *v, const char *testcase, int line)
++{
++    test_counter++;
++    int err = !!v;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected NULL value, but observed Non-NULL instead (line %d)\n", line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_non_null(const void *v, const char *testcase, int line)
++{
++    test_counter++;
++    int err = !v;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected Non-NULL value, but observed NULL instead (line %d)\n", line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_f32_eq(float a, float b,const char *testcase, int line)
++{
++    test_counter++;
++    int err = a!=b;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected %f, but observed %f instead (line %d)\n", a, b, line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_f32_sim(float a, float b, float t, const char *testcase, int line)
++{
++    test_counter++;
++    float tmp = (a-b);
++    tmp = tmp<0?-tmp:tmp;
++    int err = tmp > t;
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Expected %f+-%f, but observed %f instead (line %d)\n", a, t, b, line);
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++//produce a xxd style hexdump with sections highlighted using escape sequences
++//
++//e.g.
++//0000000: 2369 6e63 6c75 6465 203c 7374 6469 6f2e  #include <stdio.
++//0000010: 683e 0a23 696e 636c 7564 6520 3c73 7472  h>.#include <str
++//0000020: 696e 672e 683e 0a0a 696e 7420 676c 6f62  ing.h>..int glob
++//0000030: 616c 5f65 7272 203d 2030 3b0a 696e 7420  al_err = 0;.int
++//0000040: 7465 7374 5f63 6f75 6e74 6572 203d 2030  test_counter = 0
++//0000050: 3b0a 2f2f 6578 7065 6374 2061 0a2f 2f61  ;.//expect a.//a
++//
++void hexdump(const char *data, const char *mask, size_t len)
++{
++    const char *bold_gray = "\x1b[30;1m";
++    const char *reset      = "\x1b[0m";
++    int offset = 0;
++    while(1)
++    {
++        //print line
++        printf("#%07x: ", offset);
++
++        int char_covered = 0;
++
++        //print hex groups (8)
++        for(int i=0; i<8; ++i) {
++
++            //print doublet
++            for(int j=0; j<2; ++j) {
++                int loffset = offset + 2*i + j;
++                if(loffset >= (int)len)
++                    goto escape;
++
++                //print hex
++                {
++                    //start highlight
++                    if(mask && mask[loffset]){printf("%s", bold_gray);}
++
++                    //print chars
++                    printf("%02x", 0xff&data[loffset]);
++
++                    //end highlight
++                    if(mask && mask[loffset]){printf("%s", reset);}
++                    char_covered += 2;
++                }
++            }
++            printf(" ");
++            char_covered += 1;
++        }
++escape:
++
++        //print filler if needed
++        for(int i=char_covered; i<41; ++i)
++            printf(" ");
++
++        //print ascii (16)
++        for(int i=0; i<16; ++i) {
++            if(isprint(data[offset+i]))
++                printf("%c", data[offset+i]);
++            else
++                printf(".");
++        }
++        printf("\n");
++        offset += 16;
++        if(offset >= (int)len)
++            return;
++    }
++}
++
++
++int assert_hex_eq(const char *a, const char *b, size_t size_a, size_t size_b,
++                  const char *testcase, int line)
++{
++    test_counter++;
++    int err = (size_a != size_b) || memcmp(a, b, size_a);
++    if(err) {
++        printf("not ok %d - %s...\n", test_counter, testcase);
++        printf("# Error on line %d\n", line);
++        //printf("# Expected '%s', but observed '%s' instead (line %d)\n", a, b, line);
++
++        //create difference mask
++        const int longer  = size_a > size_b ? size_a : size_b;
++        const int shorter = size_a < size_b ? size_a : size_b;
++        char mask[longer];
++        memset(mask, 0, longer);
++        for(int i=0; i<shorter; ++i)
++            if(a[i] != b[i])
++                mask[i] = 1;
++
++        printf("#\n");
++        printf("# Expected:\n");
++        hexdump(a, mask, size_a);
++        printf("#\n");
++        printf("# Observed:\n");
++        hexdump(b, mask, size_b);
++
++        global_err++;
++    } else if(!tap_quiet)
++        printf("ok %d - %s...\n", test_counter, testcase);
++    return err;
++}
++
++int assert_flt_eq(float a, float b, const char *testcase, int line)
++{
++    int ret = assert_hex_eq((char*)&a, (char*)&b, sizeof(float), sizeof(float),
++            testcase, line);
++    if(ret)
++        printf("#expected=%f actual %f\n", a, b);
++    return ret;
++}
++
++int test_summary(void)
++{
++    printf("# %d test(s) failed out of %d (currently passing %f%% tests)\n",
++            global_err, test_counter, 100.0-global_err*100./test_counter);
++    return global_err ? EXIT_FAILURE : EXIT_SUCCESS;
++}
+diff --git a/src/Tests/test-suite.h b/src/Tests/test-suite.h
+new file mode 100644
+index 00000000..5df7b5be
+--- /dev/null
++++ b/src/Tests/test-suite.h
+@@ -0,0 +1,26 @@
++#include "common.h"
++
++#define TS_ASSERT(b) \
++    assert_true(b, #b, __LINE__)
++
++#define TS_ASSERT_DELTA(a,b,t) \
++    assert_f32_sim(a,b,t,"similar floats", __LINE__)
++
++#define TS_ASSERT_EQUAL_STR(a,b) \
++    assert_str_eq(a,b,a " == " #b, __LINE__)
++
++#define TS_ASSERT_EQUAL_CPP(a,b) \
++    assert_true(a == b,"equality check", __LINE__)
++
++#define TS_ASSERT_EQUAL_INT(a,b) \
++    assert_int_eq(a,b,"similar ints", __LINE__)
++
++#define TS_ASSERT_EQUAL_FLT(a,b) \
++    assert_f32_eq(a,b,"similar ints", __LINE__)
++#define TS_NON_NULL(a) \
++    assert_non_null(a, "valid pointer", __LINE__)
++
++#define RUN_TEST(x) \
++    test.setUp();\
++    test.x();\
++    test.tearDown()
+-- 
+2.47.0
+

@@ -1,0 +1,35 @@
+From c9bfad0e9abc19bbc4e9e11de8cca3e0181d2db8 Mon Sep 17 00:00:00 2001
+From: Graham Breed <gbreed@gmail.com>
+Date: Sun, 14 Feb 2021 16:28:58 +0000
+Subject: [PATCH 1713/1936] Enable first MIDI note
+
+---
+ src/Nio/AlsaEngine.cpp | 12 +++++-------
+ 1 file changed, 5 insertions(+), 7 deletions(-)
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index 6b57f174..35466b68 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -137,13 +137,11 @@ void *AlsaEngine::MidiThread(void)
+             continue;
+         switch(event->type) {
+             case SND_SEQ_EVENT_NOTEON:
+-                if(event->data.note.note) {
+-                    ev.type    = M_NOTE;
+-                    ev.channel = event->data.note.channel;
+-                    ev.num     = event->data.note.note;
+-                    ev.value   = event->data.note.velocity;
+-                    InMgr::getInstance().putEvent(ev);
+-                }
++                ev.type    = M_NOTE;
++                ev.channel = event->data.note.channel;
++                ev.num     = event->data.note.note;
++                ev.value   = event->data.note.velocity;
++                InMgr::getInstance().putEvent(ev);
+                 break;
+ 
+             case SND_SEQ_EVENT_NOTEOFF:
+-- 
+2.47.0
+

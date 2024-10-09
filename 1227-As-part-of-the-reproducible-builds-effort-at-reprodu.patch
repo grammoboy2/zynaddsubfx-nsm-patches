@@ -1,0 +1,40 @@
+From 501ee70627d02fe77ec0449fe1ab45d633f060ba Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Mon, 13 Nov 2017 09:20:38 +0100
+Subject: [PATCH 1227/1936] As part of the reproducible builds effort at
+ reproducible-builds.org remove the compiled-in __DATE__ and __TIME__ to allow
+ the software to build reproducibly in various package clusters.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ HISTORY.txt  | 1 +
+ src/main.cpp | 1 -
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/HISTORY.txt b/HISTORY.txt
+index 0fc3dfcb..038251a7 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -7,6 +7,7 @@
+         - Fix loading filter parameters with older xml
+         - Fix effect saving when updating with zyn-fusion interface
+         - Fix minor bugs
++        - The build process is now reproducible
+ 
+ 3.0.2 (21 July 2017)
+         - Upgrade MIDI learn system to include host automations and macro
+diff --git a/src/main.cpp b/src/main.cpp
+index d475b97c..04233b92 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -226,7 +226,6 @@ int main(int argc, char *argv[])
+     cerr
+     << "                Copyright (c) 2009-2017 Mark McCurry [active maintainer]"
+     << endl;
+-    cerr << "Compiled: " << __DATE__ << " " << __TIME__ << endl;
+     cerr << "This program is free software (GNU GPL v2 or later) and \n";
+     cerr << "it comes with ABSOLUTELY NO WARRANTY.\n" << endl;
+     if(argc == 1)
+-- 
+2.47.0
+

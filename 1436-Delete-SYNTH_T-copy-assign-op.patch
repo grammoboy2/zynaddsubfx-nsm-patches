@@ -1,0 +1,25 @@
+From 3850c60141a215bf6b494a921959fa1f1d691e41 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 19 Oct 2019 08:29:28 +0200
+Subject: [PATCH 1436/1936] Delete SYNTH_T copy assign op
+
+---
+ src/globals.h | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/globals.h b/src/globals.h
+index 34cea3ae..fac6d5f3 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -301,6 +301,8 @@ struct SYNTH_T {
+ 
+     SYNTH_T(const SYNTH_T& ) = delete;
+     SYNTH_T(SYNTH_T&& ) = default;
++    SYNTH_T& operator=(const SYNTH_T& ) = delete;
++    SYNTH_T& operator=(SYNTH_T&& ) = default;
+ 
+     /** the buffer to add noise in order to avoid denormalisation */
+     m_unique_ptr<float> denormalkillbuf;
+-- 
+2.47.0
+

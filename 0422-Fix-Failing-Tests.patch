@@ -1,0 +1,39 @@
+From b656980e4944e2a39623963d898af900bee54577 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Apr 2015 19:53:51 -0400
+Subject: [PATCH 0422/1936] Fix Failing Tests
+
+---
+ src/Misc/Master.cpp      | 2 +-
+ src/Tests/CMakeLists.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 46921268..89c6bf0d 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -590,7 +590,7 @@ void Master::AudioOut(float *outl, float *outr)
+     DataObj d{loc_buf, 1024, this, bToU};
+     memset(loc_buf, 0, sizeof(loc_buf));
+     int events = 0;
+-    while(uToB->hasNext() && events < 10) {
++    while(uToB && uToB->hasNext() && events < 10) {
+         const char *msg = uToB->read();
+ 
+         if(!strcmp(msg, "/load-master")) {
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index d4f491fa..72f6672c 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -40,7 +40,7 @@ target_link_libraries(AllocatorTest    ${test_lib})
+ 
+ #Testbed app
+ add_executable(ins-test InstrumentStats.cpp)
+-target_link_libraries(ins-test ${test_lib})
++target_link_libraries(ins-test ${test_lib} rt)
+ 
+ #message(STATUS "Plugin Test ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES}")
+ 
+-- 
+2.47.0
+

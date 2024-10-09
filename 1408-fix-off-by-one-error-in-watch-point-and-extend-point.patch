@@ -1,0 +1,123 @@
+From 5f81e5b44b87b146e47a8fd6877c0a800bd5258a Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Mon, 12 Aug 2019 22:49:29 +0300
+Subject: [PATCH 1408/1936] fix off by one error in watch point and extend
+ point in PADSynth
+
+---
+ src/Synth/PADnote.cpp    | 9 ++++++---
+ src/Synth/PADnote.h      | 2 +-
+ src/Synth/WatchPoint.cpp | 2 +-
+ src/Tests/AdNoteTest.h   | 2 +-
+ src/Tests/TriggerTest.h  | 4 ++--
+ 5 files changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 6361d1bf..d9958e62 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -29,7 +29,8 @@ PADnote::PADnote(const PADnoteParameters *parameters,
+                  SynthParams pars, const int& interpolation, WatchManager *wm,
+                  const char *prefix)
+     :SynthNote(pars), pars(*parameters), interpolation(interpolation),
+-    watchOut(wm, prefix, "noteout"), watchOut1(wm,prefix,"noteout1")
++    watchOut(wm, prefix, "noteout/after_interpolation"), watchOut1(wm, prefix, "noteout/after_punch"),
++    watchOut2(wm, prefix, "noteout/after_amp_interpolation"), watchOut3(wm, prefix, "noteout/after_legato")
+ {
+     NoteGlobalPar.GlobalFilter    = nullptr;
+     NoteGlobalPar.FilterEnvelope  = nullptr;
+@@ -378,7 +379,7 @@ int PADnote::noteout(float *outl, float *outr)
+     else
+         Compute_Linear(outl, outr, freqhi, freqlo);
+ 
+-    watchOut1(outr,synth.buffersize);
++    watchOut(outl,synth.buffersize);
+ 
+     if(firsttime) {
+         fadein(outl);
+@@ -402,6 +403,7 @@ int PADnote::noteout(float *outl, float *outr)
+             }
+         }
+     
++    watchOut1(outl,synth.buffersize);
+ 
+     if(ABOVE_AMPLITUDE_THRESHOLD(globaloldamplitude, globalnewamplitude))
+         // Amplitude Interpolation
+@@ -419,11 +421,12 @@ int PADnote::noteout(float *outl, float *outr)
+             outr[i] *= globalnewamplitude * (1.0f - NoteGlobalPar.Panning);
+         }
+ 
++    watchOut2(outl,synth.buffersize);
+ 
+     // Apply legato-specific sound signal modifications
+     legato.apply(*this, outl, outr);
+ 
+-    watchOut(outr,synth.buffersize);
++    watchOut3(outl,synth.buffersize);
+ 
+     // Check if the global amplitude is finished.
+     // If it does, disable the note
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index 4485149c..15d28478 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -35,7 +35,7 @@ class PADnote:public SynthNote
+         bool finished() const;
+         void entomb(void);
+ 
+-        VecWatchPoint watchOut,watchOut1;
++        VecWatchPoint watchOut,watchOut1, watchOut2, watchOut3;
+ 
+         void releasekey();
+     private:
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index ca20b4a4..568ad18d 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -115,7 +115,7 @@ void WatchManager::tick(void)
+         int framesize = 2;
+         call_count[i] = 0;
+         if(strstr(active_list[i], "noteout") != NULL)
+-            framesize = MAX_SAMPLE -1;
++            framesize = MAX_SAMPLE-1;
+         if(sample_list[i] >= framesize && call_count[i]==0) {
+             char        arg_types[MAX_SAMPLE+1] = {0};
+             rtosc_arg_t arg_val[MAX_SAMPLE];
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index 4c704a22..afcaebd8 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -134,7 +134,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.4688f, 0.0001f);
+             w->tick();
+-            TS_ASSERT(!tr->hasNext());
++            TS_ASSERT(tr->hasNext());
+             
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+diff --git a/src/Tests/TriggerTest.h b/src/Tests/TriggerTest.h
+index 864d7db1..ee01afe3 100644
+--- a/src/Tests/TriggerTest.h
++++ b/src/Tests/TriggerTest.h
+@@ -131,7 +131,7 @@ class TriggerTest:public CxxTest::TestSuite
+             const char *msg1 = tr->read();
+             float buf1[128] = {0};
+             TS_ASSERT(msg1);
+-            TS_ASSERT_EQUALS(128, rtosc_narguments(msg1));
++            TS_ASSERT_EQUALS(127, rtosc_narguments(msg1));
+ 
+             printf("msg1 = %s\n",   msg1);
+             printf("msg1 = <%s>\n", rtosc_argument_string(msg1));
+@@ -146,7 +146,7 @@ class TriggerTest:public CxxTest::TestSuite
+             }
+             const char *msg2 = tr->read();
+             TS_ASSERT(msg2);
+-            TS_ASSERT_EQUALS(128, rtosc_narguments(msg2));
++            TS_ASSERT_EQUALS(127, rtosc_narguments(msg2));
+             float buf2[128] = {0};
+             printf("nargs = %d\n", rtosc_narguments(msg2));
+             for(int i=0; i<127; ++i)
+-- 
+2.47.0
+

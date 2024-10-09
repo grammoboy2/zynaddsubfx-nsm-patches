@@ -1,0 +1,39 @@
+From 356afa1d5262997f8fab30f99d5bcffd4d9a9fac Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 23 Jul 2017 15:19:05 -0400
+Subject: [PATCH 1175/1936] Add clear port for favoites and remove dups
+
+---
+ src/Misc/Config.cpp | 11 +++++++++--
+ 1 file changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 9599bc02..6fcac93b 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -138,13 +138,20 @@ static const rtosc::Ports ports = {
+             c.cfg.OscilSize = val;
+             d.broadcast(d.loc, "i", (int)(log(c.cfg.OscilSize*1.0)/log(2.0)));
+         }},
++    {"clear-favorites:", rDoc("Clear favorite directories"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            Config &c = *(Config*)d.obj;
++            for(int i=0; i<MAX_BANK_ROOT_DIRS; ++i)
++                c.cfg.favoriteList[i] = "";
++        }},
+     {"add-favorite:s", rDoc("Add favorite directory"), 0,
+         [](const char *msg, rtosc::RtData &d)
+         {
+             Config &c = *(Config*)d.obj;
++            const char *path = rtosc_argument(msg, 0).s;
+             for(int i=0; i<MAX_BANK_ROOT_DIRS; ++i) {
+-                if(c.cfg.favoriteList[i].empty()) {
+-                    c.cfg.favoriteList[i] = rtosc_argument(msg, 0).s;
++                if(c.cfg.favoriteList[i].empty() || c.cfg.favoriteList[i] == path) {
++                    c.cfg.favoriteList[i] = path;
+                     return;
+                 }
+             }
+-- 
+2.47.0
+

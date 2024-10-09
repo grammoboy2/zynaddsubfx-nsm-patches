@@ -1,0 +1,44 @@
+From f826741f57b47c81bbd723920156475d6f468a49 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 22 Feb 2020 10:25:48 +0100
+Subject: [PATCH 1470/1936] Initialize class fields in correct order. Fixes a
+ clang [-Wreorder] compilation warning.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/SUBnote.cpp | 13 +++++++------
+ 1 file changed, 7 insertions(+), 6 deletions(-)
+
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 49a8bc82..5e4565d2 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -35,18 +35,19 @@
+ 
+ namespace zyn {
+ 
+-SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars, WatchManager *wm, const char *prefix
+-                 )
+-    :SynthNote(spars), pars(*parameters),
++SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars,
++    WatchManager *wm, const char *prefix) :
++    SynthNote(spars),
++    watch_filter(wm, prefix, "noteout/filter"), watch_amp_int(wm,prefix,"noteout/amp_int"),
++    watch_legato(wm, prefix, "noteout/legato"),
++    pars(*parameters),
+     AmpEnvelope(nullptr),
+     FreqEnvelope(nullptr),
+     BandWidthEnvelope(nullptr),
+     GlobalFilter(nullptr),
+     GlobalFilterEnvelope(nullptr),
+     NoteEnabled(true),
+-    lfilter(nullptr), rfilter(nullptr),
+-    watch_filter(wm, prefix, "noteout/filter"), watch_amp_int(wm,prefix,"noteout/amp_int"),
+-    watch_legato(wm, prefix, "noteout/legato")
++    lfilter(nullptr), rfilter(nullptr)
+ {
+     setup(spars.frequency, spars.velocity, spars.portamento, spars.note_log2_freq, false, wm, prefix);
+ }
+-- 
+2.47.0
+

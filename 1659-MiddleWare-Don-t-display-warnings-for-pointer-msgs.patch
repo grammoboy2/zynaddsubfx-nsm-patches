@@ -1,0 +1,34 @@
+From 8165cd05856023d8d4c27558c7318dc07c2cab34 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 22 Nov 2020 12:39:01 +0100
+Subject: [PATCH 1659/1936] MiddleWare: Don't display warnings for pointer msgs
+
+---
+ src/Misc/MiddleWare.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index ba992a38..c73ce12b 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -378,7 +378,7 @@ struct NonRtObjStore
+         }
+         else {
+             // print warning, except in rtosc::walk_ports
+-            if(obj_rl.find("/pointer") == obj_rl.npos)
++            if(!strstr(d.message, "/pointer"))
+             {
+                 fprintf(stderr, "Warning: trying to access oscil object \"%s\","
+                                 "which does not exist\n", obj_rl.c_str());
+@@ -409,7 +409,7 @@ struct NonRtObjStore
+             }
+             else {
+                 // print warning, except in rtosc::walk_ports
+-                if(obj_rl.find("/pointer") == obj_rl.npos)
++                if(!strstr(d.message, "/pointer"))
+                 {
+                     fprintf(stderr, "Warning: trying to access pad synth object "
+                                     "\"%s\", which does not exist\n",
+-- 
+2.47.0
+

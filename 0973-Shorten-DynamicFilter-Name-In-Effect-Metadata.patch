@@ -1,0 +1,25 @@
+From 5d58458a8c7ddc5613227c48926ddefc6aa50b63 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 24 Jul 2016 14:56:55 -0400
+Subject: [PATCH 0973/1936] Shorten DynamicFilter Name In Effect Metadata
+
+---
+ src/Effects/EffectMgr.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 2c3bc6d9..6c747f8d 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -103,7 +103,7 @@ static const rtosc::Ports local_ports = {
+             d.reply(d.loc, "bb", sizeof(a), a, sizeof(b), b);
+         }},
+     {"efftype::i", rOptions(Disabled, Reverb, Echo, Chorus,
+-            Phaser, Alienwah, Distorsion, EQ, DynamicFilter)
++            Phaser, Alienwah, Distorsion, EQ, DynFilter)
+             rProp(parameter) rDoc("Get Effect Type"), NULL,
+         [](const char *m, rtosc::RtData &d)
+         {
+-- 
+2.47.0
+

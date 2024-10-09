@@ -1,0 +1,53 @@
+From 41b3fe33c85a9daaa92807112383f7c2bd987dce Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 29 Jun 2017 13:08:59 -0400
+Subject: [PATCH 1151/1936] Connect Plugin Parameters To Automation Slots
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp | 13 +++++++++----
+ 1 file changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index 04c14c6b..95c96e89 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -228,7 +228,7 @@ protected:
+         }
+         if(kParamSlot1 <= index && index <= kParamSlot16) {
+             parameter.hints  = kParameterIsAutomable;
+-            parameter.name   = ("Automation Slot " + zyn::to_s(index)).c_str();
++            parameter.name   = ("Slot " + zyn::to_s(index)).c_str();
+             parameter.symbol = ("slot" + zyn::to_s(index)).c_str();
+             parameter.unit   = "";
+             parameter.ranges.min = 0.0f;
+@@ -247,9 +247,11 @@ protected:
+         {
+         case kParamOscPort:
+             return oscPort;
+-        default:
+-            return 0.0f;
+         }
++        if(kParamSlot1 <= index && index <= kParamSlot16) {
++            return master->automate.getSlot(index - 1);
++        }
++        return 0.0f;
+     }
+ 
+    /**
+@@ -258,9 +260,12 @@ protected:
+       When a parameter is marked as automable, you must ensure no non-realtime operations are performed.
+       @note This function will only be called for parameter inputs.
+     */
+-    void setParameterValue(uint32_t /*index*/, float /*value*/) noexcept override
++    void setParameterValue(uint32_t index, float value) noexcept override
+     {
+         // only an output port for now
++        if(kParamSlot1 <= index && index <= kParamSlot16) {
++            master->automate.setSlot(index - 1, value);
++        }
+     }
+ 
+    /* --------------------------------------------------------------------------------------------------------
+-- 
+2.47.0
+

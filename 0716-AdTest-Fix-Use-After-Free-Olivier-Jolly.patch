@@ -1,0 +1,55 @@
+From 747832e72217ca818895279fe22b5bf214e1ec9e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 10 Nov 2015 21:56:12 -0500
+Subject: [PATCH 0716/1936] AdTest: Fix Use After Free (Olivier Jolly)
+
+https://sourceforge.net/p/zynaddsubfx/patches/28/
+
+ADNoteTest uses memory after being freed since the ADNotePreset
+object, used as arg to ADNote ctr, is freed in the setup
+Non test code doesn't seem to suffer from this.
+Attached patch frees the ADNotePreset in teardown to appease
+valgrind while performing a memcheck.
+---
+ src/Tests/AdNoteTest.h | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index cb1b3afd..b8df8eb0 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -45,6 +45,7 @@ class AdNoteTest:public CxxTest::TestSuite
+         ADnote       *note;
+         AbsTime      *time;
+         FFTwrapper   *fft;
++        ADnoteParameters *defaultPreset;
+         Controller   *controller;
+         Alloc         memory;
+         unsigned char testnote;
+@@ -68,7 +69,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             fft = new FFTwrapper(synth->oscilsize);
+             //prepare the default settings
+-            ADnoteParameters *defaultPreset = new ADnoteParameters(*synth, fft);
++            defaultPreset = new ADnoteParameters(*synth, fft);
+ 
+             //Assert defaults
+             TS_ASSERT(!defaultPreset->VoicePar[1].Enabled);
+@@ -101,13 +102,13 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             note = new ADnote(defaultPreset, pars);
+ 
+-            delete defaultPreset;
+             delete wrap;
+         }
+ 
+         void tearDown() {
+             delete note;
+             delete controller;
++            delete defaultPreset;
+             delete fft;
+             delete [] outL;
+             delete [] outR;
+-- 
+2.47.0
+

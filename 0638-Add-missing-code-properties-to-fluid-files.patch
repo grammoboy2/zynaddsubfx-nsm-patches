@@ -1,0 +1,62 @@
+From 650a836a40d2d400f762ab1d864ae32691f36c84 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 25 Oct 2015 00:56:26 -0400
+Subject: [PATCH 0638/1936] Add missing code properties to fluid files.
+
+---
+ src/UI/ADnoteUI.fl  | 2 +-
+ src/UI/PartUI.fl    | 4 ++--
+ src/UI/SUBnoteUI.fl | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 3c2a1421..3351dfbb 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -90,7 +90,7 @@ class PhaseSlider {: {public Fl_Osc_TSlider}
+   setRounding(1);
+   reset_value=0;
+   setTransform(180.0/64, 0);
+-  }}
++  } {}}
+    Function {OSC_value(int i)} {open return_type void
+    } { code {
+        value(64-i);
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index e348497e..df4041db 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -1068,7 +1068,7 @@ lastkititem=kititem;
+ if(kititem>=NUM_KIT_ITEMS) return 1;//bad kit item
+ if(kititem<0) return 1;
+ return 0;
+-}}
++} {}}
+ 
+ 
+   Function {showparameters(int kititem,int engine)} {open
+@@ -1115,7 +1115,7 @@ if(adnoteui ||
+ 	else
+ 	    adnoteui->advoice->voiceFMparametersgroup->activate();
+ 	adnoteui->ADnoteVoice->show();
+-    }}}
++    }} {}}
+ 
+   Function {~PartUI()} {} {
+     code {delete adnoteui;
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 44a7c067..8f54cde3 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -48,7 +48,7 @@ class SUBSlider {: {public Fl_Osc_TSlider}
+ } {
+   Function {SUBSlider(int x,int y, int w, int h, const char *label=0)
+   :Fl_Osc_TSlider(x,y,w,h,label)} {open
+-  } { code {}}
++  } { code {} {}}
+    Function {OSC_value(char c)} {open return_type void
+    } { code {
+        value(127-c);
+-- 
+2.47.0
+

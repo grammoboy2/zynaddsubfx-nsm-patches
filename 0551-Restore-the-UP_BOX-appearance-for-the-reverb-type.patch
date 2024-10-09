@@ -1,0 +1,25 @@
+From b42db72a53f70c7ff606e8870bd11f1b8ccfe566 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <oliver@onion.private>
+Date: Fri, 2 Oct 2015 16:16:14 -0400
+Subject: [PATCH 0551/1936] Restore the UP_BOX appearance for the reverb type.
+
+---
+ src/UI/EffUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/EffUI.fl b/src/UI/EffUI.fl
+index 4e8d7972..9e868b6c 100644
+--- a/src/UI/EffUI.fl
++++ b/src/UI/EffUI.fl
+@@ -153,7 +153,7 @@ if (filterwindow!=NULL){
+         label Type
+         callback {if(o->value()==2) revp12->activate();
+ 	else revp12->deactivate();}
+-        xywh {110 15 85 15} down_box BORDER_BOX color 14 selection_color 7 labelfont 1 labelsize 10 align 5 textfont 1 textsize 10
++        xywh {110 15 85 15} box UP_BOX down_box BORDER_BOX color 14 selection_color 7 labelfont 1 labelsize 10 align 5 textfont 1 textsize 10
+         code0 {o->init("parameter10");}
+         class Fl_Osc_Choice
+       } {
+-- 
+2.47.0
+

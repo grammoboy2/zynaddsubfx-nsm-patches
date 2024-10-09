@@ -1,0 +1,37 @@
+From a50b0d59103a0bf6cbdf60c5bd94cbb32a004376 Mon Sep 17 00:00:00 2001
+From: Plagiat Gang Of Bros <plagiat@LaMachineACashDesBros.plagiat.org>
+Date: Thu, 18 Nov 2021 16:38:28 +0100
+Subject: [PATCH 1783/1936] Fix naming of jack_client using NSM client-id when
+ using JACK-MULTI output
+
+---
+ src/Nio/JackMultiEngine.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/Nio/JackMultiEngine.cpp b/src/Nio/JackMultiEngine.cpp
+index 6c76b46c..097d1d0c 100644
+--- a/src/Nio/JackMultiEngine.cpp
++++ b/src/Nio/JackMultiEngine.cpp
+@@ -28,6 +28,7 @@
+ #include "JackMultiEngine.h"
+ 
+ extern zyn::MiddleWare *middleware;
++extern char *instance_name;
+ 
+ namespace zyn {
+ 
+@@ -84,7 +85,10 @@ bool JackMultiEngine::Start(void)
+         clientname += "_" + os_pid_as_padded_string();
+     jack_status_t jackstatus;
+ 
+-    impl->client = jack_client_open(clientname.c_str(), JackNullOption, &jackstatus);
++    if(instance_name)
++        impl->client = jack_client_open(instance_name, JackNullOption, &jackstatus);
++    else
++        impl->client = jack_client_open(clientname.c_str(), JackNullOption, &jackstatus);
+ 
+     if(!impl->client)
+         errx(1, "failed to connect to jack...");
+-- 
+2.47.0
+

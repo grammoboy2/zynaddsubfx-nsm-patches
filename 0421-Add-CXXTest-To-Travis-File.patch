@@ -1,0 +1,31 @@
+From 6ef66cffa5fac113ef5cde66e398e0108ea9bb03 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Apr 2015 19:43:06 -0400
+Subject: [PATCH 0421/1936] Add CXXTest To Travis File
+
+---
+ .travis.yml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/.travis.yml b/.travis.yml
+index b1f1b446..5b1d3c34 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -6,12 +6,14 @@ compiler:
+ before_install:
+     - sudo apt-get --purge remove gcc
+     - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
++    - sudo apt-add-repository -y ppa:dhart/ppa
+     - sudo apt-get -qq update
+     - sudo apt-get -qq install g++-4.8
+     - sudo apt-get -qq install gcc-4.8
+     - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
+     - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 90
+     - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev
++    - sudo apt-get install --force-yes cxxtest
+     - wget http://downloads.sourceforge.net/liblo/liblo-0.28.tar.gz
+     - tar xvf liblo-0.28.tar.gz && cd liblo-0.28
+     - ./configure && make && sudo make install
+-- 
+2.47.0
+

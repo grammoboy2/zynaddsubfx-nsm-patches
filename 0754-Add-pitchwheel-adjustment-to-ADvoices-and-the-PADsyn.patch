@@ -1,0 +1,383 @@
+From d51445702b866fc9fed3f37b78203ea827d8cd9a Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 22 Nov 2015 19:23:26 -0500
+Subject: [PATCH 0754/1936] Add pitchwheel adjustment to ADvoices and the
+ PADsynth and SUBsynth.
+
+---
+ src/Params/ADnoteParameters.cpp  |  5 +++++
+ src/Params/ADnoteParameters.h    |  3 +++
+ src/Params/PADnoteParameters.cpp |  6 +++++-
+ src/Params/PADnoteParameters.h   |  1 +
+ src/Params/SUBnoteParameters.cpp |  5 +++++
+ src/Params/SUBnoteParameters.h   |  1 +
+ src/Synth/ADnote.cpp             |  9 ++++++++-
+ src/Synth/ADnote.h               |  3 +++
+ src/Synth/PADnote.cpp            |  9 +++++++--
+ src/Synth/PADnote.h              |  1 +
+ src/Synth/SUBnote.cpp            |  8 +++++++-
+ src/Synth/SUBnote.h              |  1 +
+ src/UI/ADnoteUI.fl               |  6 ++++++
+ src/UI/PADnoteUI.fl              | 10 ++++++++--
+ src/UI/SUBnoteUI.fl              |  6 ++++++
+ 15 files changed, 67 insertions(+), 7 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index f9521360..efedefd2 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -93,6 +93,7 @@ static const Ports voicePorts = {
+     //Freq Stuff
+     rToggle(Pfixedfreq,           "If frequency is fixed"),
+     rParamZyn(PfixedfreqET,          "Equal Tempermant Parameter"),
++    rParamZyn(PBendAdjust,          "Pitch bend adjustment"),
+     rParamI(PDetune,              "Fine Detune"),
+     rParamI(PCoarseDetune,        "Coarse Detune"),
+     rParamZyn(PDetuneType,           "Magnitude of Detune"),
+@@ -410,6 +411,7 @@ void ADnoteVoiceParam::defaults()
+     Type = 0;
+     Pfixedfreq    = 0;
+     PfixedfreqET  = 0;
++    PBendAdjust = 88; // 64 + 24
+     Presonance    = 1;
+     Pfilterbypass = 0;
+     Pextoscil     = -1;
+@@ -648,6 +650,7 @@ void ADnoteVoiceParam::add2XML(XMLwrapper& xml, bool fmoscilused)
+     xml.beginbranch("FREQUENCY_PARAMETERS");
+     xml.addparbool("fixed_freq", Pfixedfreq);
+     xml.addpar("fixed_freq_et", PfixedfreqET);
++    xml.addpar("bend_adjust", PBendAdjust);
+     xml.addpar("detune", PDetune);
+     xml.addpar("coarse_detune", PCoarseDetune);
+     xml.addpar("detune_type", PDetuneType);
+@@ -969,6 +972,7 @@ void ADnoteVoiceParam::paste(ADnoteVoiceParam &a)
+     copy(PDetune);
+     copy(PCoarseDetune);
+     copy(PDetuneType);
++    copy(PBendAdjust);
+     copy(PFreqEnvelopeEnabled);
+ 
+     RCopy(FreqEnvelope);
+@@ -1106,6 +1110,7 @@ void ADnoteVoiceParam::getfromXML(XMLwrapper& xml, unsigned nvoice)
+     if(xml.enterbranch("FREQUENCY_PARAMETERS")) {
+         Pfixedfreq    = xml.getparbool("fixed_freq", Pfixedfreq);
+         PfixedfreqET  = xml.getpar127("fixed_freq_et", PfixedfreqET);
++        PBendAdjust  = xml.getpar127("bend_adjust", PBendAdjust);
+         PDetune       = xml.getpar("detune", PDetune, 0, 16383);
+         PCoarseDetune = xml.getpar("coarse_detune", PCoarseDetune, 0, 16383);
+         PDetuneType   = xml.getpar127("detune_type", PDetuneType);
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index 3682cac1..acea5f52 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -189,6 +189,9 @@ struct ADnoteVoiceParam {
+     /** Detune type */
+     unsigned char PDetuneType;
+ 
++    /** Pitch bend adjustment */
++    unsigned char PBendAdjust;
++
+     /* Frequency Envelope */
+     unsigned char   PFreqEnvelopeEnabled;
+     EnvelopeParams *FreqEnvelope;
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 62d30ab5..47a6ed57 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -66,7 +66,7 @@ static const rtosc::Ports realtime_ports =
+     //Freq
+     rToggle(Pfixedfreq, "Base frequency fixed frequency enable"),
+     rParamZyn(PfixedfreqET, "Equal temeperate control for fixed frequency operation"),
+-
++    rParamZyn(PBendAdjust,          "Pitch bend adjustment"),
+     rParamI(PDetune,        "Fine Detune"),
+     rParamI(PCoarseDetune,  "Coarse Detune"),
+     rParamZyn(PDetuneType,  "Magnitude of Detune"),
+@@ -327,6 +327,7 @@ void PADnoteParameters::defaults()
+     /* Frequency Global Parameters */
+     Pfixedfreq    = 0;
+     PfixedfreqET  = 0;
++    PBendAdjust = 88; // 64 + 24
+     PDetune       = 8192; //zero
+     PCoarseDetune = 0;
+     PDetuneType   = 1;
+@@ -984,6 +985,7 @@ void PADnoteParameters::add2XML(XMLwrapper& xml)
+     xml.beginbranch("FREQUENCY_PARAMETERS");
+     xml.addpar("fixed_freq", Pfixedfreq);
+     xml.addpar("fixed_freq_et", PfixedfreqET);
++    xml.addpar("bend_adjust", PBendAdjust);
+     xml.addpar("detune", PDetune);
+     xml.addpar("coarse_detune", PCoarseDetune);
+     xml.addpar("detune_type", PDetuneType);
+@@ -1098,6 +1100,7 @@ void PADnoteParameters::getfromXML(XMLwrapper& xml)
+     if(xml.enterbranch("FREQUENCY_PARAMETERS")) {
+         Pfixedfreq    = xml.getpar127("fixed_freq", Pfixedfreq);
+         PfixedfreqET  = xml.getpar127("fixed_freq_et", PfixedfreqET);
++        PBendAdjust  = xml.getpar127("bend_adjust", PBendAdjust);
+         PDetune       = xml.getpar("detune", PDetune, 0, 16383);
+         PCoarseDetune = xml.getpar("coarse_detune", PCoarseDetune, 0, 16383);
+         PDetuneType   = xml.getpar127("detune_type", PDetuneType);
+@@ -1176,6 +1179,7 @@ void PADnoteParameters::pasteRT(PADnoteParameters &x)
+     COPY(Pfixedfreq);
+ 
+     COPY(PfixedfreqET);
++    COPY(PBendAdjust);
+     COPY(PDetune);
+     COPY(PCoarseDetune);
+     COPY(PDetuneType);
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index 9bae972e..0835feb9 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -106,6 +106,7 @@ class PADnoteParameters:public Presets
+            If this parameter is 0, the frequency is fixed (to 440 Hz);
+            if this parameter is 64, 1 MIDI halftone -> 1 frequency halftone */
+         unsigned char PfixedfreqET;
++        unsigned char PBendAdjust;
+         unsigned short int PDetune; //fine detune
+         unsigned short int PCoarseDetune; //coarse detune+octave
+         unsigned char      PDetuneType; //detune type
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 3fc4aea0..1d947076 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -53,6 +53,7 @@ static const rtosc::Ports SUBnotePorts = {
+     //rToggle(),//continue
+     rToggle(Pfixedfreq, "Base frequency fixed frequency enable"),
+     rParamZyn(PfixedfreqET, "Equal temeperate control for fixed frequency operation"),
++    rParamZyn(PBendAdjust,          "Pitch bend adjustment"),
+ #undef rChangeCb
+ #define rChangeCb obj->updateFrequencyMultipliers();
+     rParamI(POvertoneSpread.type, rMap(min, 0), rMap(max, 7),
+@@ -152,6 +153,7 @@ void SUBnoteParameters::defaults()
+ 
+     Pfixedfreq   = 0;
+     PfixedfreqET = 0;
++    PBendAdjust = 88; // 64 + 24
+     Pnumstages   = 2;
+     Pbandwidth   = 40;
+     Phmagtype    = 0;
+@@ -232,6 +234,7 @@ void SUBnoteParameters::add2XML(XMLwrapper& xml)
+     xml.beginbranch("FREQUENCY_PARAMETERS");
+     xml.addparbool("fixed_freq", Pfixedfreq);
+     xml.addpar("fixed_freq_et", PfixedfreqET);
++    xml.addpar("bend_adjust", PBendAdjust);
+ 
+     xml.addpar("detune", PDetune);
+     xml.addpar("coarse_detune", PCoarseDetune);
+@@ -352,6 +355,7 @@ void SUBnoteParameters::paste(SUBnoteParameters &sub)
+     doPaste(PDetune);
+     doPaste(PCoarseDetune);
+     doPaste(PDetuneType);
++    doPaste(PBendAdjust);
+     doPaste(PFreqEnvelopeEnabled);
+     doPPaste(FreqEnvelope);
+     doPaste(PBandWidthEnvelopeEnabled);
+@@ -423,6 +427,7 @@ void SUBnoteParameters::getfromXML(XMLwrapper& xml)
+     if(xml.enterbranch("FREQUENCY_PARAMETERS")) {
+         Pfixedfreq   = xml.getparbool("fixed_freq", Pfixedfreq);
+         PfixedfreqET = xml.getpar127("fixed_freq_et", PfixedfreqET);
++        PBendAdjust  = xml.getpar127("bend_adjust", PBendAdjust);
+ 
+         PDetune = xml.getpar("detune", PDetune, 0, 16383);
+         PCoarseDetune = xml.getpar("coarse_detune", PCoarseDetune, 0, 16383);
+diff --git a/src/Params/SUBnoteParameters.h b/src/Params/SUBnoteParameters.h
+index 304ea431..cae8d06b 100644
+--- a/src/Params/SUBnoteParameters.h
++++ b/src/Params/SUBnoteParameters.h
+@@ -54,6 +54,7 @@ class SUBnoteParameters:public Presets
+         EnvelopeParams    *FreqEnvelope;
+         unsigned char      PBandWidthEnvelopeEnabled;
+         EnvelopeParams    *BandWidthEnvelope;
++        unsigned char     PBendAdjust;
+ 
+         //Filter Parameters (Global)
+         unsigned char   PGlobalFilterEnabled;
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index d38a31c8..84306f60 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -105,6 +105,12 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+             continue; //the voice is disabled
+         }
+ 
++        int BendAdj = pars.VoicePar[nvoice].PBendAdjust - 64;
++        if (BendAdj % 24 == 0)
++            NoteVoicePar[nvoice].BendAdjust = BendAdj / 24;
++        else
++            NoteVoicePar[nvoice].BendAdjust = BendAdj / 24.0f;
++
+         unison_stereo_spread[nvoice] =
+             pars.VoicePar[nvoice].Unison_stereo_spread / 127.0f;
+         int unison = pars.VoicePar[nvoice].Unison_size;
+@@ -1083,7 +1089,8 @@ void ADnote::computecurrentparameters()
+                               / 100.0f;
+             voicefreq = getvoicebasefreq(nvoice)
+                         * powf(2, (voicepitch + globalpitch) / 12.0f);                //Hz frequency
+-            voicefreq *= ctl.pitchwheel.relfreq; //change the frequency by the controller
++            voicefreq *=
++                powf(ctl.pitchwheel.relfreq, NoteVoicePar[nvoice].BendAdjust); //change the frequency by the controller
+             setfreq(nvoice, voicefreq * portamentofreqrap);
+ 
+             /***************/
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 2a2196b9..61c6e9a4 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -199,6 +199,9 @@ class ADnote:public SynthNote
+             // cents = basefreq*VoiceDetune
+             float Detune, FineDetune;
+ 
++            // Bend adjustment
++            float BendAdjust;
++
+             Envelope *FreqEnvelope;
+             LFO      *FreqLfo;
+ 
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 9f664087..92570dba 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -63,7 +63,11 @@ void PADnote::setup(float freq,
+                 basefreq *= powf(3.0f, tmp);
+         }
+     }
+-
++    int BendAdj = pars.PBendAdjust - 64;
++    if (BendAdj % 24 == 0)
++        BendAdjust = BendAdj / 24;
++    else
++        BendAdjust = BendAdj / 24.0f;
+     firsttime = true;
+     realfreq  = basefreq;
+     if(!legato)
+@@ -255,7 +259,8 @@ void PADnote::computecurrentparameters()
+     }
+ 
+     realfreq = basefreq * portamentofreqrap
+-               * powf(2.0f, globalpitch / 12.0f) * ctl.pitchwheel.relfreq;
++               * powf(2.0f, globalpitch / 12.0f)
++        * powf(ctl.pitchwheel.relfreq, BendAdjust);
+ }
+ 
+ 
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index 960798bc..8d39792c 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -52,6 +52,7 @@ class PADnote:public SynthNote
+         float poslo;
+ 
+         float basefreq;
++        float BendAdjust;
+         bool  firsttime;
+ 
+         int nsample, portamento;
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index fa72eed7..574bd51c 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -78,6 +78,11 @@ void SUBnote::setup(float freq,
+                 basefreq *= powf(3.0f, tmp);
+         }
+     }
++    int BendAdj = pars.PBendAdjust - 64;
++    if (BendAdj % 24 == 0)
++        BendAdjust = BendAdj / 24;
++    else
++        BendAdjust = BendAdj / 24.0f;
+     float detune = getdetune(pars.PDetuneType,
+                              pars.PCoarseDetune,
+                              pars.PDetune);
+@@ -432,7 +437,8 @@ void SUBnote::computecurrentparameters()
+             envfreq = FreqEnvelope->envout() / 1200;
+             envfreq = powf(2.0f, envfreq);
+         }
+-        envfreq *= ctl.pitchwheel.relfreq; //pitch wheel
++        envfreq *=
++            powf(ctl.pitchwheel.relfreq, BendAdjust); //pitch wheel
+         if(portamento) { //portamento is used
+             envfreq *= ctl.portamento.freqrap;
+             if(!ctl.portamento.used) //the portamento has finished
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index ac1c6c68..f1740c66 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -59,6 +59,7 @@ class SUBnote:public SynthNote
+         int       firstnumharmonics; //To keep track of the first note's numharmonics value, useful in legato mode.
+         int       start; //how the harmonics start
+         float     basefreq;
++        float     BendAdjust;
+         float     panning;
+         Envelope *AmpEnvelope;
+         Envelope *FreqEnvelope;
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index e44134af..257f6d07 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -562,6 +562,12 @@ o->redraw();}
+               code3 {o->lstep(10);}
+               class Fl_Osc_Counter
+             }
++            Fl_Dial bendadjdial {
++              label {Bend Adj.}
++              tooltip {How the frequency varies according to the pitch bend} xywh {64 270 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
++              code0 {o->init("PBendAdjust");}
++              class Fl_Osc_Dial
++            }
+             Fl_Slider {} {
+               callback {detunevalueoutput->update();}
+               tooltip {Fine Detune (cents)} xywh {58 287 392 13} type {Horz Knob} box NO_BOX minimum -8192 maximum 8191 step 1
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index c8bdfbda..4909b2d6 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -691,13 +691,13 @@ cbwidget->do_callback();}
+             } {}
+             Fl_Slider detune {
+               callback {o->oscWrite("detunevalue");}
+-              tooltip {Fine Detune (cents)} xywh {60 295 295 15} type {Horz Knob} box NO_BOX minimum -8192 maximum 8191 step 1
++              tooltip {Fine Detune (cents)} xywh {60 296 295 15} type {Horz Knob} box NO_BOX minimum -8192 maximum 8191 step 1
+               code0 {o->init("PDetune", 'i');}
+               class Fl_Osc_Slider
+             }
+             Fl_Value_Output detunevalueoutput {
+               label Detune
+-              xywh {12 295 45 15} labelsize 10 align 5 minimum -5000 maximum 5000 step 0.01 textfont 1 textsize 10
++              xywh {12 296 45 15} labelsize 10 align 5 minimum -5000 maximum 5000 step 0.01 textfont 1 textsize 10
+               code0 {o->init("detunevalue");}
+               class Fl_Osc_Output
+             }
+@@ -709,6 +709,12 @@ cbwidget->do_callback();}
+               code1 {o->init("PDetuneType",1);}
+               class Fl_Osc_Choice
+             } {}
++            Fl_Dial bendadjustdial {
++              label {Bend}
++              tooltip {How the frequency varies according to the pitch wheel} xywh {60 278 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
++              code0 {o->init("PBendAdjust");}
++              class Fl_Osc_Dial
++            }
+             Fl_Check_Button hz440 {
+               label 440Hz
+               callback {if (o->value()==0) fixedfreqetdial->deactivate();
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index d99f04a6..4c235fcd 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -287,6 +287,12 @@ freqsettingsui->redraw();}
+           code0 {o->init("detunevalue");}
+           class Fl_Osc_Output
+         }
++        Fl_Dial bendadjdial {
++          label {Bend Adj.}
++          tooltip {How the frequency varies according to the pitch bend} xywh {448 53 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
++          code0 {o->init("PBendAdjust");}
++          class Fl_Osc_Dial
++        }
+         Fl_Check_Button hz440 {
+           label 440Hz
+           callback {if (o->value()==0) fixedfreqetdial->deactivate();
+-- 
+2.47.0
+

@@ -1,0 +1,31 @@
+From 03cd0d702af8cde117f8b6adf03700d1c84801ba Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 5 Mar 2015 19:13:51 -0500
+Subject: [PATCH 0385/1936] Virkeyboard: Fix Pixmap Paths
+
+---
+ src/UI/VirKeyboard.fl | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/UI/VirKeyboard.fl b/src/UI/VirKeyboard.fl
+index 07f4dfb4..2d6c399f 100644
+--- a/src/UI/VirKeyboard.fl
++++ b/src/UI/VirKeyboard.fl
+@@ -105,10 +105,10 @@ rndvelocity=0;} {selected
+ 
+ //On error fetch everything from source directory
+ if(!(white_up&&white_down&&black_up&&black_down)) {
+-    white_up   = Fl_Shared_Image::get(SOURCE_DIR "/../../pixmaps/white_key.png");   
+-    white_down = Fl_Shared_Image::get(SOURCE_DIR "/../../pixmaps/white_key_pressed.png");
+-    black_up   = Fl_Shared_Image::get(SOURCE_DIR "/../../pixmaps/black_key.png");
+-    black_down = Fl_Shared_Image::get(SOURCE_DIR "/../../pixmaps/black_key_pressed.png");
++    white_up   = Fl_Shared_Image::get(SOURCE_DIR "/pixmaps/white_key.png");
++    white_down = Fl_Shared_Image::get(SOURCE_DIR "/pixmaps/white_key_pressed.png");
++    black_up   = Fl_Shared_Image::get(SOURCE_DIR "/pixmaps/black_key.png");
++    black_down = Fl_Shared_Image::get(SOURCE_DIR "/pixmaps/black_key_pressed.png");
+ }
+ 
+ Fl_Image *key;
+-- 
+2.47.0
+

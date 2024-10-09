@@ -1,0 +1,31 @@
+From b65b500faca35df25f8a0d92abad01c331b44e13 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 6 Nov 2015 18:28:10 -0500
+Subject: [PATCH 0688/1936] Fix Master Keyshift Osc Port
+
+---
+ src/Misc/Master.cpp | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 4af64862..3cb6b306 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -112,8 +112,13 @@ static const Ports master_ports = {
+     rRecursp(insefx, 8, "Insertion Effect"),//NUM_INS_EFX
+     rRecur(microtonal, "Micrtonal Mapping Functionality"),
+     rRecur(ctl, "Controller"),
+-    rParamZyn(Pkeyshift,  "Global Key Shift"),
+     rArrayI(Pinsparts, NUM_INS_EFX, "Part to insert part onto"),
++    {"Pkeyshift::i", rProp(parameter) rLinear(0,127) rDoc("Global Key Shift"), 0, [](const char *m, RtData&d) {
++        if(rtosc_narguments(m)==0) {
++            d.reply(d.loc, "i", ((Master*)d.obj)->Pkeyshift);
++        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
++            ((Master*)d.obj)->setPkeyshift(limit<char>(rtosc_argument(m,0).i,0,127));
++            d.broadcast(d.loc, "i", ((Master*)d.obj)->Pkeyshift);}}},
+     {"echo", rDoc("Hidden port to echo messages"), 0, [](const char *m, RtData&d) {
+        d.reply(m-1);}},
+     {"get-vu:", rDoc("Grab VU Data"), 0, [](const char *, RtData &d) {
+-- 
+2.47.0
+

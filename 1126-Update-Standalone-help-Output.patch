@@ -1,0 +1,34 @@
+From b004e948d2b741b20778356886167dd7ddd07e59 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 27 Mar 2017 10:31:31 -0400
+Subject: [PATCH 1126/1936] Update Standalone --help Output
+
+---
+ src/main.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index 31798dec..c7e54c56 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -473,7 +473,8 @@ int wmidi = -1;
+         "  -U , --no-gui\t\t\t\t Run ZynAddSubFX without user interface\n"
+              << "  -N , --named\t\t\t\t Postfix IO Name when possible\n"
+              << "  -a , --auto-connect\t\t\t AutoConnect when using JACK\n"
+-             << "  -A , --auto-save=INTERVAL\t\t Automatically save at interval (disabled with 0 interval)\n"
++             << "  -A , --auto-save=INTERVAL\t\t Automatically save at interval\n"
++             << "\t\t\t\t\t (disabled with 0 interval)\n"
+              << "  -p , --pid-in-client-name\t\t Append PID to (JACK) "
+                 "client name\n"
+              << "  -P , --preferred-port\t\t\t Preferred OSC Port\n"
+@@ -481,6 +482,7 @@ int wmidi = -1;
+              << "  -I , --input\t\t\t\t Set Input Engine\n"
+              << "  -e , --exec-after-init\t\t Run post-initialization script\n"
+              << "  -d , --dump-oscdoc=FILE\t\t Dump oscdoc xml to file\n"
++             << "  -D , --dump-json-schema=FILE\t\t Dump osc schema (.json) to file\n"
+              << endl;
+ 
+         return 0;
+-- 
+2.47.0
+

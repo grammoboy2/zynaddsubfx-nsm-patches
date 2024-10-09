@@ -1,0 +1,115 @@
+From cf8b9350ae03c74d5e776c4ddcadedc5890c7ef5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 13 Nov 2015 20:10:14 -0500
+Subject: [PATCH 0730/1936] Bump Version To 2.5.2
+
+---
+ AUTHORS.txt             |  4 ++--
+ CMakeLists.txt          |  2 +-
+ HISTORY.txt             | 21 +++++++++++----------
+ src/Misc/XMLwrapper.cpp |  2 +-
+ src/main.cpp            |  2 +-
+ 5 files changed, 16 insertions(+), 15 deletions(-)
+
+diff --git a/AUTHORS.txt b/AUTHORS.txt
+index 3f4a0a1c..73e52d94 100644
+--- a/AUTHORS.txt
++++ b/AUTHORS.txt
+@@ -4,6 +4,8 @@ Main author:
+ Active Developers:
+         Mark McCurry
+         Hans Petter Selasky (BSD Compat)
++        Christopher Oliver (Unison + presets fix, mousewheel support,
++                            SUBnote overtones, unison enhancements, ...)
+ 
+ Contributors:
+         Gerald Folcher (legato, mono notes memory)
+@@ -25,8 +27,6 @@ Contributors:
+         Jonathan Liles (NSM & NTK support)
+         Johannes Lorenz (Effect Documentation, PID Files)
+         Ilario Glasgo (Italian Doc Translation)
+-        Christopher Oliver (Unison + presets fix, mousewheel support,
+-                            SUBnote overtones, unison enhancements, ...)
+         Filipe Coelho (Globals Cleanup)
+         Andre Sklenar (UI Pixmaps)
+         Harald Hvaal (General Code Modernization)
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 06044763..7f56a1c8 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,7 +1,7 @@
+ cmake_minimum_required(VERSION 2.8)
+ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+-set(VERSION "2.5.1")
++set(VERSION "2.5.2")
+ 
+ 
+ #Include RTOSC
+diff --git a/HISTORY.txt b/HISTORY.txt
+index 8a9f7fd8..8c23a792 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,22 +1,23 @@
+-2.5.2 (XXX)
++2.5.2 (13 November 2015)
+         - Add MIDI-Learn serialization
++        - Add realtime updates for LFOs
+         - Add pink noise source
+-	- Add missing velocity sense to ADvoice filters
+-	- Support global Q for ADvoice formant filters
+-	- Fix formant filter response to frequency
+-	- Add chop pseudo sync BF modifier to oscilgen
+-	- Add user adjustment for AD/PAD fadein
+-	- Improve use-as-base so the result works like a built-in
+-	- Save and restore some missing parameters from oscilgen
++        - Add missing velocity sense to ADvoice filters
++        - Support global Q for ADvoice formant filters
++        - Fix formant filter response to frequency
++        - Add chop pseudo sync BF modifier to oscilgen
++        - Add user adjustment for AD/PAD fadein
++        - Improve use-as-base so the result works like a built-in
++        - Save and restore some missing parameters from oscilgen
+         - Restore mousewheel functionality
+-	- Add window traversal shortcuts
++        - Add window traversal shortcuts
+         - Restore bank LSB/MSB MIDI support
+         - Improve tip windows
+         - Improve oscdoc output
+         - Restore Ext Oscil/Mod functionality
+         - Remove remaining globals
+         - Fix UI connection bugs
+-        - Add UI title rewrite support (FIXME)
++        - Add UI title rewrite support
+         - Other misc bug fixes
+ 
+ 2.5.1 (4 July 2015)
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index 42ca6f96..8ae71d5a 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -98,7 +98,7 @@ XMLwrapper::XMLwrapper()
+ {
+     version.Major    = 2;
+     version.Minor    = 5;
+-    version.Revision = 1;
++    version.Revision = 2;
+ 
+     minimal = true;
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index ab8cdacb..804c39b0 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -135,7 +135,7 @@ int main(int argc, char *argv[])
+     << "\nZynAddSubFX - Copyright (c) 2002-2013 Nasca Octavian Paul and others"
+     << endl;
+     cerr
+-    << "                Copyright (c) 2009-2014 Mark McCurry [active maintainer]"
++    << "                Copyright (c) 2009-2015 Mark McCurry [active maintainer]"
+     << endl;
+     cerr << "Compiled: " << __DATE__ << " " << __TIME__ << endl;
+     cerr << "This program is free software (GNU GPL v2 or later) and \n";
+-- 
+2.47.0
+

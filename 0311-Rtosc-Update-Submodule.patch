@@ -1,0 +1,19 @@
+From be845ac25c0ea33fee28ec3bf649b41dd7215b4a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 8 Feb 2015 13:11:06 -0500
+Subject: [PATCH 0311/1936] Rtosc: Update Submodule
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index b0bfb746..178d6159 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit b0bfb74667b561973ddb3491f3d03e914aae1813
++Subproject commit 178d6159d1aa1df41f9e9c141330af5dd448516e
+-- 
+2.47.0
+

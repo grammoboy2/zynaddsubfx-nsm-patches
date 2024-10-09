@@ -1,0 +1,37 @@
+From 4f4b13eda5e02bbaf17a79f6ed23d51bb9d79555 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 16 Oct 2016 09:39:47 -0400
+Subject: [PATCH 1066/1936] Revert "Suppress errors from system headers."
+
+This reverts commit fdbd3007a070a3ee70f5ae7b9741291d5b6b9440.
+---
+ src/CMakeLists.txt | 8 +-------
+ 1 file changed, 1 insertion(+), 7 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index f16427bf..06e3d5f8 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -262,18 +262,12 @@ add_definitions(
+ 	 -Wextra
+ 	 )
+ 
+-check_cxx_compiler_flag(-Wno-inconsistent-missing-override
++CHECK_CXX_COMPILER_FLAG(-Wno-inconsistent-missing-override
+ 	COMPILER_SUPPORTS_OVERRIDE)
+ if(COMPILER_SUPPORTS_OVERRIDE)
+     add_definitions(-Wno-inconsistent-missing-override)
+ endif()
+ 
+-check_cxx_compiler_flag(--system-header-prefix
+-	COMPILER_SUPPORTS_SYSTEM_HDR_PREFIX)
+-if(COMPILER_SUPPORTS_OVERRIDE)
+-    add_definitions(--system-header-prefix="FL/")
+-endif()
+-
+ if(NOT AVOID_ASM)
+ 	message(STATUS "Compiling with x86 opcode support")
+     add_definitions(-DASM_F2I_YES)
+-- 
+2.47.0
+

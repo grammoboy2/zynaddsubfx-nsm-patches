@@ -1,0 +1,84 @@
+From 4b3f76bae9ce8be78a7c29edd265030cc436125f Mon Sep 17 00:00:00 2001
+From: Daniel Winzen <d@winzen4.de>
+Date: Tue, 23 Dec 2014 22:22:14 +0100
+Subject: [PATCH 0301/1936] Fix memory leaks
+
+---
+ src/Effects/EQ.cpp                  | 7 +++++++
+ src/Effects/EQ.h                    | 2 +-
+ src/Misc/Master.cpp                 | 1 +
+ src/UI/Fl_PADnoteOvertonePosition.h | 2 ++
+ src/UI/MasterUI.fl                  | 1 +
+ 5 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/src/Effects/EQ.cpp b/src/Effects/EQ.cpp
+index b92712e5..db4e9f5c 100644
+--- a/src/Effects/EQ.cpp
++++ b/src/Effects/EQ.cpp
+@@ -44,6 +44,13 @@ EQ::EQ(EffectParams pars)
+     cleanup();
+ }
+ 
++EQ::~EQ()
++{
++       for(int i = 0; i < MAX_EQ_BANDS; ++i) {
++           memory.dealloc(filter[i].l);
++           memory.dealloc(filter[i].r);
++       }
++}
+ 
+ // Cleanup the effect
+ void EQ::cleanup(void)
+diff --git a/src/Effects/EQ.h b/src/Effects/EQ.h
+index 37ad5456..21af4e29 100644
+--- a/src/Effects/EQ.h
++++ b/src/Effects/EQ.h
+@@ -30,7 +30,7 @@ class EQ:public Effect
+ {
+     public:
+         EQ(EffectParams pars);
+-        ~EQ() {}
++        ~EQ();
+         void out(const Stereo<float *> &smp);
+         void setpreset(unsigned char npreset);
+         void changepar(int npar, unsigned char value);
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index dc9328a6..3483103d 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -791,6 +791,7 @@ Master::~Master()
+         delete sysefx[nefx];
+ 
+     delete fft;
++    delete memory;
+ }
+ 
+ 
+diff --git a/src/UI/Fl_PADnoteOvertonePosition.h b/src/UI/Fl_PADnoteOvertonePosition.h
+index c9836008..c5430e86 100644
+--- a/src/UI/Fl_PADnoteOvertonePosition.h
++++ b/src/UI/Fl_PADnoteOvertonePosition.h
+@@ -30,6 +30,8 @@ class PADnoteOvertonePosition: public Fl_Box, Fl_Osc_Widget
+             osc->removeLink(base_path + "mode",
+                     (Fl_Osc_Widget*) this);
+             delete [] spc;
++            delete [] nhr;
++            delete [] spectrum;
+         }
+ 
+         void init(void)
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 3f1402f3..8be5ffc6 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1620,6 +1620,7 @@ npart=0;
+ npartcounter->do_callback();
+ syseffnocounter->do_callback();
+ inseffnocounter->do_callback();
++delete microtonalui;
+ microtonalui=new MicrotonalUI(osc, "/microtonal/");
+ updatesendwindow();
+ updatepanel();
+-- 
+2.47.0
+

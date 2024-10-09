@@ -1,0 +1,507 @@
+From 0c4af806df9d7f77f53274a298a02762b1193373 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 28 Oct 2017 09:38:52 +0200
+Subject: [PATCH 1217/1936] Tmp commit
+
+---
+ TODO.txt                 |   7 +++
+ doc/architecture.txt     |  14 ++++-
+ rtosc                    |   2 +-
+ src/Misc/Master.cpp      |  33 ++++++----
+ src/Misc/Master.h        |   8 ++-
+ src/Misc/MiddleWare.cpp  | 127 ++++++++++++++++++++++++---------------
+ src/Tests/CMakeLists.txt |   2 +-
+ src/Tests/SaveOSC.cpp    |  91 ++++++++++++++++++++++++----
+ 8 files changed, 204 insertions(+), 80 deletions(-)
+ create mode 100644 TODO.txt
+
+diff --git a/TODO.txt b/TODO.txt
+new file mode 100644
+index 00000000..7bdc0b60
+--- /dev/null
++++ b/TODO.txt
+@@ -0,0 +1,7 @@
++* get position of bundle in a path
++* fix sleep => wait correctly
++* use b (or #?) for bundles, not a
++test:
++* zyn fx (all presets)
++* rtosc arg val maths
++fix all new todos
+diff --git a/doc/architecture.txt b/doc/architecture.txt
+index b30d03df..2df1d658 100644
+--- a/doc/architecture.txt
++++ b/doc/architecture.txt
+@@ -131,11 +131,19 @@ Saving
+ This is where the nice pristine hands off approach sadly comes to an end.
+ There simply isn't an effective means of capturing all parameters without
+ taking a large amount of time.
++
+ In order to permit the serialization of parameter objects, the backend is 
+-partially 'frozen'.
+-This essentially prevents the backend from processing most messages from the
+-user interface and when this occurs the parameters which are too be serialized
++partially 'frozen'. The master has two kinds of variables:
++ - The realtime variables which are only ever mutable through the RT thread
++ - The non realtime variables which are only ever mutable through
++   * osc dispatch within Master
++   * MiddleWare (using struct NonRtObjStore)
++Partially means that only the second kind of variable is ever being saved.
++Since the freezing message is the last one the middleware sends, this
++essentially prevents the backend from processing most messages from the
++user interface and when this occurs the parameters which are to be serialized
+ can be guaranteed to be constant and thus safe to access across threads.
++
+ This class of read-only-operation can be seen as used in parameter copy/paste
+ operations and in saving full instances as well as instruments.
+ 
+diff --git a/rtosc b/rtosc
+index 0ac9069c..fb4fe866 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 0ac9069cd855228dbbc9d32953ae4d0c31cab43e
++Subproject commit fb4fe8665a365b090c7e8ca2a9581980e31f9786
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 3b3e5ae5..51b40b31 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -750,8 +750,8 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+     mastercb_ptr = 0;
+ }
+ 
+-bool Master::applyOscEventWith(const char *msg, float *outl, float *outr,
+-                               bool offline, bool nio, DataObj& d, int msg_id)
++bool Master::applyOscEvent(const char *msg, float *outl, float *outr,
++                           bool offline, bool nio, DataObj& d, int msg_id)
+ {
+     if(!strcmp(msg, "/load-master")) {
+         Master *this_master = this;
+@@ -824,14 +824,11 @@ bool Master::applyOscEvent(const char *msg, float *outl, float *outr,
+     memset(loc_buf, 0, sizeof(loc_buf));
+     d.matches = 0;
+ 
+-    return applyOscEventWith(msg, outl, outr, offline, nio, d, msg_id);
++    return applyOscEvent(msg, outl, outr, offline, nio, d, msg_id);
+ }
+ 
+ bool Master::applyOscEvent(const char *msg, bool nio, int msg_id)
+ {
+-    // TODO: the following comment is probably wrong
+-    // "/load-master" can not be handled, since no out buffers are specified
+-//    assert(strcmp(msg, "/load-master"));
+     return applyOscEvent(msg, NULL, NULL, true, nio, msg_id);
+ }
+ 
+@@ -1098,7 +1095,7 @@ int msg_id=0;
+ 
+ bool Master::runOSC(float *outl, float *outr, bool offline)
+ {
+-    //Handle user events TODO move me to a proper location
++    //Handle user events
+     char loc_buf[1024];
+     DataObj d{loc_buf, 1024, this, bToU};
+     memset(loc_buf, 0, sizeof(loc_buf));
+@@ -1107,7 +1104,7 @@ bool Master::runOSC(float *outl, float *outr, bool offline)
+     for(; uToB && uToB->hasNext() && events < 100; ++msg_id, ++events)
+     {
+         const char *msg = uToB->read();
+-        if(! applyOscEventWith(msg, outl, outr, offline, true, d, msg_id) )
++        if(! applyOscEvent(msg, outl, outr, offline, true, d, msg_id) )
+             return false;
+     }
+ 
+@@ -1659,7 +1656,7 @@ char* Master::getXMLData()
+     return xml.getXMLdata();
+ }
+ 
+-// this is being called as a "read only op" directly by MiddleWare
++// this is being called as a "read only op" directly by MiddleWare or the UI;
+ // note that the Master itself is frozen
+ int Master::saveOSC(const char *filename, master_dispatcher_t* dispatcher,
+                     Master* master2)
+@@ -1674,14 +1671,25 @@ int Master::saveOSC(const char *filename, master_dispatcher_t* dispatcher,
+     dispatcher->updateMaster(master2);
+ 
+     int rval = master2->loadOSCFromStr(savefile.c_str(), dispatcher);
+-    sleep(3); // wait until savefile has been loaded into master2
+-              // TODO: how to find out when waited enough?
++
++    // The above call is in this thread (i.e. called by MiddleWare or UI), but
++    // it sends messages to master2 in order to load the values
++    // We need to wait until savefile has been loaded into master2
++    int i;
++    for(i = 0; i < 20 && master2->uToB->hasNext(); ++i)
++        usleep(50000);
++    if(i >= 20) // >= 1 second?
++    {
++        // Master failed to fetch its messages
++        rval = -1;
++    }
++    printf("Saved in less than %d ms.\n", 50*i);
+ 
+     dispatcher->updateMaster(this);
+ 
+     if(rval < 0)
+     {
+-        std::cerr << "invalid savefile!" << std::endl;
++        std::cerr << "invalid savefile (or a backend error)!" << std::endl;
+         std::cerr << "complete savefile:" << std::endl;
+         std::cerr << savefile << std::endl;
+         std::cerr << "first entry that could not be parsed:" << std::endl;
+@@ -1721,6 +1729,7 @@ int Master::saveOSC(const char *filename, master_dispatcher_t* dispatcher,
+             std::ofstream tmp1("tmp1.txt"), tmp2("tmp2.txt");
+             tmp1 << xml;
+             tmp2 << xml2;
++            rval = -1;
+         }
+ 
+         free(xml);
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index f051cfb2..d99934fd 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -72,6 +72,8 @@ class Master
+         int loadXML(const char *filename);
+ 
+         /**Save all settings to an OSC file (as specified by RT OSC)
++         * When the function returned, the OSC file has been either saved or
++         * an error occured.
+          * @param filename File to save to or NULL (useful for testing)
+          * @param dispatcher Message dispatcher and modifier
+          * @param master2 An empty master dummy where the savefile will be
+@@ -230,9 +232,9 @@ class Master
+         int loadOSCFromStr(const char *file_content,
+                            rtosc::savefile_dispatcher_t* dispatcher);
+         //applyOscEvent with a DataObj parameter
+-        bool applyOscEventWith(const char *event, float *outl, float *outr,
+-                               bool offline, bool nio,
+-                               class DataObj& d, int msg_id = -1);
++        bool applyOscEvent(const char *event, float *outl, float *outr,
++                           bool offline, bool nio,
++                           class DataObj& d, int msg_id = -1);
+ };
+ 
+ class master_dispatcher_t : public rtosc::savefile_dispatcher_t
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index c1175652..6c6f9b1c 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -416,7 +416,7 @@ class mw_dispatcher_t : public master_dispatcher_t
+     {
+         mw->transmitMsg(msg);
+         return true; // we cannot yet say if the port matched
+-                     // we will query the Master after everything wil be done
++                     // we will query the Master after everything will be done
+     }
+     void vUpdateMaster(Master* m) { mw->switchMaster(m); }
+ 
+@@ -449,7 +449,8 @@ public:
+ 
+     void savePart(int npart, const char *filename)
+     {
+-        //Copy is needed as filename WILL get trashed during the rest of the run
++        // Due to a possible bug in ThreadLink, filename may get trashed when
++        // the read-only operation writes to the buffer again. Copy to string:
+         std::string fname = filename;
+         //printf("saving part(%d,'%s')\n", npart, filename);
+         doReadOnlyOp([this,fname,npart](){
+@@ -807,11 +808,19 @@ class MwDataObj:public rtosc::RtData
+                 reply(buffer);
+             }
+         }
++        //! In the case of MiddleWare, reply always means sending back to
++        //! the front-end. If a message from the back-end gets "replied", this
++        //! only means that it has been sent from the front-end via MiddleWare
++        //! to the backend, so the reply has to go to the front-end.
++        //! The back-end itself usually doesn't ask things, so it does not
++        //! get replies.
+         virtual void reply(const char *msg) override{
+             mwi->sendToCurrentRemote(msg);
+-        };
++        }
+         //virtual void broadcast(const char *path, const char *args, ...){(void)path;(void)args;};
+-        //virtual void broadcast(const char *msg){(void)msg;};
++        virtual void broadcast(const char *msg) override {
++            mwi->broadcastToRemote(msg);
++        }
+ 
+         virtual void chain(const char *msg) override
+         {
+@@ -1135,6 +1144,68 @@ const rtosc::Ports bankPorts = {
+ #define STRINGIFY(a) STRINGIFY2(a)
+ #endif
+ 
++template<bool osc_format>
++void load_cb(const char *msg, RtData &d)
++{
++    MiddleWareImpl &impl = *((MiddleWareImpl*)d.obj);
++    const char *file = rtosc_argument(msg, 0).s;
++    uint64_t request_time = 0;
++    if(rtosc_narguments(msg) > 1)
++        request_time = rtosc_argument(msg, 1).t;
++
++    impl.loadMaster(file, osc_format);
++    d.broadcast("/damage", "s", "/");
++    d.broadcast(d.loc, "stT", file, request_time);
++}
++
++void save_cb(const char *msg, RtData &d,
++             std::function<int(MiddleWareImpl&, const std::string&)>& cb)
++{
++    MiddleWareImpl &impl = *((MiddleWareImpl*)d.obj);
++    // Due to a possible bug in ThreadLink, filename may get trashed when
++    // the read-only operation writes to the buffer again. Copy to string:
++    const string file = rtosc_argument(msg, 0).s;
++    uint64_t request_time = 0;
++    if(rtosc_narguments(msg) > 1)
++        request_time = rtosc_argument(msg, 1).t;
++
++    int res = cb(impl, file); // the actual saving
++
++    d.broadcast(d.loc, (res == 0) ? "stT" : "stF",
++                file.c_str(), request_time);
++}
++
++int save_osc(MiddleWareImpl& impl, const std::string& file)
++{
++    mw_dispatcher_t dispatcher(impl.parent);
++
++    // allocate an "empty" master
++    // after the savefile will have been saved, it will be loaded into this
++    // dummy master, and then the two masters will be compared
++    zyn::Config config;
++    zyn::SYNTH_T* synth = new zyn::SYNTH_T;
++    synth->buffersize = impl.master->synth.buffersize;
++    synth->samplerate = impl.master->synth.samplerate;
++    synth->alias();
++    zyn::Master master2(*synth, &config);
++    impl.master->copyMasterCbTo(&master2);
++    master2.frozenState = true;
++
++    int res;
++    impl.doReadOnlyOp([&impl,file,&dispatcher,&master2,&res](){
++            res = impl.master->saveOSC(file.c_str(), &dispatcher,
++                                       &master2);});
++    return res;
++}
++
++int save_xml(MiddleWareImpl& impl, const std::string& file)
++{
++    int res;
++    impl.doReadOnlyOp([&impl,file, &res](){
++            res = impl.master->saveXML(file.c_str());});
++    return res;
++}
++
+ /*
+  * BASE/part#/kititem#
+  * BASE/part#/kit#/adpars/voice#/oscil/\*
+@@ -1243,38 +1314,8 @@ static rtosc::Ports middwareSnoopPorts = {
+         const char *file = rtosc_argument(msg, 0).s;
+         impl.loadKbm(file, d);
+         rEnd},
+-    {"save_xmz:s", 0, 0,
+-        rBegin;
+-        const char *file = rtosc_argument(msg, 0).s;
+-        //Copy is needed as filename WILL get trashed during the rest of the run
+-        //^TODO: what does this comment mean? (copy & paste error?)
+-        impl.doReadOnlyOp([&impl,file](){
+-                int res = impl.master->saveXML(file);
+-                (void)res;});
+-        rEnd},
+-    {"save_osc:s", 0, 0,
+-        rBegin;
+-        const char *file = rtosc_argument(msg, 0).s;
+-        //Copy is needed as filename WILL get trashed during the rest of the run
+-        //^TODO: what does this comment mean? (copy & paste error?)
+-        mw_dispatcher_t dispatcher(impl.parent);
+-
+-        // allocate an "empty" master
+-        // after the savefile will have been saved, it will be loaded into this
+-        // dummy master, and then the two masters will be compared
+-        zyn::Config config;
+-        zyn::SYNTH_T* synth = new zyn::SYNTH_T;
+-        synth->buffersize = impl.master->synth.buffersize;
+-        synth->samplerate = impl.master->synth.samplerate;
+-        synth->alias();
+-        zyn::Master master2(*synth, &config);
+-        impl.master->copyMasterCbTo(&master2);
+-        master2.frozenState = true;
+-
+-        impl.doReadOnlyOp([&impl,file,&dispatcher,&master2](){
+-                int res = impl.master->saveOSC(file, &dispatcher, &master2);
+-                (void)res;});
+-        rEnd},
++    {"save_xmz:s:st", 0, 0, save_cb<save_xml>},
++    {"save_osc:s:st", 0, 0, save_cb<save_osc>},
+     {"save_xiz:is", 0, 0,
+         rBegin;
+         const int   part_id = rtosc_argument(msg,0).i;
+@@ -1357,18 +1398,8 @@ static rtosc::Ports middwareSnoopPorts = {
+         const string save_loc  = save_dir + "/" + save_file;
+         remove(save_loc.c_str());
+         rEnd},
+-    {"load_xmz:s", 0, 0,
+-        rBegin;
+-        const char *file = rtosc_argument(msg, 0).s;
+-        impl.loadMaster(file);
+-        d.reply("/damage", "s", "/");
+-        rEnd},
+-    {"load_osc:s", 0, 0,
+-        rBegin;
+-        const char *file = rtosc_argument(msg, 0).s;
+-        impl.loadMaster(file, true);
+-        d.reply("/damage", "s", "/");
+-        rEnd},
++    {"load_xmz:s:st", 0, 0, load_cb<false>},
++    {"load_osc:s:st", 0, 0, load_cb<true>},
+     {"reset_master:", 0, 0,
+         rBegin;
+         impl.loadMaster(NULL);
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 22e2e675..fdbe8e03 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -65,7 +65,7 @@ add_executable(ins-test InstrumentStats.cpp)
+ target_link_libraries(ins-test ${test_lib} rt)
+ 
+ add_executable(save-osc SaveOSC.cpp)
+-target_link_libraries(save-osc
++target_link_libraries(save-osc rtosc
+                       zynaddsubfx_core zynaddsubfx_nio
+                       zynaddsubfx_gui_bridge
+                       ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+diff --git a/src/Tests/SaveOSC.cpp b/src/Tests/SaveOSC.cpp
+index 13841bbe..ae841c54 100644
+--- a/src/Tests/SaveOSC.cpp
++++ b/src/Tests/SaveOSC.cpp
+@@ -1,8 +1,10 @@
+ #include <cassert>
+ #include <thread>
++#include <mutex>
+ #include <iostream>
+ #include <unistd.h>
+ #include <rtosc/thread-link.h>
++#include <rtosc/rtosc-time.h>
+ 
+ #include <cxxtest/TestSuite.h>
+ 
+@@ -46,6 +48,7 @@ class SaveOSCTest
+             synth->alias();
+ 
+             mw = new zyn::MiddleWare(std::move(*synth), &config);
++            mw->setUiCallback(_uiCallback, this);
+             _masterChangedCallback(mw->spawnMaster());
+             realtime = nullptr;
+         }
+@@ -56,30 +59,94 @@ class SaveOSCTest
+             delete synth;
+         }
+ 
++        struct {
++            std::string operation;
++            std::string file;
++            uint64_t stamp;
++            bool status;
++        } recent;
++        std::mutex cb_mutex;
++        using mutex_guard = std::lock_guard<std::mutex>;
++
++        bool timedOperation(const char* osc_path, const char* arg1, int tries)
++        {
++            bool ok = false;
++            rtosc_arg_val_t start_time;
++            rtosc_arg_val_current_time(&start_time);
++
++            mw->transmitMsg(osc_path, "st", arg1, start_time.val.t);
++
++            int attempt;
++            for(attempt = 0; attempt < tries; ++attempt)
++            {
++                mutex_guard guard(cb_mutex);
++                if(recent.stamp == start_time.val.t &&
++                   recent.operation == osc_path &&
++                   recent.file == arg1)
++                {
++                    ok = recent.status;
++                    break;
++                }
++                usleep(1000);
++            }
++
++            fprintf(stderr, "Action %s terminated after %d tries (%s)\n",
++                    osc_path, attempt,
++                    attempt == tries ? "timeout"
++                                     : ok ? "ok" : "failure");
++            return ok && (attempt != tries);
++        }
++
++        void uiCallback(const char* msg)
++        {
++            if(!strcmp(msg, "/save_osc") || !strcmp(msg, "/load_xmz"))
++            {
++                mutex_guard guard(cb_mutex);
++                fprintf(stderr, "Received message \"%s\".\n", msg);
++                recent.operation = msg;
++                recent.file = rtosc_argument(msg, 0).s;
++                recent.stamp = rtosc_argument(msg, 1).t;
++                recent.status = rtosc_argument(msg, 2).T;
++            }
++            else
++                fprintf(stderr, "Unknown message \"%s\", ignoring...\n", msg);
++        }
++
+     public:
+         SaveOSCTest() { setUp(); }
+         ~SaveOSCTest() { tearDown(); }
+ 
++        static void _uiCallback(void* ptr, const char* msg)
++        {
++            ((SaveOSCTest*)ptr)->uiCallback(msg);
++        }
++
+         int run(int argc, char** argv)
+         {
+             assert(argc == 2);
+             const char *filename = argv[1];
+-
+             assert(mw);
+-            mw->transmitMsg("/load_xmz", "s", filename);
+-            sleep(1); // TODO: Poll to find out if+when loading was finished
+-/*            if(tmp < 0) {
++            int rval;
++
++            fputs("Loading XML file...\n", stderr);
++            if(timedOperation("/load_xmz", filename, 1000))
++            {
++                fputs("Saving OSC file now...\n", stderr);
++                // There is actually no need to wait for /save_osc, since
++                // we're in the "UI" thread which does the saving itself,
++                // but this gives an example how it works with remote fron-ends
++                rval = timedOperation("/save_osc", filename, 1000)
++                     ? EXIT_SUCCESS
++                     : EXIT_FAILURE;
++            }
++            else
++            {
+                 std::cerr << "ERROR: Could not load master file " << filename
+                      << "." << std::endl;
+-                exit(1);
+-            }*/
+-
+-            fputs("Saving OSC file now...\n", stderr);
+-
+-            mw->transmitMsg("/save_osc", "s", "");
+-            sleep(1);
++                rval = EXIT_FAILURE;
++            }
+ 
+-            return EXIT_SUCCESS; // TODO: how to check load and save success?
++            return rval;
+         }
+ 
+ 
+-- 
+2.47.0
+

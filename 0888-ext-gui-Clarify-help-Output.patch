@@ -1,0 +1,29 @@
+From d1618fa16da4077b0ba63c14fdad44c17e87765d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 14 Mar 2016 17:08:32 -0400
+Subject: [PATCH 0888/1936] ext-gui: Clarify --help Output
+
+---
+ src/UI/guimain.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index 63846c68..bf1a2806 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -572,9 +572,11 @@ const char *help_message =
+ "zynaddsubfx-ext-gui [options] uri - Connect to remote ZynAddSubFX\n"
+ "    --help   print this help message\n"
+ "    --no-uri run without a remote ZynAddSubFX\n"
++"    --embed  window ID [Internal Flag For Embedding Windows]\n"
+ "\n"
+ "    example: zynaddsubfx-ext-gui osc.udp://localhost:1234/\n"
+-"       use the -P option for zynaddsubfx to specify the port of the backend\n";
++"      This will connect to a running zynaddsubfx instance on the same\n"
++"      machine on port 1234.\n";
+ 
+ #ifndef CARLA_VERSION_STRING
+ int main(int argc, char *argv[])
+-- 
+2.47.0
+

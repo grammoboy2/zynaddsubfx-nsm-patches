@@ -1,0 +1,550 @@
+From 0abeffe03c799329dbd19e1a98957b1f7f3607a4 Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Sat, 9 Jan 2021 15:17:34 -0800
+Subject: [PATCH 1702/1936] Replace tabs with spaces to comply with style
+ guidelines.
+
+---
+ src/DSP/AnalogFilter.cpp           | 108 +++++++++++-----------
+ src/DSP/FormantFilter.cpp          |  28 +++---
+ src/DSP/SVFilter.cpp               |  26 +++---
+ src/DSP/Value_Smoothing_Filter.cpp |  18 ++--
+ src/DSP/Value_Smoothing_Filter.h   |  10 +--
+ src/Misc/Master.cpp                | 138 ++++++++++++++---------------
+ src/Misc/Part.cpp                  |   6 +-
+ 7 files changed, 167 insertions(+), 167 deletions(-)
+
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index 1145a0c8..d84484cc 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -274,22 +274,22 @@ void AnalogFilter::setfreq(float frequency)
+     if(frequency < 0.1f)
+         frequency = 0.1f;
+     else if ( frequency > MAX_FREQ )
+-	frequency = MAX_FREQ;
++        frequency = MAX_FREQ;
+ 
+     float rap = freq / frequency;
+     if(rap < 1.0f)
+         rap = 1.0f / rap;
+ 
+     frequency = ceilf(frequency);/* fractional Hz changes are not
+-				 * likely to be audible and waste CPU,
+-				 * esp since we're already smoothing
+-				 * changes, so round it */
++                                 * likely to be audible and waste CPU,
++                                 * esp since we're already smoothing
++                                 * changes, so round it */
+ 
+     if ( fabsf( frequency - freq ) >= 1.0f )
+     {
+-	/* only perform computation if absolutely necessary */
+-	freq = frequency;
+-	recompute = true;
++        /* only perform computation if absolutely necessary */
++        freq = frequency;
++        recompute = true;
+     }
+ }
+ 
+@@ -356,8 +356,8 @@ void AnalogFilter::singlefilterout(float *smp, fstage &hist)
+ 
+     if ( recompute )
+     {
+-	computefiltercoefs(freq,q);
+-	recompute = false;
++        computefiltercoefs(freq,q);
++        recompute = false;
+     }
+ 
+     if(order == 1) {  //First order filter
+@@ -397,45 +397,45 @@ void AnalogFilter::singlefilterout_freqbuf(float *smp, fstage &hist,
+     
+     for ( int i = 0; i < buffersize; i += 8 )
+     {
+-	/* recompute coeffs for each 8 samples */
+-
+-	const float f = ceilf(freqbuf[i] * MAX_FREQ);
+-
+-	if ( fabsf( f - frequency ) >= 1.0f )
+-	{
+-	    /* don't perform computation more often than necessary */
+-	    computefiltercoefs(f,q);
+-	    frequency = f;
+-	}
+-
+-	if(order == 1) {  //First order filter
+-	    for ( int j = 0; j < 8; j++ )
+-	    {
+-		float y0 = smp[i+j] * coeff.c[0] + hist.x1 * coeff.c[1]
+-		    + hist.y1 * coeff.d[1];
+-		hist.y1 = y0;
+-		hist.x1 = smp[i+j];
+-		smp[i+j]  = y0;
+-	    }
+-	} else if(order == 2) {//Second order filter
+-
+-	    const float coeff_[5] = {coeff.c[0], coeff.c[1], coeff.c[2],  coeff.d[1], coeff.d[2]};
+-	    float work[4]  = {hist.x1, hist.x2, hist.y1, hist.y2};
+-
+-	    AnalogBiquadFilterA(coeff_, smp[i + 0], work);
+-	    AnalogBiquadFilterB(coeff_, smp[i + 1], work);
+-	    AnalogBiquadFilterA(coeff_, smp[i + 2], work);
+-	    AnalogBiquadFilterB(coeff_, smp[i + 3], work);
+-	    AnalogBiquadFilterA(coeff_, smp[i + 4], work);
+-	    AnalogBiquadFilterB(coeff_, smp[i + 5], work);
+-	    AnalogBiquadFilterA(coeff_, smp[i + 6], work);
+-	    AnalogBiquadFilterB(coeff_, smp[i + 7], work);
+-
+-	    hist.x1 = work[0];
+-	    hist.x2 = work[1];
+-	    hist.y1 = work[2];
+-	    hist.y2 = work[3];
+-	}
++        /* recompute coeffs for each 8 samples */
++
++        const float f = ceilf(freqbuf[i] * MAX_FREQ);
++
++        if ( fabsf( f - frequency ) >= 1.0f )
++        {
++            /* don't perform computation more often than necessary */
++            computefiltercoefs(f,q);
++            frequency = f;
++        }
++
++        if(order == 1) {  //First order filter
++            for ( int j = 0; j < 8; j++ )
++            {
++                float y0 = smp[i+j] * coeff.c[0] + hist.x1 * coeff.c[1]
++                    + hist.y1 * coeff.d[1];
++                hist.y1 = y0;
++                hist.x1 = smp[i+j];
++                smp[i+j]  = y0;
++            }
++        } else if(order == 2) {//Second order filter
++
++            const float coeff_[5] = {coeff.c[0], coeff.c[1], coeff.c[2],  coeff.d[1], coeff.d[2]};
++            float work[4]  = {hist.x1, hist.x2, hist.y1, hist.y2};
++
++            AnalogBiquadFilterA(coeff_, smp[i + 0], work);
++            AnalogBiquadFilterB(coeff_, smp[i + 1], work);
++            AnalogBiquadFilterA(coeff_, smp[i + 2], work);
++            AnalogBiquadFilterB(coeff_, smp[i + 3], work);
++            AnalogBiquadFilterA(coeff_, smp[i + 4], work);
++            AnalogBiquadFilterB(coeff_, smp[i + 5], work);
++            AnalogBiquadFilterA(coeff_, smp[i + 6], work);
++            AnalogBiquadFilterB(coeff_, smp[i + 7], work);
++
++            hist.x1 = work[0];
++            hist.x2 = work[1];
++            hist.y1 = work[2];
++            hist.y2 = work[3];
++        }
+     }
+ 
+     recompute = true;
+@@ -447,15 +447,15 @@ void AnalogFilter::filterout(float *smp)
+ 
+     if ( freq_smoothing.apply( freqbuf, buffersize, freq * MAX_FREQ_CO ) )
+     {
+-	/* in transition, need to do fine grained interpolation */
+-	for(int i = 0; i < stages + 1; ++i)
+-	    singlefilterout_freqbuf(smp, history[i], freqbuf);
++        /* in transition, need to do fine grained interpolation */
++        for(int i = 0; i < stages + 1; ++i)
++            singlefilterout_freqbuf(smp, history[i], freqbuf);
+     }
+     else
+     {
+-	/* stable state, just use one coeff */
+-	for(int i = 0; i < stages + 1; ++i)
+-	    singlefilterout(smp, history[i]);
++        /* stable state, just use one coeff */
++        for(int i = 0; i < stages + 1; ++i)
++            singlefilterout(smp, history[i]);
+     }
+ 
+     for(int i = 0; i < buffersize; ++i)
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index c2ab63c3..573bfbe4 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -41,8 +41,8 @@ FormantFilter::FormantFilter(const FilterParams *pars, Allocator *alloc, unsigne
+ 
+     for(int i = 0; i < FF_MAX_FORMANTS; ++i)
+     {
+-	formant_amp_smoothing[i].sample_rate(srate);
+-	formant_amp_smoothing[i].reset(1.0f);
++        formant_amp_smoothing[i].sample_rate(srate);
++        formant_amp_smoothing[i].reset(1.0f);
+     }
+ 
+     for(int i = 0; i < numformants; ++i) {
+@@ -105,7 +105,7 @@ void FormantFilter::setpos(float frequency)
+ 
+     if((fabsf(oldinput - input) < 0.001f) && (fabsf(slowinput - input) < 0.001f)
+        && (fabsf(Qfactor - oldQfactor) < 0.001f)) {
+-        //	oldinput=input; setting this will cause problems at very slow changes
++        //      oldinput=input; setting this will cause problems at very slow changes
+         firsttime = false;
+         return;
+     }
+@@ -207,21 +207,21 @@ void FormantFilter::filterout(float *smp)
+ 
+         float tmpbuf[buffersize];
+ 
+-	for(int i = 0; i < buffersize; ++i)
++        for(int i = 0; i < buffersize; ++i)
+             tmpbuf[i] = inbuffer[i] * outgain;
+ 
+-	formant[j]->filterout(tmpbuf);
++        formant[j]->filterout(tmpbuf);
+ 
+-	if ( formant_amp_smoothing[j].apply( formantbuf, buffersize, currentformants[j].amp ) )
+-	{
+-	    for(int i = 0; i < buffersize; ++i)
+-		smp[i] += tmpbuf[i] * formantbuf[i];
+-	}
+-	else
+-	{
+-	    for(int i = 0; i < buffersize; ++i)
++        if ( formant_amp_smoothing[j].apply( formantbuf, buffersize, currentformants[j].amp ) )
++        {
++            for(int i = 0; i < buffersize; ++i)
++                smp[i] += tmpbuf[i] * formantbuf[i];
++        }
++        else
++        {
++            for(int i = 0; i < buffersize; ++i)
+                 smp[i] += tmpbuf[i] * currentformants[j].amp;
+-	}
++        }
+     }
+ }
+ 
+diff --git a/src/DSP/SVFilter.cpp b/src/DSP/SVFilter.cpp
+index fb4ceb5f..e6e66123 100644
+--- a/src/DSP/SVFilter.cpp
++++ b/src/DSP/SVFilter.cpp
+@@ -211,21 +211,21 @@ void SVFilter::filterout(float *smp)
+ 
+     if ( freq_smoothing.apply( freqbuf, buffersize, freq ) )
+     {
+-	/* 8 sample chunks seems to work OK for AnalogFilter, so do that here too. */
+-	for ( int i = 0; i < buffersize; i += 8 )
+-	{
+-	    freq = freqbuf[i];
+-	    computefiltercoefs();
+-
+-	    for(int j = 0; j < stages + 1; ++j)
+-		singlefilterout(smp + i, st[j], par, 8 );
+-	}
+-
+-	freq = freqbuf[buffersize - 1];
+-	computefiltercoefs();
++        /* 8 sample chunks seems to work OK for AnalogFilter, so do that here too. */
++        for ( int i = 0; i < buffersize; i += 8 )
++        {
++            freq = freqbuf[i];
++            computefiltercoefs();
++
++            for(int j = 0; j < stages + 1; ++j)
++                singlefilterout(smp + i, st[j], par, 8 );
++        }
++
++        freq = freqbuf[buffersize - 1];
++        computefiltercoefs();
+     }
+     else
+-	for(int i = 0; i < stages + 1; ++i)
++        for(int i = 0; i < stages + 1; ++i)
+             singlefilterout(smp, st[i], par, buffersize );
+ 
+     for(int i = 0; i < buffersize; ++i)
+diff --git a/src/DSP/Value_Smoothing_Filter.cpp b/src/DSP/Value_Smoothing_Filter.cpp
+index 4066c09f..3faccd2c 100644
+--- a/src/DSP/Value_Smoothing_Filter.cpp
++++ b/src/DSP/Value_Smoothing_Filter.cpp
+@@ -37,13 +37,13 @@ Value_Smoothing_Filter::apply( sample_t * __restrict__ dst, nframes_t nframes, f
+ {
+     if ( _reset_on_next_apply )
+     {
+-	reset( gt );
+-	_reset_on_next_apply = false;
+-	return false;
++        reset( gt );
++        _reset_on_next_apply = false;
++        return false;
+     }
+ 
+     if ( target_reached(gt) )
+-	return false;
++        return false;
+ 
+     sample_t * dst_ = (sample_t*) assume_aligned(dst);
+ 
+@@ -57,15 +57,15 @@ Value_Smoothing_Filter::apply( sample_t * __restrict__ dst, nframes_t nframes, f
+ 
+     for (nframes_t i = 0; i < nframes; i++)
+     {
+-	g1 += w * (gm - g1 - a * g2);
+-	g2 += w * (g1 - g2);
+-	dst_[i] = g2;
++        g1 += w * (gm - g1 - a * g2);
++        g2 += w * (g1 - g2);
++        dst_[i] = g2;
+     }
+ 
+-    g2 += 1e-10f;		/* denormal protection */
++    g2 += 1e-10f;               /* denormal protection */
+ 
+     if ( fabsf( gt - g2 ) < 0.0001f )
+-	g2 = gt;
++        g2 = gt;
+ 
+     this->g1 = g1;
+     this->g2 = g2;
+diff --git a/src/DSP/Value_Smoothing_Filter.h b/src/DSP/Value_Smoothing_Filter.h
+index ed104741..e48b919f 100644
+--- a/src/DSP/Value_Smoothing_Filter.h
++++ b/src/DSP/Value_Smoothing_Filter.h
+@@ -34,11 +34,11 @@ class Value_Smoothing_Filter
+ public:
+ 
+     Value_Smoothing_Filter ( )
+-	{
+-	    g1 = g2 = 0;
+-	    _cutoff = 10.0f;
+-	    _reset_on_next_apply = false;
+-	}
++        {
++            g1 = g2 = 0;
++            _cutoff = 10.0f;
++            _reset_on_next_apply = false;
++        }
+ 
+     void reset_on_next_apply ( bool v ) { _reset_on_next_apply = v; }
+ 
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index fc707bb9..6784d985 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -189,7 +189,7 @@ static const Ports auto_param_ports = {
+             d.broadcast(d.loc, "s", a.slots[slot].automations[param].param_path);
+         }
+         else
+-			d.reply(d.loc, "s", a.slots[slot].automations[param].param_path);
++                        d.reply(d.loc, "s", a.slots[slot].automations[param].param_path);
+         rEnd},
+     {"clear:", rDoc("Clear automation param"), 0,
+         rBegin;
+@@ -784,10 +784,10 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+         part[npart] = new Part(*memory, synth, time, config->cfg.GzipCompression,
+                                config->cfg.Interpolation, &microtonal, fft, &watcher,
+                                (ss+"/part"+npart+"/").c_str);
+-	smoothing_part_l[npart].sample_rate( synth.samplerate );
+-	smoothing_part_l[npart].reset_on_next_apply( true ); /* necessary to make CI tests happy, otherwise of no practical use */
+-	smoothing_part_r[npart].sample_rate( synth.samplerate );
+-	smoothing_part_r[npart].reset_on_next_apply( true ); /* necessary to make CI tests happy, otherwise of no practical use */
++        smoothing_part_l[npart].sample_rate( synth.samplerate );
++        smoothing_part_l[npart].reset_on_next_apply( true ); /* necessary to make CI tests happy, otherwise of no practical use */
++        smoothing_part_r[npart].sample_rate( synth.samplerate );
++        smoothing_part_r[npart].reset_on_next_apply( true ); /* necessary to make CI tests happy, otherwise of no practical use */
+     }
+ 
+     smoothing.sample_rate( synth.samplerate );
+@@ -1119,52 +1119,52 @@ bool Master::hasMasterCb() const
+ template <class T>
+ struct def_skip
+ {
+-	static void skip(const char*& argptr) { argptr += sizeof(T); }
++        static void skip(const char*& argptr) { argptr += sizeof(T); }
+ };
+ 
+ template <class T>
+ struct str_skip
+ {
+-	static void skip(const char*& argptr) { while(argptr++); /*TODO: 4 padding */ }
++        static void skip(const char*& argptr) { while(argptr++); /*TODO: 4 padding */ }
+ };
+ 
+ template<class T, class Display = T, template<class TMP> class SkipsizeFunc = def_skip>
+ void _dump_prim_arg(const char*& argptr, std::ostream& os)
+ {
+-	os << ' ' << (Display)*(const T*)argptr;
+-	SkipsizeFunc<T>::skip(argptr);
++        os << ' ' << (Display)*(const T*)argptr;
++        SkipsizeFunc<T>::skip(argptr);
+ }
+ 
+ void dump_msg(const char* ptr, std::ostream& os = std::cerr)
+ {
+-	assert(*ptr == '/');
+-	os << ptr;
+-
+-	while(*++ptr) ; // skip address
+-	while(!*++ptr) ; // skip 0s
+-
+-	assert(*ptr == ',');
+-	os << ' ' << (ptr + 1);
+-
+-	const char* argptr = ptr;
+-	while(*++argptr) ; // skip type string
+-	while(!*++argptr) ; // skip 0s
+-
+-	char c;
+-	while((c = *++ptr))
+-	{
+-		switch(c)
+-		{
+-			case 'i':
+-				_dump_prim_arg<int32_t>(argptr, os); break;
+-			case 'c':
+-				_dump_prim_arg<int32_t, char>(argptr, os); break;
+-		//	case 's':
+-		//		_dump_prim_arg<char, const char*>(argptr, os); break;
+-			default:
+-				exit(1);
+-		}
+-	}
++        assert(*ptr == '/');
++        os << ptr;
++
++        while(*++ptr) ; // skip address
++        while(!*++ptr) ; // skip 0s
++
++        assert(*ptr == ',');
++        os << ' ' << (ptr + 1);
++
++        const char* argptr = ptr;
++        while(*++argptr) ; // skip type string
++        while(!*++argptr) ; // skip 0s
++
++        char c;
++        while((c = *++ptr))
++        {
++                switch(c)
++                {
++                        case 'i':
++                                _dump_prim_arg<int32_t>(argptr, os); break;
++                        case 'c':
++                                _dump_prim_arg<int32_t, char>(argptr, os); break;
++                //      case 's':
++                //              _dump_prim_arg<char, const char*>(argptr, os); break;
++                        default:
++                                exit(1);
++                }
++        }
+ 
+ }
+ #endif
+@@ -1280,28 +1280,28 @@ bool Master::AudioOut(float *outr, float *outl)
+ 
+ 
+ 
+-	/* This is where the part volume (and pan) smoothing and application happens */
+-	if ( smoothing_part_l[npart].apply( gainbuf, synth.buffersize, newvol.l ) )
+-	{
+-	    for ( int i = 0; i < synth.buffersize; ++i )
+-		part[npart]->partoutl[i] *= gainbuf[i];
+-	}
+-	else
+-	{
+-	    for ( int i = 0; i < synth.buffersize; ++i )
+-		part[npart]->partoutl[i] *= newvol.l;
+-	}
+-
+-	if ( smoothing_part_r[npart].apply( gainbuf, synth.buffersize, newvol.r ) )
+-	{
+-	    for ( int i = 0; i < synth.buffersize; ++i )
+-		part[npart]->partoutr[i] *= gainbuf[i];
+-	}
+-	else
+-	{
+-	    for ( int i = 0; i < synth.buffersize; ++i )
+-		part[npart]->partoutr[i] *= newvol.r;
+-	}
++        /* This is where the part volume (and pan) smoothing and application happens */
++        if ( smoothing_part_l[npart].apply( gainbuf, synth.buffersize, newvol.l ) )
++        {
++            for ( int i = 0; i < synth.buffersize; ++i )
++                part[npart]->partoutl[i] *= gainbuf[i];
++        }
++        else
++        {
++            for ( int i = 0; i < synth.buffersize; ++i )
++                part[npart]->partoutl[i] *= newvol.l;
++        }
++
++        if ( smoothing_part_r[npart].apply( gainbuf, synth.buffersize, newvol.r ) )
++        {
++            for ( int i = 0; i < synth.buffersize; ++i )
++                part[npart]->partoutr[i] *= gainbuf[i];
++        }
++        else
++        {
++            for ( int i = 0; i < synth.buffersize; ++i )
++                part[npart]->partoutr[i] *= newvol.r;
++        }
+     }
+ 
+     //System effects
+@@ -1372,19 +1372,19 @@ bool Master::AudioOut(float *outr, float *outl)
+     /* this is where the master volume smoothing and application happens */
+     if ( smoothing.apply( gainbuf, synth.buffersize, vol ) )
+     {
+-	for ( int i = 0; i < synth.buffersize; ++i )
+-	{
+-	    outl[i] *= gainbuf[i];
+-	    outr[i] *= gainbuf[i];
+-	}
++        for ( int i = 0; i < synth.buffersize; ++i )
++        {
++            outl[i] *= gainbuf[i];
++            outr[i] *= gainbuf[i];
++        }
+     }
+     else
+     {
+-	for ( int i = 0; i < synth.buffersize; ++i )
+-	{
+-	    outl[i] *= vol;
+-	    outr[i] *= vol;
+-	}
++        for ( int i = 0; i < synth.buffersize; ++i )
++        {
++            outl[i] *= vol;
++            outr[i] *= vol;
++        }
+     }
+ 
+     vuUpdate(outl, outr);
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 4c383770..c6b210d1 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -681,9 +681,9 @@ void Part::SetController(unsigned int type, int par)
+         case C_volume:
+             ctl.setvolume(par);
+             if(ctl.volume.receive != 0)
+-		setVolumedB(volume127TodB( ctl.volume.volume * 127.0f ) );
++                setVolumedB(volume127TodB( ctl.volume.volume * 127.0f ) );
+             else
+-		/* FIXME: why do this? */
++                /* FIXME: why do this? */
+                 setVolumedB(Volume);
+             break;
+         case C_sustain:
+@@ -698,7 +698,7 @@ void Part::SetController(unsigned int type, int par)
+             ctl.resetall();
+             ReleaseSustainedKeys();
+             if(ctl.volume.receive != 0)
+-		setVolumedB(volume127TodB( ctl.volume.volume * 127.0f ) );
++                setVolumedB(volume127TodB( ctl.volume.volume * 127.0f ) );
+             else
+                 setVolumedB(Volume);
+             setPpanning(Ppanning); //update the panning
+-- 
+2.47.0
+

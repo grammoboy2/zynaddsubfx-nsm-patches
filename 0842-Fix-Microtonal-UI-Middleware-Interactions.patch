@@ -1,0 +1,740 @@
+From 75fa15dd5e10af24ce7af4cb2f9388bb770d110e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 5 Feb 2016 22:45:19 -0500
+Subject: [PATCH 0842/1936] Fix Microtonal UI/Middleware Interactions
+
+It should now be possible to properly save .xsz and load
+- .xsz
+- .scl
+- .kbm
+
+This patch has only been lightly tested, so mistakes may be present.
+---
+ src/Misc/Microtonal.cpp | 204 ++++++++++++++++++++++++++++++++--------
+ src/Misc/Microtonal.h   |  55 ++++++++---
+ src/Misc/MiddleWare.cpp |  69 ++++++++++++++
+ src/UI/MasterUI.fl      |   8 +-
+ src/UI/MicrotonalUI.fl  |  91 ++++++------------
+ 5 files changed, 304 insertions(+), 123 deletions(-)
+
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 04035bae..3bc38908 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -23,6 +23,7 @@
+ #include <cmath>
+ #include <cstring>
+ #include <cstdio>
++#include <cassert>
+ 
+ #include <rtosc/ports.h>
+ #include <rtosc/port-sugar.h>
+@@ -72,6 +73,118 @@ const rtosc::Ports Microtonal::ports = {
+             Microtonal &m = *(Microtonal*)d.obj;
+             d.reply(d.loc, "i", m.getoctavesize());
+         }},
++    {"mapping::s", rDoc("Get user editable tunings"), 0, [](const char *msg, RtData &d)
++        {
++            char buf[100*MAX_OCTAVE_SIZE] = {0};
++            char tmpbuf[100] = {0};
++            Microtonal &m = *(Microtonal*)d.obj;
++            if(rtosc_narguments(msg) == 1) {
++                m.texttomapping(rtosc_argument(msg,0).s);
++            } else {
++                for (int i=0;i<m.Pmapsize;i++){
++                    if (i!=0)
++                        strncat(buf, "\n", sizeof(buf)-1);
++                    if (m.Pmapping[i]==-1)
++                        snprintf(tmpbuf,100,"x");
++                    else
++                        snprintf(tmpbuf,100,"%d",m.Pmapping[i]);
++                    strncat(buf, tmpbuf, sizeof(buf)-1);
++                };
++                d.reply(d.loc, "s", buf);
++            }
++            }},
++    {"tunings::s", rDoc("Get user editable tunings"), 0, [](const char *msg, RtData &d)
++        {
++            char buf[100*MAX_OCTAVE_SIZE] = {0};
++            char tmpbuf[100] = {0};
++            Microtonal &m = *(Microtonal*)d.obj;
++            if(rtosc_narguments(msg) == 1) {
++                int err = m.texttotunings(rtosc_argument(msg,0).s);
++                if (err>=0)
++                    d.reply("/alert", "s",
++                            "Parse Error: The input may contain only numbers (like 232.59)\n"
++                            "or divisions (like 121/64).");
++                if (err==-2)
++                    d.reply("/alert", "s", "Parse Error: The input is empty.");
++            } else {
++                for (int i=0;i<m.getoctavesize();i++){
++                    if (i!=0)
++                        strncat(buf, "\n", sizeof(buf)-1);
++                    m.tuningtoline(i,tmpbuf,100);
++                    strncat(buf, tmpbuf, sizeof(buf)-1);
++                };
++                d.reply(d.loc, "s", buf);
++            }
++        }},
++
++#define COPY(x) self.x = other->x;
++    {"paste:b", rProp(internal) rDoc("Clone Input Microtonal Object"), 0,
++        [](const char *msg, RtData &d)
++        {
++            rtosc_blob_t b = rtosc_argument(msg, 0).b;
++            assert(b.len == sizeof(void*));
++            Microtonal *other = *(Microtonal**)b.len;
++            Microtonal &self  = *(Microtonal*)d.obj;
++            //oh how I wish there was some darn reflection for this...
++
++            COPY(Pinvertupdown);
++            COPY(Pinvertupdowncenter);
++            COPY(Penabled);
++            COPY(PAnote);
++            COPY(PAfreq);
++            COPY(Pscaleshift);
++            COPY(Pfirstkey);
++            COPY(Plastkey);
++            COPY(Pmiddlenote);
++            COPY(Pmapsize);
++            COPY(Pmappingenabled);
++            for(int i=0; i<self.octavesize; ++i)
++                self.octave[i] = other->octave[i];
++            COPY(Pglobalfinedetune);
++
++            memcpy(self.Pname,    other->Pname,    sizeof(self.Pname));
++            memcpy(self.Pcomment, other->Pcomment, sizeof(self.Pcomment));
++            COPY(octavesize);
++
++            for(int i=0; i<self.octavesize; ++i)
++                self.octave[i] = other->octave[i];
++            d.reply("/free", "sb", "Microtonal", b.len, b.data);
++        }},
++    {"paste_scl:b", rProp(internal) rDoc("Clone Input scl Object"), 0,
++        [](const char *msg, RtData &d)
++        {
++            rtosc_blob_t b = rtosc_argument(msg, 0).b;
++            assert(b.len == sizeof(void*));
++            SclInfo *other = *(SclInfo**)b.data;
++            Microtonal &self  = *(Microtonal*)d.obj;
++            memcpy(self.Pname,    other->Pname,    sizeof(self.Pname));
++            memcpy(self.Pcomment, other->Pcomment, sizeof(self.Pcomment));
++            COPY(octavesize);
++
++            for(int i=0; i<self.octavesize; ++i)
++                self.octave[i] = other->octave[i];
++            d.reply("/free", "sb", "SclInfo", b.len, b.data);
++        }},
++    {"paste_kbm:b", rProp(internal) rDoc("Clone Input kbm Object"), 0,
++        [](const char *msg, RtData &d)
++        {
++            rtosc_blob_t b = rtosc_argument(msg, 0).b;
++            assert(b.len == sizeof(void*));
++            KbmInfo *other = *(KbmInfo**)b.data;
++            Microtonal &self  = *(Microtonal*)d.obj;
++            COPY(Pmapsize);
++            COPY(Pfirstkey);
++            COPY(Plastkey);
++            COPY(Pmiddlenote);
++            COPY(PAnote);
++            COPY(PAfreq);
++            COPY(Pmappingenabled);
++
++            for(int i=0; i<128; ++i)
++                self.Pmapping[i] = other->Pmapping[i];
++            d.reply("/free", "sb", "KbmInfo", b.len, b.data);
++        }},
++#undef COPY
+ };
+ 
+ 
+@@ -101,13 +214,10 @@ void Microtonal::defaults()
+         Pmapping[i] = i;
+ 
+     for(int i = 0; i < MAX_OCTAVE_SIZE; ++i) {
+-        octave[i].tuning = tmpoctave[i].tuning = powf(
+-                               2,
+-                               (i % octavesize
+-                                + 1) / 12.0f);
+-        octave[i].type = tmpoctave[i].type = 1;
+-        octave[i].x1   = tmpoctave[i].x1 = (i % octavesize + 1) * 100;
+-        octave[i].x2   = tmpoctave[i].x2 = 0;
++        octave[i].tuning = powf(2, (i % octavesize + 1) / 12.0f);
++        octave[i].type =  1;
++        octave[i].x1   = (i % octavesize + 1) * 100;
++        octave[i].x2   =  0;
+     }
+     octave[11].type = 2;
+     octave[11].x1   = 2;
+@@ -298,7 +408,7 @@ bool Microtonal::operator!=(const Microtonal &micro) const
+ /*
+  * Convert a line to tunings; returns -1 if it ok
+  */
+-int Microtonal::linetotunings(unsigned int nline, const char *line)
++int Microtonal::linetotunings(OctaveTuning &octave, const char *line)
+ {
+     int   x1 = -1, x2 = -1, type = -1;
+     float x  = -1.0f, tmp, tuning = 1.0f;
+@@ -346,10 +456,10 @@ int Microtonal::linetotunings(unsigned int nline, const char *line)
+             break;
+     }
+ 
+-    tmpoctave[nline].tuning = tuning;
+-    tmpoctave[nline].type   = type;
+-    tmpoctave[nline].x1     = x1;
+-    tmpoctave[nline].x2     = x2;
++    octave.tuning = tuning;
++    octave.type   = type;
++    octave.x1     = x1;
++    octave.x2     = x2;
+ 
+     return -1; //ok
+ }
+@@ -359,10 +469,11 @@ int Microtonal::linetotunings(unsigned int nline, const char *line)
+  */
+ int Microtonal::texttotunings(const char *text)
+ {
+-    unsigned int i, k = 0, nl = 0;
+-    char *lin;
+-    lin = new char[MAX_LINE_SIZE + 1];
++    unsigned int k = 0, nl = 0;
++    char *lin = new char[MAX_LINE_SIZE + 1];
++    OctaveTuning tmpoctave[MAX_OCTAVE_SIZE];
+     while(k < strlen(text)) {
++        int i;
+         for(i = 0; i < MAX_LINE_SIZE; ++i) {
+             lin[i] = text[k++];
+             if(lin[i] < 0x20)
+@@ -371,7 +482,7 @@ int Microtonal::texttotunings(const char *text)
+         lin[i] = '\0';
+         if(strlen(lin) == 0)
+             continue;
+-        int err = linetotunings(nl, lin);
++        int err = linetotunings(tmpoctave[nl], lin);
+         if(err != -1) {
+             delete [] lin;
+             return nl; //Parse error
+@@ -384,7 +495,7 @@ int Microtonal::texttotunings(const char *text)
+     if(nl == 0)
+         return -2;        //the input is empty
+     octavesize = nl;
+-    for(i = 0; i < octavesize; ++i) {
++    for(int i = 0; i < octavesize; ++i) {
+         octave[i].tuning = tmpoctave[i].tuning;
+         octave[i].type   = tmpoctave[i].type;
+         octave[i].x1     = tmpoctave[i].x1;
+@@ -449,28 +560,37 @@ void Microtonal::tuningtoline(int n, char *line, int maxn)
+ 
+ int Microtonal::loadline(FILE *file, char *line)
+ {
++    memset(line, 0, 500);
+     do {
+         if(fgets(line, 500, file) == 0)
+             return 1;
+     } while(line[0] == '!');
+     return 0;
+ }
++
++
+ /*
+  * Loads the tunnings from a scl file
+  */
+-int Microtonal::loadscl(const char *filename)
++int Microtonal::loadscl(SclInfo &scl, const char *filename)
+ {
+     FILE *file = fopen(filename, "r");
+     char  tmp[500];
++    OctaveTuning tmpoctave[MAX_OCTAVE_SIZE];
++
+     fseek(file, 0, SEEK_SET);
++
+     //loads the short description
+     if(loadline(file, &tmp[0]) != 0)
+         return 2;
++
+     for(int i = 0; i < 500; ++i)
+         if(tmp[i] < 32)
+             tmp[i] = 0;
+-    snprintf((char *) Pname, MICROTONAL_MAX_NAME_LEN, "%s", tmp);
+-    snprintf((char *) Pcomment, MICROTONAL_MAX_NAME_LEN, "%s", tmp);
++
++    snprintf(scl.Pname,    MICROTONAL_MAX_NAME_LEN, "%s", tmp);
++    snprintf(scl.Pcomment, MICROTONAL_MAX_NAME_LEN, "%s", tmp);
++
+     //loads the number of the notes
+     if(loadline(file, &tmp[0]) != 0)
+         return 2;
+@@ -478,29 +598,31 @@ int Microtonal::loadscl(const char *filename)
+     sscanf(&tmp[0], "%d", &nnotes);
+     if(nnotes > MAX_OCTAVE_SIZE)
+         return 2;
++
+     //load the tunnings
+     for(int nline = 0; nline < nnotes; ++nline) {
+         if(loadline(file, &tmp[0]) != 0)
+             return 2;
+-        linetotunings(nline, &tmp[0]);
++        linetotunings(tmpoctave[nline], tmp);
+     }
+     fclose(file);
+ 
+-    octavesize = nnotes;
+-    for(int i = 0; i < octavesize; ++i) {
+-        octave[i].tuning = tmpoctave[i].tuning;
+-        octave[i].type   = tmpoctave[i].type;
+-        octave[i].x1     = tmpoctave[i].x1;
+-        octave[i].x2     = tmpoctave[i].x2;
++    scl.octavesize = nnotes;
++    for(int i = 0; i < scl.octavesize; ++i) {
++        scl.octave[i].tuning = tmpoctave[i].tuning;
++        scl.octave[i].type   = tmpoctave[i].type;
++        scl.octave[i].x1     = tmpoctave[i].x1;
++        scl.octave[i].x2     = tmpoctave[i].x2;
+     }
+ 
+     return 0;
+ }
+ 
++
+ /*
+  * Loads the mapping from a kbm file
+  */
+-int Microtonal::loadkbm(const char *filename)
++int Microtonal::loadkbm(KbmInfo &kbm, const char *filename)
+ {
+     FILE *file = fopen(filename, "r");
+     int   x;
+@@ -511,32 +633,32 @@ int Microtonal::loadkbm(const char *filename)
+     //loads the mapsize
+     if(loadline(file, tmp) != 0 || sscanf(tmp, "%d", &x) == 0)
+         return 2;
+-    Pmapsize = limit(x, 0, 127);
++    kbm.Pmapsize = limit(x, 0, 127);
+ 
+     //loads first MIDI note to retune
+     if(loadline(file, tmp) != 0 || sscanf(tmp, "%d", &x) == 0)
+         return 2;
+-    Pfirstkey = limit(x, 0, 127);
++    kbm.Pfirstkey = limit(x, 0, 127);
+ 
+     //loads last MIDI note to retune
+     if(loadline(file, tmp) != 0 || sscanf(tmp, "%d", &x) == 0)
+         return 2;
+-    Plastkey = limit(x, 0, 127);
++    kbm.Plastkey = limit(x, 0, 127);
+ 
+     //loads last the middle note where scale fro scale degree=0
+     if(loadline(file, tmp) != 0 || sscanf(tmp, "%d", &x) == 0)
+         return 2;
+-    Pmiddlenote = limit(x, 0, 127);
++    kbm.Pmiddlenote = limit(x, 0, 127);
+ 
+     //loads the reference note
+     if(loadline(file, tmp) != 0 || sscanf(tmp, "%d", &x) == 0)
+         return 2;
+-    PAnote = limit(x,0,127);
++    kbm.PAnote = limit(x,0,127);
+ 
+     //loads the reference freq.
+     if(loadline(file, tmp) != 0 || sscanf(tmp, "%f", &tmpPAfreq) == 0)
+         return 2;
+-    PAfreq = tmpPAfreq;
++    kbm.PAfreq = tmpPAfreq;
+ 
+     //the scale degree(which is the octave) is not loaded,
+     //it is obtained by the tunnings with getoctavesize() method
+@@ -544,20 +666,20 @@ int Microtonal::loadkbm(const char *filename)
+         return 2;
+ 
+     //load the mappings
+-    if(Pmapsize != 0) {
+-        for(int nline = 0; nline < Pmapsize; ++nline) {
++    if(kbm.Pmapsize != 0) {
++        for(int nline = 0; nline < kbm.Pmapsize; ++nline) {
+             if(loadline(file, tmp) != 0)
+                 return 2;
+             if(sscanf(tmp, "%d", &x) == 0)
+                 x = -1;
+-            Pmapping[nline] = x;
++            kbm.Pmapping[nline] = x;
+         }
+-        Pmappingenabled = 1;
++        kbm.Pmappingenabled = 1;
+     }
+     else {
+-        Pmappingenabled = 0;
+-        Pmapping[0]     = 0;
+-        Pmapsize = 1;
++        kbm.Pmappingenabled = 0;
++        kbm.Pmapping[0]     = 0;
++        kbm.Pmapsize = 1;
+     }
+     fclose(file);
+ 
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index db5c9c92..5c6ed2ce 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -24,12 +24,43 @@
+ #define MICROTONAL_H
+ 
+ #include <cstdio>
++#include <stdint.h>
+ #include "../globals.h"
+ 
+ #define MAX_OCTAVE_SIZE 128
+ #define MICROTONAL_MAX_NAME_LEN 120
+ class XMLwrapper;
+ 
++struct KbmInfo
++{
++    uint8_t   Pmapsize;
++    uint8_t   Pfirstkey;
++    uint8_t   Plastkey;
++    uint8_t   Pmiddlenote;
++    uint8_t   PAnote;
++    float     PAfreq;
++    uint8_t   Pmappingenabled;
++    short int Pmapping[128];
++};
++
++struct OctaveTuning {
++    unsigned char type; //1 for cents or 2 for division
++
++    // the real tuning (eg. +1.05946f for one halftone)
++    // or 2.0f for one octave
++    float tuning;
++
++    //the real tunning is x1/x2
++    unsigned int x1, x2;
++};
++
++struct SclInfo
++{
++    char Pname[MICROTONAL_MAX_NAME_LEN];
++    char Pcomment[MICROTONAL_MAX_NAME_LEN];
++    unsigned char octavesize;
++    OctaveTuning octave[MAX_OCTAVE_SIZE];
++};
+ 
+ /**Tuning settings and microtonal capabilities*/
+ class Microtonal
+@@ -88,9 +119,9 @@ class Microtonal
+         /**Convert tunning to string*/
+         void tuningtoline(int n, char *line, int maxn);
+         /**load the tunnings from a .scl file*/
+-        int loadscl(const char *filename);
++        static int loadscl(SclInfo &scl, const char *filename);
+         /**load the mapping from .kbm file*/
+-        int loadkbm(const char *filename);
++        static int loadkbm(KbmInfo &kbm, const char *filename);
+         /**Load text into the internal tunings
+          *
+          *\todo better description*/
+@@ -114,23 +145,19 @@ class Microtonal
+         bool operator==(const Microtonal &micro) const;
+         bool operator!=(const Microtonal &micro) const;
+ 
++        void clone(Microtonal &m);
++
+         static const rtosc::Ports ports;
++
++        //only paste handler should access there (quasi-private)
++        unsigned char octavesize;
++        OctaveTuning octave[MAX_OCTAVE_SIZE];
+     private:
+-        int linetotunings(unsigned int nline, const char *line);
+         //loads a line from the text file, while ignoring the lines beggining with "!"
+-        int loadline(FILE *file, char *line);
++        static int loadline(FILE *file, char *line);
+         //Grab a 0..127 integer from the provided descriptor
+-        unsigned char octavesize;
+-        struct {
+-            unsigned char type; //1 for cents or 2 for division
+-
+-            // the real tuning (eg. +1.05946f for one halftone)
+-            // or 2.0f for one octave
+-            float tuning;
+ 
+-            //the real tunning is x1/x2
+-            unsigned int x1, x2;
+-        } octave[MAX_OCTAVE_SIZE], tmpoctave[MAX_OCTAVE_SIZE];
++        static int linetotunings(struct OctaveTuning &tune, const char *line);
+ 
+         const int& gzip_compression;
+ };
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d1bc7417..c3403d91 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -157,6 +157,12 @@ void deallocate(const char *str, void *v)
+         delete (Master*)v;
+     else if(!strcmp(str, "fft_t"))
+         delete[] (fft_t*)v;
++    else if(!strcmp(str, "KbmInfo"))
++        delete (KbmInfo*)v;
++    else if(!strcmp(str, "SclInfo"))
++        delete (SclInfo*)v;
++    else if(!strcmp(str, "Microtonal"))
++        delete (Microtonal*)v;
+     else
+         fprintf(stderr, "Unknown type '%s', leaking pointer %p!!\n", str, v);
+ }
+@@ -556,6 +562,48 @@ public:
+         parent->transmitMsg("/load-master", "b", sizeof(Master*), &m);
+     }
+ 
++    void loadXsz(const char *filename, rtosc::RtData &d)
++    {
++        Microtonal *micro = new Microtonal(master->gzip_compression);
++        int err = micro->loadXML(filename);
++        if(err) {
++            d.reply("/alert", "s", "Error: Could not load the xsz file.");
++            delete micro;
++        } else
++            d.chain("/microtonal/paste", "b", sizeof(void*), &micro);
++    }
++
++    void saveXsz(const char *filename, rtosc::RtData &d)
++    {
++        int err = 0;
++        doReadOnlyOp([this,filename,&err](){
++                err = master->microtonal.saveXML(filename);});
++        if(err)
++            d.reply("/alert", "s", "Error: Could not save the xsz file.");
++    }
++
++    void loadScl(const char *filename, rtosc::RtData &d)
++    {
++        SclInfo *scl = new SclInfo;
++        int err=Microtonal::loadscl(*scl, filename);
++        if(err) {
++            d.reply("/alert", "s", "Error: Could not load the scl file.");
++            delete scl;
++        } else
++            d.chain("/microtonal/paste_scl", "b", sizeof(void*), &scl);
++    }
++
++    void loadKbm(const char *filename, rtosc::RtData &d)
++    {
++        KbmInfo *kbm = new KbmInfo;
++        int err=Microtonal::loadkbm(*kbm, filename);
++        if(err) {
++            d.reply("/alert", "s", "Error: Could not load the kbm file.");
++            delete kbm;
++        } else
++            d.chain("/microtonal/paste_kbm", "b", sizeof(void*), &kbm);
++    }
++
+     void updateResources(Master *m)
+     {
+         obj_store.clear();
+@@ -959,6 +1007,27 @@ static rtosc::Ports middwareSnoopPorts = {
+         xml.loadXMLfile(file);
+         loadMidiLearn(xml, impl.midi_mapper);
+         rEnd},
++    //scale file stuff
++    {"load_xsz:s", 0, 0,
++        rBegin;
++        const char *file = rtosc_argument(msg, 0).s;
++        impl.loadXsz(file, d);
++        rEnd},
++    {"save_xsz:s", 0, 0,
++        rBegin;
++        const char *file = rtosc_argument(msg, 0).s;
++        impl.saveXsz(file, d);
++        rEnd},
++    {"load_scl:s", 0, 0,
++        rBegin;
++        const char *file = rtosc_argument(msg, 0).s;
++        impl.loadScl(file, d);
++        rEnd},
++    {"load_kbm:s", 0, 0,
++        rBegin;
++        const char *file = rtosc_argument(msg, 0).s;
++        impl.loadKbm(file, d);
++        rEnd},
+     {"save_xmz:s", 0, 0,
+         rBegin;
+         const char *file = rtosc_argument(msg, 0).s;
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 91aaa059..4c278766 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -336,9 +336,7 @@ filename=fl_file_chooser("Open:","({*.xsz})",NULL,0);
+ if (filename==NULL) return;
+ 
+ osc->write("/load_xsz", "s", filename);
+-/*
+-if (result==-10) fl_alert("Error: Could not load the file\\nbecause it is not a scale file.");
+-      else if (result<0) fl_alert("Error: Could not load the file.");*/}
++}
+               xywh {40 40 100 20}
+             }
+             MenuItem {} {
+@@ -358,9 +356,7 @@ if (result) {
+ };
+ 
+ 
+-osc->write("/save_xsz", "s", filename);
+-
+-/*if (result<0) fl_alert("Error: Could not save the file.");*/}
++osc->write("/save_xsz", "s", filename); }
+               xywh {30 30 100 20}
+             }
+             MenuItem {} {
+diff --git a/src/UI/MicrotonalUI.fl b/src/UI/MicrotonalUI.fl
+index 6ca5676b..f8fb4e56 100644
+--- a/src/UI/MicrotonalUI.fl
++++ b/src/UI/MicrotonalUI.fl
+@@ -96,7 +96,8 @@ class MicrotonalUI {} {
+         Fl_Input tuningsinput {
+           label {Tunings:}
+           xywh {8 144 182 264} type Multiline labelfont 1 labelsize 11 align 5 when 2
+-          code0 {updateTuningsInput();}
++          code0 {o->init("tunings");}
++          class Fl_Osc_Input
+         }
+         Fl_Input commentinput {
+           label {Comment:}
+@@ -113,23 +114,18 @@ class MicrotonalUI {} {
+         }
+         Fl_Button {} {
+           label {Import .SCL file}
+-          callback {/*const char *filename;
++          callback {const char *filename;
+ filename=fl_file_chooser("Open:","(*.scl)",NULL,0);
+ if (filename==NULL) return;
+-int result=microtonal->loadscl(filename);
+-if (result==0) {
++osc->write("/load_scl", "s", filename);
++if (true) {
+        updateTuningsInput();
+-       nameinput->cut(0,nameinput->maximum_size());
+-       nameinput->insert((char *)microtonal->Pname);
+-       nameinput->position(0);
+-       commentinput->cut(0,commentinput->maximum_size());
+-       commentinput->insert((char *)microtonal->Pname);
+-       commentinput->position(0);
++       nameinput->update();
++       commentinput->update();
+        tuningsinput->position(0);
+-       octavesizeoutput->do_callback();
+-     } else {
+-	fl_alert("Error: Could not load the file.");   
+-     };*/}
++       octavesizeoutput->update();
++     }
++     }
+           tooltip {Inport Scala .scl file (tunnings)} xywh {243 411 84 15} box THIN_UP_BOX labelfont 1 labelsize 10
+         }
+         Fl_Group keymappinggroup {
+@@ -138,7 +134,8 @@ if (result==0) {
+         } {
+           Fl_Input mappinginput {
+             xywh {250 147 146 258} type Multiline labelfont 1 labelsize 11 align 5 when 2
+-            code0 {updateMappingInput();}
++            code0 {o->init("mapping");}
++            class Fl_Osc_Input
+           }
+           Fl_Counter firstnotecounter {
+             label {First note}
+@@ -177,12 +174,11 @@ o->show();}
+         Fl_Button {} {
+           label {Import .kbm file}
+           callback {
+-          //TODO Disabled until this can be moved into middleware
+-          /*const char *filename;
++          const char *filename;
+ filename=fl_file_chooser("Open:","(*.kbm)",NULL,0);
+ if (filename==NULL) return;
+-int result=microtonal->loadkbm(filename);
+-if (result==0) {
++osc->write("/load_kbm", "s", filename);
++if (true) {
+        updateMappingInput();
+        mappinginput->position(0);
+        mapsizeoutput->update();
+@@ -192,9 +188,7 @@ if (result==0) {
+        mappingenabledbutton->update();
+        afreqinput->update();
+        anotecounter->update();
+-     } else {
+-	fl_alert("Error: Could not load the file.");   
+-     };*/}
++     }}
+           tooltip {Inport Scala .kbm file (keyboard mapping)} xywh {243 428 84 16} box THIN_UP_BOX labelfont 1 labelsize 10
+         }
+       }
+@@ -236,39 +230,13 @@ o->redraw();}
+     }
+   }
+   Function {updateTuningsInput()} {} {
+-    code {char *tmpbuf=new char[100];
+-
+-/*
+-tuningsinput->cut(0,tuningsinput->maximum_size());
+-
+-for (int i=0;i<microtonal->getoctavesize();i++){
+-   if (i!=0) tuningsinput->insert("\\n");
+-   microtonal->tuningtoline(i,tmpbuf,100);
+-   tuningsinput->insert(tmpbuf);
+-};
+-*/
+-
+-delete []tmpbuf;} {}
++    code {tuningsinput->update();} {}
+   }
+   Function {updateMappingInput()} {} {
+-    code {char *tmpbuf=new char[100];
+-
+-/*
+-mappinginput->cut(0,tuningsinput->maximum_size());
+-
+-for (int i=0;i<microtonal->Pmapsize;i++){
+-   if (i!=0) mappinginput->insert("\\n");
+-   if ((microtonal->Pmapping[i])==-1)
+-        snprintf(tmpbuf,100,"x");
+-   else snprintf(tmpbuf,100,"%d",microtonal->Pmapping[i]);
+-   mappinginput->insert(tmpbuf);
+-};
+-*/
+-
+-delete []tmpbuf;} {}
++    code { mappinginput->update(); } {}
+   }
+-  Function {MicrotonalUI(Fl_Osc_Interface *osc, std::string base)} {} {
+-    code {make_window(osc, base);} {}
++  Function {MicrotonalUI(Fl_Osc_Interface *osc_, std::string base)} {} {
++    code {osc=osc_;make_window(osc, base);} {}
+   }
+   Function {~MicrotonalUI()} {} {
+     code {microtonaluiwindow->hide();
+@@ -278,15 +246,14 @@ delete(microtonaluiwindow);} {}
+     code {microtonaluiwindow->show();} {}
+   }
+   Function {apply()} {} {
+-    code {/*int err=microtonal->texttotunings(tuningsinput->value());
+-if (err>=0) fl_alert("Parse Error: The input may contain only numbers (like 232.59)\\n or divisions (like 121/64).");
+-if (err==-2) fl_alert("Parse Error: The input is empty.");
+-octavesizeoutput->do_callback();
+-
+-microtonal->texttomapping(mappinginput->value());
+-mapsizeoutput->do_callback();
+-anotecounter->do_callback();
+-*/
+-//applybutton->color(FL_GRAY);} {}
++    code {
++    osc->write("/microtonal/tunings", "s", tuningsinput->value());
++    osc->write("/microtonal/mapping", "s", mappinginput->value());
++    octavesizeoutput->update();
++    mapsizeoutput->update();
++    anotecounter->update();
++    } {}
++  }
++  decl {Fl_Osc_Interface *osc;} {private local
+   }
+ } 
+-- 
+2.47.0
+

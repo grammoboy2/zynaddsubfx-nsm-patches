@@ -1,0 +1,38 @@
+From 3d3805c8088cd007d82c8132e465f34a5a400fb7 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 25 Oct 2014 22:37:55 -0400
+Subject: [PATCH 0270/1936] Fix Fl_Oscilloscope Rebase
+
+---
+ src/UI/ADnoteUI.fl       | 1 +
+ src/UI/Fl_Oscilloscope.h | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 6d3d5fed..b1e43efa 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -808,6 +808,7 @@ delete(oscedit);
+   Function {change_voice(int nvoice_)} {open
+   } {
+     code {nvoice = nvoice_;
++    loc = base+"voice"+to_s(nvoice)+"/";
+ ADnoteVoiceParameters->rebase(base+"voice"+to_s(nvoice)+"/");} {selected
+     }
+   }
+diff --git a/src/UI/Fl_Oscilloscope.h b/src/UI/Fl_Oscilloscope.h
+index c6cbd681..f5e9e965 100644
+--- a/src/UI/Fl_Oscilloscope.h
++++ b/src/UI/Fl_Oscilloscope.h
+@@ -13,7 +13,7 @@
+ 
+ class Fl_Osc_Group;
+ //Consider merging in Fl_OscilSpectrum
+-class Fl_Oscilloscope : public Fl_Box, Fl_Osc_Widget
++class Fl_Oscilloscope : public Fl_Box, public Fl_Osc_Widget
+ {
+     public:
+         Fl_Oscilloscope(int x,int y, int w, int h, const char *label=0)
+-- 
+2.47.0
+

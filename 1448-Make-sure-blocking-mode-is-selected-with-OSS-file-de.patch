@@ -1,0 +1,66 @@
+From 757366e1ba72a361e623a87b7c2fa32b97ceafec Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 15 Nov 2019 13:37:21 +0100
+Subject: [PATCH 1448/1936] Make sure blocking mode is selected with OSS file
+ descriptors.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/OssEngine.cpp      | 5 +++++
+ src/Nio/OssMultiEngine.cpp | 3 +++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/src/Nio/OssEngine.cpp b/src/Nio/OssEngine.cpp
+index a3dd252d..b4764a9a 100644
+--- a/src/Nio/OssEngine.cpp
++++ b/src/Nio/OssEngine.cpp
+@@ -36,6 +36,8 @@ using namespace std;
+ 
+ namespace zyn {
+ 
++static const int OssBlocking = 0;
++
+ /*
+  * The following statemachine converts MIDI commands to USB MIDI
+  * packets, derived from Linux's usbmidi.c, which was written by
+@@ -222,6 +224,7 @@ bool OssEngine::openAudio()
+              << device << '.' << endl;
+         return false;
+     }
++    ioctl(audio.handle, FIONBIO, &OssBlocking);
+     ioctl(audio.handle, SNDCTL_DSP_RESET, NULL);
+ 
+     /* Figure out the correct format first */
+@@ -360,6 +363,8 @@ bool OssEngine::openMidi()
+         return false;
+     midi.handle = handle;
+ 
++    ioctl(midi.handle, FIONBIO, &OssBlocking);
++
+     pthread_attr_t attr;
+     pthread_attr_init(&attr);
+     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+diff --git a/src/Nio/OssMultiEngine.cpp b/src/Nio/OssMultiEngine.cpp
+index 833caf60..bacb0c79 100644
+--- a/src/Nio/OssMultiEngine.cpp
++++ b/src/Nio/OssMultiEngine.cpp
+@@ -37,6 +37,8 @@ extern zyn::MiddleWare *middleware;
+ 
+ namespace zyn {
+ 
++static const int OssBlocking = 0;
++
+ OssMultiEngine :: OssMultiEngine(const SYNTH_T &synth,
+     const oss_devs_t &oss_devs)
+     :AudioOut(synth),
+@@ -92,6 +94,7 @@ OssMultiEngine :: openAudio()
+             << device << '.' << endl;
+         return (false);
+     }
++    ioctl(handle, FIONBIO, &OssBlocking);
+     ioctl(handle, SNDCTL_DSP_RESET, 0);
+ 
+     /* Figure out the correct format first */
+-- 
+2.47.0
+

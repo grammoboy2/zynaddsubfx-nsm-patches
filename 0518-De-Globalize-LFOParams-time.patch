@@ -1,0 +1,979 @@
+From 96f21123fe87f2c63b69542af356c5fc36c69800 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 3 Jul 2015 20:59:26 -0400
+Subject: [PATCH 0518/1936] De-Globalize LFOParams::time
+
+This commit introduces a quasi-global frame count based timer
+Relative actions upon this timer shall be supported in the future
+---
+ src/Misc/Master.cpp           |   9 +--
+ src/Misc/Master.h             |   5 +-
+ src/Misc/MiddleWare.cpp       |   4 +-
+ src/Misc/Part.cpp             |   8 ++-
+ src/Misc/Part.h               |   4 +-
+ src/Misc/Time.h               |  42 +++++++++++
+ src/Params/LFOParams.cpp      |   4 --
+ src/Params/LFOParams.h        |   9 ++-
+ src/Synth/ADnote.cpp          |  18 ++---
+ src/Synth/ADnote.h            |   4 +-
+ src/Synth/LFO.cpp             | 130 +++++++++++++++-------------------
+ src/Synth/LFO.h               |  37 ++++++----
+ src/Synth/PADnote.cpp         |  12 ++--
+ src/Synth/SUBnote.cpp         |   2 +-
+ src/Synth/SynthNote.cpp       |   2 +-
+ src/Synth/SynthNote.h         |   2 +
+ src/Tests/AdNoteTest.h        |   6 +-
+ src/Tests/InstrumentStats.cpp |   5 +-
+ src/Tests/KitTest.h           |   6 +-
+ src/Tests/PadNoteTest.h       |   5 +-
+ src/Tests/SubNoteTest.h       |   6 +-
+ src/Tests/UnisonTest.h        |   6 +-
+ src/globals.h                 |   2 +
+ 23 files changed, 201 insertions(+), 127 deletions(-)
+ create mode 100644 src/Misc/Time.h
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index b192ebf2..d8a9f2b2 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -287,7 +287,8 @@ vuData::vuData(void)
+ {}
+ 
+ Master::Master(const SYNTH_T &synth_)
+-:HDDRecorder(synth_), ctl(synth_), midi(Master::ports), frozenState(false), pendingMemory(false), synth(synth_)
++:HDDRecorder(synth_), ctl(synth_), midi(Master::ports), frozenState(false), pendingMemory(false),
++    synth(synth_), time(synth)
+ {
+     bToU = NULL;
+     uToB = NULL;
+@@ -310,7 +311,7 @@ Master::Master(const SYNTH_T &synth_)
+     }
+ 
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
+-        part[npart] = new Part(*memory, synth, &microtonal, fft);
++        part[npart] = new Part(*memory, synth, time, &microtonal, fft);
+ 
+     //Insertion Effects init
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+@@ -813,8 +814,8 @@ void Master::AudioOut(float *outl, float *outr)
+         ShutUp();
+     }
+ 
+-    //update the LFO's time
+-    LFOParams::time++;
++    //update the global frame timer
++    time++;
+ }
+ 
+ //TODO review the respective code from yoshimi for this
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index b2d74319..19198028 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -28,6 +28,7 @@
+ #include <rtosc/miditable.h>
+ #include <rtosc/ports.h>
+ 
++#include "Time.h"
+ #include "Bank.h"
+ #include "Recorder.h"
+ 
+@@ -99,7 +100,8 @@ class Master
+ 
+         /**Audio Output*/
+         void AudioOut(float *outl, float *outr) REALTIME;
+-        /**Audio Output (for callback mode). This allows the program to be controled by an external program*/
++        /**Audio Output (for callback mode).
++         * This allows the program to be controled by an external program*/
+         void GetAudioOutSamples(size_t nsamples,
+                                 unsigned samplerate,
+                                 float *outl,
+@@ -171,6 +173,7 @@ class Master
+         rtosc::ThreadLink *uToB;
+         bool pendingMemory;
+         const SYNTH_T &synth;
++        AbsTime  time;
+     private:
+         float  sysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+         float  sysefxsend[NUM_SYS_EFX][NUM_SYS_EFX];
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 58c64d3f..c9f48050 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -670,7 +670,7 @@ public:
+ 
+         auto alloc = std::async(std::launch::async,
+                 [master,filename,this,npart](){
+-                Part *p = new Part(*master->memory, synth, &master->microtonal, master->fft);
++                Part *p = new Part(*master->memory, synth, master->time, &master->microtonal, master->fft);
+                 if(p->loadXMLinstrument(filename))
+                     fprintf(stderr, "Warning: failed to load part<%s>!\n", filename);
+ 
+@@ -704,7 +704,7 @@ public:
+     {
+         if(npart == -1)
+             return;
+-        Part *p = new Part(*master->memory, synth, &master->microtonal, master->fft);
++        Part *p = new Part(*master->memory, synth, master->time, &master->microtonal, master->fft);
+         p->applyparameters();
+         obj_store.extractPart(p, npart);
+         kits.extractPart(p, npart);
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index adce7162..d8b8f94d 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -185,7 +185,8 @@ static const Ports kitPorts = {
+ const Ports &Part::Kit::ports = kitPorts;
+ const Ports &Part::ports = partPorts;
+ 
+-Part::Part(Allocator &alloc, const SYNTH_T &synth_, Microtonal *microtonal_, FFTwrapper *fft_)
++Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
++        Microtonal *microtonal_, FFTwrapper *fft_)
+     :
+     Pdrummode(false),
+     Ppolymode(true),
+@@ -196,7 +197,8 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, Microtonal *microtonal_, FFT
+     lastlegatomodevalid(false),
+     microtonal(microtonal_), fft(fft_),
+     memory(alloc),
+-    synth(synth_)
++    synth(synth_),
++    time(time_)
+ {
+     monomemClear();
+ 
+@@ -435,7 +437,7 @@ void Part::NoteOn(unsigned char note,
+         if(Pkitmode != 0 && !item.validNote(note))
+             continue;
+ 
+-        SynthParams pars{memory, ctl, synth, notebasefreq, vel,
++        SynthParams pars{memory, ctl, synth, time, notebasefreq, vel,
+             portamento, note, false};
+         const int sendto = Pkitmode ? item.sendto() : 0;
+ 
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 1b3471b9..e13f94cc 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -38,7 +38,8 @@ class Part
+         /**Constructor
+          * @param microtonal_ Pointer to the microtonal object
+          * @param fft_ Pointer to the FFTwrapper*/
+-        Part(Allocator &alloc, const SYNTH_T &synth, Microtonal *microtonal_, FFTwrapper *fft_);
++        Part(Allocator &alloc, const SYNTH_T &synth, const AbsTime &time,
++                Microtonal *microtonal_, FFTwrapper *fft_);
+         /**Destructor*/
+         ~Part();
+ 
+@@ -200,6 +201,7 @@ class Part
+         FFTwrapper *fft;
+         Allocator  &memory;
+         const SYNTH_T &synth;
++        const AbsTime &time;
+ };
+ 
+ #endif
+diff --git a/src/Misc/Time.h b/src/Misc/Time.h
+new file mode 100644
+index 00000000..0f8c46b0
+--- /dev/null
++++ b/src/Misc/Time.h
+@@ -0,0 +1,42 @@
++#pragma once
++#include <stdint.h>
++#include "../globals.h"
++
++class AbsTime
++{
++    public:
++        AbsTime(const SYNTH_T &synth)
++            :frames(0),
++            s(synth){};
++        void operator++(){++frames;};
++        void operator++(int){frames++;};
++        int64_t time() const {return frames;};
++        float dt() const { return s.dt(); }
++        float framesPerSec() const { return 1/s.dt();}
++        int   samplesPerFrame() const {return s.buffersize;}
++    private:
++        int64_t frames;
++        const SYNTH_T &s;
++};
++
++//Marker for an event relative to some position of the absolute timer
++class RelTime
++{
++    public:
++        RelTime(const AbsTime &t_, float sec)
++            :t(t_)
++        {
++            //Calculate time of event
++            double deltaFrames = sec*t.framesPerSec();
++            int64_t tmp = (int64_t)deltaFrames;
++            frame = t.time() + tmp;
++            sample = t.samplesPerFrame()*(deltaFrames-tmp);
++        }
++        bool inThisFrame() {return t.time() == frame;};
++        bool inPast() {return t.time() > frame;}
++        bool inFuture() {return t.time() < frame;}
++    private:
++        int64_t frame;
++        int32_t sample;
++        const AbsTime &t;
++};
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index d7444e10..27fc0b98 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -49,8 +49,6 @@ static const rtosc::Ports _ports = {
+ 
+ const rtosc::Ports &LFOParams::ports = _ports;
+ 
+-int LFOParams::time;
+-
+ LFOParams::LFOParams()
+ {
+     Dfreq       = 64;
+@@ -61,7 +59,6 @@ LFOParams::LFOParams()
+     Ddelay      = 0;
+     Dcontinous  = 0;
+     fel  = 0;
+-    time = 0;
+ 
+     defaults();
+ }
+@@ -94,7 +91,6 @@ LFOParams::LFOParams(char Pfreq_,
+     Ddelay      = Pdelay_;
+     Dcontinous  = Pcontinous_;
+     fel  = fel_;
+-    time = 0;
+ 
+     defaults();
+ }
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index 289a12f7..08e5aa43 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -28,6 +28,14 @@
+ 
+ class XMLwrapper;
+ 
++#define LFO_SINE      0
++#define LFO_TRIANGLE  1
++#define LFO_SQUARE    2
++#define LFO_RAMPUP    3
++#define LFO_RAMPDOWN  4
++#define LFO_EXP_DOWN1 5
++#define LFO_EXP_DOWN2 6
++
+ class LFOParams:public Presets
+ {
+     public:
+@@ -60,7 +68,6 @@ class LFOParams:public Presets
+         unsigned char Pstretch; /**<how the LFO is "stretched" according the note frequency (64=no stretch)*/
+ 
+         int fel; //what kind is the LFO (0 - frequency, 1 - amplitude, 2 - filter)
+-        static int time; //is used by Pcontinous parameter
+ 
+         static const rtosc::Ports &ports;
+     private:
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 5d8ac99c..85a3e415 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -49,7 +49,6 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+     NoteEnabled = ON;
+     basefreq    = spars.frequency;
+     velocity    = spars.velocity;
+-    time   = 0.0f;
+     stereo = pars.GlobalPar.PStereo;
+ 
+     NoteGlobalPar.Detune = getdetune(pars.GlobalPar.PDetuneType,
+@@ -399,7 +398,7 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+ 
+ SynthNote *ADnote::cloneLegato(void)
+ {
+-    SynthParams sp{memory, ctl, synth, legato.param.freq, velocity, 
++    SynthParams sp{memory, ctl, synth, time, legato.param.freq, velocity, 
+                    (bool)portamento, legato.param.midinote, true};
+     return memory.alloc<ADnote>(&pars, sp);
+ }
+@@ -718,6 +717,7 @@ void ADnote::initparameters()
+ 
+     // Global Parameters
+     NoteGlobalPar.initparameters(pars.GlobalPar, synth,
++                                 time,
+                                  memory, basefreq, velocity,
+                                  stereo);
+ 
+@@ -760,7 +760,7 @@ void ADnote::initparameters()
+         }
+ 
+         if(param.PAmpLfoEnabled) {
+-            vce.AmpLfo = memory.alloc<LFO>(*param.AmpLfo, basefreq, synth.dt());
++            vce.AmpLfo = memory.alloc<LFO>(*param.AmpLfo, basefreq, time);
+             newamplitude[nvoice] *= vce.AmpLfo->amplfoout();
+         }
+ 
+@@ -769,7 +769,7 @@ void ADnote::initparameters()
+             vce.FreqEnvelope = memory.alloc<Envelope>(*param.FreqEnvelope, basefreq, synth.dt());
+ 
+         if(param.PFreqLfoEnabled)
+-            vce.FreqLfo = memory.alloc<LFO>(*param.FreqLfo, basefreq, synth.dt());
++            vce.FreqLfo = memory.alloc<LFO>(*param.FreqLfo, basefreq, time);
+ 
+         /* Voice Filter Parameters Init */
+         if(param.PFilterEnabled != 0) {
+@@ -783,7 +783,7 @@ void ADnote::initparameters()
+             vce.FilterEnvelope = memory.alloc<Envelope>(*param.FilterEnvelope, basefreq, synth.dt());
+ 
+         if(param.PFilterLfoEnabled)
+-            vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq, synth.dt());
++            vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq, time);
+ 
+         vce.FilterFreqTracking =
+             param.VoiceFilter->getfreqtracking(basefreq);
+@@ -1078,7 +1078,6 @@ void ADnote::computecurrentparameters()
+             }
+         }
+     }
+-    time += synth.buffersize_f / synth.samplerate_f;
+ }
+ 
+ 
+@@ -1779,15 +1778,16 @@ void ADnote::Global::kill(Allocator &memory)
+ 
+ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+                                     const SYNTH_T &synth,
++                                    const AbsTime &time,
+                                     class Allocator &memory,
+                                     float basefreq, float velocity,
+                                     bool stereo)
+ {
+     FreqEnvelope = memory.alloc<Envelope>(*param.FreqEnvelope, basefreq, synth.dt());
+-    FreqLfo      = memory.alloc<LFO>(*param.FreqLfo, basefreq, synth.dt());
++    FreqLfo      = memory.alloc<LFO>(*param.FreqLfo, basefreq, time);
+ 
+     AmpEnvelope = memory.alloc<Envelope>(*param.AmpEnvelope, basefreq, synth.dt());
+-    AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq, synth.dt());
++    AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq, time);
+ 
+     Volume = 4.0f * powf(0.1f, 3.0f * (1.0f - param.PVolume / 96.0f)) //-60 dB .. 0 dB
+              * VelF(velocity, param.PAmpVelocityScaleFunction);     //sensing
+@@ -1801,7 +1801,7 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+         GlobalFilterR = NULL;
+ 
+     FilterEnvelope = memory.alloc<Envelope>(*param.FilterEnvelope, basefreq, synth.dt());
+-    FilterLfo      = memory.alloc<LFO>(*param.FilterLfo, basefreq, synth.dt());
++    FilterLfo      = memory.alloc<LFO>(*param.FilterLfo, basefreq, time);
+     FilterQ = param.GlobalFilter->getq();
+     FilterFreqTracking = param.GlobalFilter->getfreqtracking(basefreq);
+ }
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index ac6e4153..8554aaa0 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -121,6 +121,7 @@ class ADnote:public SynthNote
+             void kill(Allocator &memory);
+             void initparameters(const ADnoteGlobalParam &param,
+                                 const SYNTH_T &synth,
++                                const AbsTime &time,
+                                 class Allocator &memory,
+                                 float basefreq, float velocity,
+                                 bool stereo);
+@@ -248,9 +249,6 @@ class ADnote:public SynthNote
+         /*    INTERNAL VALUES OF THE NOTE AND OF THE VOICES     */
+         /********************************************************/
+ 
+-        //time from the start of the note
+-        float time;
+-
+         //the size of unison for a single voice
+         int unison_size[NUM_VOICES];
+ 
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index 14d6ac2c..37449959 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -28,8 +28,10 @@
+ #include <cstdio>
+ #include <cmath>
+ 
+-LFO::LFO(const LFOParams &lfopars, float basefreq, float dt_)
+-    :dt(dt_)
++LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t)
++    :delayTime(t, lfopars.Pdelay / 127.0f * 4.0f), //0..4 sec
++    waveShape(lfopars.PLFOtype),
++    deterministic(!lfopars.Pfreqrand)
+ {
+     int stretch = lfopars.Pstretch;
+     if(stretch == 0)
+@@ -38,24 +40,24 @@ LFO::LFO(const LFOParams &lfopars, float basefreq, float dt_)
+     //max 2x/octave
+     const float lfostretch = powf(basefreq / 440.0f, (stretch - 64.0f) / 63.0f);
+ 
+-    float lfofreq =
++    const float lfofreq =
+         (powf(2, lfopars.Pfreq * 10.0f) - 1.0f) / 12.0f * lfostretch;
+-    incx = fabs(lfofreq) * dt;
++    phaseInc = fabs(lfofreq) * t.dt();
+ 
+     if(!lfopars.Pcontinous) {
+         if(lfopars.Pstartphase == 0)
+-            x = RND;
++            phase = RND;
+         else
+-            x = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f, 1.0f);
++            phase = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f, 1.0f);
+     }
+     else {
+-        const float tmp = fmod(lfopars.time * incx, 1.0f);
+-        x = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f + tmp, 1.0f);
++        const float tmp = fmod(t.time() * phaseInc, 1.0f);
++        phase = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f + tmp, 1.0f);
+     }
+ 
+     //Limit the Frequency(or else...)
+-    if(incx > 0.49999999f)
+-        incx = 0.499999999f;
++    if(phaseInc > 0.49999999f)
++        phaseInc = 0.499999999f;
+ 
+ 
+     lfornd = limit(lfopars.Prandomness / 127.0f, 0.0f, 1.0f);
+@@ -70,88 +72,72 @@ LFO::LFO(const LFOParams &lfopars, float basefreq, float dt_)
+             break; //in octave
+         default:
+             lfointensity = powf(2, lfopars.Pintensity / 127.0f * 11.0f) - 1.0f; //in centi
+-            x -= 0.25f; //chance the starting phase
++            phase -= 0.25f; //chance the starting phase
+             break;
+     }
+ 
+     amp1     = (1 - lfornd) + lfornd * RND;
+     amp2     = (1 - lfornd) + lfornd * RND;
+-    lfotype  = lfopars.PLFOtype;
+-    lfodelay = lfopars.Pdelay / 127.0f * 4.0f; //0..4 sec
+     incrnd   = nextincrnd = 1.0f;
+-    freqrndenabled = (lfopars.Pfreqrand != 0);
+-    computenextincrnd();
+-    computenextincrnd(); //twice because I want incrnd & nextincrnd to be random
++    computeNextFreqRnd();
++    computeNextFreqRnd(); //twice because I want incrnd & nextincrnd to be random
+ }
+ 
+ LFO::~LFO()
+ {}
+ 
+-/*
+- * LFO out
+- */
+-float LFO::lfoout()
++float LFO::baseOut(const char waveShape, const float phase) const
+ {
+-    float out;
+-    switch(lfotype) {
+-        case 1: //LFO_TRIANGLE
+-            if((x >= 0.0f) && (x < 0.25f))
+-                out = 4.0f * x;
++    switch(waveShape) {
++        case LFO_TRIANGLE:
++            if(phase >= 0.0f && phase < 0.25f)
++                return 4.0f * phase;
++            else if(phase > 0.25f && phase < 0.75f)
++                return 2 - 4 * phase;
+             else
+-            if((x > 0.25f) && (x < 0.75f))
+-                out = 2 - 4 * x;
+-            else
+-                out = 4.0f * x - 4.0f;
++                return 4.0f * phase - 4.0f;
+             break;
+-        case 2: //LFO_SQUARE
+-            if(x < 0.5f)
+-                out = -1;
++        case LFO_SQUARE:
++            if(phase < 0.5f)
++                return -1;
+             else
+-                out = 1;
+-            break;
+-        case 3: //LFO_RAMPUP
+-            out = (x - 0.5f) * 2.0f;
++                return  1;
+             break;
+-        case 4: //LFO_RAMPDOWN
+-            out = (0.5f - x) * 2.0f;
+-            break;
+-        case 5: //LFO_EXP_DOWN 1
+-            out = powf(0.05f, x) * 2.0f - 1.0f;
+-            break;
+-        case 6: //LFO_EXP_DOWN 2
+-            out = powf(0.001f, x) * 2.0f - 1.0f;
+-            break;
+-        default:
+-            out = cosf(x * 2.0f * PI); //LFO_SINE
++        case LFO_RAMPUP:    return (phase - 0.5f) * 2.0f;
++        case LFO_RAMPDOWN:  return (0.5f - phase) * 2.0f;
++        case LFO_EXP_DOWN1: return powf(0.05f, phase) * 2.0f - 1.0f;
++        case LFO_EXP_DOWN2: return powf(0.001f, phase) * 2.0f - 1.0f;
++        default:            return cosf(phase * 2.0f * PI); //LFO_SINE
+     }
++}
+ 
+ 
+-    if((lfotype == 0) || (lfotype == 1))
+-        out *= lfointensity * (amp1 + x * (amp2 - amp1));
++float LFO::lfoout()
++{
++    float out = baseOut(waveShape, phase);
++
++    if(waveShape == LFO_SINE || waveShape == LFO_TRIANGLE)
++        out *= lfointensity * (amp1 + phase * (amp2 - amp1));
+     else
+         out *= lfointensity * amp2;
+-    if(lfodelay < 0.00001f) {
+-        if(freqrndenabled == 0)
+-            x += incx;
+-        else {
+-            float tmp = (incrnd * (1.0f - x) + nextincrnd * x);
+-            if(tmp > 1.0f)
+-                tmp = 1.0f;
+-            else
+-            if(tmp < 0.0f)
+-                tmp = 0.0f;
+-            x += incx * tmp;
+-        }
+-        if(x >= 1) {
+-            x    = fmod(x, 1.0f);
+-            amp1 = amp2;
+-            amp2 = (1 - lfornd) + lfornd * RND;
+-
+-            computenextincrnd();
+-        }
++
++    if(delayTime.inFuture())
++        return out;
++
++    //Start oscillating
++    if(deterministic)
++        phase += phaseInc;
++    else {
++        const float tmp = (incrnd * (1.0f - phase) + nextincrnd * phase);
++        phase += phaseInc * limit(tmp, 0.0f, 1.0f);
++    }
++    if(phase >= 1) {
++        phase    = fmod(phase, 1.0f);
++        amp1 = amp2;
++        amp2 = (1 - lfornd) + lfornd * RND;
++
++        computeNextFreqRnd();
+     }
+-    else
+-        lfodelay -= dt;
+     return out;
+ }
+ 
+@@ -164,9 +150,9 @@ float LFO::amplfoout()
+ }
+ 
+ 
+-void LFO::computenextincrnd()
++void LFO::computeNextFreqRnd()
+ {
+-    if(freqrndenabled == 0)
++    if(deterministic)
+         return;
+     incrnd     = nextincrnd;
+     nextincrnd = powf(0.5f, lfofreqrnd) + RND * (powf(2.0f, lfofreqrnd) - 1.0f);
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index 6c53fc63..ebe5707a 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -24,8 +24,9 @@
+ #define LFO_H
+ 
+ #include "../globals.h"
++#include "../Misc/Time.h"
+ 
+-/**Class for creating Low Frequency Ocillators*/
++/**Class for creating Low Frequency Oscillators*/
+ class LFO
+ {
+     public:
+@@ -34,24 +35,36 @@ class LFO
+          * @param lfopars pointer to a LFOParams object
+          * @param basefreq base frequency of LFO
+          */
+-        LFO(const LFOParams &lfopars, float basefreq, float dt);
+-        /**Deconstructor*/
++        LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t);
+         ~LFO();
++
+         float lfoout();
+         float amplfoout();
+     private:
+-        float x;
+-        float incx, incrnd, nextincrnd;
+-        float amp1, amp2; // used for randomness
++        float baseOut(const char waveShape, const float phase) const;
++        //Phase of Oscillator
++        float phase;
++        //Phase Increment Per Frame
++        float phaseInc;
++        //Frequency Randomness
++        float incrnd, nextincrnd;
++        //Amplitude Randomness
++        float amp1, amp2;
++
++        //Intensity of the wave
+         float lfointensity;
++        //Amount Randomness
+         float lfornd, lfofreqrnd;
+-        float lfodelay;
+-        const float dt;
+-        /**\todo see if an enum would be better here*/
+-        char lfotype;
+-        int  freqrndenabled;
+ 
+-        void computenextincrnd();
++        //Delay before starting
++        RelTime delayTime;
++
++        char  waveShape;
++
++        //If After initialization there are no calls to random number gen.
++        bool  deterministic;
++
++        void computeNextFreqRnd(void);
+ };
+ 
+ #endif
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index a256cf98..c066ae28 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -121,9 +121,9 @@ void PADnote::setup(float freq,
+                 ((powf(10, 1.5f * pars.PPunchStrength / 127.0f) - 1.0f)
+                  * VelF(velocity,
+                         pars.PPunchVelocitySensing));
+-            float time =
++            const float time =
+                 powf(10, 3.0f * pars.PPunchTime / 127.0f) / 10000.0f;             //0.1f .. 100 ms
+-            float stretch = powf(440.0f / freq, pars.PPunchStretch / 64.0f);
++            const float stretch = powf(440.0f / freq, pars.PPunchStretch / 64.0f);
+             NoteGlobalPar.Punch.dt = 1.0f
+                                      / (time * synth.samplerate_f * stretch);
+         }
+@@ -131,10 +131,10 @@ void PADnote::setup(float freq,
+             NoteGlobalPar.Punch.Enabled = 0;
+ 
+         NoteGlobalPar.FreqEnvelope = memory.alloc<Envelope>(*pars.FreqEnvelope, basefreq, synth.dt());
+-        NoteGlobalPar.FreqLfo      = memory.alloc<LFO>(*pars.FreqLfo, basefreq, synth.dt());
++        NoteGlobalPar.FreqLfo      = memory.alloc<LFO>(*pars.FreqLfo, basefreq, time);
+ 
+         NoteGlobalPar.AmpEnvelope = memory.alloc<Envelope>(*pars.AmpEnvelope, basefreq, synth.dt());
+-        NoteGlobalPar.AmpLfo      = memory.alloc<LFO>(*pars.AmpLfo, basefreq, synth.dt());
++        NoteGlobalPar.AmpLfo      = memory.alloc<LFO>(*pars.AmpLfo, basefreq, time);
+     }
+ 
+     NoteGlobalPar.Volume = 4.0f
+@@ -154,7 +154,7 @@ void PADnote::setup(float freq,
+                     synth.samplerate, synth.buffersize);
+ 
+         NoteGlobalPar.FilterEnvelope = memory.alloc<Envelope>(*pars.FilterEnvelope, basefreq, synth.dt());
+-        NoteGlobalPar.FilterLfo      = memory.alloc<LFO>(*pars.FilterLfo, basefreq, synth.dt());
++        NoteGlobalPar.FilterLfo      = memory.alloc<LFO>(*pars.FilterLfo, basefreq, time);
+     }
+     NoteGlobalPar.FilterQ = pars.GlobalFilter->getq();
+     NoteGlobalPar.FilterFreqTracking = pars.GlobalFilter->getfreqtracking(
+@@ -168,7 +168,7 @@ void PADnote::setup(float freq,
+ 
+ SynthNote *PADnote::cloneLegato(void)
+ {
+-    SynthParams sp{memory, ctl, synth, legato.param.freq, velocity, 
++    SynthParams sp{memory, ctl, synth, time, legato.param.freq, velocity, 
+                    (bool)portamento, legato.param.midinote, true};
+     return memory.alloc<PADnote>(&pars, sp);
+ }
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 9b904e60..fb047843 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -213,7 +213,7 @@ void SUBnote::setup(float freq,
+ 
+ SynthNote *SUBnote::cloneLegato(void)
+ {
+-    SynthParams sp{memory, ctl, synth, legato.param.freq, velocity, 
++    SynthParams sp{memory, ctl, synth, time, legato.param.freq, velocity, 
+                    (bool)portamento, legato.param.midinote, true};
+     return memory.alloc<SUBnote>(&pars, sp);
+ }
+diff --git a/src/Synth/SynthNote.cpp b/src/Synth/SynthNote.cpp
+index 9aa1b1a5..45054dfc 100644
+--- a/src/Synth/SynthNote.cpp
++++ b/src/Synth/SynthNote.cpp
+@@ -5,7 +5,7 @@
+ SynthNote::SynthNote(SynthParams &pars)
+     :memory(pars.memory),
+     legato(pars.synth, pars.frequency, pars.velocity, pars.portamento,
+-            pars.note, pars.quiet), ctl(pars.ctl), synth(pars.synth)
++            pars.note, pars.quiet), ctl(pars.ctl), synth(pars.synth), time(pars.time)
+ {}
+ 
+ SynthNote::Legato::Legato(const SYNTH_T &synth_, float freq, float vel, int port,
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index 82659c5c..38e98a55 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -30,6 +30,7 @@ struct SynthParams
+     Allocator &memory;   //Memory Allocator for the Note to use
+     const Controller &ctl;
+     const SYNTH_T    &synth;
++    const AbsTime    &time;
+     float     frequency; //Note base frequency
+     float     velocity;  //Velocity of the Note
+     bool      portamento;//True if portamento is used for this note
+@@ -112,6 +113,7 @@ class SynthNote
+ 
+         const Controller &ctl;
+         const SYNTH_T    &synth;
++        const AbsTime    &time;
+ };
+ 
+ #endif
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index f4b223df..cbeeebda 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -44,7 +44,7 @@ class AdNoteTest:public CxxTest::TestSuite
+     public:
+ 
+         ADnote       *note;
+-        Master       *master;
++        AbsTime      *time;
+         FFTwrapper   *fft;
+         Controller   *controller;
+         Allocator     memory;
+@@ -57,6 +57,8 @@ class AdNoteTest:public CxxTest::TestSuite
+             //First the sensible settings and variables that have to be set:
+             synth = new SYNTH_T;
+             synth->buffersize = 256;
++            synth->alias();
++            time  = new AbsTime(*synth);
+ 
+             outL = new float[synth->buffersize];
+             for(int i = 0; i < synth->buffersize; ++i)
+@@ -104,7 +106,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             //lets go with.... 50! as a nice note
+             testnote = 50;
+             float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+-            SynthParams pars{memory, *controller, *synth, freq, 120, 0, testnote, false};
++            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote, false};
+ 
+             note = new ADnote(defaultPreset, pars);
+ 
+diff --git a/src/Tests/InstrumentStats.cpp b/src/Tests/InstrumentStats.cpp
+index af1b88d8..dfeda097 100644
+--- a/src/Tests/InstrumentStats.cpp
++++ b/src/Tests/InstrumentStats.cpp
+@@ -3,6 +3,7 @@
+ #include <iostream>
+ #include <fstream>
+ #include <string>
++#include "../Misc/Time.h"
+ #include "../Misc/MiddleWare.h"
+ #include "../Misc/Part.h"
+ #include "../Misc/Util.h"
+@@ -11,6 +12,7 @@
+ #include "../DSP/FFTwrapper.h"
+ #include "../globals.h"
+ SYNTH_T *synth;
++AbsTime *time_;
+ 
+ using namespace std;
+ 
+@@ -50,6 +52,7 @@ void setup() {
+     synth->buffersize = 256;
+     synth->samplerate = 48000;
+     synth->alias();
++    time_ = new AbsTime(*synth);
+     //for those patches that are just really big
+     alloc.addMemory(malloc(1024*1024),1024*1024);
+ 
+@@ -65,7 +68,7 @@ void setup() {
+     denormalkillbuf = new float[synth->buffersize];
+     for(int i = 0; i < synth->buffersize; ++i)
+         denormalkillbuf[i] = 0;
+-    p = new Part(alloc, *synth, &microtonal, &fft);
++    p = new Part(alloc, *synth, *time_, &microtonal, &fft);
+ }
+ 
+ void xml(string s)
+diff --git a/src/Tests/KitTest.h b/src/Tests/KitTest.h
+index 90c2a7d8..5b4acbd8 100644
+--- a/src/Tests/KitTest.h
++++ b/src/Tests/KitTest.h
+@@ -3,6 +3,7 @@
+ #include <cstring>
+ #include <cstdlib>
+ #include <iostream>
++#include "../Misc/Time.h"
+ #include "../Misc/Allocator.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../Misc/Microtonal.h"
+@@ -23,6 +24,7 @@ class KitTest:public CxxTest::TestSuite
+         FFTwrapper fft;
+         Microtonal microtonal;
+         Part *part;
++        AbsTime *time;
+         float *outL, *outR;
+     public:
+         KitTest()
+@@ -30,6 +32,7 @@ class KitTest:public CxxTest::TestSuite
+         {}
+         void setUp() {
+             synth = new SYNTH_T;
++            time  = new AbsTime(*synth);
+             denormalkillbuf = new float[synth->buffersize];
+             outL  = new float[synth->buffersize];
+             outR = new float[synth->buffersize];
+@@ -38,7 +41,7 @@ class KitTest:public CxxTest::TestSuite
+             memset(outR, 0, synth->bufferbytes);
+ 
+ 
+-            part = new Part(alloc, *synth, &microtonal, &fft);
++            part = new Part(alloc, *synth, *time, &microtonal, &fft);
+         }
+ 
+         //Enumerate cases of:
+@@ -531,6 +534,7 @@ class KitTest:public CxxTest::TestSuite
+             delete[] denormalkillbuf;
+             delete[] outL;
+             delete[] outR;
++            delete time;
+             delete synth;
+         }
+ };
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index e9a46a0c..350b6a9d 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -53,6 +53,7 @@ class PadNoteTest:public CxxTest::TestSuite
+         Master       *master;
+         FFTwrapper   *fft;
+         Controller   *controller;
++        AbsTime      *time;
+         unsigned char testnote;
+         Allocator     memory;
+ 
+@@ -63,6 +64,8 @@ class PadNoteTest:public CxxTest::TestSuite
+             synth = new SYNTH_T;
+             //First the sensible settings and variables that have to be set:
+             synth->buffersize = 256;
++            synth->alias();
++            time  = new AbsTime(*synth);
+ 
+             outL = new float[synth->buffersize];
+             for(int i = 0; i < synth->buffersize; ++i)
+@@ -114,7 +117,7 @@ class PadNoteTest:public CxxTest::TestSuite
+             //lets go with.... 50! as a nice note
+             testnote = 50;
+             float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+-            SynthParams pars_{memory, *controller, *synth, freq, 120, 0, testnote, false};
++            SynthParams pars_{memory, *controller, *synth, *time, freq, 120, 0, testnote, false};
+ 
+             note = new PADnote(pars, pars_);
+         }
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index d9533fad..46e807cf 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -44,6 +44,7 @@ class SubNoteTest:public CxxTest::TestSuite
+ 
+         SUBnote      *note;
+         Master       *master;
++        AbsTime      *time;
+         Controller   *controller;
+         unsigned char testnote;
+         Allocator     memory;
+@@ -55,6 +56,8 @@ class SubNoteTest:public CxxTest::TestSuite
+             synth = new SYNTH_T;
+             //First the sensible settings and variables that have to be set:
+             synth->buffersize = 256;
++            synth->alias();
++            time  = new AbsTime(*synth);
+ 
+             outL = new float[synth->buffersize];
+             for(int i = 0; i < synth->buffersize; ++i)
+@@ -88,7 +91,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             testnote = 50;
+             float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+ 
+-            SynthParams pars{memory, *controller, *synth, freq, 120, 0, testnote, false};
++            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote, false};
+             note = new SUBnote(defaultPreset, pars);
+             delete wrap;
+             delete defaultPreset;
+@@ -100,6 +103,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             delete [] outL;
+             delete [] outR;
+             delete [] denormalkillbuf;
++            delete time;
+             delete synth;
+         }
+ 
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.h
+index 2bc61a7c..da289347 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.h
+@@ -49,6 +49,7 @@ class AdNoteTest:public CxxTest::TestSuite
+         Controller   *controller;
+         unsigned char testnote;
+         ADnoteParameters *params;
++        AbsTime  *time;
+         Allocator memory;
+         float freq;
+ 
+@@ -59,6 +60,8 @@ class AdNoteTest:public CxxTest::TestSuite
+             //First the sensible settings and variables that have to be set:
+             synth = new SYNTH_T;
+             synth->buffersize = BUF;
++            synth->alias();
++            time = new AbsTime(*synth);
+ 
+             memset(outL,0,sizeof(outL));
+             memset(outR,0,sizeof(outR));
+@@ -89,6 +92,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             delete fft;
+             delete [] denormalkillbuf;
+             FFT_cleanup();
++            delete time;
+             delete synth;
+             delete params;
+         }
+@@ -103,7 +107,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             params->VoicePar[0].Unison_vibratto_speed   = e;
+             params->VoicePar[0].Unison_invert_phase     = f;
+ 
+-            SynthParams pars{memory, *controller, *synth, freq, 120, 0, testnote, false};
++            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote, false};
+             note = new ADnote(params, pars);
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(outL[80], values[0], 1e-5);
+diff --git a/src/globals.h b/src/globals.h
+index 7f5225c6..7ab83625 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -43,6 +43,8 @@ class  PADnoteParameters;
+ class  SynthNote;
+ 
+ class  Allocator;
++class  AbsTime;
++class  RelTime;
+ 
+ class  Microtonal;
+ class  XMLwrapper;
+-- 
+2.47.0
+

@@ -1,0 +1,19 @@
+From d718d614427baf80ef728005e0011893731d0976 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 22 Jun 2023 19:41:45 -0400
+Subject: [PATCH 1921/1936] Update rtosc submodule to fix windows cross build
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index aed6e417..6f151af0 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit aed6e417cc868ce459edaae250b0e8ee9bbf20c2
++Subproject commit 6f151af012a659eb3cf2e61b6ffa3c62a4852897
+-- 
+2.47.0
+

@@ -1,0 +1,26 @@
+From 953cfb1efa3eca90934e13562ae9f5d30aeb04f2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 6 Apr 2017 11:45:37 -0400
+Subject: [PATCH 1129/1936] Change BankDb Search Order
+
+Sort by path+file rather than just the file name
+---
+ src/Misc/BankDb.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index a92bc111..59a691f2 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -57,7 +57,7 @@ bool BankEntry::match(string s) const
+ 
+ bool BankEntry::operator<(const BankEntry &b) const
+ {
+-    return this->file < b.file;
++    return (this->bank+this->file) < (b.bank+b.file);
+ }
+ 
+ static svec split(string s)
+-- 
+2.47.0
+

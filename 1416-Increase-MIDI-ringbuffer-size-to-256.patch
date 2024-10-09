@@ -1,0 +1,35 @@
+From 2b9c1120caf77ca0f59b3d4e3349af39f0229947 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 5 Sep 2019 23:28:58 +0200
+Subject: [PATCH 1416/1936] Increase MIDI ringbuffer size to 256.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/InMgr.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Nio/InMgr.cpp b/src/Nio/InMgr.cpp
+index c257fbe9..6c8f53bb 100644
+--- a/src/Nio/InMgr.cpp
++++ b/src/Nio/InMgr.cpp
+@@ -65,7 +65,7 @@ InMgr &InMgr::getInstance()
+ }
+ 
+ InMgr::InMgr()
+-    :queue(100), master(NULL)
++    :queue(256), master(NULL)
+ {
+     current = NULL;
+     work.init(PTHREAD_PROCESS_PRIVATE, 0);
+@@ -79,7 +79,7 @@ InMgr::~InMgr()
+ void InMgr::putEvent(MidiEvent ev)
+ {
+     if(queue.push(ev)) //check for error
+-        cerr << "ERROR: Midi Ringbuffer is FULL" << endl;
++        cerr << "ERROR: MIDI ringbuffer is FULL" << endl;
+     else
+         work.post();
+ }
+-- 
+2.47.0
+

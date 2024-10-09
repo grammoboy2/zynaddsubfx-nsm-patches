@@ -1,0 +1,29 @@
+From 1e7f9a7e2778f806eb13f2ffb51f190b1b8408dd Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 22 Nov 2020 21:38:09 +0100
+Subject: [PATCH 1662/1936] Master: Remove duplicate `bToU` write
+
+The duplicate was introduced in e2c21671f (code refactoring).
+---
+ src/Misc/Master.cpp | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 63c1d1c9..4f258c68 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -867,11 +867,6 @@ bool Master::applyOscEvent(const char *msg, float *outl, float *outr,
+     else if(d.forwarded)
+         bToU->raw_write(msg);
+ 
+-    if(d.matches == 0 && !d.forwarded)
+-        fprintf(stderr, "Unknown path '%s:%s'\n", msg, rtosc_argument_string(msg));
+-    if(d.forwarded)
+-        bToU->raw_write(msg);
+-
+     return true;
+ }
+ 
+-- 
+2.47.0
+

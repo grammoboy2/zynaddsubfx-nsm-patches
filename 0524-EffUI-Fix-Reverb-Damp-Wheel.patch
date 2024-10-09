@@ -1,0 +1,43 @@
+From 4bf7294e734c9a2ac7d41632c7108aa5679f1eed Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 3 Aug 2015 14:19:05 -0400
+Subject: [PATCH 0524/1936] EffUI: Fix Reverb Damp Wheel
+
+---
+ src/UI/Fl_Osc_Dial.cpp | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/UI/Fl_Osc_Dial.cpp b/src/UI/Fl_Osc_Dial.cpp
+index 6ca6b871..e4040d39 100644
+--- a/src/UI/Fl_Osc_Dial.cpp
++++ b/src/UI/Fl_Osc_Dial.cpp
+@@ -78,7 +78,10 @@ int Fl_Osc_Dial::handle(int ev)
+ 
+ void Fl_Osc_Dial::OSC_value(int v)
+ {
+-    value(v+minimum()+fmodf(value(), 1));
++    if(64 != (int)minimum())
++        value(v+minimum()+fmodf(value(), 1));
++    else
++        value(v+fmodf(value(), 1));
+ }
+ 
+ void Fl_Osc_Dial::OSC_value(char v)
+@@ -95,11 +98,10 @@ void Fl_Osc_Dial::cb(void)
+ {
+     assert(osc);
+ 
+-/*    if((maximum()-minimum()) == 127 || (maximum()-minimum()) == 255) {
+-	oscWrite(ext, "i", (int)(value()-minimum()));
+-    }
+-    else*/
++    if(64 != (int)minimum())
+         oscWrite(ext, "i", (int)(value()-minimum()));
++    else
++        oscWrite(ext, "i", (int)(value()));
+ 
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+-- 
+2.47.0
+

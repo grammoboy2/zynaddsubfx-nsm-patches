@@ -1,0 +1,41 @@
+From cdc70919f09ad72d211526fa87036e86245bcad3 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 4 Apr 2020 03:17:03 +0200
+Subject: [PATCH 1505/1936] Add const keyword. applyLegato() is not allowed to
+ modify the LegatoParams it is passed.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Containers/NotePool.cpp | 2 +-
+ src/Containers/NotePool.h   | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index a9cc3f09..58c7f5a2 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -205,7 +205,7 @@ void NotePool::insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor des
+ };
+ 
+ //There should only be one pair of notes which are still playing
+-void NotePool::applyLegato(note_t note, LegatoParams &par)
++void NotePool::applyLegato(note_t note, const LegatoParams &par)
+ {
+     for(auto &desc:activeDesc()) {
+         desc.note = note;
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index efcdac10..3f03b48a 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -122,7 +122,7 @@ class NotePool
+         void insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor desc);
+ 
+         void upgradeToLegato(void);
+-        void applyLegato(note_t note, LegatoParams &par);
++        void applyLegato(note_t note, const LegatoParams &par);
+ 
+         void makeUnsustainable(note_t note);
+ 
+-- 
+2.47.0
+

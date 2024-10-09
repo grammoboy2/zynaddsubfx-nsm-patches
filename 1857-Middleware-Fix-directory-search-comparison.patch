@@ -1,0 +1,27 @@
+From a0f5fe2d7357febd8688209870fddc3507b1a6a7 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 16 Jun 2022 17:30:49 -0400
+Subject: [PATCH 1857/1936] Middleware: Fix directory search comparison
+
+Bug spotted by Andreas Schwab on gcc's bugzilla
+https://gcc.gnu.org/bugzilla/show_bug.cgi?id=105997
+---
+ src/Misc/MiddleWare.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d3f9f934..3c7b93b3 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1151,7 +1151,7 @@ static std::vector<std::string> getFiles(const char *folder, bool finddir)
+ 
+     while((fn = readdir(dir))) {
+ #ifndef WIN32
+-        bool is_dir = fn->d_type & DT_DIR;
++        bool is_dir = fn->d_type == DT_DIR;
+         //it could still be a symbolic link
+         if(!is_dir) {
+             string path = string(folder) + "/" + fn->d_name;
+-- 
+2.47.0
+

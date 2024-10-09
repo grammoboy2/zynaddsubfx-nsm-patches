@@ -1,0 +1,26 @@
+From da1fabc182d64af33b7a6e668d508530046d134d Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 2 Jan 2020 19:32:03 +0100
+Subject: [PATCH 1461/1936] Fix signed comparison compile warning.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/ADnote.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 2fb93641..ce3b42db 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -28,7 +28,7 @@
+ #include "OscilGen.h"
+ #include "ADnote.h"
+ 
+-#define LENGTHOF(x) (sizeof(x)/sizeof(x[0]))
++#define LENGTHOF(x) ((int)(sizeof(x)/sizeof(x[0])))
+ 
+ namespace zyn {
+ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
+-- 
+2.47.0
+

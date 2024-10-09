@@ -1,0 +1,377 @@
+From 59f75bda3a467bb6dfe9a5c6d8d8ae354573c15b Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Wed, 21 May 2014 05:31:58 +0200
+Subject: [PATCH 0180/1936] portable semaphore implementation (for OSX)
+
+---
+ src/Nio/InMgr.cpp     |  12 ++---
+ src/Nio/InMgr.h       |   4 +-
+ src/Nio/SafeQueue.cpp |  26 ++++------
+ src/Nio/SafeQueue.h   |   6 +--
+ src/Nio/WavEngine.cpp |   9 ++--
+ src/Nio/WavEngine.h   |   4 +-
+ src/Nio/ZynSema.h     | 112 ++++++++++++++++++++++++++++++++++++++++++
+ 7 files changed, 138 insertions(+), 35 deletions(-)
+ create mode 100644 src/Nio/ZynSema.h
+
+diff --git a/src/Nio/InMgr.cpp b/src/Nio/InMgr.cpp
+index b9db3fbd..441a6dcd 100644
+--- a/src/Nio/InMgr.cpp
++++ b/src/Nio/InMgr.cpp
+@@ -44,13 +44,12 @@ InMgr::InMgr()
+     :queue(100), master(Master::getInstance())
+ {
+     current = NULL;
+-    sem_init(&work, PTHREAD_PROCESS_PRIVATE, 0);
++    work.init(PTHREAD_PROCESS_PRIVATE, 0);
+ }
+ 
+ InMgr::~InMgr()
+ {
+     //lets stop the consumer thread
+-    sem_destroy(&work);
+ }
+ 
+ void InMgr::putEvent(MidiEvent ev)
+@@ -58,17 +57,17 @@ void InMgr::putEvent(MidiEvent ev)
+     if(queue.push(ev)) //check for error
+         cerr << "ERROR: Midi Ringbuffer is FULL" << endl;
+     else
+-        sem_post(&work);
++        work.post();
+ }
+ 
+ void InMgr::flush(unsigned frameStart, unsigned frameStop)
+ {
+     MidiEvent ev;
+-    while(!sem_trywait(&work)) {
++    while(!work.trywait()) {
+         queue.peak(ev);
+         if(ev.time < (int)frameStart || ev.time > (int)frameStop) {
+             //Back out of transaction
+-            sem_post(&work);
++            work.post();
+             //printf("%d vs [%d..%d]\n",ev.time, frameStart, frameStop);
+             break;
+         }
+@@ -102,8 +101,7 @@ void InMgr::flush(unsigned frameStart, unsigned frameStop)
+ 
+ bool InMgr::empty(void) const
+ {
+-    int semvalue = 0;
+-    sem_getvalue(&work, &semvalue);
++    int semvalue = work.getvalue();
+     return semvalue <= 0;
+ }
+ 
+diff --git a/src/Nio/InMgr.h b/src/Nio/InMgr.h
+index b06bd37a..abaf925c 100644
+--- a/src/Nio/InMgr.h
++++ b/src/Nio/InMgr.h
+@@ -2,7 +2,7 @@
+ #define INMGR_H
+ 
+ #include <string>
+-#include <semaphore.h>
++#include "ZynSema.h"
+ #include "SafeQueue.h"
+ 
+ enum midi_type {
+@@ -45,7 +45,7 @@ class InMgr
+         InMgr();
+         class MidiIn *getIn(std::string name);
+         SafeQueue<MidiEvent> queue;
+-        mutable sem_t work;
++        mutable ZynSema work;
+         class MidiIn * current;
+ 
+         /**the link to the rest of zyn*/
+diff --git a/src/Nio/SafeQueue.cpp b/src/Nio/SafeQueue.cpp
+index 25b35890..510e4b20 100644
+--- a/src/Nio/SafeQueue.cpp
++++ b/src/Nio/SafeQueue.cpp
+@@ -3,16 +3,14 @@ template<class T>
+ SafeQueue<T>::SafeQueue(size_t maxlen)
+     :writePtr(0), readPtr(0), bufSize(maxlen)
+ {
+-    sem_init(&w_space, PTHREAD_PROCESS_PRIVATE, maxlen - 1);
+-    sem_init(&r_space, PTHREAD_PROCESS_PRIVATE, 0);
++    w_space.init(PTHREAD_PROCESS_PRIVATE, maxlen - 1);
++    r_space.init(PTHREAD_PROCESS_PRIVATE, 0);
+     buffer = new T[maxlen];
+ }
+ 
+ template<class T>
+ SafeQueue<T>::~SafeQueue()
+ {
+-    sem_destroy(&w_space);
+-    sem_destroy(&r_space);
+     delete [] buffer;
+ }
+ 
+@@ -25,17 +23,13 @@ unsigned int SafeQueue<T>::size() const
+ template<class T>
+ unsigned int SafeQueue<T>::rSpace() const
+ {
+-    int space = 0;
+-    sem_getvalue(&r_space, &space);
+-    return space;
++    return r_space.getvalue();
+ }
+ 
+ template<class T>
+ unsigned int SafeQueue<T>::wSpace() const
+ {
+-    int space = 0;
+-    sem_getvalue(&w_space, &space);
+-    return space;
++    return w_space.getvalue();
+ }
+ 
+ template<class T>
+@@ -50,8 +44,8 @@ int SafeQueue<T>::push(const T &in)
+     writePtr  = w;
+ 
+     //adjust ranges
+-    sem_wait(&w_space); //guaranteed not to wait
+-    sem_post(&r_space);
++    w_space.wait(); //guaranteed not to wait
++    r_space.post();
+     return 0;
+ }
+ 
+@@ -80,8 +74,8 @@ int SafeQueue<T>::pop(T &out)
+     readPtr = r;
+ 
+     //adjust ranges
+-    sem_wait(&r_space); //guaranteed not to wait
+-    sem_post(&w_space);
++    r_space.wait(); //guaranteed not to wait
++    w_space.post();
+     return 0;
+ }
+ 
+@@ -89,7 +83,7 @@ template<class T>
+ void SafeQueue<T>::clear()
+ {
+     //thread unsafe
+-    while(!sem_trywait(&r_space))
+-        sem_post(&w_space);
++    while(!r_space.trywait())
++        w_space.post();
+     readPtr = writePtr;
+ }
+diff --git a/src/Nio/SafeQueue.h b/src/Nio/SafeQueue.h
+index 8b6b0693..bfb6c20d 100644
+--- a/src/Nio/SafeQueue.h
++++ b/src/Nio/SafeQueue.h
+@@ -2,7 +2,7 @@
+ #ifndef SAFEQUEUE_H
+ #define SAFEQUEUE_H
+ #include <cstdlib>
+-#include <semaphore.h>
++#include "ZynSema.h"
+ #include <pthread.h>
+ 
+ /**
+@@ -32,9 +32,9 @@ class SafeQueue
+         unsigned int rSpace() const;
+ 
+         //write space
+-        mutable sem_t w_space;
++        mutable ZynSema w_space;
+         //read space
+-        mutable sem_t r_space;
++        mutable ZynSema r_space;
+ 
+         //next writing spot
+         size_t writePtr;
+diff --git a/src/Nio/WavEngine.cpp b/src/Nio/WavEngine.cpp
+index 9d0d2df0..1c3d66ec 100644
+--- a/src/Nio/WavEngine.cpp
++++ b/src/Nio/WavEngine.cpp
+@@ -28,13 +28,12 @@ using namespace std;
+ WavEngine::WavEngine()
+     :AudioOut(), file(NULL), buffer(synth->samplerate * 4), pThread(NULL)
+ {
+-    sem_init(&work, PTHREAD_PROCESS_PRIVATE, 0);
++    work.init(PTHREAD_PROCESS_PRIVATE, 0);
+ }
+ 
+ WavEngine::~WavEngine()
+ {
+     Stop();
+-    sem_destroy(&work);
+     destroyFile();
+ }
+ 
+@@ -65,7 +64,7 @@ void WavEngine::Stop()
+     pthread_t *tmp = pThread;
+     pThread = NULL;
+ 
+-    sem_post(&work);
++    work.post();
+     pthread_join(*tmp, NULL);
+     delete pThread;
+ }
+@@ -81,7 +80,7 @@ void WavEngine::push(Stereo<float *> smps, size_t len)
+         buffer.push(*smps.l++);
+         buffer.push(*smps.r++);
+     }
+-    sem_post(&work);
++    work.post();
+ }
+ 
+ void WavEngine::newFile(WavFile *_file)
+@@ -113,7 +112,7 @@ void *WavEngine::AudioThread()
+ {
+     short *recordbuf_16bit = new short[2 * synth->buffersize];
+ 
+-    while(!sem_wait(&work) && pThread) {
++    while(!work.wait() && pThread) {
+         for(int i = 0; i < synth->buffersize; ++i) {
+             float left = 0.0f, right = 0.0f;
+             buffer.pop(left);
+diff --git a/src/Nio/WavEngine.h b/src/Nio/WavEngine.h
+index 8f55238e..73f553c9 100644
+--- a/src/Nio/WavEngine.h
++++ b/src/Nio/WavEngine.h
+@@ -25,7 +25,7 @@
+ #include "AudioOut.h"
+ #include <string>
+ #include <pthread.h>
+-#include <semaphore.h>
++#include "ZynSema.h"
+ #include "SafeQueue.h"
+ 
+ class WavFile;
+@@ -53,7 +53,7 @@ class WavEngine:public AudioOut
+ 
+     private:
+         WavFile *file;
+-        sem_t    work;
++        ZynSema  work;
+         SafeQueue<float> buffer;
+ 
+         pthread_t *pThread;
+diff --git a/src/Nio/ZynSema.h b/src/Nio/ZynSema.h
+new file mode 100644
+index 00000000..c41477e0
+--- /dev/null
++++ b/src/Nio/ZynSema.h
+@@ -0,0 +1,112 @@
++#ifndef ZYNSEMA_H
++#define ZYNSEMA_H
++
++#if defined __APPLE__ || defined WIN32
++
++#include <pthread.h>
++
++class ZynSema
++{
++public:
++    ZynSema (void) : _count (0)
++    {
++    }
++
++    ~ZynSema (void)
++    {
++        pthread_mutex_destroy (&_mutex);
++        pthread_cond_destroy (&_cond);
++    }
++
++    int init (int, int v)
++    {
++        _count = v;
++        return pthread_mutex_init (&_mutex, 0) || pthread_cond_init (&_cond, 0);
++    }
++
++    int post (void)
++    {
++        pthread_mutex_lock (&_mutex);
++        if (++_count == 1) pthread_cond_signal (&_cond);
++        pthread_mutex_unlock (&_mutex);
++        return 0;
++    }
++
++    int wait (void)
++    {
++        pthread_mutex_lock (&_mutex);
++        while (_count < 1) pthread_cond_wait (&_cond, &_mutex);
++        --_count;
++        pthread_mutex_unlock (&_mutex);
++        return 0;
++    }
++
++    int trywait (void)
++    {
++        if (pthread_mutex_trylock (&_mutex)) return -1;
++        if (_count < 1)
++        {
++            pthread_mutex_unlock (&_mutex);
++            return -1;
++        }
++        --_count;
++        pthread_mutex_unlock (&_mutex);
++        return 0;
++    }
++
++    int getvalue (void) const
++    {
++        return _count;
++    }
++
++
++private:
++    int              _count;
++    pthread_mutex_t  _mutex;
++    pthread_cond_t   _cond;
++};
++
++#else // POSIX sempahore
++
++#include <semaphore.h>
++
++class ZynSema
++{
++public:
++    ZynSema (void)
++    {
++    }
++    ~ZynSema (void)
++    {
++        sem_destroy (&_sema);
++    }
++    int init (int s, int v)
++    {
++        return sem_init (&_sema, s, v);
++    }
++    int post (void)
++    {
++        return sem_post (&_sema);
++    }
++    int wait (void)
++    {
++        return sem_wait (&_sema);
++    }
++    int trywait (void)
++    {
++        return sem_trywait (&_sema);
++    }
++    int getvalue(void)
++    {
++        int v = 0;
++        sem_getvalue(&_sema, &v);
++        return v;
++    }
++
++private:
++    sem_t _sema;
++};
++
++#endif // POSIX semapore
++
++#endif // ZYNSEMA_H
+-- 
+2.47.0
+

@@ -1,0 +1,158 @@
+From eaa0903527a6e9654a57596b1aa7ce8ee89cbf7a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 1 Jul 2014 23:51:57 -0400
+Subject: [PATCH 0207/1936] Merge Fixup
+
+---
+ src/CMakeLists.txt       | 2 +-
+ src/Nio/OutMgr.cpp       | 2 +-
+ src/Tests/CMakeLists.txt | 6 ++++--
+ src/Tests/PadNoteTest.h  | 2 +-
+ src/Tests/PluginTest.h   | 2 ++
+ src/UI/ADnoteUI.fl       | 4 ++--
+ src/UI/EnvelopeUI.fl     | 2 +-
+ src/UI/MasterUI.fl       | 1 +
+ src/UI/SUBnoteUI.fl      | 2 +-
+ 9 files changed, 14 insertions(+), 9 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 6f5b8453..2146ca6b 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -350,9 +350,9 @@ add_executable(zynaddsubfx main.cpp)
+ #Warning: the required ordering of these to get proper linking depends upon the
+ #         phase of the moon
+ target_link_libraries(zynaddsubfx
+-	${GUI_LIBRARIES}
+     zynaddsubfx_core
+ 	zynaddsubfx_nio
++	${GUI_LIBRARIES}
+ 	${NIO_LIBRARIES}
+ 	${AUDIO_LIBRARIES}
+ 	)
+diff --git a/src/Nio/OutMgr.cpp b/src/Nio/OutMgr.cpp
+index d7847b6c..85b0d4de 100644
+--- a/src/Nio/OutMgr.cpp
++++ b/src/Nio/OutMgr.cpp
+@@ -62,7 +62,7 @@ const Stereo<float *> OutMgr::tick(unsigned int frameSize)
+         if(!midi.empty()) {
+             midi.flush(i*synth->buffersize, (i+1)*synth->buffersize);
+         }
+-        master.AudioOut(outl, outr);
++        master->AudioOut(outl, outr);
+         addSmps(outl, outr);
+         i++;
+     }
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 373fd40b..1f64b458 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -17,7 +17,7 @@ CXXTEST_ADD_TEST(UnisonTest UnisonTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/UnisonTes
+ 
+ #Extra libraries added to make test and full compilation use the same library
+ #links for quirky compilers
+-set(test_lib zynaddsubfx_core ${ZLIB_LIBRARY} ${FFTW_LIBRARIES} ${MXML_LIBRARIES} pthread)
++set(test_lib zynaddsubfx_core ${GUI_LIBRARIES} ${ZLIB_LIBRARY} ${FFTW_LIBRARIES} ${MXML_LIBRARIES} pthread)
+ 
+ message(STATUS "Linking tests with: ${test_lib}")
+ target_link_libraries(ADnoteTest     ${test_lib})
+@@ -30,6 +30,8 @@ target_link_libraries(XMLwrapperTest ${test_lib})
+ target_link_libraries(RandTest       ${test_lib})
+ target_link_libraries(PADnoteTest    ${test_lib})
+ target_link_libraries(PluginTest     zynaddsubfx_core zynaddsubfx_nio
+-    ${OS_LIBRARIES} ${AUDIO_LIBRARIES})
++    ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+ target_link_libraries(UnisonTest    ${test_lib})
+ 
++message(STATUS "Plugin Test ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES}")
++
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index 985135c9..751bf7e0 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -163,7 +163,7 @@ class PadNoteTest:public CxxTest::TestSuite
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.060818f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.060818f, 0.0005f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+diff --git a/src/Tests/PluginTest.h b/src/Tests/PluginTest.h
+index b88e9ba4..00588bcd 100644
+--- a/src/Tests/PluginTest.h
++++ b/src/Tests/PluginTest.h
+@@ -25,6 +25,7 @@
+ #include <iostream>
+ #include <fstream>
+ #include <string>
++#include "../Misc/MiddleWare.h"
+ #include "../Misc/Master.h"
+ #include "../Misc/Util.h"
+ #include "../globals.h"
+@@ -33,6 +34,7 @@ SYNTH_T *synth;
+ using namespace std;
+ 
+ char *instance_name=(char*)"";
++MiddleWare *middleware;
+ 
+ class PluginTest:public CxxTest::TestSuite
+ {
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index c9313443..50ff58b2 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -610,9 +610,9 @@ voiceonbutton->redraw();} open
+             }
+             Fl_Dial {} {
+               label {Ph.rand}
+-              callback {pars->VoicePar[nvoice].Unison_phase_randomness=(int)o->value();}
++              callback {/*pars->VoicePar[nvoice].Unison_phase_randomness=(int)o->value();*/}
+               tooltip {Phase randomness} xywh {280 555 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-              code0 {o->value(pars->VoicePar[nvoice].Unison_phase_randomness);}
++              code0 {/*o->value(pars->VoicePar[nvoice].Unison_phase_randomness);*/}
+               class WidgetPDial
+             }
+           }
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index c577f19d..1b02433b 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -627,7 +627,7 @@ linearenvelopecheck->value(Plinearenvelope);
+ 
+     forcedreleasecheck->value(Pforcedrelease);
+ 
+-if (env->Pfreemode==0){
++if (Pfreemode==0){
+ 	addpoint->hide();
+ 	deletepoint->hide();
+ } else {
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index b47c3dae..8b30bc1a 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -925,6 +925,7 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))
+ };
+ } open
+       xywh {661 384 600 335} type Double visible
++      class Fl_Osc_Window
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 9245179d..f5c54195 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -438,7 +438,7 @@ globalfiltergroup->redraw();}
+           callback {/*pars->POvertoneSpread.type = (int)o->value();
+ pars->updateFrequencyMultipliers();*/} open
+           xywh {450 190 80 20} down_box BORDER_BOX labelsize 10 align 5 textsize 10
+-          code0 {o->value(pars->POvertoneSpread.type);}
++          code0 {/*o->value(pars->POvertoneSpread.type);*/}
+         } {
+           MenuItem {} {
+             label Harmonic
+-- 
+2.47.0
+

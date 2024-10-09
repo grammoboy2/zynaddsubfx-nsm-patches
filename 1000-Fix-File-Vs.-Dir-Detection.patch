@@ -1,0 +1,82 @@
+From fe19b2eaaf566034ec2e3b2d92aca4a994cc40f9 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 9 Aug 2016 12:27:07 -0400
+Subject: [PATCH 1000/1936] Fix File Vs. Dir Detection
+
+---
+ src/Misc/MiddleWare.cpp               | 26 +++++++++++++++++++++++++-
+ src/Plugin/ZynAddSubFX/CMakeLists.txt |  6 +++---
+ 2 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index bc965ab0..8907d7fe 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -853,10 +853,22 @@ static std::vector<std::string> getFiles(const char *folder, int mask)
+     std::vector<string> files;
+ 
+     while((fn = readdir(dir))) {
++#ifndef WIN32
+         struct stat s;
+         stat(fn->d_name, &s);
+-        if((s.st_mode & S_IFMT) == mask)
++        printf("stat on <%s> => %x\n", fn->d_name, s.st_mode & S_IFMT);
++        printf("desired mask =  %x\n", mask);
++        if(s.st_mode & mask)
+             files.push_back(fn->d_name);
++#else
++        std::string darn_windows = folder + std::string("/") + std::string(fn->d_name);
++        printf("attr on <%s> => %x\n", darn_windows.c_str(), GetFileAttributes(darn_windows.c_str()));
++        printf("desired mask =  %x\n", mask);
++        printf("error = %x\n", INVALID_FILE_ATTRIBUTES);
++       int isdir = GetFileAttributes(darn_windows.c_str()) & FILE_ATTRIBUTE_DIRECTORY;
++if((mask == 0xbeef && isdir) || (mask == 0xcafe && !isdir))
++    files.push_back(fn->d_name);
++#endif
+     }
+ 
+     closedir(dir);
+@@ -1215,6 +1227,18 @@ static rtosc::Ports middwareSnoopPorts = {
+         rBegin;
+         const char *folder = rtosc_argument(msg, 0).s;
+ 
++#ifdef WIN32
++#ifdef S_IFREG
++#undef S_IFREG
++#endif
++#define S_IFREG 0xcafe
++
++#ifdef S_IFDIR
++#undef S_IFDIR
++#endif
++#define S_IFDIR 0xbeef
++#endif
++
+         auto files = getFiles(folder, S_IFREG);
+ 
+         const int N = files.size();
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 21f84c09..a39ea3fc 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -103,14 +103,14 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+             wsock32
+             "-static" iphlpapi
+             "-static" winpthread)
++else()
++    set(PLATFORM_LIBRARIES X11 GL)
+ endif()
+ 
+ #target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+ #    ${PLATFORM_LIBRARIES})
+ target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+-    ${PLATFORM_LIBRARIES}
+-    X11
+-    GL)
++    ${PLATFORM_LIBRARIES})
+ 
+ #install(TARGETS ZynAddSubFX_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
+ #install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+-- 
+2.47.0
+

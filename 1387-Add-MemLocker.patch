@@ -1,0 +1,162 @@
+From b5f6a4049a4b9daaacdcc9861f94c2be0d658a58 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Mon, 1 Jul 2019 03:34:46 +0200
+Subject: [PATCH 1387/1936] Add MemLocker
+
+---
+ src/Misc/CMakeLists.txt |  1 +
+ src/Misc/MemLocker.cpp  | 59 +++++++++++++++++++++++++++++++++++++++++
+ src/Misc/MemLocker.h    | 30 +++++++++++++++++++++
+ src/main.cpp            |  7 +++++
+ 4 files changed, 97 insertions(+)
+ create mode 100644 src/Misc/MemLocker.cpp
+ create mode 100644 src/Misc/MemLocker.h
+
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index 9a150500..603e4678 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -17,6 +17,7 @@ set(zynaddsubfx_misc_SRCS
+     Misc/Allocator.cpp
+     Misc/CallbackRepeater.cpp
+     Misc/Schema.cpp
++    Misc/MemLocker.cpp
+ )
+ 
+ 
+diff --git a/src/Misc/MemLocker.cpp b/src/Misc/MemLocker.cpp
+new file mode 100644
+index 00000000..dec1c68a
+--- /dev/null
++++ b/src/Misc/MemLocker.cpp
+@@ -0,0 +1,59 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  MemLocker.cpp - Memory page locker
++  Copyright (C) 2019-2019 Johannes Lorenz
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#include "MemLocker.h"
++
++#ifndef WIN32
++#include <cstdio>
++#include <sys/mman.h>
++#endif
++
++namespace zyn {
++
++void MemLocker::lock()
++{
++#ifndef WIN32
++    if (!isLocked)
++    {
++        if (mlockall (MCL_CURRENT | MCL_FUTURE)) {
++            perror ("Warning: Can not lock memory");
++        } else {
++            isLocked = true;
++        }
++    }
++#endif
++}
++
++void MemLocker::unlock()
++{
++#ifndef WIN32
++    if (isLocked)
++    {
++        if (munlockall ()) {
++            perror ("Warning: Can not unlock memory");
++        } else {
++            isLocked = false;
++        }
++    }
++#endif
++}
++
++}
+diff --git a/src/Misc/MemLocker.h b/src/Misc/MemLocker.h
+new file mode 100644
+index 00000000..b5e87fcc
+--- /dev/null
++++ b/src/Misc/MemLocker.h
+@@ -0,0 +1,30 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  MemLocker.h - Memory page locker
++  Copyright (C) 2019-2019 Johannes Lorenz
++  Author: Johannes Lorenz
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++namespace zyn {
++
++//! Class to lock all pages in memory 
++class MemLocker
++{
++	bool isLocked = false;
++public:
++	MemLocker() = default;
++	~MemLocker() { unlock(); }
++	
++	//! try to lock all current and future pages, if not already locked
++	void lock();
++	//! try to unlock all pages, if locked
++	void unlock();
++};
++
++}
+diff --git a/src/main.cpp b/src/main.cpp
+index 2ff509a2..c5f627df 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -36,6 +36,7 @@
+ #include "Params/PADnoteParameters.h"
+ 
+ #include "DSP/FFTwrapper.h"
++#include "Misc/MemLocker.h"
+ #include "Misc/PresetExtractor.h"
+ #include "Misc/Master.h"
+ #include "Misc/Part.h"
+@@ -761,6 +762,9 @@ int main(int argc, char *argv[])
+     }
+ #endif
+ 
++    MemLocker mem_locker;
++    mem_locker.lock();
++
+     printf("[INFO] Main Loop...\n");
+     bool already_exited = false;
+     while(Pexitprogram == 0) {
+@@ -814,6 +818,9 @@ done:
+ #endif
+ #endif
+     }
++
++    mem_locker.unlock();
++
+ #ifdef ZEST_GUI
+ #ifndef WIN32
+     if(!already_exited) {
+-- 
+2.47.0
+

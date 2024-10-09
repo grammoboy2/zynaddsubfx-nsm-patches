@@ -1,0 +1,54 @@
+From 12a84b1cf24ccd4eefbfd02dc31bd214bbe25060 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 17 Jun 2023 13:54:08 +0200
+Subject: [PATCH 1923/1936] Avoid -0.f when reading old savefiles
+
+By turning the formulae around, we avoid -0.f and get +0.f, which helps
+with issues when comparing savefiles.
+
+Partial fixup for 0e3d5ef06ee9edd39b5f71532d30e576cfff89e6 .
+---
+ src/Params/ADnoteParameters.cpp  | 4 ++--
+ src/Params/SUBnoteParameters.cpp | 4 +---
+ 2 files changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 5d22cbb6..5afc78b8 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -982,7 +982,7 @@ void ADnoteGlobalParam::getfromXML(XMLwrapper& xml)
+ 
+         if (upgrade_3_0_3) {
+             int vol = xml.getpar127("volume", 0);
+-            Volume = 12.0412f - 60.0f * ( 1.0f - vol / 96.0f);
++            Volume = 12.0412f + 60.0f * (vol / 96.0f - 1.0f);
+         } else if (upgrade_3_0_5) {
+             printf("file version less than 3.0.5\n");
+             Volume = 12.0412f + xml.getparreal("volume", Volume);
+@@ -1285,7 +1285,7 @@ void ADnoteVoiceParam::getfromXML(XMLwrapper& xml, unsigned nvoice)
+ 
+         if (upgrade_3_0_3) {
+             int vol = xml.getpar127("volume", 0);
+-            volume    = -60.0f * ( 1.0f - vol / 127.0f);
++            volume    = 60.0f * (vol / 127.0f - 1.0f);
+         } else {
+             volume    = xml.getparreal("volume", volume);
+         }
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index f9bac648..cc5f888e 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -577,9 +577,7 @@ void SUBnoteParameters::getfromXML(XMLwrapper& xml)
+             (!xml.hasparreal("volume"));
+         if (upgrade_3_0_3) {
+             int vol = xml.getpar127("volume", 0);
+-            Volume    = -60.0f * ( 1.0f - vol / 96.0f);
+-            if(Volume == -0.f)
+-                Volume = 0.f;
++            Volume    = 60.0f * (vol / 96.0f - 1.0f);
+         } else {
+             Volume    = xml.getparreal("volume", Volume);
+         }
+-- 
+2.47.0
+

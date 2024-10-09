@@ -1,0 +1,25 @@
+From dae91e826e9692a5320296154e399a53a2fb7069 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 24 Jul 2016 12:31:46 -0400
+Subject: [PATCH 0972/1936] Clear Active Notes On Panic
+
+---
+ src/Misc/Master.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index d36a4302..2fd91c59 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -998,6 +998,8 @@ void Master::ShutUp()
+         insefx[nefx]->cleanup();
+     for(int nefx = 0; nefx < NUM_SYS_EFX; ++nefx)
+         sysefx[nefx]->cleanup();
++    for(int i = 0; i < sizeof(activeNotes)/sizeof(activeNotes[0]); ++i)
++        activeNotes[i] = 0;
+     vuresetpeaks();
+     shutup = 0;
+ }
+-- 
+2.47.0
+

@@ -1,0 +1,139 @@
+From cd8d466ee133b59384d7a1e71af0242d0f9955c8 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sat, 27 Feb 2021 13:01:25 +0100
+Subject: [PATCH 1715/1936] fix tests to match corrected forced release timing
+
+---
+ src/Tests/AdNoteTest.h  | 22 ++++++++++++++++------
+ src/Tests/PadNoteTest.h |  8 ++++----
+ src/Tests/SubNoteTest.h |  6 +++---
+ 3 files changed, 23 insertions(+), 13 deletions(-)
+
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index 7386fe49..8e9080c7 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -59,12 +59,14 @@ class AdNoteTest:public CxxTest::TestSuite
+         void randomize_params(void) {
+             lfop->Pintensity  = randval(0,255);
+             lfop->Pstartphase = randval(0,255);
+-            lfop->Pcutoff     = randval(0,255);
++            lfop->Pcutoff     = randval(0,127);
+             lfop->PLFOtype    = randval(0,6);
+             lfop->Prandomness = randval(0,255);
+             lfop->Pfreqrand   = randval(0,255);
+             lfop->Pcontinous  = randval(0,1);
+             lfop->Pstretch    = randval(0,255);
++            lfop->fel         = (consumer_location_type_t) randval(1,2);
++            
+         }
+ 
+         void run_lfo_randomtest(void)
+@@ -72,7 +74,15 @@ class AdNoteTest:public CxxTest::TestSuite
+             lfo  = new LFO(*lfop, 440.0f, *time);
+             for(int i=0; i<100; ++i) {
+                 float out = lfo->lfoout();
+-                TS_ASSERT((-2.0f < out && out < 2.0f));
++                switch(lfop->fel)
++                {
++                    case consumer_location_type_t::amp:
++                        TS_ASSERT((-2.0f < out && out < 2.0f));
++                        break;
++                    case consumer_location_type_t::filter:
++                        TS_ASSERT((-8.0f < out && out < 8.0f));
++                        break;
++                }
+             }
+         }
+ 
+@@ -171,15 +181,15 @@ class AdNoteTest:public CxxTest::TestSuite
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             w->tick();
+-            TS_ASSERT_DELTA(outL[255], 0.0592f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.0646f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.0989f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.1183f, 0.0001f);
+             w->tick();
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0901f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.1169f, 0.0001f);
+             w->tick();
+ 
+             TS_ASSERT(tr->hasNext());
+@@ -203,7 +213,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             file.close();
+ #endif
+ 
+-            TS_ASSERT_EQUALS(sampleCount, 9472);
++            TS_ASSERT_EQUALS(sampleCount, 30208);
+ 
+               lfop = new LFOParams();
+             lfop->fel  = zyn::consumer_location_type_t::amp;
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index bd2300fd..0e7c6518 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -166,15 +166,15 @@ class PadNoteTest:public CxxTest::TestSuite
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0754f, 0.0005f);
++            TS_ASSERT_DELTA(outL[255], -0.1164f, 0.0005f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.0448f, 0.0005f);
++            TS_ASSERT_DELTA(outL[255], 0.1079, 0.0005f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.0220f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.0841f, 0.0001f);
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+@@ -190,7 +190,7 @@ class PadNoteTest:public CxxTest::TestSuite
+             file.close();
+ #endif
+ 
+-            TS_ASSERT_EQUALS(sampleCount, 2304);
++            TS_ASSERT_EQUALS(sampleCount, 5888);
+         }
+ 
+         void testInitialization() {
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index 84c868ab..5cde4440 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -141,12 +141,12 @@ class SubNoteTest:public CxxTest::TestSuite
+             w->add_watch("noteout/amp_int");
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0020f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.0031f, 0.0001f);
+             w->tick();
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0005f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.0013f, 0.0001f);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+             TS_ASSERT_EQUALS(string("noteout/amp_int"), tr->read());
+@@ -165,7 +165,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             file.close();
+ #endif
+ 
+-            TS_ASSERT_EQUALS(sampleCount, 2304);
++            TS_ASSERT_EQUALS(sampleCount, 5888);
+         }
+ 
+ #define OUTPUT_PROFILE
+-- 
+2.47.0
+

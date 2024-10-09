@@ -1,0 +1,37 @@
+From 88d0a267ead1b5b31a449f8a65c0153ae6030e54 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 21 Feb 2015 13:48:38 -0500
+Subject: [PATCH 0342/1936] Middleware: Keep Part Kit Info In Sync
+
+- Kit info previously got out of sync when master was replaced
+---
+ src/Misc/MiddleWare.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 0babd93f..6d3d178b 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -667,6 +667,8 @@ public:
+         //Update resource locator table
+         obj_store.clear();
+         obj_store.extractMaster(m);
++        for(int i=0; i<NUM_MIDI_PARTS; ++i)
++            kits.extractPart(m->part[i], i);
+ 
+         master = m;
+ 
+@@ -999,6 +1001,10 @@ void MiddleWareImpl::handleMsg(const char *msg)
+     assert(msg && *msg && rindex(msg, '/')[1]);
+     assert(strcmp(msg, "/part0/Psysefxvol"));
+     assert(strcmp(msg, "/Penabled"));
++    assert(strcmp(msg, "part0/part0/Ppanning"));
++    assert(strcmp(msg, "sysefx0sysefx0/preset"));
++    assert(strcmp(msg, "/sysefx0preset"));
++    assert(strcmp(msg, "Psysefxvol0/part0"));
+     //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 6 + 30, 0 + 40);
+     //fprintf(stdout, "middleware: '%s':%s\n", msg, rtosc_argument_string(msg));
+     //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+-- 
+2.47.0
+

@@ -1,0 +1,47 @@
+From 187ae9e1752f5aa3d0dcda110b7fa611929b84aa Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sun, 22 Dec 2019 14:32:41 +0100
+Subject: [PATCH 1456/1936] fix in distorsion function 7 (limiter) and new
+ waveshapers in oscilgen
+
+---
+ rtosc                      | 2 +-
+ src/Misc/WaveShapeSmps.cpp | 1 +
+ src/Synth/OscilGen.cpp     | 2 +-
+ 3 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 604de85e..6a65b244 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 604de85ec2ec18dd6e7566e123d9a677033e83ea
++Subproject commit 6a65b24469068a8f334567b72a3125bd1d7fd1b1
+diff --git a/src/Misc/WaveShapeSmps.cpp b/src/Misc/WaveShapeSmps.cpp
+index 070a3ba4..85ddc6d2 100644
+--- a/src/Misc/WaveShapeSmps.cpp
++++ b/src/Misc/WaveShapeSmps.cpp
+@@ -146,6 +146,7 @@ void waveShapeSmps(int n,
+                 else
+                     smps[i] = ( smps[i] < -ws ? -ws+res : smps[i]+res );
+                 // and substract the polyblamp-limited offset again: smps[i] = y - f(offs)
++                res = polyblampres(offs, ws, par);
+                 if (offs>=0)
+                     smps[i] -= ( offs >= ws ? ws-res : offs-res );
+                 else
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 3cb8d345..97635664 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -65,7 +65,7 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+             rOptions(Undistorted,
+                 Arctangent, Asymmetric, Pow, Sine, Quantisize,
+                 Zigzag, Limiter, Upper Limiter, Lower Limiter,
+-                Inverse Limiter, Clip, Asym2, Pow2, sigmoid),
++                Inverse Limiter, Clip, Asym2, Pow2, sigmoid, Tanh, Cubic, Square),
+             "Shape of distortion to be applied"),
+     rOption(Pfiltertype, rShort("filter"), rOptions(No Filter,
+             lp, hp1, hp1b, bp1, bs1, lp2, hp2, bp2, bs2,
+-- 
+2.47.0
+

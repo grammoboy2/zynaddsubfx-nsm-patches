@@ -1,0 +1,57 @@
+From 82a0f9859c253cf0ce439e074bb7932facfc08c5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 27 Jul 2017 18:54:18 -0400
+Subject: [PATCH 1183/1936] Fix oscdoc command line arg
+
+---
+ src/Misc/Master.cpp | 6 +++---
+ src/main.cpp        | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index afdb790e..07d024f4 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -178,7 +178,7 @@ static const Ports auto_param_ports = {
+         int param = d.idx[0];
+         d.reply(d.loc, "s", a.slots[slot].automations[param].param_path);
+         rEnd},
+-    {"clear:", 0, 0,
++    {"clear:", rDoc("Clear automation param"), 0,
+         rBegin;
+         int slot = d.idx[1];
+         int param = d.idx[0];
+@@ -260,7 +260,7 @@ static const Ports slot_ports = {
+         int slot = d.idx[0];
+         d.reply(d.loc, "i", a.slots[slot].learning);
+         rEnd},
+-    {"clear:", 0, 0,
++    {"clear:", rDoc("Clear automation slot"), 0,
+         rBegin;
+         int slot = d.idx[0];
+         a.clearSlot(slot);
+@@ -306,7 +306,7 @@ static const Ports automate_ports = {
+         slot_ports.dispatch(msg, d);
+         d.pop_index();
+         rEnd},
+-    {"clear", 0, 0,
++    {"clear", rDoc("Clear all automation slots"), 0,
+         rBegin;
+         for(int i=0; i<a.nslots; ++i)
+             a.clearSlot(i);
+diff --git a/src/main.cpp b/src/main.cpp
+index 24556daf..259a8144 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -329,7 +329,7 @@ int wmidi = -1;
+         /**\todo check this process for a small memory leak*/
+         opt = getopt_long(argc,
+                           argv,
+-                          "l:L:M:r:b:o:I:O:N:e:P:A:D:hvapSDUYZ",
++                          "l:L:M:r:b:o:I:O:N:e:P:A:d:D:hvapSDUYZ",
+                           opts,
+                           &option_index);
+         char *optarguments = optarg;
+-- 
+2.47.0
+

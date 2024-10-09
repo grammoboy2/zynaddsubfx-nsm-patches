@@ -1,0 +1,95 @@
+From 2bc878c047ebc3575ab673ba0ba6e5207df0c312 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 22 Nov 2015 19:20:35 -0500
+Subject: [PATCH 0753/1936] Remove the mysterious never-implemented PITCH mod.
+
+---
+ src/Params/ADnoteParameters.h |  2 +-
+ src/Synth/ADnote.cpp          | 14 --------------
+ src/UI/ADnoteUI.fl            |  4 ----
+ 3 files changed, 1 insertion(+), 19 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index bd3088c8..3682cac1 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -27,7 +27,7 @@
+ #include "PresetsArray.h"
+ 
+ enum FMTYPE {
+-    NONE, MORPH, RING_MOD, PHASE_MOD, FREQ_MOD, PITCH_MOD
++    NONE, MORPH, RING_MOD, PHASE_MOD, FREQ_MOD
+ };
+ 
+ /*****************************************************************/
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 7b7db05b..d38a31c8 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -354,9 +354,6 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+             case 4:
+                 NoteVoicePar[nvoice].FMEnabled = FREQ_MOD;
+                 break;
+-            case 5:
+-                NoteVoicePar[nvoice].FMEnabled = PITCH_MOD;
+-                break;
+             default:
+                 NoteVoicePar[nvoice].FMEnabled = NONE;
+         }
+@@ -387,8 +384,6 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+                     (expf(pars.VoicePar[nvoice].PFMVolume / 127.0f
+                           * FM_AMP_MULTIPLIER) - 1.0f) * fmvoldamp * 4.0f;
+                 break;
+-            //    case PITCH_MOD:NoteVoicePar[nvoice].FMVolume=(pars.VoicePar[nvoice].PFMVolume/127.0f*8.0f)*fmvoldamp;//???????????
+-            //	          break;
+             default:
+                 if(fmvoldamp > 1.0f)
+                     fmvoldamp = 1.0f;
+@@ -565,8 +560,6 @@ void ADnote::legatonote(LegatoParams lpars)
+                     (expf(pars.VoicePar[nvoice].PFMVolume / 127.0f
+                           * FM_AMP_MULTIPLIER) - 1.0f) * fmvoldamp * 4.0f;
+                 break;
+-            //    case PITCH_MOD:NoteVoicePar[nvoice].FMVolume=(pars.VoicePar[nvoice].PFMVolume/127.0f*8.0f)*fmvoldamp;//???????????
+-            //	          break;
+             default:
+                 if(fmvoldamp > 1.0f)
+                     fmvoldamp = 1.0f;
+@@ -1457,12 +1450,6 @@ inline void ADnote::ComputeVoiceOscillatorFrequencyModulation(int nvoice,
+ }
+ 
+ 
+-/*Calculeaza Oscilatorul cu PITCH MODULATION*/
+-inline void ADnote::ComputeVoiceOscillatorPitchModulation(int /*nvoice*/)
+-{
+-//TODO
+-}
+-
+ /*
+  * Computes the Noise
+  */
+@@ -1531,7 +1518,6 @@ int ADnote::noteout(float *outl, float *outr)
+                     case FREQ_MOD:
+                         ComputeVoiceOscillatorFrequencyModulation(nvoice, 1);
+                         break;
+-                    //case PITCH_MOD:ComputeVoiceOscillatorPitchModulation(nvoice);break;
+                     default:
+                         ComputeVoiceOscillator_LinearInterpolation(nvoice);
+                         //if (config.cfg.Interpolation) ComputeVoiceOscillator_CubicInterpolation(nvoice);
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 1f2875c5..e44134af 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -513,10 +513,6 @@ o->redraw();}
+               label FM
+               xywh {80 80 100 20} labelfont 1
+             }
+-            MenuItem {} {
+-              label PITCH
+-              xywh {90 90 100 20} labelfont 1 deactivate
+-            }
+           }
+           Fl_Group {} {
+             label FREQUENCY open
+-- 
+2.47.0
+

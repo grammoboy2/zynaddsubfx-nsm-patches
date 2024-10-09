@@ -1,0 +1,39 @@
+From 5f4872d2980899e47669c6ad80836f82c4afd28c Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 03:35:52 +0200
+Subject: [PATCH 1491/1936] Don't compute SUBnote filter coefficients when
+ automation is enabled. This is done by computeallfiltercoefs(). Else we get
+ waveform discontinuity when changing pitch and velocity.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/SUBnote.cpp | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 5e4565d2..252a5a68 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -106,7 +106,7 @@ void SUBnote::setup(float freq,
+     volume     *= VelF(velocity, pars.AmpVelocityScaleFunction);
+     if(pars.PPanning != 0)
+         panning = pars.PPanning / 127.0f;
+-    else
++    else if (!legato)
+         panning = RND;
+ 
+     if(!legato) { //normal note
+@@ -310,7 +310,9 @@ void SUBnote::initfilter(bpfilter &filter,
+     filter.amp  = amp;
+     filter.freq = freq;
+     filter.bw   = bw;
+-    computefiltercoefs(filter, freq, bw, 1.0f);
++
++    if (!automation)
++        computefiltercoefs(filter, freq, bw, 1.0f);
+ }
+ 
+ /*
+-- 
+2.47.0
+

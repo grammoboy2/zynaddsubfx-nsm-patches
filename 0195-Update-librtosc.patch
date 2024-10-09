@@ -1,0 +1,19 @@
+From f92d9fd503c7dc424a42eedbe059e409a779a16a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 25 Jun 2014 12:06:51 -0400
+Subject: [PATCH 0195/1936] Update librtosc
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index a63e2b97..e40ae9fb 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit a63e2b97b8276658f1709769592eb2896eabfe8b
++Subproject commit e40ae9fb3730b8fa0d759a40cef6968a48e70696
+-- 
+2.47.0
+

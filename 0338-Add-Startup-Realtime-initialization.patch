@@ -1,0 +1,24 @@
+From 906204fccf6070408bc38b66bda3e89d02cbf0d1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 21 Feb 2015 12:08:05 -0500
+Subject: [PATCH 0338/1936] Add Startup Realtime initialization
+
+---
+ src/main.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index d517dda8..32b2cb4b 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -401,6 +401,7 @@ int main(int argc, char *argv[])
+         }
+         else {
+             master->part[loadtopart]->applyparameters();
++            master->part[loadtopart]->initialize_rt();
+             cout << "Instrument file loaded." << endl;
+         }
+     }
+-- 
+2.47.0
+

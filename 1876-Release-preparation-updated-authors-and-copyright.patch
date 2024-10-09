@@ -1,0 +1,57 @@
+From cc193b488dda356f6399260aa3e00e65251f2ec6 Mon Sep 17 00:00:00 2001
+From: Philippe Gervais <philippe.n.gervais@free.fr>
+Date: Sat, 1 Apr 2023 19:50:31 +0200
+Subject: [PATCH 1876/1936] Release preparation: updated authors and copyright
+
+---
+ AUTHORS.txt        | 7 ++++++-
+ src/UI/MasterUI.fl | 4 ++--
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/AUTHORS.txt b/AUTHORS.txt
+index 01fc07b6..075a72b9 100644
+--- a/AUTHORS.txt
++++ b/AUTHORS.txt
+@@ -47,7 +47,7 @@ Contributors:
+         Kinichiro Inoguchi (Added Sndio input&output engine, build/cmake fixes)
+         Carlo Bramini (Fixed several cygwin build issues)
+         Simon van der Veldt (fixed missing cmake dependency)
+-        Philippe Gervais (Documentation Fixes)
++        Philippe Gervais (Documentation Fixes, UI bug fixes)
+         Carlo Bramini (Windows config fix)
+         AnClark (Zest fixes)
+         Grahm Breed (Fix MIDI note 0 not turning on)
+@@ -56,3 +56,8 @@ Contributors:
+                                       legato fixes, portamento upgrades)
+         Plagiat Gang of Bros (Fixed NSM JACK-MULTI client naming)
+         Julien Olivain (Fixed gcc warnings)
++        ORL - AMMD (NSM fixes)
++        DancesWithBugs (Fixed typos)
++        David Runge (Fixed Arch Linux support)
++        Michele Sorcinelli (Fixed inconsistency in MSB/LSB selection)
++        Nik Nyby (Code cleanup)
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 9dea22ca..b639649f 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -2,7 +2,7 @@
+ version 1.0302
+ header_name {.h}
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2009 Nasca Octavian Paul - (c) 2009-2021 Mark McCurry} {private local
++decl {//Copyright (c) 2002-2009 Nasca Octavian Paul - (c) 2009-2023 Mark McCurry} {private local
+ }
+ 
+ decl {//License: GNU GPL version 2 or later} {private local
+@@ -897,7 +897,7 @@ panelwindow->show();}
+       xywh {411 344 365 280} type Double hide
+     } {
+       Fl_Box {} {
+-        label {Copyright (c) 2002-2009 Nasca O. PAUL, 2009-2021 Mark McCurry, and others. Please read AUTHORS.txt}
++        label {Copyright (c) 2002-2009 Nasca O. PAUL, 2009-2023 Mark McCurry, and others. Please read AUTHORS.txt}
+         xywh {15 35 335 55} labeltype EMBOSSED_LABEL labelsize 15 align 208
+       }
+       Fl_Box {} {
+-- 
+2.47.0
+

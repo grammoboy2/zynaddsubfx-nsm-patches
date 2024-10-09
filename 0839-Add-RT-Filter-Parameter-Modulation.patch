@@ -1,0 +1,1031 @@
+From 5c5207a72a1ae04186f1ac7c1afc62e6c8cc93ef Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 3 Feb 2016 11:55:18 -0500
+Subject: [PATCH 0839/1936] Add RT Filter Parameter Modulation
+
+Filter Parameters can now be modified and reflected in the realtime
+instance.
+- Filter category can be changed
+- Filter Q can be changed (sounds a little rough with svfilter)
+- Filter cuttoff can be changed
+- Filter tracking can be changed
+- Filter gain should be able to be changed
+- Filter velocity tracking cannot be changed (yet)
+---
+ src/DSP/AnalogFilter.cpp    |   8 +-
+ src/DSP/Filter.cpp          |   2 +-
+ src/DSP/Filter.h            |   2 +-
+ src/DSP/FormantFilter.cpp   |   4 +-
+ src/DSP/FormantFilter.h     |   3 +-
+ src/DSP/SVFilter.cpp        |   2 +-
+ src/Params/FilterParams.cpp |  22 ++---
+ src/Params/FilterParams.h   |  22 ++---
+ src/Synth/ADnote.cpp        | 170 +++++++++++++++---------------------
+ src/Synth/ADnote.h          |  24 ++---
+ src/Synth/CMakeLists.txt    |   1 +
+ src/Synth/PADnote.cpp       |  63 ++++++-------
+ src/Synth/PADnote.h         |  12 +--
+ src/Synth/SUBnote.cpp       | 100 +++++++++------------
+ src/Synth/SUBnote.h         |  13 ++-
+ src/globals.h               |   6 ++
+ 16 files changed, 192 insertions(+), 262 deletions(-)
+
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index 23a5963c..72383988 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -323,9 +323,11 @@ void AnalogFilter::setstages(int stages_)
+ {
+     if(stages_ >= MAX_FILTER_STAGES)
+         stages_ = MAX_FILTER_STAGES - 1;
+-    stages = stages_;
+-    cleanup();
+-    computefiltercoefs();
++    if(stages_  != stages) {
++        stages = stages_;
++        cleanup();
++        computefiltercoefs();
++    }
+ }
+ 
+ inline void AnalogBiquadFilterA(const float coeff[5], float &src, float work[4])
+diff --git a/src/DSP/Filter.cpp b/src/DSP/Filter.cpp
+index 883cbfdd..924972ae 100644
+--- a/src/DSP/Filter.cpp
++++ b/src/DSP/Filter.cpp
+@@ -39,7 +39,7 @@ Filter::Filter(unsigned int srate, int bufsize)
+     alias();
+ }
+ 
+-Filter *Filter::generate(Allocator &memory, FilterParams *pars,
++Filter *Filter::generate(Allocator &memory, const FilterParams *pars,
+         unsigned int srate, int bufsize)
+ {
+     assert(srate != 0);
+diff --git a/src/DSP/Filter.h b/src/DSP/Filter.h
+index 848981f1..c668211d 100644
+--- a/src/DSP/Filter.h
++++ b/src/DSP/Filter.h
+@@ -29,7 +29,7 @@ class Filter
+ {
+     public:
+         static float getrealfreq(float freqpitch);
+-        static Filter *generate(class Allocator &memory, class FilterParams *pars,
++        static Filter *generate(Allocator &memory, const FilterParams *pars,
+                 unsigned int srate, int bufsize);
+ 
+         Filter(unsigned int srate, int bufsize);
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index 4773106e..46bc3c6e 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -28,8 +28,8 @@
+ #include "AnalogFilter.h"
+ #include "../Params/FilterParams.h"
+ 
+-FormantFilter::FormantFilter(FilterParams *pars, Allocator *alloc, unsigned int srate, int bufsize)
+-    : Filter(srate, bufsize), memory(*alloc)
++FormantFilter::FormantFilter(const FilterParams *pars, Allocator *alloc, unsigned int srate, int bufsize)
++    :Filter(srate, bufsize), memory(*alloc)
+ {
+     numformants = pars->Pnumformants;
+     for(int i = 0; i < numformants; ++i)
+diff --git a/src/DSP/FormantFilter.h b/src/DSP/FormantFilter.h
+index ad8d6dd9..261625be 100644
+--- a/src/DSP/FormantFilter.h
++++ b/src/DSP/FormantFilter.h
+@@ -27,11 +27,10 @@
+ #include "Filter.h"
+ 
+ 
+-class Allocator;
+ class FormantFilter:public Filter
+ {
+     public:
+-        FormantFilter(class FilterParams *pars, Allocator *alloc, unsigned int srate, int bufsize);
++        FormantFilter(const FilterParams *pars, Allocator *alloc, unsigned int srate, int bufsize);
+         ~FormantFilter();
+         void filterout(float *smp);
+         void setfreq(float frequency);
+diff --git a/src/DSP/SVFilter.cpp b/src/DSP/SVFilter.cpp
+index cc78d378..cabc633a 100644
+--- a/src/DSP/SVFilter.cpp
++++ b/src/DSP/SVFilter.cpp
+@@ -85,7 +85,7 @@ void SVFilter::setfreq(float frequency)
+     bool nyquistthresh = (abovenq ^ oldabovenq);
+ 
+     //if the frequency is changed fast, it needs interpolation
+-    if((rap > 3.0f) || nyquistthresh) { //(now, filter and coeficients backup)
++    if((rap > 3.0f) || nyquistthresh) { //(now, filter and coefficients backup)
+         if(!firsttime)
+             needsinterpolation = true;
+         ipar = par;
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index be9f45ac..e719228c 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -237,21 +237,21 @@ void FilterParams::getfromFilterParams(FilterParams *pars)
+ /*
+  * Parameter control
+  */
+-float FilterParams::getfreq()
++float FilterParams::getfreq() const
+ {
+     return (Pfreq / 64.0f - 1.0f) * 5.0f;
+ }
+ 
+-float FilterParams::getq()
++float FilterParams::getq() const
+ {
+     return expf(powf((float) Pq / 127.0f, 2) * logf(1000.0f)) - 0.9f;
+ }
+-float FilterParams::getfreqtracking(float notefreq)
++float FilterParams::getfreqtracking(float notefreq) const
+ {
+     return logf(notefreq / 440.0f) * (Pfreqtrack - 64.0f) / (64.0f * LOG_2);
+ }
+ 
+-float FilterParams::getgain()
++float FilterParams::getgain() const
+ {
+     return (Pgain / 64.0f - 1.0f) * 30.0f; //-30..30dB
+ }
+@@ -259,7 +259,7 @@ float FilterParams::getgain()
+ /*
+  * Get the center frequency of the formant's graph
+  */
+-float FilterParams::getcenterfreq()
++float FilterParams::getcenterfreq() const
+ {
+     return 10000.0f * powf(10, -(1.0f - Pcenterfreq / 127.0f) * 2.0f);
+ }
+@@ -267,7 +267,7 @@ float FilterParams::getcenterfreq()
+ /*
+  * Get the number of octave that the formant functions applies to
+  */
+-float FilterParams::getoctavesfreq()
++float FilterParams::getoctavesfreq() const
+ {
+     return 0.25f + 10.0f * Poctavesfreq / 127.0f;
+ }
+@@ -275,7 +275,7 @@ float FilterParams::getoctavesfreq()
+ /*
+  * Get the frequency from x, where x is [0..1]
+  */
+-float FilterParams::getfreqx(float x)
++float FilterParams::getfreqx(float x) const
+ {
+     if(x > 1.0f)
+         x = 1.0f;
+@@ -286,7 +286,7 @@ float FilterParams::getfreqx(float x)
+ /*
+  * Get the x coordinate from frequency (used by the UI)
+  */
+-float FilterParams::getfreqpos(float freq)
++float FilterParams::getfreqpos(float freq) const
+ {
+     return (logf(freq) - logf(getfreqx(0.0f))) / logf(2.0f) / getoctavesfreq();
+ }
+@@ -294,19 +294,19 @@ float FilterParams::getfreqpos(float freq)
+ /*
+  * Transforms a parameter to the real value
+  */
+-float FilterParams::getformantfreq(unsigned char freq)
++float FilterParams::getformantfreq(unsigned char freq) const
+ {
+     float result = getfreqx(freq / 127.0f);
+     return result;
+ }
+ 
+-float FilterParams::getformantamp(unsigned char amp)
++float FilterParams::getformantamp(unsigned char amp) const
+ {
+     float result = powf(0.1f, (1.0f - amp / 127.0f) * 4.0f);
+     return result;
+ }
+ 
+-float FilterParams::getformantq(unsigned char q)
++float FilterParams::getformantq(unsigned char q) const
+ {
+     //temp
+     float result = powf(25.0f, (q - 32.0f) / 64.0f);
+diff --git a/src/Params/FilterParams.h b/src/Params/FilterParams.h
+index a7c08fec..a3fad037 100644
+--- a/src/Params/FilterParams.h
++++ b/src/Params/FilterParams.h
+@@ -48,10 +48,10 @@ class FilterParams:public PresetsArray
+ 
+         void getfromFilterParams(FilterParams *pars);
+ 
+-        float getfreq();
+-        float getq();
+-        float getfreqtracking(float notefreq);
+-        float getgain();
++        float getfreq() const ;
++        float getq() const ;
++        float getfreqtracking(float notefreq) const ;
++        float getgain() const ;
+ 
+         unsigned char Pcategory; //Filter category (Analog/Formant/StVar)
+         unsigned char Ptype; // Filter type  (for analog lpf,hpf,bpf..)
+@@ -80,14 +80,14 @@ class FilterParams:public PresetsArray
+             unsigned char nvowel; //the vowel from the position
+         } Psequence[FF_MAX_SEQUENCE];
+ 
+-        float getcenterfreq();
+-        float getoctavesfreq();
+-        float getfreqpos(float freq);
+-        float getfreqx(float x);
++        float getcenterfreq() const ;
++        float getoctavesfreq() const ;
++        float getfreqpos(float freq) const ;
++        float getfreqx(float x) const ;
+ 
+-        float getformantfreq(unsigned char freq);
+-        float getformantamp(unsigned char amp);
+-        float getformantq(unsigned char q);
++        float getformantfreq(unsigned char freq) const ;
++        float getformantamp(unsigned char amp) const ;
++        float getformantq(unsigned char q) const ;
+ 
+         void defaults(int n);
+ 
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index d624077e..2bf96277 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -29,9 +29,8 @@
+ #include "../globals.h"
+ #include "../Misc/Util.h"
+ #include "../Misc/Allocator.h"
+-#include "../DSP/Filter.h"
+ #include "../Params/ADnoteParameters.h"
+-#include "../Params/FilterParams.h"
++#include "ModFilter.h"
+ #include "OscilGen.h"
+ #include "ADnote.h"
+ 
+@@ -63,13 +62,6 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+         NoteGlobalPar.Panning = pars.GlobalPar.PPanning / 128.0f;
+ 
+ 
+-    NoteGlobalPar.FilterCenterPitch = pars.GlobalPar.GlobalFilter->getfreq() //center freq
+-                                      + pars.GlobalPar.PFilterVelocityScale
+-                                      / 127.0f * 6.0f       //velocity sensing
+-                                      * (VelF(velocity,
+-                                              pars.GlobalPar.
+-                                              PFilterVelocityScaleFunction) - 1);
+-
+     NoteGlobalPar.Fadein_adjustment =
+         pars.GlobalPar.Fadein_adjustment / (float)FADEIN_ADJUSTMENT_SCALE;
+     NoteGlobalPar.Fadein_adjustment *= NoteGlobalPar.Fadein_adjustment;
+@@ -373,17 +365,10 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+         NoteVoicePar[nvoice].AmpLfo      = NULL;
+         NoteVoicePar[nvoice].AmpEnvelope = NULL;
+ 
+-        NoteVoicePar[nvoice].VoiceFilterL   = NULL;
+-        NoteVoicePar[nvoice].VoiceFilterR   = NULL;
++        NoteVoicePar[nvoice].Filter         = NULL;
+         NoteVoicePar[nvoice].FilterEnvelope = NULL;
+         NoteVoicePar[nvoice].FilterLfo      = NULL;
+ 
+-        NoteVoicePar[nvoice].FilterCenterPitch =
+-            pars.VoicePar[nvoice].VoiceFilter->getfreq()
+-            + pars.VoicePar[nvoice].PFilterVelocityScale
+-            / 127.0f * 6.0f       //velocity sensing
+-            * (VelF(velocity,
+-                    pars.VoicePar[nvoice].PFilterVelocityScaleFunction) - 1);
+         NoteVoicePar[nvoice].filterbypass =
+             pars.VoicePar[nvoice].Pfilterbypass;
+ 
+@@ -514,13 +499,9 @@ void ADnote::legatonote(LegatoParams lpars)
+     else
+         NoteGlobalPar.Panning = pars.GlobalPar.PPanning / 128.0f;
+ 
+-    //center freq
+-    NoteGlobalPar.FilterCenterPitch = pars.GlobalPar.GlobalFilter->getfreq()
+-                                      + pars.GlobalPar.PFilterVelocityScale
+-                                      / 127.0f * 6.0f          //velocity sensing
+-                                      * (VelF(velocity,
+-                                              pars.GlobalPar.
+-                                              PFilterVelocityScaleFunction) - 1);
++    NoteGlobalPar.Filter->updateSense(velocity, 
++                pars.GlobalPar.PFilterVelocityScale,
++                pars.GlobalPar.PFilterVelocityScaleFunction);
+ 
+ 
+     for(int nvoice = 0; nvoice < NUM_VOICES; ++nvoice) {
+@@ -580,13 +561,12 @@ void ADnote::legatonote(LegatoParams lpars)
+                                           + i] =
+                 NoteVoicePar[nvoice].OscilSmp[i];
+ 
+-
+-        NoteVoicePar[nvoice].FilterCenterPitch =
+-            pars.VoicePar[nvoice].VoiceFilter->getfreq()
+-            + pars.VoicePar[nvoice].PFilterVelocityScale
+-            / 127.0f * 6.0f       //velocity sensing
+-            * (VelF(velocity,
+-                    pars.VoicePar[nvoice].PFilterVelocityScaleFunction) - 1);
++        auto &voiceFilter = NoteVoicePar[nvoice].Filter;
++        if(voiceFilter) {
++            const auto  &vce     = pars.VoicePar[nvoice];
++            voiceFilter->updateSense(velocity, vce.PFilterVelocityScale,
++                        vce.PFilterVelocityScaleFunction);
++        }
+ 
+         NoteVoicePar[nvoice].filterbypass =
+             pars.VoicePar[nvoice].Pfilterbypass;
+@@ -653,9 +633,12 @@ void ADnote::legatonote(LegatoParams lpars)
+                          * NoteGlobalPar.AmpEnvelope->envout_dB()
+                          * NoteGlobalPar.AmpLfo->amplfoout();
+ 
+-    NoteGlobalPar.FilterQ = pars.GlobalPar.GlobalFilter->getq();
+-    NoteGlobalPar.FilterFreqTracking =
+-        pars.GlobalPar.GlobalFilter->getfreqtracking(basefreq);
++    {
++        auto        *filter  = NoteGlobalPar.Filter;
++        filter->updateSense(velocity, pars.GlobalPar.PFilterVelocityScale,
++                            pars.GlobalPar.PFilterVelocityScaleFunction);
++        filter->updateNoteFreq(basefreq);
++    }
+ 
+     // Forbids the Modulation Voice to be greater or equal than voice
+     for(int i = 0; i < NUM_VOICES; ++i)
+@@ -693,10 +676,12 @@ void ADnote::legatonote(LegatoParams lpars)
+         if(pars.VoicePar[nvoice].PAmpLfoEnabled && NoteVoicePar[nvoice].AmpLfo)
+             newamplitude[nvoice] *= NoteVoicePar[nvoice].AmpLfo->amplfoout();
+ 
+-
+-
+-        NoteVoicePar[nvoice].FilterFreqTracking =
+-            pars.VoicePar[nvoice].VoiceFilter->getfreqtracking(basefreq);
++        auto *voiceFilter = NoteVoicePar[nvoice].Filter;
++        if(voiceFilter) {
++            voiceFilter->updateSense(velocity, pars.VoicePar[nvoice].PFilterVelocityScale,
++                                     pars.VoicePar[nvoice].PFilterVelocityScaleFunction);
++            voiceFilter->updateNoteFreq(basefreq);
++        }
+ 
+         /* Voice Modulation Parameters Init */
+         if((NoteVoicePar[nvoice].FMEnabled != NONE)
+@@ -857,21 +842,24 @@ void ADnote::initparameters()
+             vce.FreqLfo = memory.alloc<LFO>(*param.FreqLfo, basefreq, time);
+ 
+         /* Voice Filter Parameters Init */
+-        if(param.PFilterEnabled != 0) {
+-            vce.VoiceFilterL = Filter::generate(memory, param.VoiceFilter,
+-                    synth.samplerate, synth.buffersize);
+-            vce.VoiceFilterR = Filter::generate(memory, param.VoiceFilter,
+-                    synth.samplerate, synth.buffersize);
+-        }
++        if(param.PFilterEnabled) {
++            vce.Filter = memory.alloc<ModFilter>(*param.VoiceFilter, synth, time, memory, stereo,
++                      basefreq);
++            vce.Filter->updateSense(velocity, param.PFilterVelocityScale,
++                    param.PFilterVelocityScaleFunction);
+ 
+-        if(param.PFilterEnvelopeEnabled)
+-            vce.FilterEnvelope = memory.alloc<Envelope>(*param.FilterEnvelope, basefreq, synth.dt());
+ 
+-        if(param.PFilterLfoEnabled)
+-            vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq, time);
++            if(param.PFilterEnvelopeEnabled) {
++                vce.FilterEnvelope =
++                    memory.alloc<Envelope>(*param.FilterEnvelope, basefreq, synth.dt());
++                vce.Filter->addMod(*vce.FilterEnvelope);
++            }
+ 
+-        vce.FilterFreqTracking =
+-            param.VoiceFilter->getfreqtracking(basefreq);
++            if(param.PFilterLfoEnabled) {
++                vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq, time);
++                vce.Filter->addMod(*vce.FilterLfo);
++            }
++        }
+ 
+         /* Voice Modulation Parameters Init */
+         if((vce.FMEnabled != NONE) && (vce.FMVoice < 0)) {
+@@ -1050,8 +1038,8 @@ float ADnote::getFMvoicebasefreq(int nvoice) const
+ void ADnote::computecurrentparameters()
+ {
+     int   nvoice;
+-    float voicefreq, voicepitch, filterpitch, filterfreq, FMfreq,
+-          FMrelativepitch, globalpitch, globalfilterpitch;
++    float voicefreq, voicepitch, FMfreq,
++          FMrelativepitch, globalpitch;
+     globalpitch = 0.01f * (NoteGlobalPar.FreqEnvelope->envout()
+                            + NoteGlobalPar.FreqLfo->lfoout()
+                            * ctl.modwheel.relmod);
+@@ -1060,19 +1048,9 @@ void ADnote::computecurrentparameters()
+                          * NoteGlobalPar.AmpEnvelope->envout_dB()
+                          * NoteGlobalPar.AmpLfo->amplfoout();
+ 
+-    globalfilterpitch = NoteGlobalPar.FilterEnvelope->envout()
+-                        + NoteGlobalPar.FilterLfo->lfoout()
+-                        + NoteGlobalPar.FilterCenterPitch;
+-
+-    float tmpfilterfreq = globalfilterpitch + ctl.filtercutoff.relfreq
+-                          + NoteGlobalPar.FilterFreqTracking;
+-
+-    tmpfilterfreq = Filter::getrealfreq(tmpfilterfreq);
++    NoteGlobalPar.Filter->update(ctl.filtercutoff.relfreq,
++                                 ctl.filterq.relq);
+ 
+-    float globalfilterq = NoteGlobalPar.FilterQ * ctl.filterq.relq;
+-    NoteGlobalPar.GlobalFilterL->setfreq_and_q(tmpfilterfreq, globalfilterq);
+-    if(stereo != 0)
+-        NoteGlobalPar.GlobalFilterR->setfreq_and_q(tmpfilterfreq, globalfilterq);
+ 
+     //compute the portamento, if it is used by this note
+     float portamentofreqrap = 1.0f;
+@@ -1107,21 +1085,10 @@ void ADnote::computecurrentparameters()
+         /****************/
+         /* Voice Filter */
+         /****************/
+-        if(NoteVoicePar[nvoice].VoiceFilterL) {
+-            filterpitch = NoteVoicePar[nvoice].FilterCenterPitch;
+-
+-            if(NoteVoicePar[nvoice].FilterEnvelope)
+-                filterpitch += NoteVoicePar[nvoice].FilterEnvelope->envout();
+-
+-            if(NoteVoicePar[nvoice].FilterLfo)
+-                filterpitch += NoteVoicePar[nvoice].FilterLfo->lfoout();
+-
+-            filterfreq = filterpitch + NoteVoicePar[nvoice].FilterFreqTracking;
+-            filterfreq = Filter::getrealfreq(filterfreq);
+-
+-            NoteVoicePar[nvoice].VoiceFilterL->setfreq(filterfreq);
+-            if(stereo && NoteVoicePar[nvoice].VoiceFilterR)
+-                NoteVoicePar[nvoice].VoiceFilterR->setfreq(filterfreq);
++        auto *voiceFilter = NoteVoicePar[nvoice].Filter;
++        if(voiceFilter) {
++            voiceFilter->update(ctl.filtercutoff.relfreq,
++                                ctl.filterq.relq);
+         }
+ 
+         if(NoteVoicePar[nvoice].noisetype == 0) { //compute only if the voice isn't noise
+@@ -1702,12 +1669,13 @@ int ADnote::noteout(float *outl, float *outr)
+             firsttick[nvoice] = 0;
+         }
+ 
+-
+         // Filter
+-        if(NoteVoicePar[nvoice].VoiceFilterL)
+-            NoteVoicePar[nvoice].VoiceFilterL->filterout(&tmpwavel[0]);
+-        if(stereo && NoteVoicePar[nvoice].VoiceFilterR)
+-            NoteVoicePar[nvoice].VoiceFilterR->filterout(&tmpwaver[0]);
++        if(NoteVoicePar[nvoice].Filter) {
++            if(stereo)
++                NoteVoicePar[nvoice].Filter->filter(tmpwavel, tmpwaver);
++            else
++                NoteVoicePar[nvoice].Filter->filter(tmpwavel, 0);
++        }
+ 
+         //check if the amplitude envelope is finished, if yes, the voice will be fadeout
+         if(NoteVoicePar[nvoice].AmpEnvelope)
+@@ -1767,14 +1735,13 @@ int ADnote::noteout(float *outl, float *outr)
+ 
+ 
+     //Processing Global parameters
+-    NoteGlobalPar.GlobalFilterL->filterout(&outl[0]);
+-
+-    if(stereo == 0) { //set the right channel=left channel
++    if(stereo) {
++        NoteGlobalPar.Filter->filter(outl, outr);
++    } else { //set the right channel=left channel
++        NoteGlobalPar.Filter->filter(outl, 0);
+         memcpy(outr, outl, synth.bufferbytes);
+         memcpy(bypassr, bypassl, synth.bufferbytes);
+     }
+-    else
+-        NoteGlobalPar.GlobalFilterR->filterout(&outr[0]);
+ 
+     for(int i = 0; i < synth.buffersize; ++i) {
+         outl[i] += bypassl[i];
+@@ -1881,8 +1848,7 @@ void ADnote::Voice::kill(Allocator &memory, const SYNTH_T &synth)
+     memory.dealloc(FreqLfo);
+     memory.dealloc(AmpEnvelope);
+     memory.dealloc(AmpLfo);
+-    memory.dealloc(VoiceFilterL);
+-    memory.dealloc(VoiceFilterR);
++    memory.dealloc(Filter);
+     memory.dealloc(FilterEnvelope);
+     memory.dealloc(FilterLfo);
+     memory.dealloc(FMFreqEnvelope);
+@@ -1905,8 +1871,7 @@ void ADnote::Global::kill(Allocator &memory)
+     memory.dealloc(FreqLfo);
+     memory.dealloc(AmpEnvelope);
+     memory.dealloc(AmpLfo);
+-    memory.dealloc(GlobalFilterL);
+-    memory.dealloc(GlobalFilterR);
++    memory.dealloc(Filter);
+     memory.dealloc(FilterEnvelope);
+     memory.dealloc(FilterLfo);
+ }
+@@ -1927,16 +1892,17 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+     Volume = 4.0f * powf(0.1f, 3.0f * (1.0f - param.PVolume / 96.0f)) //-60 dB .. 0 dB
+              * VelF(velocity, param.PAmpVelocityScaleFunction);     //sensing
+ 
+-    GlobalFilterL = Filter::generate(memory, param.GlobalFilter,
+-            synth.samplerate, synth.buffersize);
+-    if(stereo)
+-        GlobalFilterR = Filter::generate(memory, param.GlobalFilter,
+-                synth.samplerate, synth.buffersize);
+-    else
+-        GlobalFilterR = NULL;
++    Filter = memory.alloc<ModFilter>(*param.GlobalFilter, synth, time, memory, 
++            stereo, basefreq);
+ 
+     FilterEnvelope = memory.alloc<Envelope>(*param.FilterEnvelope, basefreq, synth.dt());
+     FilterLfo      = memory.alloc<LFO>(*param.FilterLfo, basefreq, time);
+-    FilterQ = param.GlobalFilter->getq();
+-    FilterFreqTracking = param.GlobalFilter->getfreqtracking(basefreq);
++
++    Filter->addMod(*FilterEnvelope);
++    Filter->addMod(*FilterLfo);
++    
++    {
++        Filter->updateSense(velocity, param.PFilterVelocityScale,
++                param.PFilterVelocityScaleFunction);
++    }
+ }
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 1fb25066..7218f2fd 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -154,15 +154,9 @@ class ADnote:public SynthNote
+             /******************************************
+             *        FILTER GLOBAL PARAMETERS        *
+             ******************************************/
+-            class Filter * GlobalFilterL, *GlobalFilterR;
+-
+-            float FilterCenterPitch;  //octaves
+-            float FilterQ;
+-            float FilterFreqTracking;
+-
+-            Envelope *FilterEnvelope;
+-
+-            LFO *FilterLfo;
++            ModFilter *Filter;
++            Envelope  *FilterEnvelope;
++            LFO       *FilterLfo;
+         } NoteGlobalPar;
+ 
+ 
+@@ -226,15 +220,9 @@ class ADnote:public SynthNote
+             /*************************
+             *   FILTER PARAMETERS    *
+             *************************/
+-
+-            class Filter * VoiceFilterL;
+-            class Filter * VoiceFilterR;
+-
+-            float FilterCenterPitch;  /* Filter center Pitch*/
+-            float FilterFreqTracking;
+-
+-            Envelope *FilterEnvelope;
+-            LFO      *FilterLfo;
++            ModFilter *Filter;
++            Envelope  *FilterEnvelope;
++            LFO       *FilterLfo;
+ 
+ 
+             /****************************
+diff --git a/src/Synth/CMakeLists.txt b/src/Synth/CMakeLists.txt
+index ce45fa54..c43079eb 100644
+--- a/src/Synth/CMakeLists.txt
++++ b/src/Synth/CMakeLists.txt
+@@ -3,6 +3,7 @@ set(zynaddsubfx_synth_SRCS
+ 	Synth/ADnote.cpp
+ 	Synth/Envelope.cpp
+ 	Synth/LFO.cpp
++    Synth/ModFilter.cpp
+ 	Synth/OscilGen.cpp
+ 	Synth/PADnote.cpp
+ 	Synth/Resonance.cpp
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 759c9bed..23d39e14 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -18,11 +18,12 @@
+   along with this program; if not, write to the Free Software Foundation,
+   Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
+ */
++#include <cassert>
+ #include <cmath>
+ #include "PADnote.h"
++#include "ModFilter.h"
+ #include "../Misc/Config.h"
+ #include "../Misc/Allocator.h"
+-#include "../DSP/Filter.h"
+ #include "../Params/PADnoteParameters.h"
+ #include "../Params/Controller.h"
+ #include "../Params/FilterParams.h"
+@@ -32,6 +33,10 @@ PADnote::PADnote(const PADnoteParameters *parameters,
+                  SynthParams pars, const int& interpolation)
+     :SynthNote(pars), pars(*parameters), interpolation(interpolation)
+ {
++    NoteGlobalPar.GlobalFilter    = nullptr;
++    NoteGlobalPar.FilterEnvelope  = nullptr;
++    NoteGlobalPar.FilterLfo       = nullptr;
++
+     firsttime = true;
+     setup(pars.frequency, pars.velocity, pars.portamento, pars.note);
+ }
+@@ -112,13 +117,6 @@ void PADnote::setup(float freq,
+     else
+         NoteGlobalPar.Panning = pars.PPanning / 128.0f;
+ 
+-    NoteGlobalPar.FilterCenterPitch = pars.GlobalFilter->getfreq() //center freq
+-                                      + pars.PFilterVelocityScale / 127.0f
+-                                      * 6.0f                                //velocity sensing
+-                                      * (VelF(velocity,
+-                                              pars.
+-                                              PFilterVelocityScaleFunction) - 1);
+-
+     if(!legato) {
+         NoteGlobalPar.Fadein_adjustment =
+             pars.Fadein_adjustment / (float)FADEIN_ADJUSTMENT_SCALE;
+@@ -157,17 +155,25 @@ void PADnote::setup(float freq,
+                                               * NoteGlobalPar.AmpLfo->amplfoout();
+ 
+     if(!legato) {
+-        NoteGlobalPar.GlobalFilterL = Filter::generate(memory, pars.GlobalFilter,
+-                    synth.samplerate, synth.buffersize);
+-        NoteGlobalPar.GlobalFilterR = Filter::generate(memory, pars.GlobalFilter,
+-                    synth.samplerate, synth.buffersize);
++        auto &flt = NoteGlobalPar.GlobalFilter;
++        auto &env = NoteGlobalPar.FilterEnvelope;
++        auto &lfo = NoteGlobalPar.FilterLfo;
++        assert(flt == nullptr);
++        flt = memory.alloc<ModFilter>(*pars.GlobalFilter, synth, time, memory, true, basefreq);
++
++        //setup mod
++        env = memory.alloc<Envelope>(*pars.FilterEnvelope, basefreq, synth.dt());
++        lfo = memory.alloc<LFO>(*pars.FilterLfo, basefreq, time);
++        flt->addMod(*env);
++        flt->addMod(*lfo);
++    }
+ 
+-        NoteGlobalPar.FilterEnvelope = memory.alloc<Envelope>(*pars.FilterEnvelope, basefreq, synth.dt());
+-        NoteGlobalPar.FilterLfo      = memory.alloc<LFO>(*pars.FilterLfo, basefreq, time);
++    {
++        auto &flt = *NoteGlobalPar.GlobalFilter;
++        flt.updateSense(velocity, pars.PFilterVelocityScale,
++                        pars.PFilterVelocityScaleFunction);
++        flt.updateNoteFreq(basefreq);
+     }
+-    NoteGlobalPar.FilterQ = pars.GlobalFilter->getq();
+-    NoteGlobalPar.FilterFreqTracking = pars.GlobalFilter->getfreqtracking(
+-        basefreq);
+ 
+     if(!pars.sample[nsample].smp) {
+         finished_ = true;
+@@ -198,8 +204,7 @@ PADnote::~PADnote()
+     memory.dealloc(NoteGlobalPar.FreqLfo);
+     memory.dealloc(NoteGlobalPar.AmpEnvelope);
+     memory.dealloc(NoteGlobalPar.AmpLfo);
+-    memory.dealloc(NoteGlobalPar.GlobalFilterL);
+-    memory.dealloc(NoteGlobalPar.GlobalFilterR);
++    memory.dealloc(NoteGlobalPar.GlobalFilter);
+     memory.dealloc(NoteGlobalPar.FilterEnvelope);
+     memory.dealloc(NoteGlobalPar.FilterLfo);
+ }
+@@ -230,8 +235,7 @@ inline void PADnote::fadein(float *smps)
+ 
+ void PADnote::computecurrentparameters()
+ {
+-    float globalpitch, globalfilterpitch;
+-    globalpitch = 0.01f * (NoteGlobalPar.FreqEnvelope->envout()
++    const float globalpitch = 0.01f * (NoteGlobalPar.FreqEnvelope->envout()
+                            + NoteGlobalPar.FreqLfo->lfoout()
+                            * ctl.modwheel.relmod + NoteGlobalPar.Detune);
+     globaloldamplitude = globalnewamplitude;
+@@ -239,18 +243,8 @@ void PADnote::computecurrentparameters()
+                          * NoteGlobalPar.AmpEnvelope->envout_dB()
+                          * NoteGlobalPar.AmpLfo->amplfoout();
+ 
+-    globalfilterpitch = NoteGlobalPar.FilterEnvelope->envout()
+-                        + NoteGlobalPar.FilterLfo->lfoout()
+-                        + NoteGlobalPar.FilterCenterPitch;
+-
+-    float tmpfilterfreq = globalfilterpitch + ctl.filtercutoff.relfreq
+-                          + NoteGlobalPar.FilterFreqTracking;
+-
+-    tmpfilterfreq = Filter::getrealfreq(tmpfilterfreq);
+-
+-    float globalfilterq = NoteGlobalPar.FilterQ * ctl.filterq.relq;
+-    NoteGlobalPar.GlobalFilterL->setfreq_and_q(tmpfilterfreq, globalfilterq);
+-    NoteGlobalPar.GlobalFilterR->setfreq_and_q(tmpfilterfreq, globalfilterq);
++    NoteGlobalPar.GlobalFilter->update(ctl.filtercutoff.relfreq,
++                                       ctl.filterq.relq);
+ 
+     //compute the portamento, if it is used by this note
+     float portamentofreqrap = 1.0f;
+@@ -377,8 +371,7 @@ int PADnote::noteout(float *outl, float *outr)
+         firsttime = false;
+     }
+ 
+-    NoteGlobalPar.GlobalFilterL->filterout(outl);
+-    NoteGlobalPar.GlobalFilterR->filterout(outr);
++    NoteGlobalPar.GlobalFilter->filter(outl, outr);
+ 
+     //Apply the punch
+     if(NoteGlobalPar.Punch.Enabled != 0)
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index acfa2624..987f949c 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -98,15 +98,9 @@ class PADnote:public SynthNote
+             /******************************************
+             *        FILTER GLOBAL PARAMETERS        *
+             ******************************************/
+-            class Filter * GlobalFilterL, *GlobalFilterR;
+-
+-            float FilterCenterPitch;  //octaves
+-            float FilterQ;
+-            float FilterFreqTracking;
+-
+-            Envelope *FilterEnvelope;
+-
+-            LFO *FilterLfo;
++            ModFilter *GlobalFilter;
++            Envelope  *FilterEnvelope;
++            LFO       *FilterLfo;
+         } NoteGlobalPar;
+ 
+ 
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 31b0371c..2c297e51 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -28,16 +28,24 @@
+ #include "../globals.h"
+ #include "SUBnote.h"
+ #include "Envelope.h"
++#include "ModFilter.h"
+ #include "../Params/Controller.h"
+ #include "../Params/SUBnoteParameters.h"
+ #include "../Params/FilterParams.h"
++#include "../Misc/Time.h"
+ #include "../Misc/Util.h"
+ #include "../Misc/Allocator.h"
+ 
+ SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars)
+-    :SynthNote(spars), pars(*parameters)
++    :SynthNote(spars), pars(*parameters),
++    AmpEnvelope(nullptr),
++    FreqEnvelope(nullptr),
++    BandWidthEnvelope(nullptr),
++    GlobalFilter(nullptr),
++    GlobalFilterEnvelope(nullptr),
++    NoteEnabled(ON),
++    lfilter(nullptr), rfilter(nullptr)
+ {
+-    NoteEnabled = ON;
+     setup(spars.frequency, spars.velocity, spars.portamento, spars.note);
+ }
+ 
+@@ -56,12 +64,14 @@ void SUBnote::setup(float freq,
+         panning = pars.PPanning / 127.0f;
+     else
+         panning = RND;
+-    if(!legato) {
++
++    if(!legato) { //normal note
+         numstages = pars.Pnumstages;
+         stereo    = pars.Pstereo;
+         start     = pars.Pstart;
+         firsttick = 1;
+     }
++
+     int pos[MAX_SUB_HARMONICS];
+ 
+     if(pars.Pfixedfreq == 0)
+@@ -91,20 +101,6 @@ void SUBnote::setup(float freq,
+     basefreq *= powf(2.0f, detune / 1200.0f); //detune
+ //    basefreq*=ctl.pitchwheel.relfreq;//pitch wheel
+ 
+-    //global filter
+-    GlobalFilterCenterPitch = pars.GlobalFilter->getfreq() //center freq
+-                              + (pars.PGlobalFilterVelocityScale / 127.0f
+-                                 * 6.0f)                                           //velocity sensing
+-                              * (VelF(velocity,
+-                                      pars.PGlobalFilterVelocityScaleFunction)
+-                                 - 1);
+-
+-    if(!legato) {
+-        GlobalFilterL = NULL;
+-        GlobalFilterR = NULL;
+-        GlobalFilterEnvelope = NULL;
+-    }
+-
+     int harmonics = 0;
+ 
+     //select only harmonics that desire to compute
+@@ -113,7 +109,7 @@ void SUBnote::setup(float freq,
+             continue;
+         pos[harmonics++] = n;
+     }
+-    if(!legato)
++    if(!legato) //normal note
+         firstnumharmonics = numharmonics = harmonics;
+     else {
+         if(harmonics > firstnumharmonics)
+@@ -129,7 +125,7 @@ void SUBnote::setup(float freq,
+     }
+ 
+ 
+-    if(!legato) {
++    if(!legato) { //normal note
+         lfilter = memory.valloc<bpfilter>(numstages * numharmonics);
+         if(stereo)
+             rfilter = memory.valloc<bpfilter>(numstages * numharmonics);
+@@ -199,7 +195,7 @@ void SUBnote::setup(float freq,
+ 
+     oldpitchwheel = 0;
+     oldbandwidth  = 64;
+-    if(!legato) {
++    if(!legato) { //normal note
+         if(pars.Pfixedfreq == 0)
+             initparameters(basefreq);
+         else
+@@ -211,13 +207,14 @@ void SUBnote::setup(float freq,
+         else
+             freq *= basefreq / 440.0f;
+ 
+-        if(pars.PGlobalFilterEnabled) {
+-            globalfiltercenterq      = pars.GlobalFilter->getq();
+-            GlobalFilterFreqTracking = pars.GlobalFilter->getfreqtracking(
+-                basefreq);
+-        }
++        if(GlobalFilter)
++            GlobalFilter->updateNoteFreq(basefreq);
+     }
+ 
++    if(GlobalFilter)
++        GlobalFilter->updateSense(velocity, pars.PGlobalFilterVelocityScale,
++                                     pars.PGlobalFilterVelocityScaleFunction);
++
+     oldamplitude = newamplitude;
+ }
+ 
+@@ -260,8 +257,7 @@ void SUBnote::KillNote()
+         memory.dealloc(AmpEnvelope);
+         memory.dealloc(FreqEnvelope);
+         memory.dealloc(BandWidthEnvelope);
+-        memory.dealloc(GlobalFilterL);
+-        memory.dealloc(GlobalFilterR);
++        memory.dealloc(GlobalFilter);
+         memory.dealloc(GlobalFilterEnvelope);
+         NoteEnabled = OFF;
+     }
+@@ -383,23 +379,19 @@ void SUBnote::filter(bpfilter &filter, float *smps)
+ void SUBnote::initparameters(float freq)
+ {
+     AmpEnvelope = memory.alloc<Envelope>(*pars.AmpEnvelope, freq, synth.dt());
++
+     if(pars.PFreqEnvelopeEnabled)
+         FreqEnvelope = memory.alloc<Envelope>(*pars.FreqEnvelope, freq, synth.dt());
+-    else
+-        FreqEnvelope = NULL;
++
+     if(pars.PBandWidthEnvelopeEnabled)
+         BandWidthEnvelope = memory.alloc<Envelope>(*pars.BandWidthEnvelope, freq, synth.dt());
+-    else
+-        BandWidthEnvelope = NULL;
++
+     if(pars.PGlobalFilterEnabled) {
+-        globalfiltercenterq = pars.GlobalFilter->getq();
+-        GlobalFilterL = Filter::generate(memory, pars.GlobalFilter,
+-                    synth.samplerate, synth.buffersize);
+-        if(stereo)
+-            GlobalFilterR = Filter::generate(memory, pars.GlobalFilter,
+-                    synth.samplerate, synth.buffersize);
+         GlobalFilterEnvelope = memory.alloc<Envelope>(*pars.GlobalFilterEnvelope, freq, synth.dt());
+-        GlobalFilterFreqTracking = pars.GlobalFilter->getfreqtracking(basefreq);
++
++        GlobalFilter = memory.alloc<ModFilter>(*pars.GlobalFilter, synth, time, memory, stereo, freq);
++
++        GlobalFilter->addMod(*GlobalFilterEnvelope);
+     }
+     computecurrentparameters();
+ }
+@@ -492,21 +484,9 @@ void SUBnote::computecurrentparameters()
+     newamplitude = volume * AmpEnvelope->envout_dB() * 2.0f;
+ 
+     //Filter
+-    if(GlobalFilterL != NULL) {
+-        float globalfilterpitch = GlobalFilterCenterPitch
+-                                  + GlobalFilterEnvelope->envout();
+-        float filterfreq = globalfilterpitch + ctl.filtercutoff.relfreq
+-                           + GlobalFilterFreqTracking;
+-        filterfreq = Filter::getrealfreq(filterfreq);
+-
+-        GlobalFilterL->setfreq_and_q(filterfreq,
+-                                     globalfiltercenterq * ctl.filterq.relq);
+-        if(GlobalFilterR != NULL)
+-            GlobalFilterR->setfreq_and_q(
+-                filterfreq,
+-                globalfiltercenterq
+-                * ctl.filterq.relq);
+-    }
++    if(GlobalFilter)
++        GlobalFilter->update(ctl.filtercutoff.relfreq,
++                             ctl.filterq.relq);
+ }
+ 
+ /*
+@@ -534,8 +514,6 @@ int SUBnote::noteout(float *outl, float *outr)
+             outl[i] += tmpsmp[i] * rolloff;
+     }
+ 
+-    if(GlobalFilterL != NULL)
+-        GlobalFilterL->filterout(&outl[0]);
+ 
+     //right channel
+     if(stereo) {
+@@ -549,11 +527,15 @@ int SUBnote::noteout(float *outl, float *outr)
+             for(int i = 0; i < synth.buffersize; ++i)
+                 outr[i] += tmpsmp[i] * rolloff;
+         }
+-        if(GlobalFilterR != NULL)
+-            GlobalFilterR->filterout(&outr[0]);
+-    }
+-    else
++        if(GlobalFilter)
++            GlobalFilter->filter(outl, outr);
++
++    } else {
++        if(GlobalFilter)
++            GlobalFilter->filter(outl, 0);
++
+         memcpy(outr, outl, synth.bufferbytes);
++    }
+ 
+     if(firsttick != 0) {
+         int n = 10;
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index b57b7bd1..b33a2984 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -25,7 +25,6 @@
+ 
+ #include "SynthNote.h"
+ #include "../globals.h"
+-#include "../DSP/Filter.h"
+ 
+ class SUBnote:public SynthNote
+ {
+@@ -48,6 +47,10 @@ class SUBnote:public SynthNote
+                    int midinote,
+                    bool legato = false);
+         void computecurrentparameters();
++        /*
++         * Initialize envelopes and global filter
++         * calls computercurrentparameters()
++         */
+         void initparameters(float freq);
+         void KillNote();
+ 
+@@ -67,18 +70,14 @@ class SUBnote:public SynthNote
+         Envelope *FreqEnvelope;
+         Envelope *BandWidthEnvelope;
+ 
+-        Filter *GlobalFilterL, *GlobalFilterR;
+-
+-        Envelope *GlobalFilterEnvelope;
++        ModFilter *GlobalFilter;
++        Envelope  *GlobalFilterEnvelope;
+ 
+         //internal values
+         ONOFFTYPE NoteEnabled;
+         int       firsttick, portamento;
+         float     volume, oldamplitude, newamplitude;
+ 
+-        float GlobalFilterCenterPitch; //octaves
+-        float GlobalFilterFreqTracking;
+-
+         struct bpfilter {
+             float freq, bw, amp; //filter parameters
+             float a1, a2, b0, b2; //filter coefs. b1=0
+diff --git a/src/globals.h b/src/globals.h
+index cf8f639b..215e2073 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -62,6 +62,12 @@ class  Controller;
+ class  Master;
+ class  Part;
+ 
++class  Filter;
++class  AnalogFilter;
++class  SVFilter;
++class  FormantFilter;
++class  ModFilter;
++
+ #if defined(__APPLE__) || defined(__FreeBSD__)
+ #include <complex>
+ #else
+-- 
+2.47.0
+

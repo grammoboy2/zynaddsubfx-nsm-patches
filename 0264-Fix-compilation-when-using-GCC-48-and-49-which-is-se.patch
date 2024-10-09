@@ -1,0 +1,60 @@
+From 7408b1fc4686d5ad0d5d6a3459e154c130343805 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 24 Oct 2014 11:13:27 +0200
+Subject: [PATCH 0264/1936] Fix compilation when using GCC 48 and 49, which is
+ segfaulting on powf(x,0.5f). Rewrite the code to sqrtf(x) which avoids this
+ compiler specific issue.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Effects/Distorsion.cpp | 4 ++--
+ src/Effects/Reverb.cpp     | 4 ++--
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/Effects/Distorsion.cpp b/src/Effects/Distorsion.cpp
+index 8123bfa5..98639f8d 100644
+--- a/src/Effects/Distorsion.cpp
++++ b/src/Effects/Distorsion.cpp
+@@ -138,7 +138,7 @@ void Distorsion::setvolume(unsigned char _Pvolume)
+ void Distorsion::setlpf(unsigned char _Plpf)
+ {
+     Plpf = _Plpf;
+-    float fr = expf(powf(Plpf / 127.0f, 0.5f) * logf(25000.0f)) + 40.0f;
++    float fr = expf(sqrtf(Plpf / 127.0f) * logf(25000.0f)) + 40.0f;
+     lpfl->setfreq(fr);
+     lpfr->setfreq(fr);
+ }
+@@ -146,7 +146,7 @@ void Distorsion::setlpf(unsigned char _Plpf)
+ void Distorsion::sethpf(unsigned char _Phpf)
+ {
+     Phpf = _Phpf;
+-    float fr = expf(powf(Phpf / 127.0f, 0.5f) * logf(25000.0f)) + 20.0f;
++    float fr = expf(sqrtf(Phpf / 127.0f) * logf(25000.0f)) + 20.0f;
+     hpfl->setfreq(fr);
+     hpfr->setfreq(fr);
+ }
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index 10dd2659..6bcb45e4 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -253,7 +253,7 @@ void Reverb::sethpf(unsigned char _Phpf)
+     if(Phpf == 0) { //No HighPass
+         memory.dealloc(hpf);
+     } else {
+-        float fr = expf(powf(Phpf / 127.0f, 0.5f) * logf(10000.0f)) + 20.0f;
++        float fr = expf(sqrtf(Phpf / 127.0f) * logf(10000.0f)) + 20.0f;
+         if(hpf == NULL)
+             hpf = memory.alloc<AnalogFilter>(3, fr, 1, 0, samplerate, buffersize);
+         else
+@@ -267,7 +267,7 @@ void Reverb::setlpf(unsigned char _Plpf)
+     if(Plpf == 127) { //No LowPass
+         memory.dealloc(lpf);
+     } else {
+-        float fr = expf(powf(Plpf / 127.0f, 0.5f) * logf(25000.0f)) + 40.0f;
++        float fr = expf(sqrtf(Plpf / 127.0f) * logf(25000.0f)) + 40.0f;
+         if(!lpf)
+             lpf = memory.alloc<AnalogFilter>(2, fr, 1, 0, samplerate, buffersize);
+         else
+-- 
+2.47.0
+

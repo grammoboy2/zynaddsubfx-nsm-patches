@@ -1,0 +1,193 @@
+From 4a9a6002ddb31257be6ec7d14ef3cb60ffba9823 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 11 Dec 2022 00:15:36 +0100
+Subject: [PATCH 1892/1936] Use `rOption` wherever possible
+
+This uses `rOption` where possible, and thus allows all options `:i:c:S`,
+where previously not all were allowed.
+---
+ rtosc                            |  2 +-
+ src/Effects/EQ.cpp               |  9 +++++----
+ src/Misc/Part.cpp                | 28 ++++++++++++++++++----------
+ src/Params/ADnoteParameters.cpp  |  8 ++++----
+ src/Params/FilterParams.cpp      |  6 +++---
+ src/Params/PADnoteParameters.cpp |  2 +-
+ src/Params/SUBnoteParameters.cpp |  4 ++--
+ 7 files changed, 34 insertions(+), 25 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 69ccb8fc..bf3621ff 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 69ccb8fc30aae40e7838364c557fbf2871db140a
++Subproject commit bf3621ff0540ca3c5d30b5ffc8edc5126684c622
+diff --git a/src/Effects/EQ.cpp b/src/Effects/EQ.cpp
+index 7064278e..3936cc48 100644
+--- a/src/Effects/EQ.cpp
++++ b/src/Effects/EQ.cpp
+@@ -28,14 +28,15 @@ using rtosc::RtData;
+     int nfilt = atoi(msg-2); \
+     int id    = 10+nfilt*5+offset; \
+     if(rtosc_narguments(msg)) \
+-        obj->changepar(id, rtosc_argument(msg,0).i);\
+-    else \
+-        d.reply(d.loc, "i", obj->getpar(id))
++    { \
++        obj->changepar(id, enum_key_from_msg(d.port->meta(), msg)); \
++    } else { \
++        d.reply(d.loc, "i", obj->getpar(id)); }
+ 
+ #define rEnd }
+ 
+ static rtosc::Ports filterports {
+-    {"Ptype::i", rProp(parameter) rOptions(Off, LP1, HP1, LP2,
++    {"Ptype::i:S", rProp(parameter) rProp(enumerated) rOptions(Off, LP1, HP1, LP2,
+             HP2, BP, notch, peak, l.shelf, h.shelf)
+         rShort("type") rDoc("Filter Type"), 0,
+         rBegin;
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index d8515e80..438bff2f 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -88,9 +88,9 @@ static const Ports partPorts = {
+     rParamZyn(Pminkey, rShort("min"), rDefault(0), "Min Used Key"),
+     rParamZyn(Pmaxkey, rShort("max"), rDefault(127), "Max Used Key"),
+     rParamZyn(Pkeyshift, rShort("shift"), rDefault(64), "Part keyshift"),
+-    rParamZyn(Prcvchn, rOptions(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16),
+-              rPresets(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16),
+-              "Active MIDI channel"),
++    rOption(Prcvchn, rOptions(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16),
++            rPresets(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16),
++            "Active MIDI channel"),
+     rParamZyn(Pvelsns,   rShort("sense"), rDefault(64), "Velocity sensing"),
+     rParamZyn(Pveloffs,  rShort("offset"), rDefault(64),"Velocity offset"),
+     rToggle(Pnoteon, rDefault(true), "If the channel accepts note on events"),
+@@ -109,10 +109,10 @@ static const Ports partPorts = {
+     rString(info.Pcomments, MAX_INFO_TEXT_SIZE, rDefault(""),
+         "Instrument comments"),
+     rString(Pname, PART_MAX_NAME_LEN, rDefault(""), "User specified label"),
+-    rArrayI(Pefxroute, NUM_PART_EFX,
+-            rOptions(Next Effect,Part Out,Dry Out),
+-            ":default\0=[\"Next Effect\"S...]\0",
+-            "Effect Routing"),
++    rArrayOption(Pefxroute, NUM_PART_EFX,
++        rOptions(Next Effect,Part Out,Dry Out),
++        ":default\0=[\"Next Effect\"S...]\0",
++        "Effect Routing"),
+     rArrayT(Pefxbypass, NUM_PART_EFX, rDefault([false...]),
+         "If an effect is bypassed"),
+     {"captureMin:", rDoc("Capture minimum valid note"), NULL,
+@@ -121,7 +121,7 @@ static const Ports partPorts = {
+     {"captureMax:", rDoc("Capture maximum valid note"), NULL,
+         [](const char *, RtData &r)
+         {Part *p = (Part*)r.obj; p->Pmaxkey = p->lastnote;}},
+-    {"polyType::c:i", rProp(parameter) rOptions(Poly, Mono, Legato, Latch)
++    {"polyType::i:c:S", rProp(parameter) rOptions(Poly, Mono, Legato, Latch)
+         rDoc("Synthesis polyphony type\n"), NULL,
+         [](const char *msg, RtData &d)
+         {
+@@ -140,7 +140,15 @@ static const Ports partPorts = {
+                 return;
+             }
+ 
+-            int i = rtosc_argument(msg, 0).i;
++            int i;
++            if(rtosc_type(msg, 0) == 'S') {
++                auto prop = d.port->meta();
++                i = enum_key(prop, rtosc_argument(msg, 0).s);
++                assert(!prop["min"] || i >= atoi(prop["min"]));
++                assert(!prop["max"] || i <= atoi(prop["max"]));
++            } else {
++                i = rtosc_argument(msg, 0).i;
++            }
+             if(i == 0) {
+                 p->Ppolymode = 1;
+                 p->Plegatomode = 0;
+@@ -238,7 +246,7 @@ static const Ports kitPorts = {
+             "ADsynth enable"),
+     rToggle(Psubenabled, rDefault(false), "SUBsynth enable"),
+     rToggle(Ppadenabled, rDefault(false), "PADsynth enable"),
+-    rParamZyn(Psendtoparteffect,
++    rOption(Psendtoparteffect,
+             rOptions(FX1, FX2, FX3, Off), rDefault(FX1),
+             "Effect Levels"),
+     rString(Pname, PART_MAX_NAME_LEN, rDefault(""), "Kit User Specified Label"),
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index d560c61a..6d32d462 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -190,10 +190,10 @@ static const Ports voicePorts = {
+             rLinear(0, 16383), rDefault(8192), "Modulator Fine Detune"),
+     rParamI(PFMCoarseDetune,            rShort("coarse"), rDefault(0),
+             "Modulator Coarse Detune"),
+-    rParamZyn(PFMDetuneType,            rShort("type"),
+-              rOptions(L35cents, L10cents, E100cents, E1200cents),
+-              rDefault(L35cents),
+-              "Modulator Detune Magnitude"),
++    rOption(PFMDetuneType,            rShort("type"),
++            rOptions(L35cents, L10cents, E100cents, E1200cents),
++            rDefault(L35cents),
++            "Modulator Detune Magnitude"),
+     rToggle(PFMFixedFreq,               rShort("fixed"),  rDefault(false),
+             "Modulator Frequency Fixed"),
+     rToggle(PFMFreqEnvelopeEnabled,  rShort("enable"), rDefault(false),
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index f2087ce4..33ba1b30 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -128,13 +128,13 @@ const rtosc::Ports FilterParams::ports = {
+             } else
+                 d.reply(d.loc, "i", obj->Psequence[idx].nvowel);
+         }},
+-    {"type-svf::i", rProp(parameter) rShort("type")
++    {"type-svf::i:c:S", rProp(parameter) rProp(enumerated) rShort("type")
+         rOptions(low, high, band, notch)
+             rDoc("Filter Type"), 0, rOptionCb(Ptype)},
+-    {"type-moog::i", rProp(parameter) rShort("type")
++    {"type-moog::i:c:S", rProp(parameter) rProp(enumerated) rShort("type")
+         rOptions(HP, BP, LP)
+             rDoc("Filter Type"), 0, rOptionCb(Ptype)},
+-    {"type-comb::i", rProp(parameter) rShort("type")
++    {"type-comb::i:c:S", rProp(parameter) rProp(enumerated) rShort("type")
+         rOptions(BWD, FWD, both)
+             rDoc("Comb Filter Type"), 0, rOptionCb(Ptype)},
+     //UI reader
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index c01582e4..7718d7e6 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -80,7 +80,7 @@ static const rtosc::Ports realtime_ports =
+     rParamI(PDetune,        rShort("fine"), rLinear(0, 16383), rDefault(8192),
+         "Fine Detune"),
+     rParamI(PCoarseDetune,  rShort("coarse"), rDefault(0), "Coarse Detune"),
+-    rParamZyn(PDetuneType,  rShort("type"),
++    rOption(PDetuneType,  rShort("type"),
+             rOptions(L35cents, L10cents, E100cents, E1200cents),
+             rDefault(L10cents), "Magnitude of Detune"),
+ 
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 4857d631..6144be60 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -85,7 +85,7 @@ static const rtosc::Ports SUBnotePorts = {
+ #undef rChangeCb
+ #define rChangeCb obj->updateFrequencyMultipliers(); if (obj->time) { \
+     obj->last_update_timestamp = obj->time->time(); }
+-    rParamI(POvertoneSpread.type, rMap(min, 0), rMap(max, 7), rShort("spread type")
++    rOption(POvertoneSpread.type, rMap(min, 0), rMap(max, 7), rShort("spread type")
+             rOptions(Harmonic, ShiftU, ShiftL, PowerU, PowerL, Sine, Power, Shift),
+             rDefault(Harmonic)
+             "Spread of harmonic frequencies"),
+@@ -101,7 +101,7 @@ static const rtosc::Ports SUBnotePorts = {
+             rDefault(2), "Number of filter stages"),
+     rParamZyn(Pbandwidth, rShort("bandwidth"), rDefault(40),
+               "Bandwidth of filters"),
+-    rParamZyn(Phmagtype,  rShort("mag. type"),
++    rOption(Phmagtype,  rShort("mag. type"),
+               rOptions(linear, -40dB, -60dB, -80dB, -100dB),
+               rDefault(linear), "Magnitude scale"),
+     rArray(Phmag, MAX_SUB_HARMONICS, rDefault([127 0 0 ...]),
+-- 
+2.47.0
+

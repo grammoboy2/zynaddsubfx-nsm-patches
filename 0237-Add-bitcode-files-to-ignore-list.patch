@@ -1,0 +1,24 @@
+From 75fb8ef98426b8ecbf484e78b9036e112226f8fa Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 13 Sep 2014 15:18:45 -0400
+Subject: [PATCH 0237/1936] Add bitcode files to ignore list
+
+Ignore llvm bitcode files for stoat based analysis
+---
+ .gitignore | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/.gitignore b/.gitignore
+index 77d28419..04c0d040 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,5 +1,6 @@
+ *.o
+ *~
++*.bc
+ src/zynaddsubfx
+ src/Tests/runner
+ src/Tests/runner.cpp
+-- 
+2.47.0
+

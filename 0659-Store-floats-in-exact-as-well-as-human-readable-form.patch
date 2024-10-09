@@ -1,0 +1,48 @@
+From 037152b9a61d5abeeb91f2f9ba987afc5ba11ac9 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 1 Nov 2015 13:15:57 -0500
+Subject: [PATCH 0659/1936] Store floats in exact as well as human readable
+ format.
+
+---
+ src/Misc/XMLwrapper.cpp | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index 8aa9fd10..855b923f 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -250,8 +250,12 @@ void XMLwrapper::addpar(const string &name, int val)
+ 
+ void XMLwrapper::addparreal(const string &name, float val)
+ {
+-    addparams("par_real", 2, "name", name.c_str(), "value",
+-              stringFrom<float>(val).c_str());
++    union { float in; uint32_t out; } convert;
++    char buf[11];
++    convert.in = val;
++    sprintf(buf, "0x%8X", convert.out);
++    addparams("par_real", 3, "name", name.c_str(), "value",
++              stringFrom<float>(val).c_str(), "exact_value", buf);
+ }
+ 
+ void XMLwrapper::addparbool(const string &name, int val)
+@@ -571,7 +575,14 @@ float XMLwrapper::getparreal(const char *name, float defaultpar) const
+     if(tmp == NULL)
+         return defaultpar;
+ 
+-    const char *strval = mxmlElementGetAttr(tmp, "value");
++    const char *strval = mxmlElementGetAttr(tmp, "exact_value");
++    if (strval != NULL) {
++        union { float out; uint32_t in; } convert;
++        sscanf(strval+2, "%x", &convert.in);
++        return convert.out;
++    }
++
++    strval = mxmlElementGetAttr(tmp, "value");
+     if(strval == NULL)
+         return defaultpar;
+ 
+-- 
+2.47.0
+

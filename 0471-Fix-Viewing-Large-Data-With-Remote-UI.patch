@@ -1,0 +1,104 @@
+From 6c1623b576d4eddf06b83951bd4c3c3f07455af8 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 18 May 2015 20:08:45 -0400
+Subject: [PATCH 0471/1936] Fix Viewing Large Data With Remote UI
+
+This should resolve some of the crashing issues with the remote
+gui observed by using padsynth
+---
+ src/Misc/Master.cpp              |  2 +-
+ src/Params/PADnoteParameters.cpp |  5 ++++-
+ src/UI/Fl_Oscilloscope.h         | 20 +++++++++++---------
+ src/UI/guimain.cpp               |  6 ++++--
+ 4 files changed, 20 insertions(+), 13 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 74111273..b192ebf2 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -641,7 +641,7 @@ void Master::AudioOut(float *outl, float *outr)
+         }
+ 
+         //XXX yes, this is not realtime safe, but it is useful...
+-        if(strcmp(msg, "/get-vu") && true) {
++        if(strcmp(msg, "/get-vu") && false) {
+             fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 5 + 30, 0 + 40);
+             fprintf(stdout, "backend[%d]: '%s'<%s>\n", msg_id++, msg,
+                     rtosc_argument_string(msg));
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 70599339..8b5367cc 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -127,6 +127,7 @@ static const rtosc::Ports PADnotePorts =
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+             const unsigned n = p->synth.oscilsize / 2;
+             float *tmp = new float[n];
++            *tmp = 0;
+             for(unsigned i=1; i<n; ++i)
+                 tmp[i] = p->getNhr(i);
+             d.reply(d.loc, "b", n*sizeof(float), tmp);
+@@ -134,7 +135,9 @@ static const rtosc::Ports PADnotePorts =
+     {"profile:i", rProp(non-realtime) rDoc("UI display of the harmonic profile"),
+         NULL, [](const char *m, rtosc::RtData &d) {
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+-            const unsigned n = rtosc_argument(m, 0).i;
++            const int n = rtosc_argument(m, 0).i;
++            if(n<=0)
++                return;
+             float *tmp = new float[n];
+             float realbw = p->getprofile(tmp, n);
+             d.reply(d.loc, "b", n*sizeof(float), tmp);
+diff --git a/src/UI/Fl_Oscilloscope.h b/src/UI/Fl_Oscilloscope.h
+index b935d301..54aec9e6 100644
+--- a/src/UI/Fl_Oscilloscope.h
++++ b/src/UI/Fl_Oscilloscope.h
+@@ -107,16 +107,18 @@ class Fl_Oscilloscope : public Fl_Box, public Fl_Osc_Widget
+ 
+             fl_color( fl_color_add_alpha( fl_color(), 127 ) );
+ 
+-            int lw=2;
+-            fl_line_style(FL_SOLID,lw);
+-            fl_begin_line();
+-            double ph=((phase-64.0)/128.0*oscilsize+oscilsize);
+-            for (int i=1;i<lx;i++){
+-                int k2=(oscilsize*i/lx)+ph;
+-                double y2=smps[k2%oscilsize];
+-                fl_vertex(i+ox,y2*ly/2.0+oy+ly/2);
++            if(smps) {
++                int lw=2;
++                fl_line_style(FL_SOLID,lw);
++                fl_begin_line();
++                double ph=((phase-64.0)/128.0*oscilsize+oscilsize);
++                for (int i=1;i<lx;i++){
++                    int k2=(oscilsize*i/lx)+ph;
++                    double y2=smps[k2%oscilsize];
++                    fl_vertex(i+ox,y2*ly/2.0+oy+ly/2);
++                }
++                fl_end_line();
+             }
+-            fl_end_line();
+ 
+             fl_line_style(FL_SOLID,0);
+         }
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index ed14a74e..df9cc1cf 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -519,10 +519,12 @@ static int handler_function(const char *path, const char *types, lo_arg **argv,
+     (void) argv;
+     (void) argc;
+     (void) user_data;
+-    char buffer[2048];
++    char buffer[8192];
+     memset(buffer, 0, sizeof(buffer));
+-    size_t size = 2048;
++    size_t size = sizeof(buffer);
++    assert(lo_message_length(msg, path) <= sizeof(buffer));
+     lo_message_serialise(msg, path, buffer, &size);
++    assert(size <= sizeof(buffer));
+     raiseUi(gui, buffer);
+ 
+     return 0;
+-- 
+2.47.0
+

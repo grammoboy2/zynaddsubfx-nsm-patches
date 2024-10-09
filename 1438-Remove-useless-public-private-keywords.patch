@@ -1,0 +1,29 @@
+From 9b8657d7715e05d230475311d90f79c222e2dc06 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 19 Oct 2019 08:44:23 +0200
+Subject: [PATCH 1438/1936] Remove useless public/private keywords
+
+---
+ src/Misc/MiddleWare.cpp | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index b78ed264..1a9bbda1 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -426,11 +426,8 @@ public:
+ 
+ class MiddleWareImpl
+ {
+-    public:
+-    MiddleWare *parent;
+-    private:
+-
+ public:
++    MiddleWare *parent;
+     Config* const config;
+     MiddleWareImpl(MiddleWare *mw, SYNTH_T synth, Config* config,
+                    int preferred_port);
+-- 
+2.47.0
+

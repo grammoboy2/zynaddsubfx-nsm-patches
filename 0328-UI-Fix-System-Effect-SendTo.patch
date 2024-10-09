@@ -1,0 +1,89 @@
+From d12adb19675d938cbb97ce22e942eb712e324b88 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 19 Feb 2015 00:33:12 -0500
+Subject: [PATCH 0328/1936] UI: Fix System Effect SendTo
+
+---
+ src/Misc/Master.cpp | 30 +++++++++++++++++++++++++++++-
+ src/UI/MasterUI.fl  |  6 +++---
+ 2 files changed, 32 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 36575dc6..6983f759 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -75,6 +75,30 @@ static Ports sysefxPort =
+         }}
+ };
+ 
++static Ports sysefsendto = 
++{
++    {"to#" STRINGIFY(NUM_SYS_EFX) "::i", 0, 0, [](const char *m, RtData&d)
++        {
++            //same ugly workaround as before
++            const char *index_1 = m;
++            index_1 -=2;
++            assert(isdigit(*index_1));
++            if(isdigit(index_1[-1]))
++                index_1--;
++            int ind1 = atoi(index_1);
++
++            //Now get the second index like normal
++            while(!isdigit(*m)) m++;
++            int ind2 = atoi(m);
++            Master &master = *(Master*)d.obj;
++
++            if(rtosc_narguments(m))
++                master.setPsysefxsend(ind1, ind2, rtosc_argument(m,0).i);
++            else
++                d.reply(d.loc, "i", master.Psysefxsend[ind1][ind2]);
++        }}
++};
++
+ static Ports localports = {
+     rRecursp(part, 16, "Part"),//NUM_MIDI_PARTS
+     rRecursp(sysefx, 4, "System Effect"),//NUM_SYS_EFX
+@@ -125,7 +149,11 @@ static Ports localports = {
+             SNIP;
+             sysefxPort.dispatch(msg, d);
+         }},
+-    //    unsigned char Psysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
++    {"sysefxfrom#" STRINGIFY(NUM_SYS_EFX) "/", rDoc("Routing Between System Effects"), &sysefsendto,
++        [](const char *msg, RtData&d) {
++            SNIP;
++            sysefsendto.dispatch(msg, d);
++        }},
+ 
+     {"noteOn:iii", rDoc("Noteon Event"), 0,
+         [](const char *m,RtData &d){
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 79c86a2e..853c0f80 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -848,12 +848,12 @@ GNU General Public License for details.}
+       Fl_Box {} {
+         xywh {0 0 0 0}
+         code0 {syseffsendwindow->osc = osc; assert(osc);}
+-        code1 {syseffsendwindow->base = "/sysefx/";}
++        code1 {syseffsendwindow->base = "";}
+       }
+       Fl_Scroll syseffscroll {open
+         xywh {0 45 120 170} box FLAT_BOX resizable
+         code0 {syseffsendwindow->begin();for (int neff1=0;neff1<NUM_SYS_EFX;neff1++) for (int neff2=neff1+1;neff2<NUM_SYS_EFX;neff2++)}
+-        code1 {{syseffsend[neff1][neff2]=new SysEffSend(o->x()+(neff2-1)*35,o->y()+15+neff1*50,30,30);syseffsend[neff1][neff2]->label("aaa");syseffsend[neff1][neff2]->init(neff1,neff2);};syseffsendwindow->end();}
++        code1 {{syseffsend[neff1][neff2]=new Fl_Osc_Dial(o->x()+(neff2-1)*35,o->y()+15+neff1*50,30,30);syseffsend[neff1][neff2]->label(strdup((to_s(neff1) + "->" + to_s(neff2)).c_str()));syseffsend[neff1][neff2]->init("/sysefxfrom"+to_s(neff1)+"/to"+to_s(neff2));};syseffsendwindow->end();}
+       } {}
+       Fl_Button {} {
+         label Close
+@@ -1632,7 +1632,7 @@ bankui->hide();} {}
+   }
+   decl {int *exitprogram;} {private local
+   }
+-  decl {SysEffSend *syseffsend[NUM_SYS_EFX][NUM_SYS_EFX];} {private local
++  decl {Fl_Osc_Dial *syseffsend[NUM_SYS_EFX][NUM_SYS_EFX];} {private local
+   }
+   decl {VirKeyboard *virkeyboard;} {private local
+   }
+-- 
+2.47.0
+

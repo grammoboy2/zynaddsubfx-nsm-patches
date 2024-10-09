@@ -1,0 +1,29 @@
+From 3ec3035fbd4a490ed0b2205f32b1553f47be0aeb Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 4 Apr 2013 23:27:09 -0400
+Subject: [PATCH 0069/1936] Redoing instruments submodule update
+
+---
+ .gitmodules | 2 +-
+ instruments | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/.gitmodules b/.gitmodules
+index d0f6aba0..183f3f37 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -1,3 +1,3 @@
+ [submodule "instruments"]
+ 	path = instruments
+-	url = git clone git://git.code.sf.net/p/zynaddsubfx/instruments
++	url = git://git.code.sf.net/p/zynaddsubfx/instruments
+diff --git a/instruments b/instruments
+index f05e5f9c..a06fadb9 160000
+--- a/instruments
++++ b/instruments
+@@ -1 +1 @@
+-Subproject commit f05e5f9cb3e226b3154e183e5104fa5b678cfe32
++Subproject commit a06fadb98d2d9937a2e0127f1a9f7e5f0237c29b
+-- 
+2.47.0
+

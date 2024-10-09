@@ -1,0 +1,25 @@
+From 584ba99a897d1548581467840ba7dafe31904078 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Mon, 30 Nov 2015 00:52:47 -0500
+Subject: [PATCH 0775/1936] Spelling fix
+
+---
+ src/Params/Controller.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index 42151471..2a608ce8 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -39,7 +39,7 @@ const rtosc::Ports Controller::ports = {
+     rToggle(bandwidth.exponential, "Bandwidth Exponential Mode"),
+     rParamZyn(modwheel.depth, "Depth of Modwheel MIDI Control"),
+     rToggle(modwheel.exponential, "Modwheel Exponential Mode"),
+-    rToggle(pitchwheel.is_split, "If PitchWheel Has unified blendrange or not"),
++    rToggle(pitchwheel.is_split, "If PitchWheel Has unified bendrange or not"),
+     rParamI(pitchwheel.bendrange, "Range of MIDI Pitch Wheel"),
+     rParamI(pitchwheel.bendrange_down, "Lower Range of MIDI Pitch Wheel"),
+     rToggle(expression.receive, "Expression MIDI Receive"),
+-- 
+2.47.0
+

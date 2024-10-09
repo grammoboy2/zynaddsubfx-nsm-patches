@@ -1,0 +1,28 @@
+From c876972e30c5ea180063b94af3b052a37db6553a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 2 Oct 2016 15:53:38 -0400
+Subject: [PATCH 1039/1936] Prevent Duplicate Watch Points
+
+---
+ src/Synth/WatchPoint.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index 5064c4b1..c91caa18 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -69,6 +69,11 @@ WatchManager::WatchManager(thrlnk *link)
+     
+ void WatchManager::add_watch(const char *id)
+ {
++    //Don't add duplicate watchs
++    for(int i=0; i<MAX_WATCH; ++i)
++        if(!strcmp(active_list[i], id))
++            return;
++
+     //Apply to a free slot
+     for(int i=0; i<MAX_WATCH; ++i) {
+         if(!active_list[i][0]) {
+-- 
+2.47.0
+

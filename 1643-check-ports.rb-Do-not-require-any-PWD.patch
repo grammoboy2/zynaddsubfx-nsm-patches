@@ -1,0 +1,34 @@
+From 8737b32179e73c4c31c9d399f5395617563f72a3 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 30 Oct 2020 14:24:58 +0100
+Subject: [PATCH 1643/1936] check-ports.rb: Do not require any PWD
+
+---
+ src/Tests/check-ports.rb | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/Tests/check-ports.rb b/src/Tests/check-ports.rb
+index 2eb9cd69..7da771f5 100755
+--- a/src/Tests/check-ports.rb
++++ b/src/Tests/check-ports.rb
+@@ -3,14 +3,15 @@
+ require 'open3'
+ 
+ rval=0
++my_path=File.dirname(__FILE__)
+ 
+ # start zyn, grep the lo server port, and connect the port checker to it
+-Open3.popen3(Dir.pwd + "/../zynaddsubfx -O null --no-gui") do |stdin, stdout, stderr, wait_thr|
++Open3.popen3(my_path + "/../zynaddsubfx -O null --no-gui") do |stdin, stdout, stderr, wait_thr|
+   pid = wait_thr[:pid]
+   while line=stderr.gets do 
+     # print "line: " + line;
+     if /^lo server running on (\d+)$/.match(line) then
+-      port_checker_rval = system(Dir.pwd + "/../../rtosc/port-checker 'osc.udp://localhost:" + $1 + "/'")
++      port_checker_rval = system(my_path + "/../../rtosc/port-checker 'osc.udp://localhost:" + $1 + "/'")
+       if port_checker_rval != true then
+         puts "Error: port-checker has returned #{$?.exitstatus}."
+         rval=1
+-- 
+2.47.0
+

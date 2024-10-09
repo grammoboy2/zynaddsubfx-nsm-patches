@@ -1,0 +1,28 @@
+From bda5c928ca35a54cd4917bcf308b5e8a4d656b8e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 18 Mar 2017 23:13:26 -0400
+Subject: [PATCH 1121/1936] Add Loading Support For Jackoo VST Plugin Files
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index b03e4061..743c18c3 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -303,6 +303,11 @@ protected:
+         const MiddleWareThread::ScopedStopper mwss(*middlewareThread);
+         const MutexLocker cml(mutex);
+ 
++        if(key && strlen(key) > 1000 && (!value || strlen(value) < 1000)) {
++            //Loading a Jackoo VST File
++            value = key;
++        }
++
+         master->defaults();
+         master->putalldata(value);
+         master->applyparameters();
+-- 
+2.47.0
+

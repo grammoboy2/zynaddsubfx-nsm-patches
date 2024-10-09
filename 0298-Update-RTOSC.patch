@@ -1,0 +1,50 @@
+From 651dbca5aef9f0787efd1305efdf5219b7fc4735 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 19 Dec 2014 00:50:11 -0500
+Subject: [PATCH 0298/1936] Update RTOSC
+
+---
+ rtosc               | 2 +-
+ src/Misc/Master.cpp | 5 ++---
+ 2 files changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 9d7f8676..b0bfb746 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 9d7f86769439c4ff7a60a22d3db7f14184cfd7aa
++Subproject commit b0bfb74667b561973ddb3491f3d03e914aae1813
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 7e63a6d6..dc9328a6 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -82,7 +82,7 @@ static Ports localports = {
+     rRecur(microtonal, "Micrtonal Mapping Functionality"),
+     rRecur(ctl, "Controller"),
+     rParamZyn(Pkeyshift,  "Global Key Shift"),
+-    rParams(Pinsparts, NUM_INS_EFX, "Part to insert part onto"),
++    rArrayI(Pinsparts, NUM_INS_EFX, "Part to insert part onto"),
+     {"echo", rDoc("Hidden port to echo messages"), 0, [](const char *m, RtData&) {
+        bToU->raw_write(m-1);}},
+     {"get-vu", rDoc("Grab VU Data"), 0, [](const char *, RtData &d) {
+@@ -187,7 +187,7 @@ class DataObj:public rtosc::RtData
+     public:
+         DataObj(char *loc_, size_t loc_size_, void *obj_, rtosc::ThreadLink *bToU_)
+         {
+-            memset(loc_, 0, sizeof(loc_size_));
++            memset(loc_, 0, loc_size_);
+             loc      = loc_;
+             loc_size = loc_size_;
+             obj      = obj_;
+@@ -468,7 +468,6 @@ void Master::partonoff(int npart, int what)
+         for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx) {
+             if(Pinsparts[nefx] == npart)
+                 insefx[nefx]->cleanup();
+-            ;
+         }
+     }
+     else {  //enabled
+-- 
+2.47.0
+

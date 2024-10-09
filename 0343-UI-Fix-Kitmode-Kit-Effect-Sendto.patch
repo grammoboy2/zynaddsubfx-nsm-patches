@@ -1,0 +1,39 @@
+From 35dbd946f1371cc1e45e68650201f54bbce95917 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 21 Feb 2015 13:58:32 -0500
+Subject: [PATCH 0343/1936] UI: Fix Kitmode & Kit Effect Sendto
+
+---
+ src/Misc/Part.cpp | 2 +-
+ src/UI/PartUI.fl  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 2cbada97..f26a1ea2 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -67,7 +67,7 @@ static Ports partPorts = {
+     rParamZyn(Pveloffs,  "Velocity offset"),
+     rToggle(Pnoteon,  "If the channel accepts note on events"),
+     //TODO FIXME Change to 0=OFF 1=MULTI 2=SINGLE
+-    rToggle(Pkitmode, "Kit mode enable"),
++    rParamI(Pkitmode, "Kit mode enable"),
+     rToggle(Pdrummode, "Drum mode enable"),
+     rToggle(Ppolymode,  "Polyphoney mode"),
+     rToggle(Plegatomode, "Legato enable"),
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 40fa7d28..57f6b220 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -176,7 +176,7 @@ maxkcounter->do_callback();}
+         }
+         Fl_Choice sendtoeffect {
+           xywh {615 0 45 15} down_box BORDER_BOX labelsize 10 align 5 textfont 1 textsize 10
+-          code0 {o->add("OFF");char nrstr[10]; for(int i=0;i<NUM_PART_EFX;i++){sprintf(nrstr,"FX%d",i+1);o->add(nrstr);};}
++          code0 {char nrstr[10]; for(int i=0;i<NUM_PART_EFX;i++){sprintf(nrstr,"FX%d",i+1);o->add(nrstr);};o->add("OFF");}
+           code1 {o->init("Psendtoparteffect");//TODO check semantics}
+           class Fl_Osc_Choice
+         } {}
+-- 
+2.47.0
+

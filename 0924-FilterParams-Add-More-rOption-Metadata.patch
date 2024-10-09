@@ -1,0 +1,36 @@
+From f1f96e56352448e0fb05f7b9a2c0d4957b4a8fad Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 9 Jun 2016 13:38:57 -0400
+Subject: [PATCH 0924/1936] FilterParams: Add More rOption Metadata
+
+---
+ src/Params/FilterParams.cpp | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index ba4b5379..2d7c4720 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -59,12 +59,16 @@ const rtosc::Ports FilterParams::ports = {
+     rSelf(FilterParams),
+     rPaste,
+     rArrayPaste,
+-    rParamZyn(Pcategory,        rShort("class"),    "Class of filter"),
+-    rParamZyn(Ptype,            rShort("type"),     "Filter Type"),
++    rOption(Pcategory,          rShort("class"),
++            rOptions(analog, formant, st.var.), "Class of filter"),
++    rOption(Ptype,              rShort("type"),
++            rOptions(LP1, HP1, LP2, HP2, BP, notch, peak,
++                l.shelf, h.shelf), "Filter Type"),
+     rParamZyn(Pfreq,            rShort("cutoff"),   "Center Freq"),
+     rParamZyn(Pq,               rShort("q"),
+             "Quality Factor (resonance/bandwidth)"),
+-    rParamZyn(Pstages,          rShort("stages"),   "Filter Stages + 1"),
++    rOption(Pstages,            rShort("stages"),
++            rOptions(1, 2, 3, 4, 5), "Filter Stages"),
+     rParamZyn(Pfreqtrack,       rShort("f.track"),
+             "Frequency Tracking amount"),
+     rParamZyn(Pgain,            rShort("gain"),     "Output Gain"),
+-- 
+2.47.0
+

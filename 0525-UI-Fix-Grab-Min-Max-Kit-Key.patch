@@ -1,0 +1,74 @@
+From e346b97bff4de31c57b087b6992d66537b8f9091 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 3 Aug 2015 14:48:00 -0400
+Subject: [PATCH 0525/1936] UI: Fix Grab Min/Max Kit Key
+
+Fixes Bug #82
+---
+ src/Misc/Part.cpp | 5 +++++
+ src/Misc/Part.h   | 1 +
+ src/UI/PartUI.fl  | 8 ++++++--
+ 3 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index d22bad3b..13f83965 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -159,6 +159,10 @@ static const Ports kitPorts = {
+     rToggle(Ppadenabled, "PADsynth enable"),
+     rParamZyn(Psendtoparteffect, "Effect Levels"),
+     rString(Pname, PART_MAX_NAME_LEN, "Kit User Specified Label"),
++    {"captureMin:", NULL, NULL, [](const char *, RtData &r)
++        {Part::Kit *p = (Part::Kit*)r.obj; p->Pminkey = p->parent->lastnote;}},
++    {"captureMax:", NULL, NULL, [](const char *, RtData &r)
++        {Part::Kit *p = (Part::Kit*)r.obj; p->Pmaxkey = p->parent->lastnote;}},
+     {"padpars-data:b", rProp(internal), 0,
+         [](const char *msg, RtData &d) {
+             rObject &o = *(rObject*)d.obj;
+@@ -195,6 +199,7 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, Microtonal *microtonal_, FFT
+     monomemClear();
+ 
+     for(int n = 0; n < NUM_KIT_ITEMS; ++n) {
++        kit[n].parent  = this;
+         kit[n].Pname   = new char [PART_MAX_NAME_LEN];
+         kit[n].adpars  = nullptr;
+         kit[n].subpars = nullptr;
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 7066be08..45a26e18 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -85,6 +85,7 @@ class Part
+ 
+         //the part's kit
+         struct Kit {
++            Part              *parent;
+             bool               Penabled, Pmuted;
+             unsigned char      Pminkey, Pmaxkey;
+             char              *Pname;
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index fee3ea3b..d2a55c42 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -112,13 +112,17 @@ class PartKitItem {open : {public Fl_Osc_Group}
+         }
+         Fl_Button {} {
+           label m
+-          callback {o->oscWrite("grabMinKey");}
++          callback {o->oscWrite("captureMin");
++minkcounter->update();
++maxkcounter->update();}
+           tooltip {set the minimum key to the last pressed key} xywh {285 3 15 12} box THIN_UP_BOX labelsize 10
+           class Fl_Osc_Button
+         }
+         Fl_Button {} {
+           label M
+-          callback {o->oscWrite("grabMaxKey");}
++          callback {o->oscWrite("captureMax");
++minkcounter->update();
++maxkcounter->update();}
+           tooltip {set the maximum key to the last pressed key} xywh {315 3 15 12} box THIN_UP_BOX labelsize 10
+           class Fl_Osc_Button
+         }
+-- 
+2.47.0
+

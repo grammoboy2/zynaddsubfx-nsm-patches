@@ -1,0 +1,19 @@
+From 7b564cdf8fd494e7fc2b20bb75253c8e194730c3 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 24 Feb 2015 18:58:58 -0500
+Subject: [PATCH 0364/1936] Update Rtosc
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 6494d444..846f3e4c 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 6494d444a5ab6a5ab94005ea84ebc55fc12bcf32
++Subproject commit 846f3e4cde717aede8e3c664b02be93050950847
+-- 
+2.47.0
+

@@ -1,0 +1,27 @@
+From 0f68723ac9bbcc37b392f60eff8397981ff6edd5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 6 Mar 2019 08:08:23 -0500
+Subject: [PATCH 1322/1936] Add 'fluid' To Package List In Travis-CI Build
+
+This fltk utility was split into a separate package in the newer
+Ubuntu release
+---
+ .travis.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index 7abd9463..2cb38a23 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -6,7 +6,7 @@ compiler:
+ dist: xenial
+ 
+ before_install:
+-    - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev libxpm-dev
++    - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev fluid libxpm-dev
+     - sudo apt-get install liblo-dev
+     - sudo apt-get install --force-yes cxxtest
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,96 @@
+From d1f116ac8012caf8da68136b85bac2971e26608c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 1 Sep 2014 02:03:33 -0400
+Subject: [PATCH 0224/1936] rtosc-dispatch: Fix More Connectivity Issues
+
+---
+ src/Misc/Bank.cpp       |  2 +-
+ src/Misc/Bank.h         |  1 +
+ src/Misc/Master.cpp     |  7 +++++++
+ src/Misc/MiddleWare.cpp | 20 +++++++++++++++++---
+ 4 files changed, 26 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 3b80e70c..d3216a02 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -47,7 +47,7 @@
+ using namespace std;
+ 
+ Bank::Bank()
+-    :defaultinsname(" ")
++    :bankpos(0), defaultinsname(" ")
+ {
+     clearbank();
+     bankfiletitle = dirname;
+diff --git a/src/Misc/Bank.h b/src/Misc/Bank.h
+index 6bbe1ef1..d1cd3af9 100644
+--- a/src/Misc/Bank.h
++++ b/src/Misc/Bank.h
+@@ -72,6 +72,7 @@ class Bank
+         };
+ 
+         std::vector<bankstruct> banks;
++        int bankpos;
+         
+         struct ins_t {
+             ins_t(void);
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 81bd7838..ff73b3f3 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -70,6 +70,13 @@ static Ports localports = {
+        d.reply("/free", "sb", "Part", sizeof(void*), &m->part[i]);
+        m->part[i] = p;
+        printf("part %d is now pointer %p\n", i, p);}},
++    {"Pvolume::c", rDoc("Master Volume"), 0,
++        [](const char *m, rtosc::RtData &d) {
++        if(rtosc_narguments(m)==0) {
++            d.reply(d.loc, "c", ((Master*)d.obj)->Pvolume);
++        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='c') {
++            ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
++            d.broadcast(d.loc, "c", ((Master*)d.obj)->Pvolume);}}},
+     {"volume::c", rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 0bd94ee3..c22a7a8b 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -214,9 +214,21 @@ void rescanForBanks(Bank &bank, Fl_Osc_Interface *osc)
+ 
+ void loadBank(Bank &bank, int pos, Fl_Osc_Interface *osc)
+ {
+-    bank.loadbank(bank.banks[pos].dir);
+-    for(int i=0; i<BANK_SIZE; ++i)
+-        refreshBankView(bank, i, osc);
++    if(bank.bankpos != pos) {
++        bank.bankpos = pos;
++        bank.loadbank(bank.banks[pos].dir);
++        for(int i=0; i<BANK_SIZE; ++i)
++            refreshBankView(bank, i, osc);
++    }
++}
++
++void bankPos(Bank &bank, Fl_Osc_Interface *osc)
++{
++    char response[2048];
++
++    if(!rtosc_message(response, 2048, "/loadbank", "i", bank.bankpos))
++        errx(1, "Failure to handle bank update properly...");
++    osc->tryLink(response);
+ }
+ 
+ void createEffect(const char *msg)
+@@ -684,6 +696,8 @@ public:
+             rescanForBanks(master->bank, osc);
+         } else if(!strcmp(msg, "/loadbank") && !strcmp(rtosc_argument_string(msg), "c")) {
+             loadBank(master->bank, rtosc_argument(msg, 0).i, osc);
++        } else if(!strcmp(msg, "/loadbank") && !strcmp(rtosc_argument_string(msg), "")) {
++            bankPos(master->bank, osc);
+         } else if(strstr(msg, "efftype") && !strcmp(rtosc_argument_string(msg), "c")) {
+             createEffect(msg);
+         } else if(objmap.find(obj_rl) != objmap.end()) {
+-- 
+2.47.0
+

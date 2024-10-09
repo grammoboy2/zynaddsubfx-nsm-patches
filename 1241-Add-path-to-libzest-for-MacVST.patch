@@ -1,0 +1,28 @@
+From 4b4bbcd9e83d97e607a0dfd8d3625b6fa4162129 Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Fri, 5 Jan 2018 01:44:23 +0100
+Subject: [PATCH 1241/1936] Add path to libzest for MacVST
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+index a97b860c..0124bc45 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+@@ -61,8 +61,10 @@ public:
+         if(!handle)
+             handle = LoadLibrary("libzest.dll");
+ #elif defined __APPLE__
+-        if(!handle)
++        if(!handle) // LV2
+             handle = dlopen("@loader_path/libzest.dylib", RTLD_LAZY);
++        if(!handle) // VST
++            handle = dlopen("@loader_path/../Resources/libzest.dylib", RTLD_LAZY);
+ #else
+         handle = dlopen("./libzest.so", RTLD_LAZY);
+         if(!handle)
+-- 
+2.47.0
+

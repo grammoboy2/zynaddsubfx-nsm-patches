@@ -1,0 +1,73 @@
+From 0e2cd5ffb935eb6da08bf5e137155ba5726247a4 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 14 Feb 2016 21:30:39 +0100
+Subject: [PATCH 0864/1936] Plugin: Use window title from host
+
+---
+ DPF                                       | 2 +-
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp | 3 +++
+ src/UI/guimain.cpp                        | 6 ++++++
+ 3 files changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/DPF b/DPF
+index 720d681a..d1e12728 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit 720d681a09bd8bef418b0e12a65679a7905699d8
++Subproject commit d1e127289c4f3f51d34177ed3adb67f2e75925fe
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+index 30bf8dd9..684a12d6 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+@@ -34,6 +34,7 @@ public:
+           oscPort(0),
+           winId(wid)
+     {
++        setTitle("ZynAddSubFX");
+     }
+ 
+     ~ZynAddSubFXUI() override
+@@ -98,6 +99,8 @@ private:
+             "zynaddsubfx-ext-gui",
+             "--embed",
+             winIdAsString,
++            "--title",
++            getTitle(),
+             urlAsString,
+             nullptr
+         };
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index 85a3a73c..90d9cebd 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -591,6 +591,7 @@ const char *help_message =
+ int main(int argc, char *argv[])
+ {
+     const char *uri    = NULL;
++    const char *title  = NULL;
+     bool        help   = false;
+     bool        no_uri = false;
+     for(int i=1; i<argc; ++i) {
+@@ -602,6 +603,8 @@ int main(int argc, char *argv[])
+         else if(!strcmp("--embed", argv[i]))
+             embedId = argv[++i];
+ #endif
++        else if(!strcmp("--title", argv[i]))
++            title = argv[++i];
+         else
+             uri = argv[i];
+     }
+@@ -624,6 +627,9 @@ int main(int argc, char *argv[])
+ 
+     gui = GUI::createUi(new UI_Interface(), &Pexitprogram);
+ 
++    if (title != NULL)
++        GUI::raiseUi(gui, "/ui/title", "s", title);
++
+     GUI::raiseUi(gui, "/show",  "i", 1);
+     while(Pexitprogram == 0) {
+         GUI::tickUi(gui);
+-- 
+2.47.0
+

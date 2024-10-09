@@ -1,0 +1,24 @@
+From 9fd44013b620e423ce80beec2a3e7f6f0ec6f33f Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Mon, 6 Sep 2021 00:15:54 +0200
+Subject: [PATCH 1765/1936] fix latchmode initialization
+
+---
+ src/Misc/Part.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index e864c4d2..6f22e9bc 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -275,6 +275,7 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+     :Pdrummode(false),
+     Ppolymode(true),
+     Plegatomode(false),
++    Platchmode(false),
+     partoutl(new float[synth_.buffersize]),
+     partoutr(new float[synth_.buffersize]),
+     ctl(synth_, &time_),
+-- 
+2.47.0
+

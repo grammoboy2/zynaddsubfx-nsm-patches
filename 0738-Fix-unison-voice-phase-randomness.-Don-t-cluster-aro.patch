@@ -1,0 +1,33 @@
+From 8773b26df67fa08086e6c68fc144338d4e37f837 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Fri, 20 Nov 2015 03:37:00 -0500
+Subject: [PATCH 0738/1936] Fix unison voice phase randomness.  (Don't cluster
+ around zero.)
+
+---
+ src/Synth/ADnote.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index a9b946bf..4b080783 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -295,12 +295,12 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+         oscposhi_start +=
+             (int)((pars.VoicePar[nvoice].Poscilphase
+                    - 64.0f) / 128.0f * synth.oscilsize + synth.oscilsize * 4);
+-        oscposhi_start %= synth.oscilsize;
+ 
++        int kth_start = oscposhi_start;
+         for(int k = 0; k < unison; ++k) {
+-            oscposhi[nvoice][k] = oscposhi_start;
++            oscposhi[nvoice][k] = kth_start % synth.oscilsize;
+             //put random starting point for other subvoices
+-            oscposhi_start      =
++            kth_start      = oscposhi_start +
+                 (int)(RND * pars.VoicePar[nvoice].Unison_phase_randomness /
+                         127.0f * (synth.oscilsize - 1));
+         }
+-- 
+2.47.0
+

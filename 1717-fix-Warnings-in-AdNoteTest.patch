@@ -1,0 +1,27 @@
+From 614ff0d03552fa5149c526bbc11b4063d7203191 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Wed, 10 Mar 2021 18:16:40 +0100
+Subject: [PATCH 1717/1936] fix Warnings in AdNoteTest
+
+---
+ src/Tests/AdNoteTest.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index 8e9080c7..7e7ae977 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -82,6 +82,10 @@ class AdNoteTest:public CxxTest::TestSuite
+                     case consumer_location_type_t::filter:
+                         TS_ASSERT((-8.0f < out && out < 8.0f));
+                         break;
++                    case consumer_location_type_t::freq:
++                    case consumer_location_type_t::unspecified:
++                    default:
++                        break;
+                 }
+             }
+         }
+-- 
+2.47.0
+

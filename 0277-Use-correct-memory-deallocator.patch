@@ -1,0 +1,28 @@
+From aa88b902ca1ff87779c1172f4e35d58ca3b0fb88 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 30 Oct 2014 11:46:57 +0100
+Subject: [PATCH 0277/1936] Use correct memory deallocator.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Effects/Alienwah.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Effects/Alienwah.cpp b/src/Effects/Alienwah.cpp
+index 2e3cd244..ae08e489 100644
+--- a/src/Effects/Alienwah.cpp
++++ b/src/Effects/Alienwah.cpp
+@@ -38,8 +38,8 @@ Alienwah::Alienwah(EffectParams pars)
+ 
+ Alienwah::~Alienwah()
+ {
+-    delete [] oldl;
+-    delete [] oldr;
++    memory.devalloc(oldl);
++    memory.devalloc(oldr);
+ }
+ 
+ 
+-- 
+2.47.0
+

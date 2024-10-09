@@ -1,0 +1,19 @@
+From 05a35855e3dc095a7afc9fd6abc07554dc00fce5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 17 Jul 2016 13:47:53 -0400
+Subject: [PATCH 0952/1936] Update Rtosc To Fix Issue With Clang
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 4ab80cbd..0771cb1f 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 4ab80cbda6be312e9ef8e5ffea573e7701ed30cc
++Subproject commit 0771cb1f29a68d13bb8ec00abaaafcb54cb1366e
+-- 
+2.47.0
+

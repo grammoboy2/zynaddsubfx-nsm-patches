@@ -1,0 +1,35 @@
+From 5caf6ff9734e79599bab0a56fea51af0fb99ca2d Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Mon, 2 Nov 2015 12:58:38 -0500
+Subject: [PATCH 0669/1936] Silence -Wparentheses garbage. There's nothing
+ ambiguous about the else.  It follows the rules for C/C++.
+
+---
+ src/UI/PartUI.fl | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 6f78cc6e..114ab841 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -1118,7 +1118,7 @@ if (engine==2&&padnoteui) padnoteui->padnotewindow->show();} {}
+ if (cleanuplastkit(kititem))
+     return;
+ if(adnoteui ||
+-   (adnoteui=new ADnoteUI(loc+"kit"+to_s(kititem)+"/adpars/", osc)))
++   (adnoteui=new ADnoteUI(loc+"kit"+to_s(kititem)+"/adpars/", osc))) {
+     if(voicelist)
+         adnoteui->ADnoteVoiceList->show();
+     else {
+@@ -1127,7 +1127,7 @@ if(adnoteui ||
+ 	else
+ 	    adnoteui->advoice->voiceFMparametersgroup->activate();
+ 	adnoteui->ADnoteVoice->show();
+-    }} {}}
++    }}} {}}
+ 
+   Function {~PartUI()} {} {
+     code {delete adnoteui;
+-- 
+2.47.0
+

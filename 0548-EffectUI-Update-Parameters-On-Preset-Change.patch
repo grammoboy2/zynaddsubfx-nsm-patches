@@ -1,0 +1,40 @@
+From 08e3b4afa851b6cf2bd9f75fdbe34abbaf126518 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 1 Oct 2015 20:45:33 -0400
+Subject: [PATCH 0548/1936] EffectUI: Update Parameters On Preset Change
+
+---
+ src/Effects/EffectMgr.cpp | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 72f8bda2..72d320fe 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -62,12 +62,23 @@ static const rtosc::Ports local_ports = {
+     {"preset::i", rProp(alias) rDoc("Effect Preset Selector"), NULL,
+         [](const char *msg, rtosc::RtData &d)
+         {
++            char loc[1024];
+             EffectMgr *eff = (EffectMgr*)d.obj;
+             if(!rtosc_narguments(msg))
+                 d.reply(d.loc, "i", eff->getpreset());
+             else {
+                 eff->changepresetrt(rtosc_argument(msg, 0).i);
+                 d.broadcast(d.loc, "i", eff->getpreset());
++
++                //update parameters as well
++                strncpy(loc, d.loc, 1024);
++                char *tail = rindex(loc, '/');
++                if(!tail)
++                    return;
++                for(int i=0;i<128;++i) {
++                    sprintf(tail+1, "parameter%d", i);
++                    d.broadcast(loc, "i", eff->geteffectparrt(i));
++                }
+             }
+         }},
+     {"eq-coeffs:", rProp(internal) rDoc("Get equalizer Coefficients"), NULL,
+-- 
+2.47.0
+

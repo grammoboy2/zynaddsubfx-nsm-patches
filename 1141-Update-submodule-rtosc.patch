@@ -1,0 +1,19 @@
+From 015f719223b09c7f9a41a62f1fcfa20ef9698ebf Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sun, 16 Apr 2017 14:07:22 +0200
+Subject: [PATCH 1141/1936] Update submodule rtosc
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index d184b254..60297243 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit d184b254e8f52bd19a4b466b54234992e6e31928
++Subproject commit 60297243ae0b1600ef24379c77c5546d6822e333
+-- 
+2.47.0
+

@@ -1,0 +1,23 @@
+From 2631637e5e9a1a2f715b72fe7e9fd31ae8e4424a Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Wed, 16 Dec 2020 21:30:49 +0100
+Subject: [PATCH 1681/1936] Do not warn for unneccessary parentheses
+
+Those warnings come from the Lv2 headers, so we can't fix them. Instead,
+ignore them for the whole Plugin subdirectory.
+---
+ src/Plugin/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Plugin/CMakeLists.txt b/src/Plugin/CMakeLists.txt
+index 06c4bcc7..29617053 100644
+--- a/src/Plugin/CMakeLists.txt
++++ b/src/Plugin/CMakeLists.txt
+@@ -1,3 +1,4 @@
++add_compile_options(-Wno-parentheses) # disable warnings from Lv2 headers
+ 
+ add_executable(lv2-ttl-generator ${CMAKE_SOURCE_DIR}/DPF/utils/lv2-ttl-generator/lv2_ttl_generator.c)
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,43 @@
+From d95863cc152084991ba1a198ac8a8c2b54fe07fe Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sun, 19 Jan 2020 23:24:42 +0100
+Subject: [PATCH 1464/1936] fixes for float ENV parameters
+
+---
+ src/Params/EnvelopeParams.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 7e419f4d..f40cfdd4 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -158,7 +158,7 @@ static const rtosc::Ports localPorts = {
+         d.reply(d.loc, "i", env->Envmode);
+         rEnd},
+ 
+-    {"envdt", rDoc("Envelope Delay Times (log)"), NULL,
++    {"envdt", rDoc("Envelope Delay Times (ms)"), NULL,
+         rBegin;
+         const int N = MAX_ENVELOPE_POINTS;
+         const int M = rtosc_narguments(msg);
+@@ -176,7 +176,7 @@ static const rtosc::Ports localPorts = {
+             }
+         }
+         rEnd},
+-    {"dt", rDoc("Envelope Delay Times (lin)"), NULL,
++    {"dt", rDoc("Envelope Delay Times (sec)"), NULL,
+         rBegin;
+         
+         const int N = MAX_ENVELOPE_POINTS;
+@@ -556,7 +556,7 @@ void EnvelopeParams::getfromXML(XMLwrapper& xml)
+         if(xml.enterbranch("POINT", i) == 0)
+             continue;
+         if(i != 0) {
+-            if(!xml.hasparreal("A_dt")) {
++            if(!xml.hasparreal("dt")) {
+                 int dt = xml.getpar127("dt", dT127(envdt[i]));
+                 envdt[i] = dTREAL(dt);
+             }
+-- 
+2.47.0
+

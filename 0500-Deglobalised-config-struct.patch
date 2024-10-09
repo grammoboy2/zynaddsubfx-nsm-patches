@@ -1,0 +1,1010 @@
+From 24777fd9d0c94e823020c9ec62a537f04ff406f3 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Wed, 17 Jun 2015 20:20:09 +0200
+Subject: [PATCH 0500/1936] Deglobalised config struct.
+
+---
+ TODO.txt                    |  2 +-
+ src/DSP/Unison.cpp          |  1 +
+ src/Effects/EffectLFO.cpp   |  3 ++-
+ src/Misc/Bank.cpp           | 16 ++++++++--------
+ src/Misc/Bank.h             |  5 ++++-
+ src/Misc/Config.cpp         | 21 ++++++++++----------
+ src/Misc/Config.h           | 18 ++++++++++++++----
+ src/Misc/Master.cpp         | 12 ++++++++----
+ src/Misc/Master.h           |  3 ++-
+ src/Misc/Microtonal.cpp     |  5 +++--
+ src/Misc/Microtonal.h       |  4 +++-
+ src/Misc/MiddleWare.cpp     | 38 ++++++++++++++++++++++++-------------
+ src/Misc/MiddleWare.h       |  3 ++-
+ src/Misc/Part.cpp           | 22 ++++++++++++++-------
+ src/Misc/Part.h             |  5 ++++-
+ src/Misc/Util.cpp           |  3 +--
+ src/Misc/Util.h             |  3 ---
+ src/Misc/XMLwrapper.cpp     |  1 +
+ src/Nio/EngineMgr.cpp       | 11 ++++++-----
+ src/Nio/EngineMgr.h         |  6 ++++--
+ src/Nio/Nio.cpp             |  6 ++++--
+ src/Nio/Nio.h               |  3 ++-
+ src/Nio/OssEngine.cpp       | 12 ++++++++----
+ src/Nio/OssEngine.h         |  6 +++++-
+ src/Nio/OssMultiEngine.cpp  |  8 +++++---
+ src/Nio/OssMultiEngine.h    |  5 ++++-
+ src/Params/PresetsStore.cpp |  3 ++-
+ src/Params/PresetsStore.h   |  3 ++-
+ src/Synth/PADnote.cpp       |  6 +++---
+ src/Synth/PADnote.h         |  4 +++-
+ src/main.cpp                | 15 ++++++++-------
+ 31 files changed, 161 insertions(+), 92 deletions(-)
+
+diff --git a/TODO.txt b/TODO.txt
+index 4f2ca472..e0fc355c 100644
+--- a/TODO.txt
++++ b/TODO.txt
+@@ -16,7 +16,7 @@ Status:
+ (3) will be fixed by fundamental
+ (4)
+ (5) fixed + tested
+-(6)
++(6) fixed + tested (only basic testing)
+ (7) -> will not be fixed (should stay random)
+ (8) fixed + tested
+ 
+diff --git a/src/DSP/Unison.cpp b/src/DSP/Unison.cpp
+index c7518c49..5dff500c 100644
+--- a/src/DSP/Unison.cpp
++++ b/src/DSP/Unison.cpp
+@@ -24,6 +24,7 @@
+ 
+ #include "../Misc/Allocator.h"
+ #include "Unison.h"
++#include "globals.h"
+ 
+ #ifndef errx
+ #include <err.h>
+diff --git a/src/Effects/EffectLFO.cpp b/src/Effects/EffectLFO.cpp
+index 1ec507a2..3d236104 100644
+--- a/src/Effects/EffectLFO.cpp
++++ b/src/Effects/EffectLFO.cpp
+@@ -24,6 +24,7 @@
+ #include "../Misc/Util.h"
+ 
+ #include <cmath>
++#include "globals.h"
+ 
+ EffectLFO::EffectLFO(float srate_f, float bufsize_f)
+     :Pfreq(40),
+@@ -79,7 +80,7 @@ float EffectLFO::getlfoshape(float x)
+             break;
+         //when adding more, ensure ::updateparams() gets updated
+         default:
+-            out = cosf(x * 2.0f * PI); //EffectLFO_SINE
++            out = cosf(x * 2.0f * PI); //EffectLFO_SINE // TODO: use M_PI ?
+     }
+     return out;
+ }
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 4b4d5543..a04f6d4f 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -46,16 +46,16 @@
+ 
+ using namespace std;
+ 
+-Bank::Bank()
+-    :bankpos(0), defaultinsname(" ")
++Bank::Bank(Config *config)
++    :bankpos(0), defaultinsname(" "), config(config)
+ {
+     clearbank();
+     bankfiletitle = dirname;
+     rescanforbanks();
+-    loadbank(config.cfg.currentBankDir);
++    loadbank(config->cfg.currentBankDir);
+ 
+     for(unsigned i=0; i<banks.size(); ++i) {
+-        if(banks[i].dir == config.cfg.currentBankDir) {
++        if(banks[i].dir == config->cfg.currentBankDir) {
+             bankpos = i;
+             break;
+         }
+@@ -270,7 +270,7 @@ int Bank::loadbank(string bankdirname)
+     closedir(dir);
+ 
+     if(!dirname.empty())
+-        config.cfg.currentBankDir = dirname;
++        config->cfg.currentBankDir = dirname;
+ 
+     return 0;
+ }
+@@ -281,7 +281,7 @@ int Bank::loadbank(string bankdirname)
+ int Bank::newbank(string newbankdirname)
+ {
+     string bankdir;
+-    bankdir = config.cfg.bankRootDirList[0];
++    bankdir = config->cfg.bankRootDirList[0];
+ 
+     if(((bankdir[bankdir.size() - 1]) != '/')
+        && ((bankdir[bankdir.size() - 1]) != '\\'))
+@@ -361,8 +361,8 @@ void Bank::rescanforbanks()
+     banks.clear();
+ 
+     for(int i = 0; i < MAX_BANK_ROOT_DIRS; ++i)
+-        if(!config.cfg.bankRootDirList[i].empty())
+-            scanrootdir(config.cfg.bankRootDirList[i]);
++        if(!config->cfg.bankRootDirList[i].empty())
++            scanrootdir(config->cfg.bankRootDirList[i]);
+ 
+     //sort the banks
+     sort(banks.begin(), banks.end());
+diff --git a/src/Misc/Bank.h b/src/Misc/Bank.h
+index 6f827108..d958251d 100644
+--- a/src/Misc/Bank.h
++++ b/src/Misc/Bank.h
+@@ -26,6 +26,7 @@
+ #include <string>
+ #include <vector>
+ #include "../globals.h"
++#include "Config.h"
+ 
+ //entries in a bank
+ #define BANK_SIZE 160
+@@ -35,7 +36,7 @@ class Bank
+ {
+     public:
+         /**Constructor*/
+-        Bank();
++        Bank(Config* config);
+         ~Bank();
+         std::string getname(unsigned int ninstrument);
+         std::string getnamenumbered(unsigned int ninstrument);
+@@ -96,6 +97,8 @@ class Bank
+         std::string dirname;
+ 
+         void scanrootdir(std::string rootdir); //scans a root dir for banks
++        
++        Config* const config;
+ };
+ 
+ #endif
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 0badf57f..d5d1fdfd 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -28,6 +28,7 @@
+ #include <rtosc/port-sugar.h>
+ 
+ #include "Config.h"
++#include "../src/globals.h"
+ #include "XMLwrapper.h"
+ 
+ #define rStdString(name, len, ...) \
+@@ -160,10 +161,10 @@ void Config::init()
+     cfg.OscilSize  = 1024;
+     cfg.SwapStereo = 0;
+ 
+-    cfg.LinuxOSSWaveOutDev = new char[MAX_STRING_SIZE];
+-    snprintf(cfg.LinuxOSSWaveOutDev, MAX_STRING_SIZE, "/dev/dsp");
+-    cfg.LinuxOSSSeqInDev = new char[MAX_STRING_SIZE];
+-    snprintf(cfg.LinuxOSSSeqInDev, MAX_STRING_SIZE, "/dev/sequencer");
++    cfg.oss_devs.linux_wave_out = new char[MAX_STRING_SIZE];
++    snprintf(cfg.oss_devs.linux_wave_out, MAX_STRING_SIZE, "/dev/dsp");
++    cfg.oss_devs.linux_seq_in = new char[MAX_STRING_SIZE];
++    snprintf(cfg.oss_devs.linux_seq_in, MAX_STRING_SIZE, "/dev/sequencer");
+ 
+     cfg.WindowsWaveOutId = 0;
+     cfg.WindowsMidiInId  = 0;
+@@ -228,8 +229,8 @@ void Config::init()
+ 
+ Config::~Config()
+ {
+-    delete [] cfg.LinuxOSSWaveOutDev;
+-    delete [] cfg.LinuxOSSSeqInDev;
++    delete [] cfg.oss_devs.linux_wave_out;
++    delete [] cfg.oss_devs.linux_seq_in;
+ 
+     for(int i = 0; i < winmidimax; ++i)
+         delete [] winmididevices[i].name;
+@@ -330,10 +331,10 @@ void Config::readConfig(const char *filename)
+ 
+         //linux stuff
+         xmlcfg.getparstr("linux_oss_wave_out_dev",
+-                         cfg.LinuxOSSWaveOutDev,
++                         cfg.oss_devs.linux_wave_out,
+                          MAX_STRING_SIZE);
+         xmlcfg.getparstr("linux_oss_seq_in_dev",
+-                         cfg.LinuxOSSSeqInDev,
++                         cfg.oss_devs.linux_seq_in,
+                          MAX_STRING_SIZE);
+ 
+         //windows stuff
+@@ -392,8 +393,8 @@ void Config::saveConfig(const char *filename) const
+     xmlcfg->addpar("interpolation", cfg.Interpolation);
+ 
+     //linux stuff
+-    xmlcfg->addparstr("linux_oss_wave_out_dev", cfg.LinuxOSSWaveOutDev);
+-    xmlcfg->addparstr("linux_oss_seq_in_dev", cfg.LinuxOSSSeqInDev);
++    xmlcfg->addparstr("linux_oss_wave_out_dev", cfg.oss_devs.linux_wave_out);
++    xmlcfg->addparstr("linux_oss_seq_in_dev", cfg.oss_devs.linux_seq_in);
+ 
+     //windows stuff
+     xmlcfg->addpar("windows_wave_out_id", cfg.WindowsWaveOutId);
+diff --git a/src/Misc/Config.h b/src/Misc/Config.h
+index 5395a141..7b5e411f 100644
+--- a/src/Misc/Config.h
++++ b/src/Misc/Config.h
+@@ -22,21 +22,31 @@
+ 
+ #ifndef CONFIG_H
+ #define CONFIG_H
+-#include "../globals.h"
++
+ #include <string>
+ #define MAX_STRING_SIZE 4000
+ #define MAX_BANK_ROOT_DIRS 100
+ 
++namespace rtosc
++{
++    struct Ports;
++}
++
++struct oss_devs_t
++{
++    char *linux_wave_out, *linux_seq_in;
++};
++
+ /**Configuration file functions*/
+ class Config
+ {
+     public:
+-        /** Constructor*/
+         Config();
+-        /** Destructor*/
++        Config(const Config& ) = delete;
+         ~Config();
++        
+         struct {
+-            char *LinuxOSSWaveOutDev, *LinuxOSSSeqInDev;
++            oss_devs_t oss_devs;
+             int   SampleRate, SoundBufferSize, OscilSize, SwapStereo;
+             int   WindowsWaveOutId, WindowsMidiInId;
+             int   BankUIAutoClose;
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 510b5ec5..9c859ad4 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -288,8 +288,11 @@ vuData::vuData(void)
+       rmspeakl(0.0f), rmspeakr(0.0f), clipped(0)
+ {}
+ 
+-Master::Master(const SYNTH_T &synth_)
+-:HDDRecorder(synth_), ctl(synth_), midi(Master::ports), frozenState(false), pendingMemory(false), synth(synth_)
++Master::Master(const SYNTH_T &synth_, Config* config)
++    :HDDRecorder(synth_), ctl(synth_),
++    microtonal(config->cfg.GzipCompression), bank(config),
++    midi(Master::ports), frozenState(false), pendingMemory(false),
++    synth(synth_), gzip_compression(config->cfg.GzipCompression)
+ {
+     bToU = NULL;
+     uToB = NULL;
+@@ -312,7 +315,8 @@ Master::Master(const SYNTH_T &synth_)
+     }
+ 
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
+-        part[npart] = new Part(*memory, synth, &microtonal, fft);
++        part[npart] = new Part(*memory, synth, config->cfg.GzipCompression,
++                               config->cfg.Interpolation, &microtonal, fft);
+ 
+     //Insertion Effects init
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+@@ -1046,7 +1050,7 @@ int Master::saveXML(const char *filename)
+     add2XML(xml);
+     xml->endbranch();
+ 
+-    int result = xml->saveXMLfile(filename, config.cfg.GzipCompression);
++    int result = xml->saveXMLfile(filename, gzip_compression);
+     delete (xml);
+     return result;
+ }
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index b2d74319..ee47436a 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -49,7 +49,7 @@ class Master
+ {
+     public:
+         /** Constructor TODO make private*/
+-        Master(const SYNTH_T &synth);
++        Master(const SYNTH_T &synth, class Config *config);
+         /** Destructor*/
+         ~Master();
+ 
+@@ -171,6 +171,7 @@ class Master
+         rtosc::ThreadLink *uToB;
+         bool pendingMemory;
+         const SYNTH_T &synth;
++        const int& gzip_compression; //!< value from config
+     private:
+         float  sysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+         float  sysefxsend[NUM_SYS_EFX][NUM_SYS_EFX];
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index af70d2e5..9ee39f7b 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -75,7 +75,8 @@ const rtosc::Ports Microtonal::ports = {
+ };
+ 
+ 
+-Microtonal::Microtonal()
++Microtonal::Microtonal(const int &gzip_compression)
++    : gzip_compression(gzip_compression)
+ {
+     defaults();
+ }
+@@ -688,7 +689,7 @@ int Microtonal::saveXML(const char *filename) const
+     add2XML(xml);
+     xml->endbranch();
+ 
+-    int result = xml->saveXMLfile(filename, config.cfg.GzipCompression);
++    int result = xml->saveXMLfile(filename, gzip_compression);
+     delete (xml);
+     return result;
+ }
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index d32893c2..bbbde597 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -36,7 +36,7 @@ class Microtonal
+ {
+     public:
+         /**Constructor*/
+-        Microtonal();
++        Microtonal(const int& gzip_compression);
+         /**Destructor*/
+         ~Microtonal();
+         void defaults();
+@@ -131,6 +131,8 @@ class Microtonal
+             //the real tunning is x1/x2
+             unsigned int x1, x2;
+         } octave[MAX_OCTAVE_SIZE], tmpoctave[MAX_OCTAVE_SIZE];
++
++        const int& gzip_compression;
+ };
+ 
+ #endif
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 59a989e1..f8ea1f37 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -550,9 +550,12 @@ class MiddleWareImpl
+             fputs("Warning: can not read /tmp.\n", stderr);
+         }
+     }
+-
++    
++    Config* const config;
++    
+ public:
+-    MiddleWareImpl(MiddleWare *mw, const SYNTH_T &synth, int prefered_port);
++    MiddleWareImpl(MiddleWare *mw, const SYNTH_T &synth, Config* config,
++                   int preferred_port);
+     ~MiddleWareImpl(void);
+ 
+     void warnMemoryLeaks(void);
+@@ -639,7 +642,10 @@ public:
+ 
+         auto alloc = std::async(std::launch::async,
+                 [master,filename,this,npart](){
+-                Part *p = new Part(*master->memory, synth, &master->microtonal, master->fft);
++                Part *p = new Part(*master->memory, synth,
++                                   config->cfg.GzipCompression,
++                                   config->cfg.Interpolation,
++                                   &master->microtonal, master->fft);
+                 if(p->loadXMLinstrument(filename))
+                     fprintf(stderr, "Warning: failed to load part<%s>!\n", filename);
+ 
+@@ -673,7 +679,10 @@ public:
+     {
+         if(npart == -1)
+             return;
+-        Part *p = new Part(*master->memory, synth, &master->microtonal, master->fft);
++        Part *p = new Part(*master->memory, synth,
++                           config->cfg.GzipCompression,
++                           config->cfg.Interpolation,
++                           &master->microtonal, master->fft);
+         p->applyparameters();
+         obj_store.extractPart(p, npart);
+         kits.extractPart(p, npart);
+@@ -690,7 +699,7 @@ public:
+     //structures at once... TODO error handling
+     void loadMaster(const char *filename)
+     {
+-        Master *m = new Master(synth);
++        Master *m = new Master(synth, config);
+         m->uToB = uToB;
+         m->bToU = bToU;
+         if(filename) {
+@@ -782,7 +791,7 @@ public:
+     {
+         char buffer[1024];
+         memset(buffer, 0, sizeof(buffer));
+-        DummyDataObj d(buffer, 1024, (void*)&config, this, uToB);
++        DummyDataObj d(buffer, 1024, (void*)config, this, uToB);
+         strcpy(buffer, "/config/");
+ 
+         Config::ports.dispatch(msg+8, d);
+@@ -854,13 +863,15 @@ public:
+ };
+ 
+ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, const SYNTH_T& synth_,
+-    int prefered_port)
+-    :parent(mw), ui(nullptr), synth(synth_)
++    Config* config, int preferrred_port)
++    :parent(mw), config(config), ui(nullptr), synth(synth_),
++    presetsstore(*config)
+ {
+     bToU = new rtosc::ThreadLink(4096*2,1024);
+     uToB = new rtosc::ThreadLink(4096*2,1024);
+-    if(prefered_port != -1)
+-        server = lo_server_new_with_proto(to_s(prefered_port).c_str(), LO_UDP, liblo_error_cb);
++    if(preferrred_port != -1)
++        server = lo_server_new_with_proto(to_s(preferrred_port).c_str(),
++                                          LO_UDP, liblo_error_cb);
+     else
+         server = lo_server_new_with_proto(NULL, LO_UDP, liblo_error_cb);
+     lo_server_add_method(server, NULL, NULL, handler_function, mw);
+@@ -881,7 +892,7 @@ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, const SYNTH_T& synth_,
+ #ifndef PLUGINVERSION
+     the_bToU = bToU;
+ #endif
+-    master = new Master(synth);
++    master = new Master(synth, config);
+     master->bToU = bToU;
+     master->uToB = uToB;
+     osc    = GUI::genOscInterface(mw);
+@@ -1288,8 +1299,9 @@ void MiddleWareImpl::warnMemoryLeaks(void)
+ /******************************************************************************
+  *                         MidleWare Forwarding Stubs                         *
+  ******************************************************************************/
+-MiddleWare::MiddleWare(const SYNTH_T &synth, int prefered_port)
+-:impl(new MiddleWareImpl(this, synth, prefered_port))
++MiddleWare::MiddleWare(const SYNTH_T &synth, Config* config,
++                       int preferred_port)
++:impl(new MiddleWareImpl(this, synth, config, preferred_port))
+ {}
+ MiddleWare::~MiddleWare(void)
+ {
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 82f314a8..bc8f1d23 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -11,7 +11,8 @@ class PresetsStore;
+ class MiddleWare
+ {
+     public:
+-        MiddleWare(const SYNTH_T& synth, int prefered_port = -1);
++        MiddleWare(const SYNTH_T& synth, class Config *config,
++                   int preferred_port = -1);
+         ~MiddleWare(void);
+         void updateResources(Master *m);
+         //returns internal master pointer
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index f9f5c6fe..f1e92870 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -184,8 +184,12 @@ static const Ports kitPorts = {
+ const Ports &Part::Kit::ports = kitPorts;
+ const Ports &Part::ports = partPorts;
+ 
+-Part::Part(Allocator &alloc, const SYNTH_T &synth_, Microtonal *microtonal_, FFTwrapper *fft_)
+-    :ctl(synth_), memory(alloc), synth(synth_)
++Part::Part(Allocator &alloc, const SYNTH_T &synth_,
++    const int &gzip_compression, const int &interpolation,
++    Microtonal *microtonal_, FFTwrapper *fft_)
++    :ctl(synth_), memory(alloc), synth(synth_),
++    gzip_compression(gzip_compression),
++    interpolation(interpolation)
+ {
+     microtonal = microtonal_;
+     fft      = fft_;
+@@ -579,7 +583,8 @@ void Part::NoteOn(unsigned char note,
+                     memory.alloc<SUBnote>(kit[0].subpars, pars);
+             if(kit[0].Ppadenabled)
+                 partnote[pos].kititem[0].padnote =
+-                    memory.alloc<PADnote>(kit[0].padpars, pars);
++                    memory.alloc<PADnote>(kit[0].padpars, pars,
++                                          interpolation);
+ 
+ 
+             if(kit[0].Padenabled || kit[0].Psubenabled || kit[0].Ppadenabled)
+@@ -598,7 +603,8 @@ void Part::NoteOn(unsigned char note,
+                         memory.alloc<SUBnote>(kit[0].subpars, pars);
+                 if(kit[0].Ppadenabled)
+                     partnote[posb].kititem[0].padnote =
+-                        memory.alloc<PADnote>(kit[0].padpars, pars);
++                        memory.alloc<PADnote>(kit[0].padpars, pars,
++                                              interpolation);
+ 
+                 if(kit[0].Padenabled || kit[0].Psubenabled || kit[0].Ppadenabled)
+                     partnote[posb].itemsplaying++;
+@@ -627,7 +633,8 @@ void Part::NoteOn(unsigned char note,
+ 
+                 if(kit[item].padpars && kit[item].Ppadenabled)
+                     note1.padnote =
+-                        memory.alloc<PADnote>(kit[item].padpars, pars);
++                        memory.alloc<PADnote>(kit[item].padpars, pars,
++                                              interpolation);
+ 
+                 // Spawn another note (but silent) if legatomodevalid==true
+                 if(legatomodevalid) {
+@@ -643,7 +650,8 @@ void Part::NoteOn(unsigned char note,
+                             memory.alloc<SUBnote>(kit[item].subpars, pars);
+                     if(kit[item].padpars && kit[item].Ppadenabled)
+                         note2.padnote =
+-                            memory.alloc<PADnote>(kit[item].padpars, pars);
++                            memory.alloc<PADnote>(kit[item].padpars, pars,
++                                                  interpolation);
+ 
+                     if(kit[item].adpars || kit[item].subpars || kit[item].padpars)
+                         partnote[posb].itemsplaying++;
+@@ -1193,7 +1201,7 @@ int Part::saveXML(const char *filename)
+     add2XMLinstrument(&xml);
+     xml.endbranch();
+ 
+-    int result = xml.saveXMLfile(filename, config.cfg.GzipCompression);
++    int result = xml.saveXMLfile(filename, gzip_compression);
+     return result;
+ }
+ 
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 7066be08..7935e70b 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -37,7 +37,9 @@ class Part
+         /**Constructor
+          * @param microtonal_ Pointer to the microtonal object
+          * @param fft_ Pointer to the FFTwrapper*/
+-        Part(Allocator &alloc, const SYNTH_T &synth, Microtonal *microtonal_, FFTwrapper *fft_);
++        Part(Allocator &alloc, const SYNTH_T &synth,
++             const int& gzip_compression, const int& interpolation,
++             Microtonal *microtonal_, FFTwrapper *fft_);
+         /**Destructor*/
+         ~Part();
+ 
+@@ -198,6 +200,7 @@ class Part
+         FFTwrapper *fft;
+         Allocator  &memory;
+         const SYNTH_T &synth;
++        const int &gzip_compression, &interpolation;
+ };
+ 
+ #endif
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index d132c601..949bdbaa 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -20,6 +20,7 @@
+ 
+ */
+ 
++#include "globals.h"
+ #include "Util.h"
+ #include <vector>
+ #include <cassert>
+@@ -43,8 +44,6 @@
+ 
+ prng_t prng_state = 0x1234;
+ 
+-Config config;
+-
+ /*
+  * Transform the velocity according the scaling parameter (velocity sensing)
+  */
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 7461e725..ad123e2d 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -27,7 +27,6 @@
+ #include <sstream>
+ #include <stdint.h>
+ #include <algorithm>
+-#include "Config.h"
+ 
+ using std::min;
+ using std::max;
+@@ -56,8 +55,6 @@ std::string os_pid_as_padded_string();
+ 
+ std::string legalizeFilename(std::string filename);
+ 
+-extern class Config config;
+-
+ void invSignal(float *sig, size_t len);
+ 
+ template<class T>
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index 4d74e8f2..e3bdcac9 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -31,6 +31,7 @@
+ #include <iostream>
+ #include <sstream>
+ 
++#include "globals.h"
+ #include "Util.h"
+ 
+ using namespace std;
+diff --git a/src/Nio/EngineMgr.cpp b/src/Nio/EngineMgr.cpp
+index 1f340bcd..5e003949 100644
+--- a/src/Nio/EngineMgr.cpp
++++ b/src/Nio/EngineMgr.cpp
+@@ -25,13 +25,14 @@
+ 
+ using namespace std;
+ 
+-EngineMgr &EngineMgr::getInstance(const SYNTH_T *synth)
++EngineMgr &EngineMgr::getInstance(const SYNTH_T *synth,
++    const oss_devs_t *oss_devs)
+ {
+-    static EngineMgr instance(synth);
++    static EngineMgr instance(synth, *oss_devs);
+     return instance;
+ }
+ 
+-EngineMgr::EngineMgr(const SYNTH_T *synth)
++EngineMgr::EngineMgr(const SYNTH_T *synth, const oss_devs_t& oss_devs)
+ {
+     assert(synth);
+     Engine *defaultEng = new NulEngine(*synth);
+@@ -39,8 +40,8 @@ EngineMgr::EngineMgr(const SYNTH_T *synth)
+     //conditional compiling mess (but contained)
+     engines.push_back(defaultEng);
+ #if OSS
+-    engines.push_back(new OssEngine(*synth));
+-    engines.push_back(new OssMultiEngine(*synth));
++    engines.push_back(new OssEngine(*synth, oss_devs));
++    engines.push_back(new OssMultiEngine(*synth, oss_devs));
+ #endif
+ #if ALSA
+     engines.push_back(new AlsaEngine(*synth));
+diff --git a/src/Nio/EngineMgr.h b/src/Nio/EngineMgr.h
+index 1dabe25d..e6aad51a 100644
+--- a/src/Nio/EngineMgr.h
++++ b/src/Nio/EngineMgr.h
+@@ -14,7 +14,9 @@ struct SYNTH_T;
+ class EngineMgr
+ {
+     public:
+-        static EngineMgr &getInstance(const SYNTH_T *synth=NULL);
++        static EngineMgr &getInstance(
++            const SYNTH_T *synth = nullptr,
++            const class oss_devs_t* oss_devs = nullptr);
+         ~EngineMgr();
+ 
+         /**Gets requested engine
+@@ -39,6 +41,6 @@ class EngineMgr
+         AudioOut *defaultOut;
+         MidiIn   *defaultIn;
+     private:
+-        EngineMgr(const SYNTH_T *synth);
++        EngineMgr(const SYNTH_T *synth, const oss_devs_t &oss_devs);
+ };
+ #endif
+diff --git a/src/Nio/Nio.cpp b/src/Nio/Nio.cpp
+index 84ec7864..db77d45f 100644
+--- a/src/Nio/Nio.cpp
++++ b/src/Nio/Nio.cpp
+@@ -5,6 +5,7 @@
+ #include "MidiIn.h"
+ #include "AudioOut.h"
+ #include "WavEngine.h"
++#include "../Misc/Config.h"
+ #include <cstring>
+ #include <iostream>
+ #include <algorithm>
+@@ -30,11 +31,12 @@ bool   Nio::pidInClientName = false;
+ string Nio::defaultSource   = IN_DEFAULT;
+ string Nio::defaultSink     = OUT_DEFAULT;
+ 
+-void Nio::init(const SYNTH_T &synth, class Master *master)
++void Nio::init(const SYNTH_T &synth, const oss_devs_t& oss_devs,
++               class Master *master)
+ {
+     in  = &InMgr::getInstance(); //Enable input wrapper
+     out = &OutMgr::getInstance(&synth); //Initialize the Output Systems
+-    eng = &EngineMgr::getInstance(&synth); //Initialize The Engines
++    eng = &EngineMgr::getInstance(&synth, &oss_devs); //Initialize the Engines
+ 
+     in->setMaster(master);
+     out->setMaster(master);
+diff --git a/src/Nio/Nio.h b/src/Nio/Nio.h
+index fd8696a9..1489c24f 100644
+--- a/src/Nio/Nio.h
++++ b/src/Nio/Nio.h
+@@ -6,13 +6,14 @@
+ class WavFile;
+ class Master;
+ struct SYNTH_T;
++class oss_devs_t;
+ 
+ /**Interface to Nio Subsystem
+  *
+  * Should be only externally included header */
+ namespace Nio
+ {
+-    void init(const SYNTH_T &synth, Master *master);
++    void init(const SYNTH_T &synth, const oss_devs_t &oss_devs, Master *master);
+     bool start(void);
+     void stop(void);
+ 
+diff --git a/src/Nio/OssEngine.cpp b/src/Nio/OssEngine.cpp
+index 34962584..ae1769e2 100644
+--- a/src/Nio/OssEngine.cpp
++++ b/src/Nio/OssEngine.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include "OssEngine.h"
+ #include "../Misc/Util.h"
++#include "../Misc/Config.h"
+ #include "../globals.h"
+ 
+ #include <cstring>
+@@ -179,8 +180,11 @@ OssMidiParse(struct OssMidiParse &midi_parse,
+         return (0);
+ }
+ 
+-OssEngine::OssEngine(const SYNTH_T &synth)
+-    :AudioOut(synth), audioThread(NULL), midiThread(NULL)
++OssEngine::OssEngine(const SYNTH_T &synth,
++    const oss_devs_t& oss_devs)
++    :AudioOut(synth), audioThread(NULL), midiThread(NULL),
++    linux_oss_wave_out_dev(oss_devs.linux_wave_out),
++    linux_oss_seq_in_dev(oss_devs.linux_seq_in)
+ {
+     name = "OSS";
+ 
+@@ -212,7 +216,7 @@ bool OssEngine::openAudio()
+ 
+     const char *device = getenv("DSP_DEVICE");
+     if(device == NULL)
+-        device = config.cfg.LinuxOSSWaveOutDev;
++        device = linux_oss_wave_out_dev;
+ 
+     /* NOTE: PIPEs and FIFOs can block when opening them */
+     audio.handle = open(device, O_WRONLY, O_NONBLOCK);
+@@ -350,7 +354,7 @@ bool OssEngine::openMidi()
+ 
+     const char *device = getenv("MIDI_DEVICE");
+     if(device == NULL)
+-        device = config.cfg.LinuxOSSSeqInDev;
++        device = linux_oss_seq_in_dev;
+ 
+     /* NOTE: PIPEs and FIFOs can block when opening them */
+     handle = open(device, O_RDONLY, O_NONBLOCK);
+diff --git a/src/Nio/OssEngine.h b/src/Nio/OssEngine.h
+index a96975eb..a4e8ff32 100644
+--- a/src/Nio/OssEngine.h
++++ b/src/Nio/OssEngine.h
+@@ -45,7 +45,7 @@ struct OssMidiParse {
+ class OssEngine:public AudioOut, MidiIn
+ {
+     public:
+-        OssEngine(const SYNTH_T &synth);
++        OssEngine(const SYNTH_T &synth, const class oss_devs_t& oss_devs);
+         ~OssEngine();
+ 
+         bool Start();
+@@ -83,6 +83,8 @@ class OssEngine:public AudioOut, MidiIn
+             bool en;
+             bool is32bit;
+         } audio;
++        
++        const char* linux_oss_wave_out_dev;
+ 
+         //Midi
+         bool openMidi();
+@@ -94,6 +96,8 @@ class OssEngine:public AudioOut, MidiIn
+             bool en;
+             bool run;
+         } midi;
++        
++        const char* linux_oss_seq_in_dev;
+ };
+ 
+ #endif
+diff --git a/src/Nio/OssMultiEngine.cpp b/src/Nio/OssMultiEngine.cpp
+index 34dab391..6bb8f2bf 100644
+--- a/src/Nio/OssMultiEngine.cpp
++++ b/src/Nio/OssMultiEngine.cpp
+@@ -43,8 +43,10 @@ extern MiddleWare *middleware;
+ 
+ using namespace std;
+ 
+-OssMultiEngine :: OssMultiEngine(const SYNTH_T &synth)
+-    :AudioOut(synth)
++OssMultiEngine :: OssMultiEngine(const SYNTH_T &synth,
++    const oss_devs_t &oss_devs)
++    :AudioOut(synth),
++    linux_oss_wave_out_dev(oss_devs.linux_wave_out)
+ {
+     /* setup variables */
+     name = "OSS-MULTI";
+@@ -81,7 +83,7 @@ OssMultiEngine :: openAudio()
+ 
+     const char *device = getenv("DSP_DEVICE");
+     if(device == 0)
+-        device = config.cfg.LinuxOSSWaveOutDev;
++        device = linux_oss_wave_out_dev;
+ 
+     /* NOTE: PIPEs and FIFOs can block when opening them */
+     handle = open(device, O_WRONLY, O_NONBLOCK);
+diff --git a/src/Nio/OssMultiEngine.h b/src/Nio/OssMultiEngine.h
+index d5a668d2..6f2c3856 100644
+--- a/src/Nio/OssMultiEngine.h
++++ b/src/Nio/OssMultiEngine.h
+@@ -29,7 +29,8 @@
+ class OssMultiEngine : public AudioOut
+ {
+     public:
+-        OssMultiEngine(const SYNTH_T &synth);
++        OssMultiEngine(const SYNTH_T &synth,
++                       const class oss_devs_t& oss_devs);
+         ~OssMultiEngine();
+ 
+         bool Start();
+@@ -62,6 +63,8 @@ class OssMultiEngine : public AudioOut
+ 
+         bool en;
+         bool is32bit;
++
++        const char* linux_oss_wave_out_dev;
+ };
+ 
+ #endif
+diff --git a/src/Params/PresetsStore.cpp b/src/Params/PresetsStore.cpp
+index c0623613..f5af758d 100644
+--- a/src/Params/PresetsStore.cpp
++++ b/src/Params/PresetsStore.cpp
+@@ -30,13 +30,14 @@
+ #include "PresetsStore.h"
+ #include "../Misc/XMLwrapper.h"
+ #include "../Misc/Util.h"
++#include "../Misc/Config.h"
+ 
+ using namespace std;
+ 
+ //XXX to remove
+ //PresetsStore presetsstore;
+ 
+-PresetsStore::PresetsStore()
++PresetsStore::PresetsStore(const Config& config) : config(config)
+ {
+ }
+ 
+diff --git a/src/Params/PresetsStore.h b/src/Params/PresetsStore.h
+index 6a40f4fd..5baabfec 100644
+--- a/src/Params/PresetsStore.h
++++ b/src/Params/PresetsStore.h
+@@ -29,8 +29,9 @@
+ class XMLwrapper;
+ class PresetsStore
+ {
++        const class Config& config;
+     public:
+-        PresetsStore();
++        PresetsStore(const class Config &config);
+         ~PresetsStore();
+ 
+         //Clipboard stuff
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 52e28ca0..2e232164 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -29,8 +29,8 @@
+ #include "../Misc/Util.h"
+ 
+ PADnote::PADnote(PADnoteParameters *parameters,
+-                 SynthParams pars)
+-    :SynthNote(pars), pars(*parameters)
++                 SynthParams pars, const int& interpolation)
++    :SynthNote(pars), pars(*parameters), interpolation(interpolation)
+ {
+     firsttime = true;
+     setup(pars.frequency, pars.velocity, pars.portamento, pars.note);
+@@ -347,7 +347,7 @@ int PADnote::noteout(float *outl, float *outr)
+     float freqlo  = freqrap - floor(freqrap);
+ 
+ 
+-    if(config.cfg.Interpolation)
++    if(interpolation)
+         Compute_Cubic(outl, outr, freqhi, freqlo);
+     else
+         Compute_Linear(outl, outr, freqhi, freqlo);
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index de63acea..dda0641f 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -30,7 +30,8 @@
+ class PADnote:public SynthNote
+ {
+     public:
+-        PADnote(PADnoteParameters *parameters, SynthParams pars);
++        PADnote(PADnoteParameters *parameters, SynthParams pars,
++                const int &interpolation);
+         ~PADnote();
+ 
+         void legatonote(LegatoParams pars);
+@@ -104,6 +105,7 @@ class PADnote:public SynthNote
+ 
+ 
+         float globaloldamplitude, globalnewamplitude, velocity, realfreq;
++        const int& interpolation;
+ };
+ 
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index 920cfc3a..a569ac89 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -76,7 +76,7 @@ NSM_Client *nsm = 0;
+ 
+ char *instance_name = 0;
+ 
+-void exitprogram();
++void exitprogram(const Config &config);
+ 
+ extern pthread_t main_thread;
+ 
+@@ -91,21 +91,21 @@ void sigterm_exit(int /*sig*/)
+ /*
+  * Program initialisation
+  */
+-void initprogram(const SYNTH_T& synth, int prefered_port)
++void initprogram(const SYNTH_T& synth, Config* config, int prefered_port)
+ {
+-    middleware = new MiddleWare(synth, prefered_port);
++    middleware = new MiddleWare(synth, config, prefered_port);
+     master = middleware->spawnMaster();
+     master->swaplr = swaplr;
+ 
+     signal(SIGINT, sigterm_exit);
+     signal(SIGTERM, sigterm_exit);
+-    Nio::init(master->synth, master);
++    Nio::init(master->synth, config->cfg.oss_devs, master);
+ }
+ 
+ /*
+  * Program exit
+  */
+-void exitprogram()
++void exitprogram(const Config& config)
+ {
+     Nio::stop();
+     config.save();
+@@ -128,6 +128,7 @@ int main(int argc, char *argv[])
+ {
+     main_thread = pthread_self();
+     SYNTH_T synth;
++    Config config;
+     config.init();
+     int noui = 0;
+     cerr
+@@ -374,7 +375,7 @@ int main(int argc, char *argv[])
+         return 0;
+     }
+ 
+-    initprogram(synth, prefered_port);
++    initprogram(synth, &config, prefered_port);
+ 
+     if(!loadfile.empty()) {
+         int tmp = master->loadXML(loadfile.c_str());
+@@ -495,6 +496,6 @@ done:
+         middleware->tick();
+     }
+ 
+-    exitprogram();
++    exitprogram(config);
+     return 0;
+ }
+-- 
+2.47.0
+

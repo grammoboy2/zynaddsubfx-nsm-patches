@@ -1,0 +1,29 @@
+From 8aa78f5f79e83e2b03998d2de76f532d545f3334 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 9 Dec 2018 21:56:44 -0500
+Subject: [PATCH 1296/1936] Pad Synth: Add missing export2wav OSC API
+
+Should resolve https://sourceforge.net/p/zynaddsubfx/bugs/183/
+---
+ src/Params/PADnoteParameters.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 78ddc96d..cc93c856 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -285,6 +285,11 @@ static const rtosc::Ports non_realtime_ports =
+             d.replyArray(d.loc, types, args);
+ #undef RES
+         }},
++    {"export2wav:s", rDoc("Export padsynth waveforms to .wav files"),
++        NULL, [](const char *m, rtosc::RtData&d) {
++            PADnoteParameters *p = ((PADnoteParameters*)d.obj);
++            p->export2wav(rtosc_argument(m, 0).s);
++        }},
+     {"needPrepare:", rDoc("Unimplemented Stub"),
+         NULL, [](const char *, rtosc::RtData&) {}},
+ };
+-- 
+2.47.0
+

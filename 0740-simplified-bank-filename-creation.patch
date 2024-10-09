@@ -1,0 +1,33 @@
+From dcbb57c7ad077d02d640f7c5420439187e920548 Mon Sep 17 00:00:00 2001
+From: Olivier Jolly <olivier@pcedev.com>
+Date: Fri, 20 Nov 2015 23:36:11 +0100
+Subject: [PATCH 0740/1936] simplified bank filename creation
+
+---
+ src/Misc/Bank.cpp | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index e936d9d5..969f79c8 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -170,15 +170,10 @@ int Bank::savetoslot(unsigned int ninstrument, Part *part)
+ 
+     snprintf(tmpfilename,
+              maxfilename,
+-             "%4d-%s",
++             "%04d-%s",
+              ninstrument + 1,
+              (char *)part->Pname);
+ 
+-    //add the zeroes at the start of filename
+-    for(int i = 0; i < 4; ++i)
+-        if(tmpfilename[i] == ' ')
+-            tmpfilename[i] = '0';
+-
+     string filename = dirname + '/' + legalizeFilename(tmpfilename) + ".xiz";
+ 
+     FILE *f = fopen(filename.c_str(), "r");
+-- 
+2.47.0
+

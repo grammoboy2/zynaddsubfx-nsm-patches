@@ -1,0 +1,520 @@
+From 4b26b6456e011740f4efb2c10ff6f8c46395c622 Mon Sep 17 00:00:00 2001
+From: dancesWithBugs <nospam@example.com>
+Date: Wed, 4 May 2022 11:46:23 +0200
+Subject: [PATCH 1856/1936] fixed misspelling of "distortion"
+
+---
+ NEWS.txt                                      |  2 +-
+ doc/nrpn.txt                                  |  2 +-
+ src/Effects/CMakeLists.txt                    |  2 +-
+ .../{Distorsion.cpp => Distortion.cpp}        | 36 +++++++++----------
+ src/Effects/{Distorsion.h => Distortion.h}    | 16 ++++-----
+ src/Effects/EffectMgr.cpp                     | 12 +++----
+ src/Misc/WaveShapeSmps.cpp                    |  4 +--
+ src/Misc/WaveShapeSmps.h                      |  2 +-
+ src/Plugin/Distortion/Distortion.cpp          |  4 +--
+ src/UI/EffUI.fl                               | 30 ++++++++--------
+ 10 files changed, 55 insertions(+), 55 deletions(-)
+ rename src/Effects/{Distorsion.cpp => Distortion.cpp} (92%)
+ rename src/Effects/{Distorsion.h => Distortion.h} (86%)
+
+diff --git a/NEWS.txt b/NEWS.txt
+index 3daa15a3..c503d88a 100644
+--- a/NEWS.txt
++++ b/NEWS.txt
+@@ -370,7 +370,7 @@
+ 
+ 1.0.7 (7 Feb 2003)
+       - some settings (like samplerate) are set at runtime (by comand line)
+-      - added Distorsion effect
++      - added Distortion effect
+       - added controllers, and NRPNs for changing all effects parameters by midi
+       - bugs removed and other improvements
+ 
+diff --git a/doc/nrpn.txt b/doc/nrpn.txt
+index 8df4dd5c..ce169682 100644
+--- a/doc/nrpn.txt
++++ b/doc/nrpn.txt
+@@ -121,7 +121,7 @@ AlienWah
+ [orange]#09 - Left/Right Crossing (FC)#
+ 10 - Phase+
+ 
+-Distorsion
++Distortion
+ ~~~~~~~~~~
+ 
+ [verse]
+diff --git a/src/Effects/CMakeLists.txt b/src/Effects/CMakeLists.txt
+index 803cbca1..4fd35e19 100644
+--- a/src/Effects/CMakeLists.txt
++++ b/src/Effects/CMakeLists.txt
+@@ -1,7 +1,7 @@
+ set(zynaddsubfx_effect_SRCS
+     Effects/Alienwah.cpp
+ 	Effects/Chorus.cpp
+-	Effects/Distorsion.cpp
++	Effects/Distortion.cpp
+ 	Effects/DynamicFilter.cpp
+ 	Effects/Echo.cpp
+ 	Effects/Effect.cpp
+diff --git a/src/Effects/Distorsion.cpp b/src/Effects/Distortion.cpp
+similarity index 92%
+rename from src/Effects/Distorsion.cpp
+rename to src/Effects/Distortion.cpp
+index c710679a..eebe4b1b 100644
+--- a/src/Effects/Distorsion.cpp
++++ b/src/Effects/Distortion.cpp
+@@ -1,7 +1,7 @@
+ /*
+   ZynAddSubFX - a software synthesizer
+ 
+-  Distorsion.cpp - Distorsion effect
++  Distortion.cpp - Distortion effect
+   Copyright (C) 2002-2005 Nasca Octavian Paul
+   Author: Nasca Octavian Paul
+ 
+@@ -11,7 +11,7 @@
+   of the License, or (at your option) any later version.
+ */
+ 
+-#include "Distorsion.h"
++#include "Distortion.h"
+ #include "../DSP/AnalogFilter.h"
+ #include "../Misc/WaveShapeSmps.h"
+ #include "../Misc/Allocator.h"
+@@ -21,11 +21,11 @@
+ 
+ namespace zyn {
+ 
+-#define rObject Distorsion
++#define rObject Distortion
+ #define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+-rtosc::Ports Distorsion::ports = {
++rtosc::Ports Distortion::ports = {
+     {"preset::i", rProp(parameter)
+                   rOptions(Overdrive 1, Overdrive 2, A. Exciter 1, A. Exciter 2, Guitar Amp,
+                     Quantisize)
+@@ -68,7 +68,7 @@ rtosc::Ports Distorsion::ports = {
+             rLinear(0, 127), "Input DC Offset"),
+     {"waveform:", 0, 0, [](const char *, rtosc::RtData &d)
+         {
+-            Distorsion  &dd = *(Distorsion*)d.obj;
++            Distortion  &dd = *(Distortion*)d.obj;
+             float        buffer[128], orig[128];
+             rtosc_arg_t  args[128];
+             char         arg_str[128+1] = {};
+@@ -92,7 +92,7 @@ rtosc::Ports Distorsion::ports = {
+ #undef rEnd
+ #undef rObject
+ 
+-Distorsion::Distorsion(EffectParams pars)
++Distortion::Distortion(EffectParams pars)
+     :Effect(pars),
+       Pvolume(50),
+       Pdrive(90),
+@@ -114,7 +114,7 @@ Distorsion::Distorsion(EffectParams pars)
+     cleanup();
+ }
+ 
+-Distorsion::~Distorsion()
++Distortion::~Distortion()
+ {
+     memory.dealloc(lpfl);
+     memory.dealloc(lpfr);
+@@ -123,7 +123,7 @@ Distorsion::~Distorsion()
+ }
+ 
+ //Cleanup the effect
+-void Distorsion::cleanup(void)
++void Distortion::cleanup(void)
+ {
+     lpfl->cleanup();
+     hpfl->cleanup();
+@@ -133,7 +133,7 @@ void Distorsion::cleanup(void)
+ 
+ 
+ //Apply the filters
+-void Distorsion::applyfilters(float *efxoutl, float *efxoutr)
++void Distortion::applyfilters(float *efxoutl, float *efxoutr)
+ {
+     if(Plpf!=127) lpfl->filterout(efxoutl);
+     if(Phpf!=0) hpfl->filterout(efxoutl);
+@@ -145,7 +145,7 @@ void Distorsion::applyfilters(float *efxoutl, float *efxoutr)
+ 
+ 
+ //Effect output
+-void Distorsion::out(const Stereo<float *> &smp)
++void Distortion::out(const Stereo<float *> &smp)
+ {
+     float inputvol = powf(5.0f, (Pdrive - 32.0f) / 127.0f);
+     if(Pnegate)
+@@ -189,7 +189,7 @@ void Distorsion::out(const Stereo<float *> &smp)
+ 
+ 
+ //Parameter control
+-void Distorsion::setvolume(unsigned char _Pvolume)
++void Distortion::setvolume(unsigned char _Pvolume)
+ {
+     Pvolume = _Pvolume;
+ 
+@@ -203,7 +203,7 @@ void Distorsion::setvolume(unsigned char _Pvolume)
+         cleanup();
+ }
+ 
+-void Distorsion::setlpf(unsigned char _Plpf)
++void Distortion::setlpf(unsigned char _Plpf)
+ {
+     Plpf = _Plpf;
+     float fr = expf(sqrtf(Plpf / 127.0f) * logf(25000.0f)) + 40.0f;
+@@ -211,7 +211,7 @@ void Distorsion::setlpf(unsigned char _Plpf)
+     lpfr->setfreq(fr);
+ }
+ 
+-void Distorsion::sethpf(unsigned char _Phpf)
++void Distortion::sethpf(unsigned char _Phpf)
+ {
+     Phpf = _Phpf;
+     float fr = expf(sqrtf(Phpf / 127.0f) * logf(25000.0f)) + 20.0f;
+@@ -219,7 +219,7 @@ void Distorsion::sethpf(unsigned char _Phpf)
+     hpfr->setfreq(fr);
+ }
+ 
+-unsigned char Distorsion::getpresetpar(unsigned char npreset, unsigned int npar)
++unsigned char Distortion::getpresetpar(unsigned char npreset, unsigned int npar)
+ {
+ #define	PRESET_SIZE 13
+ #define	NUM_PRESETS 6
+@@ -247,7 +247,7 @@ unsigned char Distorsion::getpresetpar(unsigned char npreset, unsigned int npar)
+     return 0;
+ }
+ 
+-void Distorsion::setpreset(unsigned char npreset)
++void Distortion::setpreset(unsigned char npreset)
+ {
+     if(npreset >= NUM_PRESETS)
+         npreset = NUM_PRESETS - 1;
+@@ -257,7 +257,7 @@ void Distorsion::setpreset(unsigned char npreset)
+     cleanup();
+ }
+ 
+-void Distorsion::changepar(int npar, unsigned char value)
++void Distortion::changepar(int npar, unsigned char value)
+ {
+     switch(npar) {
+         case 0:
+@@ -277,7 +277,7 @@ void Distorsion::changepar(int npar, unsigned char value)
+             break;
+         case 5:
+             if(value > 16)
+-                Ptype = 16;  //this must be increased if more distorsion types are added
++                Ptype = 16;  //this must be increased if more distortion types are added
+             else
+                 Ptype = value;
+             break;
+@@ -308,7 +308,7 @@ void Distorsion::changepar(int npar, unsigned char value)
+     }
+ }
+ 
+-unsigned char Distorsion::getpar(int npar) const
++unsigned char Distortion::getpar(int npar) const
+ {
+     switch(npar) {
+         case 0:  return Pvolume;
+diff --git a/src/Effects/Distorsion.h b/src/Effects/Distortion.h
+similarity index 86%
+rename from src/Effects/Distorsion.h
+rename to src/Effects/Distortion.h
+index f191bd86..82087130 100644
+--- a/src/Effects/Distorsion.h
++++ b/src/Effects/Distortion.h
+@@ -1,7 +1,7 @@
+ /*
+   ZynAddSubFX - a software synthesizer
+ 
+-  Distorsion.h - Distorsion Effect
++  Distortion.h - Distortion Effect
+   Copyright (C) 2002-2005 Nasca Octavian Paul
+   Author: Nasca Octavian Paul
+ 
+@@ -11,19 +11,19 @@
+   of the License, or (at your option) any later version.
+ */
+ 
+-#ifndef DISTORSION_H
+-#define DISTORSION_H
++#ifndef DISTORTION_H
++#define DISTORTION_H
+ 
+ #include "Effect.h"
+ 
+ namespace zyn {
+ 
+ /**Distortion Effect*/
+-class Distorsion:public Effect
++class Distortion:public Effect
+ {
+     public:
+-        Distorsion(EffectParams pars);
+-        ~Distorsion();
++        Distortion(EffectParams pars);
++        ~Distortion();
+         void out(const Stereo<float *> &smp);
+         unsigned char getpresetpar(unsigned char npreset, unsigned int npar);
+         void setpreset(unsigned char npreset);
+@@ -38,12 +38,12 @@ class Distorsion:public Effect
+         unsigned char Pvolume;       //Volume or E/R
+         unsigned char Pdrive;        //the input amplification
+         unsigned char Plevel;        //the output amplification
+-        unsigned char Ptype;         //Distorsion type
++        unsigned char Ptype;         //Distortion type
+         unsigned char Pnegate;       //if the input is negated
+         unsigned char Plpf;          //lowpass filter
+         unsigned char Phpf;          //highpass filter
+         unsigned char Pstereo;       //0=mono, 1=stereo
+-        unsigned char Pprefiltering; //if you want to do the filtering before the distorsion
++        unsigned char Pprefiltering; //if you want to do the filtering before the distortion
+         unsigned char Pfuncpar;      //for parametric functions
+         unsigned char Poffset;       //the input offset
+ 
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 5c2a7d3f..95b1154a 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -22,7 +22,7 @@
+ #include "Reverb.h"
+ #include "Echo.h"
+ #include "Chorus.h"
+-#include "Distorsion.h"
++#include "Distortion.h"
+ #include "EQ.h"
+ #include "DynamicFilter.h"
+ #include "Phaser.h"
+@@ -153,7 +153,7 @@ static const rtosc::Ports local_ports = {
+                                 eff->seteffectparrt(2, Pfreq);
+                             break;
+                         case 1: // Reverb
+-                        case 6: // Distorsion
++                        case 6: // Distortion
+                         case 7: // EQ
+                         default:
+                             break;
+@@ -200,7 +200,7 @@ static const rtosc::Ports local_ports = {
+                                 eff->seteffectparrt(2, Pfreq);
+                             break;
+                         case 1: // Reverb
+-                        case 6: // Distorsion
++                        case 6: // Distortion
+                         case 7: // EQ
+                         default:
+                             break;
+@@ -249,7 +249,7 @@ static const rtosc::Ports local_ports = {
+         }},
+     rSubtype(Alienwah),
+     rSubtype(Chorus),
+-    rSubtype(Distorsion),
++    rSubtype(Distortion),
+     rSubtype(DynamicFilter),
+     rSubtype(Echo),
+     rSubtype(EQ),
+@@ -327,7 +327,7 @@ void EffectMgr::changeeffectrt(int _nefx, bool avoidSmash)
+                 efx = memory.alloc<Alienwah>(pars);
+                 break;
+             case 6:
+-                efx = memory.alloc<Distorsion>(pars);
++                efx = memory.alloc<Distortion>(pars);
+                 break;
+             case 7:
+                 efx = memory.alloc<EQ>(pars);
+@@ -368,7 +368,7 @@ void EffectMgr::changeeffectrt(int _nefx, bool avoidSmash)
+                         seteffectparrt(2, Pfreq);
+                     break;
+                 case 1: // Reverb
+-                case 6: // Distorsion
++                case 6: // Distortion
+                 case 7: // EQ
+                 default:
+                     break;
+diff --git a/src/Misc/WaveShapeSmps.cpp b/src/Misc/WaveShapeSmps.cpp
+index a48f563e..a733210c 100644
+--- a/src/Misc/WaveShapeSmps.cpp
++++ b/src/Misc/WaveShapeSmps.cpp
+@@ -277,7 +277,7 @@ void waveShapeSmps(int n,
+                     smps[i] = 1.5 * (smps[i] - (smps[i]*smps[i]*smps[i] / 3.0) );
+                 else
+                     smps[i] = (smps[i] > 0 ? 1.0f : -1.0f);
+-                //subtract offset with distorsion function applied
++                //subtract offset with distortion function applied
+                 smps[i] -= 1.5 * (offs - (offs*offs*offs / 3.0));
+             }
+             break;
+@@ -292,7 +292,7 @@ void waveShapeSmps(int n,
+                     smps[i] = smps[i]*(2-fabsf(smps[i]));
+                 else
+                     smps[i] = (smps[i] > 0 ? 1.0f : -1.0f);
+-                //subtract offset with distorsion function applied
++                //subtract offset with distortion function applied
+                 smps[i] -= offs*(2-fabsf(offs));
+             }
+             break;
+diff --git a/src/Misc/WaveShapeSmps.h b/src/Misc/WaveShapeSmps.h
+index a521b519..200f71e6 100644
+--- a/src/Misc/WaveShapeSmps.h
++++ b/src/Misc/WaveShapeSmps.h
+@@ -15,7 +15,7 @@
+ 
+ namespace zyn {
+ 
+-//Waveshaping(called by Distorsion effect and waveshape from OscilGen)
++//Waveshaping(called by Distortion effect and waveshape from OscilGen)
+ void waveShapeSmps(int n,
+                    float *smps,
+                    unsigned char type,
+diff --git a/src/Plugin/Distortion/Distortion.cpp b/src/Plugin/Distortion/Distortion.cpp
+index 9c9ef772..87d995cf 100644
+--- a/src/Plugin/Distortion/Distortion.cpp
++++ b/src/Plugin/Distortion/Distortion.cpp
+@@ -15,12 +15,12 @@
+ #include "../AbstractFX.hpp"
+ 
+ // ZynAddSubFX includes
+-#include "Effects/Distorsion.h"
++#include "Effects/Distortion.h"
+ 
+ /* ------------------------------------------------------------------------------------------------------------
+  * Distortion plugin class */
+ 
+-class DistortionPlugin : public AbstractPluginFX<zyn::Distorsion>
++class DistortionPlugin : public AbstractPluginFX<zyn::Distortion>
+ {
+ public:
+     DistortionPlugin()
+diff --git a/src/UI/EffUI.fl b/src/UI/EffUI.fl
+index 0d218a21..be3557b6 100644
+--- a/src/UI/EffUI.fl
++++ b/src/UI/EffUI.fl
+@@ -71,7 +71,7 @@ effechowindow->hide();//delete (effechowindow);
+ effchoruswindow->hide();//delete (effchoruswindow);
+ effphaserwindow->hide();//delete (effphaserwindow);
+ effalienwahwindow->hide();//delete (effalienwahwindow);
+-effdistorsionwindow->hide();//delete (effdistorsionwindow);
++effdistortionwindow->hide();//delete (effdistortionwindow);
+ effeqwindow->hide();//delete (effeqwindow);
+ effdynamicfilterwindow->hide();//delete (effdynamicfilterwindow);
+ 
+@@ -740,8 +740,8 @@ if (filterwindow!=NULL){
+       }
+     }
+   }
+-  Function {make_distorsion_window()} {} {
+-    Fl_Window effdistorsionwindow {
++  Function {make_distortion_window()} {} {
++    Fl_Window effdistortionwindow {
+       xywh {553 286 380 100} type Double box UP_BOX color 221 labelfont 1 labelsize 19
+       code0 {set_module_parameters(o);}
+       class Fl_Group visible
+@@ -920,7 +920,7 @@ if (filterwindow!=NULL){
+       }
+       Fl_Check_Button distp10 {
+         label PF
+-        tooltip {Applies the filters(before or after) the distorsion} xywh {355 44 15 15} down_box DOWN_BOX labelfont 1 labelsize 11 align 1
++        tooltip {Applies the filters(before or after) the distortion} xywh {355 44 15 15} down_box DOWN_BOX labelfont 1 labelsize 11 align 1
+         code0 {o->init("parameter10");}
+         class Fl_Osc_Check
+       }
+@@ -1188,7 +1188,7 @@ make_echo_window();
+ make_chorus_window();
+ make_phaser_window();
+ make_alienwah_window();
+-make_distorsion_window();
++make_distortion_window();
+ make_eq_window();
+ make_dynamicfilter_window();
+ 
+@@ -1201,7 +1201,7 @@ effechowindow->position(px,py);
+ effchoruswindow->position(px,py);
+ effphaserwindow->position(px,py);
+ effalienwahwindow->position(px,py);
+-effdistorsionwindow->position(px,py);
++effdistortionwindow->position(px,py);
+ effeqwindow->position(px,py);
+ effdynamicfilterwindow->position(px,py);
+ 
+@@ -1219,7 +1219,7 @@ effechowindow->hide();
+ effchoruswindow->hide();
+ effphaserwindow->hide();
+ effalienwahwindow->hide();
+-effdistorsionwindow->hide();
++effdistortionwindow->hide();
+ effeqwindow->hide();
+ effdynamicfilterwindow->hide();
+ 
+@@ -1258,7 +1258,7 @@ switch(efftype){
+ 	effalienwahwindow->show();
+         break; 
+      case 6:
+-	effdistorsionwindow->show();
++	effdistortionwindow->show();
+         break;
+      case 7:eqband=0;
+ 	bandcounter->value(eqband);
+@@ -1297,7 +1297,7 @@ effechowindow->hide();//delete (effechowindow);
+ effchoruswindow->hide();//delete (effchoruswindow);
+ effphaserwindow->hide();//delete (effphaserwindow);
+ effalienwahwindow->hide();//delete (effalienwahwindow);
+-effdistorsionwindow->hide();//delete (effdistorsionwindow);
++effdistortionwindow->hide();//delete (effdistortionwindow);
+ effeqwindow->hide();//delete (effeqwindow);
+ effdynamicfilterwindow->hide();//delete (effdynamicfilterwindow);} {}
+   }
+@@ -1691,8 +1691,8 @@ effdynamicfilterwindow->hide();//delete (effdynamicfilterwindow);} {}
+       }
+     }
+   }
+-  Function {make_distorsion_window()} {} {
+-    Fl_Window effdistorsionwindow {
++  Function {make_distortion_window()} {} {
++    Fl_Window effdistortionwindow {
+       xywh {88 881 230 100} type Double box UP_BOX color 51 labelfont 1 labelsize 19
+       code3 {set_module_parameters(o);}
+       class Fl_Group visible
+@@ -2031,7 +2031,7 @@ make_echo_window();
+ make_chorus_window();
+ make_phaser_window();
+ make_alienwah_window();
+-make_distorsion_window();
++make_distortion_window();
+ make_eq_window();
+ make_dynamicfilter_window();
+ 
+@@ -2044,7 +2044,7 @@ effechowindow->position(px,py);
+ effchoruswindow->position(px,py);
+ effphaserwindow->position(px,py);
+ effalienwahwindow->position(px,py);
+-effdistorsionwindow->position(px,py);
++effdistortionwindow->position(px,py);
+ effeqwindow->position(px,py);
+ effdynamicfilterwindow->position(px,py);} {}
+   }
+@@ -2061,7 +2061,7 @@ effechowindow->hide();
+ effchoruswindow->hide();
+ effphaserwindow->hide();
+ effalienwahwindow->hide();
+-effdistorsionwindow->hide();
++effdistortionwindow->hide();
+ effeqwindow->hide();
+ effdynamicfilterwindow->hide();
+ 
+@@ -2094,7 +2094,7 @@ switch(efftype){
+ 	effalienwahwindow->show();
+         break; 
+      case 6:
+-	effdistorsionwindow->show();
++	effdistortionwindow->show();
+         break;
+      case 7:
+ 	bandcounter->value(eqband);
+-- 
+2.47.0
+

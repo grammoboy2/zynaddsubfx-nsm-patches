@@ -1,0 +1,50 @@
+From 54166fd0c6884b04a3519c0c18f0344e087ec09b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 1 Mar 2015 10:50:00 -0500
+Subject: [PATCH 0381/1936] Alienwah: Remove 'using namespace std' From Header
+
+---
+ src/Effects/Alienwah.cpp | 2 ++
+ src/Effects/Alienwah.h   | 6 ++----
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/Effects/Alienwah.cpp b/src/Effects/Alienwah.cpp
+index ae08e489..cdb06ee5 100644
+--- a/src/Effects/Alienwah.cpp
++++ b/src/Effects/Alienwah.cpp
+@@ -24,6 +24,8 @@
+ #include "../Misc/Allocator.h"
+ #include "Alienwah.h"
+ 
++using std::complex;
++
+ Alienwah::Alienwah(EffectParams pars)
+     :Effect(pars),
+       lfo(pars.srate, pars.bufsize),
+diff --git a/src/Effects/Alienwah.h b/src/Effects/Alienwah.h
+index 7f8358df..06a18d62 100644
+--- a/src/Effects/Alienwah.h
++++ b/src/Effects/Alienwah.h
+@@ -27,8 +27,6 @@
+ #include "EffectLFO.h"
+ #include <complex>
+ 
+-using namespace std;
+-
+ #define MAX_ALIENWAH_DELAY 100
+ 
+ /**"AlienWah" Effect*/
+@@ -63,8 +61,8 @@ class Alienwah:public Effect
+ 
+         //Internal Values
+         float fb, depth, phase;
+-        complex<float> *oldl, *oldr;
+-        complex<float>  oldclfol, oldclfor;
++        std::complex<float> *oldl, *oldr;
++        std::complex<float>  oldclfol, oldclfor;
+         int oldk;
+ };
+ 
+-- 
+2.47.0
+

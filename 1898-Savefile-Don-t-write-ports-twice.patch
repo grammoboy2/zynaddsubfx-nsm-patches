@@ -1,0 +1,94 @@
+From 4f1db1ebfa6a31cf37633ee470c9af407eb8896d Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 24 Mar 2023 17:12:27 +0100
+Subject: [PATCH 1898/1936] Savefile: Don't write ports twice
+
+This uses two new rtosc features:
+
+* "alreadyWritten": Ports that were already written will not be written
+  again
+* "propsToExclude": Ports with property "non-realtime" will not be
+  written from the Master port tree
+---
+ rtosc                   | 2 +-
+ src/Misc/Master.cpp     | 4 +++-
+ src/Misc/Master.h       | 3 ++-
+ src/Misc/MiddleWare.cpp | 7 ++++---
+ 4 files changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index dcfa725f..ed5ca36e 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit dcfa725f3f77ce3765972d805372b9eadb764b9e
++Subproject commit ed5ca36e5c6260c0215e2d7b6b16f72e5ba7aa04
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 98618e1b..cbb4ae6b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1809,10 +1809,12 @@ char* Master::getXMLData()
+ 
+ // this is being called as a "read only op" directly by the MiddleWare thread;
+ // note that the Master itself is frozen
+-std::string Master::saveOSC(std::string savefile)
++std::string Master::saveOSC(std::string savefile, std::set<std::string>& alreadyWritten)
+ {
+     return rtosc::save_to_file(ports, this,
+                                nullptr, version_in_rtosc_fmt(), // both unused
++                               alreadyWritten,
++                               {"non-realtime"}, // excluded non-reatlime ports
+                                savefile);
+ }
+ 
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index fc9827ab..791ac3c5 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -17,6 +17,7 @@
+ #include "../globals.h"
+ #include "Microtonal.h"
+ #include <atomic>
++#include <set>
+ #include <rtosc/automations.h>
+ #include <rtosc/miditable.h>
+ #include <rtosc/savefile.h>
+@@ -78,7 +79,7 @@ class Master
+         int loadXML(const char *filename);
+ 
+         /**Append all settings to an OSC savefile (as specified by RT OSC)*/
+-        std::string saveOSC(std::string savefile);
++        std::string saveOSC(std::string savefile, std::set<std::string>& alreadyWritten);
+         /**loads all settings from an OSC file (as specified by RT OSC)
+          * @param dispatcher Message dispatcher and modifier
+          * @return 0 for ok or <0 if there is an error*/
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 3c7b93b3..dbe86737 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -758,18 +758,19 @@ public:
+             master2.frozenState = true;
+ 
+             std::string savefile;
++            std::set<std::string> alreadyWritten;
+             rtosc_version m_version =
+             {
+                 (unsigned char) version.get_major(),
+                 (unsigned char) version.get_minor(),
+                 (unsigned char) version.get_revision()
+             };
+-            savefile = rtosc::save_to_file(getNonRtParamPorts(), this, "ZynAddSubFX", m_version);
++            savefile = rtosc::save_to_file(getNonRtParamPorts(), this, "ZynAddSubFX", m_version, alreadyWritten, {});
+             savefile += '\n';
+ 
+-            doReadOnlyOp([this,filename,&dispatcher,&master2,&savefile,&res]()
++            doReadOnlyOp([this,filename,&dispatcher,&master2,&savefile,&res,&alreadyWritten]()
+             {
+-                savefile = master->saveOSC(savefile);
++                savefile = master->saveOSC(savefile, alreadyWritten);
+ #if 1
+                 // load the savefile string into another master to compare the results
+                 // between the original and the savefile-loaded master
+-- 
+2.47.0
+

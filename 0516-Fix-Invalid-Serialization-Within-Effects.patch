@@ -1,0 +1,107 @@
+From 0aa37fe4a487a71ed67345d41c26e6cc5696ee0c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 2 Jul 2015 16:03:39 -0400
+Subject: [PATCH 0516/1936] Fix Invalid Serialization Within Effects
+
+parameters got out of sync between synthesis model and parameter model
+---
+ src/Effects/EffectMgr.cpp | 24 +++++++++++++++---------
+ src/Effects/EffectMgr.h   |  4 ++--
+ 2 files changed, 17 insertions(+), 11 deletions(-)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 1a96f9ef..5397ae9a 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -43,7 +43,7 @@ static const rtosc::Ports local_ports = {
+     rSelf(EffectMgr),
+     rPaste,
+     rRecurp(filterpars, "Filter Parameter for Dynamic Filter"),
+-    {"parameter#64::i", rProp(alias) rDoc("Parameter Accessor"), NULL,
++    {"parameter#128::i", rProp(alias) rDoc("Parameter Accessor"), NULL,
+         [](const char *msg, rtosc::RtData &d)
+         {
+             EffectMgr *eff = (EffectMgr*)d.obj;
+@@ -146,7 +146,7 @@ void EffectMgr::defaults(void)
+ }
+ 
+ //Change the effect
+-void EffectMgr::changeeffectrt(int _nefx)
++void EffectMgr::changeeffectrt(int _nefx, bool avoidSmash)
+ {
+     cleanup();
+     if(nefx == _nefx && efx != NULL)
+@@ -190,6 +190,10 @@ void EffectMgr::changeeffectrt(int _nefx)
+ 
+     if(efx)
+         filterpars = efx->filterpars;
++
++    if(!avoidSmash)
++        for(int i=0; i<128; ++i)
++            settings[i] = geteffectparrt(i);
+ }
+ 
+ void EffectMgr::changeeffect(int _nefx)
+@@ -208,8 +212,8 @@ int EffectMgr::geteffect(void)
+ // Initialize An Effect in RT context
+ void EffectMgr::init(void)
+ {
+-    changeeffectrt(nefx);
+-    changepresetrt(preset);
++    changeeffectrt(nefx, true);
++    changepresetrt(preset, true);
+     for(int i=0; i<128; ++i)
+         seteffectparrt(i, settings[i]);
+ }
+@@ -245,11 +249,14 @@ void EffectMgr::changepreset(unsigned char npreset)
+ }
+ 
+ // Change the preset of the current effect
+-void EffectMgr::changepresetrt(unsigned char npreset)
++void EffectMgr::changepresetrt(unsigned char npreset, bool avoidSmash)
+ {
+     preset = npreset;
+     if(efx)
+         efx->setpreset(npreset);
++    if(!avoidSmash)
++        for(int i=0; i<128; ++i)
++            settings[i] = geteffectparrt(i);
+ }
+ 
+ //Change a parameter of the current effect
+@@ -373,11 +380,10 @@ void EffectMgr::setdryonly(bool value)
+ 
+ void EffectMgr::paste(EffectMgr &e)
+ {
+-    changeeffectrt(e.nefx);
+-    changepresetrt(e.preset);
+-    for(int i=0;i<128;++i){
++    changeeffectrt(e.nefx, true);
++    changepresetrt(e.preset, true);
++    for(int i=0;i<128;++i)
+         seteffectparrt(e.settings[i], i);
+-    }
+ }
+ 
+ void EffectMgr::add2XML(XMLwrapper *xml)
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index df3d1aa6..e545c919 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -62,11 +62,11 @@ class EffectMgr:public Presets
+         void kill(void) REALTIME;
+         void cleanup(void) REALTIME;
+ 
+-        void changeeffectrt(int nefx_) REALTIME;
++        void changeeffectrt(int nefx_, bool avoidSmash=false) REALTIME;
+         void changeeffect(int nefx_) NONREALTIME;
+         int geteffect(void);
+         void changepreset(unsigned char npreset) NONREALTIME;
+-        void changepresetrt(unsigned char npreset) REALTIME;
++        void changepresetrt(unsigned char npreset, bool avoidSmash=false) REALTIME;
+         unsigned char getpreset(void);
+         void seteffectpar(int npar, unsigned char value) NONREALTIME;
+         void seteffectparrt(int npar, unsigned char value) REALTIME;
+-- 
+2.47.0
+

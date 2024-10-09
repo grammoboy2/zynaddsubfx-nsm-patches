@@ -1,0 +1,48 @@
+From 0e186603ba55643c8178413227ebb447cc665bfd Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 20 May 2016 11:52:13 -0400
+Subject: [PATCH 0914/1936] WatchTest: Fix Failing Test Due To API Change
+
+---
+ src/Tests/WatchTest.h | 20 ++++----------------
+ 1 file changed, 4 insertions(+), 16 deletions(-)
+
+diff --git a/src/Tests/WatchTest.h b/src/Tests/WatchTest.h
+index 8fb5483d..21c72711 100644
+--- a/src/Tests/WatchTest.h
++++ b/src/Tests/WatchTest.h
+@@ -65,27 +65,15 @@ class WatchTest:public CxxTest::TestSuite
+             l->lfoout();
+             TS_ASSERT(!tr->hasNext());
+         }
+-        
++
+         void testPhaseWatch(void)
+         {
+             TS_ASSERT(!tr->hasNext());
+-            w->add_watch("phase");
+-            l->lfoout();
+-            TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("phase"), tr->read());
+-            TS_ASSERT(!tr->hasNext());
+-        }
+-        
+-        void testPhaseMagWatch(void)
+-        {
+-            TS_ASSERT(!tr->hasNext());
+-            w->add_watch("phase");
+-            w->add_watch("magnitude");
++            w->add_watch("out");
+             l->lfoout();
++            w->tick();
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("phase"), tr->read());
+-            TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("magnitude"), tr->read());
++            TS_ASSERT_EQUALS(string("out"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+         }
+ };
+-- 
+2.47.0
+

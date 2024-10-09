@@ -1,0 +1,26 @@
+From 7ac9aa1916862f6a44692ebffd3e5d000af066f1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 22 Nov 2016 16:18:54 -0500
+Subject: [PATCH 1093/1936] Add Additional Release TODO Items
+
+---
+ TODO-release | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/TODO-release b/TODO-release
+index e7821b8a..c441ec50 100644
+--- a/TODO-release
++++ b/TODO-release
+@@ -3,5 +3,9 @@ This is a list of things to do when releasing a new version.
+ - Update version number in CMakeLists.txt
+ - Update version number in src/Tests/guitar-adnote.xmz
+ - Update date of the new version in HISTORY.txt
++- Update news on sourceforge website
++- Upload source tarball to sourceforge website
+ - Update Copyright (mainly YEAR) info in src/UI/MasterUI.fl (note this is mentionned 2 times on line 5 and line 872)
+ - Check and update (if needed) the manpage file : doc/zynaddsubfx.1.txt
++- Issue release announcement to linux-audio-announce, zynaddsubfx-user, kvr,
++  linux-musicians
+-- 
+2.47.0
+

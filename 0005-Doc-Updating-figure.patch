@@ -1,0 +1,237 @@
+From baad5c6db2f02d9f400be2f5a9bee20000d1d793 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 18 Apr 2012 10:39:17 -0400
+Subject: [PATCH 0005/1936] Doc: Updating figure
+
+---
+ doc/gen/Makefile    | 10 +++---
+ doc/gen/ad-note.tex | 82 +++++++++++++++++++--------------------------
+ doc/gen/chorus.tex  |  1 +
+ doc/gen/distort.tex |  1 +
+ doc/gen/dynamic.tex |  1 +
+ doc/gen/echo.tex    |  1 +
+ doc/gen/fig.sty     | 14 ++++++++
+ doc/gen/reverb.tex  |  1 +
+ doc/gen/velf.tex    | 16 +++++++++
+ 9 files changed, 75 insertions(+), 52 deletions(-)
+ create mode 100644 doc/gen/fig.sty
+ create mode 100644 doc/gen/velf.tex
+
+diff --git a/doc/gen/Makefile b/doc/gen/Makefile
+index 18f8bcb1..3ce54893 100644
+--- a/doc/gen/Makefile
++++ b/doc/gen/Makefile
+@@ -1,14 +1,14 @@
+-SOURCES=ad-note.tex echo.tex distort.tex dynamic.tex reverb.tex chorus.tex
++SOURCES=velf.tex ad-note.tex echo.tex distort.tex dynamic.tex reverb.tex chorus.tex
+ OBJECTS=$(SOURCES:.tex=.png)
+ 
+ all:$(OBJECTS)
+ 
+ %.png: %.tex
+-	pslatex $<
+-	convert $(<:.tex=.dvi) -resize 200% -trim $@
+-	rm $(<:.tex=.dvi) $(<:.tex=.log) $(<:.tex=.aux)
++	pdflatex -shell-escape $<
++	convert $(<:.tex=.pdf) -density 300 -trim $@
++	rm -f $(<:.tex=.pdf) $(<:.tex=.log) $(<:.tex=.aux) $(<:.tex=-pic*) $(<:.tex=.pgf-plot*)
+ 
+ .PHONY: clean
+ clean:
+-	rm -f *.png *~
++	rm -f *.png *~ *.aux *.auxlock *.table *.log *.gnuplot *.dpth *.dep
+ 
+diff --git a/doc/gen/ad-note.tex b/doc/gen/ad-note.tex
+index 95af2464..4dd3f3cd 100644
+--- a/doc/gen/ad-note.tex
++++ b/doc/gen/ad-note.tex
+@@ -1,49 +1,37 @@
+-\documentclass[11pt]{report}
+-\pagestyle{empty}
+-\usepackage{pst-sigsys}
++\documentclass{standalone}
++\usepackage{tikz}
++\usetikzlibrary{matrix,shapes,chains,scopes}
+ \begin{document}
+-\begin{pspicture}[showgrid=false](-5,-3)(12,3)
+-\psset{framesize=2 .65}
+-\psfblock(-4,1){inFq}{Note Fq.}
+-\psfblock(-4,0){lfoFq}{Fq. LFO}
+-\psfblock(-4,-1){envFq}{Fq. Env.}
+-
+-\dotnode(-2.5,1){dot1}
+-\dotnode(-2.5,0){dot2}
+-\dotnode(-2.5,-1){dot3}
+-
+-\psfblock(-1,0){vce}{Voices}
+-
+-
+-\psfblock(2,0){flt}{Filter}
+-
+-\psfblock(1,-2){envFl}{Filter Env.}
+-\psfblock(3,-2){lfoFl}{Filter LFO}
+-
+-\pspolygon(4,1)(6,0)(4,-1)
+-\psfblock[linecolor=white](5,0){amp}{Amp}
+-
+-\psfblock(4,2){envAmp}{Amp. Env.}
+-\psfblock(6,2){lfoAmp}{Amp. LFO}
+-
+-\psfblock(7.5,0){pnch}{Punch}
+-
+-\psfblock(10,0){out}{Output}
+-
+-\ncline{inFq}{dot1}
+-\ncline{dot1}{dot2}
+-\ncline{lfoFq}{dot2}
+-\ncline{dot3}{dot2}
+-\ncline{envFq}{dot3}
+-
+-\dotnode(2,-1){fltdot}
+-\ncline{envFl}{fltdot}
+-\ncline{lfoFl}{fltdot}
+-\ncline{fltdot}{flt}
+-\dotnode(5,1){ampdot}
+-\ncline{lfoAmp}{ampdot}
+-\ncline{envAmp}{ampdot}
+-\ncline{ampdot}{amp}
+-\nclist[arrows=->]{ncline}{dot2,vce,flt,amp,pnch,out}
+-\end{pspicture}
++\input{fig.sty}
++\begin{tikzpicture}
++    \matrix (mtx) [matrix of nodes, row sep=5mm, column sep=5mm] {
++    &
++    |[lfo]| Freq LFO   &
++    |[lfo]| Filter LFO &
++    |[lfo]| Amp LFO    &
++    &\\
++    |[block]| Base Fq. &
++    |[block]| Voices   &
++    |[block]| Filter   &
++    |[block, shape=isosceles triangle]| Volume &
++    {Output} \\
++    &
++    |[env]| Freq Env&
++    |[env]| Filter Env&
++    |[env]| Amp Env&\\
++    };
++
++    { [start chain=trunk]
++    \chainin (mtx-2-1)[join=by tip];
++    \chainin (mtx-2-2)[join=by tip];
++    \chainin (mtx-2-3)[join=by tip];
++    \chainin (mtx-2-4)[join=by tip];
++    \chainin (mtx-2-5)[join=by tip];
++    }
++    \foreach \i in {2,3,4}
++    {
++        \draw[->] (mtx-1-\i) -- (mtx-2-\i);
++        \draw[->] (mtx-3-\i) -- (mtx-2-\i);
++    }
++\end{tikzpicture}
+ \end{document}
+diff --git a/doc/gen/chorus.tex b/doc/gen/chorus.tex
+index e0fd5488..87727e36 100644
+--- a/doc/gen/chorus.tex
++++ b/doc/gen/chorus.tex
+@@ -1,6 +1,7 @@
+ \documentclass[12pt]{report}
+ \pagestyle{empty}
+ \usepackage{pst-sigsys}
++\usepackage{auto-pst-pdf}
+ \begin{document}
+ \begin{pspicture}[showgrid=false](0,-1)(8,2)
+     %Style
+diff --git a/doc/gen/distort.tex b/doc/gen/distort.tex
+index 0d6a169f..eb6b3a9a 100644
+--- a/doc/gen/distort.tex
++++ b/doc/gen/distort.tex
+@@ -1,6 +1,7 @@
+ \documentclass[11pt]{report}
+ \pagestyle{empty}
+ \usepackage{pst-sigsys}
++\usepackage{auto-pst-pdf}
+ \begin{document}
+ \begin{pspicture}[showgrid=false](0,-2)(10,2)
+     %Style
+diff --git a/doc/gen/dynamic.tex b/doc/gen/dynamic.tex
+index 4d22ecb3..aba63309 100644
+--- a/doc/gen/dynamic.tex
++++ b/doc/gen/dynamic.tex
+@@ -1,6 +1,7 @@
+ \documentclass[11pt]{report}
+ \pagestyle{empty}
+ \usepackage{pst-sigsys}
++\usepackage{auto-pst-pdf}
+ \begin{document}
+ \begin{pspicture}[showgrid=false](0,0)(8,2)
+     %Style
+diff --git a/doc/gen/echo.tex b/doc/gen/echo.tex
+index f5d59f03..22248b4b 100644
+--- a/doc/gen/echo.tex
++++ b/doc/gen/echo.tex
+@@ -1,6 +1,7 @@
+ \documentclass[11pt]{report}
+ \pagestyle{empty}
+ \usepackage{pst-sigsys}
++\usepackage{auto-pst-pdf}
+ \begin{document}
+ \begin{pspicture}[showgrid=false](0,0)(8,2)
+     %Style
+diff --git a/doc/gen/fig.sty b/doc/gen/fig.sty
+new file mode 100644
+index 00000000..076954a0
+--- /dev/null
++++ b/doc/gen/fig.sty
+@@ -0,0 +1,14 @@
++\tikzset{
++>=stealth,
++thick,
++block/.style={rectangle, draw=black!50, thick,
++              top color=white,
++              bottom color=red!50!black!20,
++              font=\itshape},
++op/.style={circle, draw=black!50, thick,
++           top color=white,bottom color=black!20,
++           font=\ttfamily},
++lfo/.style={block,bottom color=orange!80},
++env/.style={block,bottom color=yellow!80},
++tip/.style={->,shorten >=1pt}
++}
+diff --git a/doc/gen/reverb.tex b/doc/gen/reverb.tex
+index eb81a10d..ca99b58a 100644
+--- a/doc/gen/reverb.tex
++++ b/doc/gen/reverb.tex
+@@ -1,6 +1,7 @@
+ \documentclass[11pt]{report}
+ \pagestyle{empty}
+ \usepackage{pst-sigsys}
++\usepackage{auto-pst-pdf}
+ \begin{document}
+ \begin{pspicture}[showgrid=false](0,-1)(11,2)
+     %Style
+diff --git a/doc/gen/velf.tex b/doc/gen/velf.tex
+new file mode 100644
+index 00000000..63884424
+--- /dev/null
++++ b/doc/gen/velf.tex
+@@ -0,0 +1,16 @@
++\documentclass{standalone}
++\usepackage{tikz,pgfplots}
++\begin{document}
++\begin{tikzpicture}
++    \begin{axis}[domain=0:1,samples=128,no markers,
++        xlabel=Note Velocity,ylabel=Param Magnitude,
++       legend style={ cells={anchor=east}, legend pos=outer north east}]
++        \addplot gnuplot{x^8^1};
++        \addlegendentry{max sensing}
++        \addplot gnuplot{x^(8^-1)};
++        \addlegendentry{min sensing}
++        \addplot gnuplot{x};
++        \addlegendentry{avg sensing}
++    \end{axis}
++\end{tikzpicture}
++\end{document}
+-- 
+2.47.0
+

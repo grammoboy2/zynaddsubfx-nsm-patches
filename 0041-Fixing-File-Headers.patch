@@ -1,0 +1,162 @@
+From 07c847d90b3967aeb1c356e7efa4fd47b443bdd1 Mon Sep 17 00:00:00 2001
+From: cquad <cquad@lquad.(none)>
+Date: Fri, 9 Nov 2012 17:51:40 +0100
+Subject: [PATCH 0041/1936] Fixing File Headers
+
+---
+ src/Tests/AdNoteTest.h     | 27 ++++++++++++++++++++++++++-
+ src/Tests/ControllerTest.h |  2 +-
+ src/Tests/EchoTest.h       |  5 +++--
+ src/Tests/MicrotonalTest.h |  2 +-
+ src/Tests/OscilGenTest.h   | 21 +++++++++++++++++++++
+ src/Tests/SubNoteTest.h    | 22 ++++++++++++++++++++++
+ 6 files changed, 74 insertions(+), 5 deletions(-)
+
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index fe5e172b..c296e9cb 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -1,3 +1,27 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  AdNoteTest.h - CxxTest for Synth/ADnote
++  Copyright (C) 2009-2011 Mark McCurry
++  Copyright (C) 2009 Harald Hvaal
++  Authors: Mark McCurry, Harald Hvaal
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++
+ #include <cxxtest/TestSuite.h>
+ #include <iostream>
+ #include <fstream>
+@@ -9,9 +33,10 @@
+ #include "../Params/Presets.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../globals.h"
++SYNTH_T *synth;
+ 
+ using namespace std;
+-SYNTH_T *synth;
++
+ 
+ class AdNoteTest:public CxxTest::TestSuite
+ {
+diff --git a/src/Tests/ControllerTest.h b/src/Tests/ControllerTest.h
+index 1a6147ae..f9b97046 100644
+--- a/src/Tests/ControllerTest.h
++++ b/src/Tests/ControllerTest.h
+@@ -2,7 +2,7 @@
+   ZynAddSubFX - a software synthesizer
+ 
+   ControllerTest.h - CxxTest for Params/Controller
+-  Copyright (C) 2009-2009 Mark McCurry
++  Copyright (C) 2009-2011 Mark McCurry
+   Author: Mark McCurry
+ 
+   This program is free software; you can redistribute it and/or modify
+diff --git a/src/Tests/EchoTest.h b/src/Tests/EchoTest.h
+index 08e5e9d4..bf94b972 100644
+--- a/src/Tests/EchoTest.h
++++ b/src/Tests/EchoTest.h
+@@ -2,8 +2,9 @@
+   ZynAddSubFX - a software synthesizer
+ 
+   EchoTest.h - CxxTest for Effect/Echo
+-  Copyright (C) 2009-2009 Mark McCurry
+-  Author: Mark McCurry
++  Copyright (C) 2009-2011 Mark McCurry
++  Copyright (C) 2009 Harald Hvaal
++  Authors: Mark McCurry, Harald Hvaal
+ 
+   This program is free software; you can redistribute it and/or modify
+   it under the terms of version 2 of the GNU General Public License
+diff --git a/src/Tests/MicrotonalTest.h b/src/Tests/MicrotonalTest.h
+index ae0641c5..6ce1ca52 100644
+--- a/src/Tests/MicrotonalTest.h
++++ b/src/Tests/MicrotonalTest.h
+@@ -2,7 +2,7 @@
+   ZynAddSubFX - a software synthesizer
+ 
+   MicrotonalTest.h - CxxTest for Misc/Microtonal
+-  Copyright (C) 2009-2009 Mark McCurry
++  Copyright (C) 2009-2012 Mark McCurry
+   Author: Mark McCurry
+ 
+   This program is free software; you can redistribute it and/or modify
+diff --git a/src/Tests/OscilGenTest.h b/src/Tests/OscilGenTest.h
+index 1c7c5d46..b0e13b25 100644
+--- a/src/Tests/OscilGenTest.h
++++ b/src/Tests/OscilGenTest.h
+@@ -1,3 +1,24 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  AdNoteTest.h - CxxTest for Synth/OscilGen
++  Copyright (C) 20011-2012 Mark McCurry
++  Author: Mark McCurry
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
+ #include <cxxtest/TestSuite.h>
+ #include <string>
+ #include "../Synth/OscilGen.h"
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index b97a3428..0708a735 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -1,3 +1,25 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  AdNoteTest.h - CxxTest for Synth/SUBnote
++  Copyright (C) 2009-2011 Mark McCurry
++  Author: Mark McCurry
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
+ //Based Upon AdNoteTest.h
+ #include <cxxtest/TestSuite.h>
+ #include <iostream>
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From bc068710ee642c0cf419d5e9e46573b2ed146e27 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 29 Jan 2017 13:21:25 -0500
+Subject: [PATCH 1115/1936] Fix Distortion Typo In Effect Metatdata
+
+---
+ src/Effects/EffectMgr.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 1e2148b2..55bdb573 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -130,7 +130,7 @@ static const rtosc::Ports local_ports = {
+             d.reply(d.loc, "bb", sizeof(a), a, sizeof(b), b);
+         }},
+     {"efftype::i", rOptions(Disabled, Reverb, Echo, Chorus,
+-            Phaser, Alienwah, Distorsion, EQ, DynFilter)
++            Phaser, Alienwah, Distortion, EQ, DynFilter)
+             rProp(parameter) rDoc("Get Effect Type"), NULL,
+         [](const char *m, rtosc::RtData &d)
+         {
+-- 
+2.47.0
+

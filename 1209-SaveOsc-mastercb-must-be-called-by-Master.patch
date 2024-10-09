@@ -1,0 +1,212 @@
+From 0c43f66fea7935ef8f50f4fbd84178a6105a1493 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Tue, 10 Oct 2017 19:35:17 +0200
+Subject: [PATCH 1209/1936] SaveOsc: mastercb must be called by Master
+
+---
+ src/Misc/Master.cpp             | 26 +++++++++++++++++++++-----
+ src/Misc/Master.h               |  3 +++
+ src/Misc/MiddleWare.cpp         | 12 +++++++++++-
+ src/Params/ADnoteParameters.cpp |  5 +++--
+ src/Params/LFOParams.cpp        |  3 ++-
+ src/Synth/OscilGen.cpp          |  6 +++++-
+ src/Tests/SaveOSC.cpp           |  7 +++++++
+ 7 files changed, 52 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index b34aff2a..094204d6 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -650,10 +650,18 @@ bool Master::applyOscEventWith(const char *msg, float *outl, float *outr,
+             new_master->AudioOut(outl, outr);
+         if(nio)
+             Nio::masterSwap(new_master);
+-        if (mastercb)
++        if (hasMasterCb())
+             mastercb(mastercb_ptr, new_master);
+         bToU->write("/free", "sb", "Master", sizeof(Master*), &this_master);
+         return false;
++    } else if(!strcmp(msg, "/switch-master")) {
++        // if the other stuff from load-master is needed optionally
++        // (currently, it is not needed anywhere)
++        // add booleans to the parameters of "/switch-master"
++        Master *new_master  = *(Master**)rtosc_argument(msg, 0).b.data;
++        if (hasMasterCb())
++            mastercb(mastercb_ptr, new_master);
++        return false;
+     }
+ 
+     //XXX yes, this is not realtime safe, but it is useful...
+@@ -911,6 +919,18 @@ void Master::setMasterChangedCallback(void(*cb)(void*,Master*), void *ptr)
+     mastercb_ptr = ptr;
+ }
+ 
++void Master::copyMasterCbTo(Master *dest)
++{
++    dest->mastercb     = mastercb;
++    dest->mastercb_ptr = mastercb_ptr;
++}
++
++bool Master::hasMasterCb() const
++{
++    return !!mastercb;
++}
++
++
+ #if 0
+ template <class T>
+ struct def_skip
+@@ -1538,16 +1558,12 @@ int Master::saveOSC(const char *filename, master_dispatcher_t* dispatcher,
+     // between the original and the savefile-loaded master
+     // this requires a temporary master switch
+     dispatcher->updateMaster(master2);
+-    if(mastercb)
+-        mastercb(mastercb_ptr, master2);
+ 
+     int rval = master2->loadOSCFromStr(savefile.c_str(), dispatcher);
+     sleep(3); // wait until savefile has been loaded into master2
+               // TODO: how to find out when waited enough?
+ 
+     dispatcher->updateMaster(this);
+-    if(mastercb)
+-        mastercb(mastercb_ptr, this);
+ 
+     if(rval < 0)
+     {
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 68ff34e1..50ef6231 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -128,6 +128,9 @@ class Master
+ 
+         //Set callback to run when master changes
+         void setMasterChangedCallback(void(*cb)(void*,Master*),void *ptr);
++        //Copy callback to other master
++        void copyMasterCbTo(Master* dest);
++        bool hasMasterCb() const;
+ 
+         /**parts \todo see if this can be made to be dynamic*/
+         class Part * part[NUM_MIDI_PARTS];
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d8bf825b..7c451afb 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1293,6 +1293,7 @@ static rtosc::Ports middwareSnoopPorts = {
+         synth->samplerate = impl.master->synth.samplerate;
+         synth->alias();
+         zyn::Master master2(*synth, &config);
++        impl.master->copyMasterCbTo(&master2);
+         master2.frozenState = true;
+ 
+         impl.doReadOnlyOp([&impl,file,&dispatcher,&master2](){
+@@ -2226,11 +2227,20 @@ PresetsStore& MiddleWare::getPresetsStore()
+ 
+ void MiddleWare::switchMaster(Master* new_master)
+ {
++    // this function is kept similar to loadMaster
+     assert(impl->master->frozenState);
++
+     new_master->uToB = impl->uToB;
+     new_master->bToU = impl->bToU;
+-    impl->master = new_master;
+     impl->updateResources(new_master);
++    impl->master = new_master;
++
++    if(impl->master->hasMasterCb())
++    {
++        // inform the realtime thread about the switch
++        // this will be done by calling the mastercb
++        transmitMsg("/switch-master", "b", sizeof(Master*), &new_master);
++    }
+ }
+ 
+ }
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index f7db4709..ef3179b7 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -106,7 +106,7 @@ static const Ports voicePorts = {
+     rParamZyn(POffsetHz,          rShort("offset"), "Voice constant offset"),
+     //nominally -8192..8191
+     rParamI(PDetune,              rShort("fine"),
+-            rLinear(0, 16383), "Fine Detune"),
++            rLinear(0, 16383), rDefault(8192), "Fine Detune"),
+     rParamI(PCoarseDetune,        rShort("coarse"), "Coarse Detune"),
+     rParamZyn(PDetuneType,        rShort("type"),
+             rOptions(L35cents, L10cents, E100cents, E1200cents),
+@@ -115,7 +115,8 @@ static const Ports voicePorts = {
+     rToggle(PFreqLfoEnabled,      rShort("enable"), "Frequency LFO Enable"),
+ 
+     //Amplitude Stuff
+-    rParamZyn(PPanning,                  rShort("pan."), "Panning"),
++    rParamZyn(PPanning,                  rShort("pan."), rDefault(64),
++        "Panning"),
+     rParamZyn(PVolume,                   rShort("vol."), rDefault(100),
+         "Volume"),
+     rToggle(PVolumeminus,                rShort("inv."), rDefault(false),
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index a7ee2735..1088d1ea 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -33,7 +33,8 @@ namespace zyn {
+ static const rtosc::Ports _ports = {
+     rSelf(LFOParams),
+     rPaste,
+-    rParamF(Pfreq, rShort("freq"), rLinear(0.0,1.0), "frequency of LFO\n"
++    rParamF(Pfreq, rShort("freq"), rLinear(0.0,1.0), rDefaultMissing,
++            "frequency of LFO\n"
+             "lfo frequency = (2^(10*Pfreq)-1)/12 * stretch\n"
+             "true frequency is [0,85.33] Hz"),
+     rParamZyn(Pintensity, rShort("depth"), "Intensity of LFO"),
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 673a6bc5..3c5cf865 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -92,6 +92,8 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+               "modulation parameter"),
+     rParamZyn(Pmodulationpar3, rShort("p3"), rDefault(32),
+               "modulation parameter"),
++    rToggle(ADvsPAD, rShort("If it is used by PADSynth"),
++            "If it is used by PADSynth (and not ADSynth)"),
+ 
+ 
+     //TODO update to rArray and test
+@@ -201,7 +203,9 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+ const rtosc::Ports OscilGen::realtime_ports{
+     rSelf(OscilGen),
+     rPresetType,
+-    rParamZyn(Prand, rLinear(-64, 63), rShort("phase rnd"), "Oscillator Phase Randomness: smaller than 0 is \""
++    rParamZyn(Prand, rLinear(-64, 63), rShort("phase rnd"),
++            rDefaultDepends(ADvsPAD), rPreset(true, 127), rPreset(false, 64),
++            "Oscillator Phase Randomness: smaller than 0 is \""
+             "group\", larger than 0 is for each harmonic"),
+     rParamZyn(Pamprandpower, rShort("variance"), rDefault(64),
+             "Variance of harmonic randomness"),
+diff --git a/src/Tests/SaveOSC.cpp b/src/Tests/SaveOSC.cpp
+index d28447ed..13841bbe 100644
+--- a/src/Tests/SaveOSC.cpp
++++ b/src/Tests/SaveOSC.cpp
+@@ -23,6 +23,12 @@ class SaveOSCTest
+ 
+         void _masterChangedCallback(zyn::Master* m)
+         {
++            /*
++                Note: This message will appear 4 times:
++                 * Once at startup (changing from nil)
++                 * Once after the loading
++                 * Twice for the temporary exchange during saving
++             */
+             printf("Changing master from %p (%p) to %p...\n", master, &master, m);
+             master = m;
+             master->setMasterChangedCallback(__masterChangedCallback, this);
+@@ -45,6 +51,7 @@ class SaveOSCTest
+         }
+ 
+         void tearDown() {
++            printf("Master at the end: %p\n", master);
+             delete mw;
+             delete synth;
+         }
+-- 
+2.47.0
+

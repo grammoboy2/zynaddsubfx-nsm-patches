@@ -1,0 +1,26 @@
+From e838f3c46385b06b5b09f7193141bdbf0ed602fe Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 18 Jun 2015 11:11:41 -0400
+Subject: [PATCH 0504/1936] BankUI: Fix Non-Refreshed View Of BankUI
+
+---
+ src/UI/BankView.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index 0a9128ef..5946ef7a 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -15,8 +15,8 @@ BankList::BankList(int x,int y, int w, int h, const char *label)
+ void BankList::init(std::string path)
+ {
+     ext = path;
++    oscRegister("bank-list");
+     oscRegister(path.c_str());
+-    osc->createLink("/bank-list", this);
+ }
+ 
+ void BankList::OSC_raw(const char *msg)
+-- 
+2.47.0
+

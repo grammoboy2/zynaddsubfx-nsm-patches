@@ -1,0 +1,51 @@
+From cd41eac2ae76cdd9aeba7a2d47d2c7b1473f0937 Mon Sep 17 00:00:00 2001
+From: Julien Olivain <ju.o@free.fr>
+Date: Fri, 31 Dec 2021 12:57:46 +0100
+Subject: [PATCH 1798/1936] Misc/Microtonal: fix gcc compiler warning
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+gcc warns about possible unintended string operation truncation. This commit
+change the code to make it detected by gcc as an intended string truncation,
+thus fixing the warning.
+
+This commit fixes the warning:
+
+    src/Misc/Microtonal.cpp: In static member function ‘static int zyn::Microtonal::loadscl(zyn::SclInfo&, const char*)’:
+    src/Misc/Microtonal.cpp:640:12: warning: ‘char* strncpy(char*, const char*, size_t)’ output may be truncated copying 119 bytes from a string of length 499 [-Wstringop-truncation]
+      640 |     strncpy(scl.Pname,    tmp, MICROTONAL_MAX_NAME_LEN);
+          |     ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    src/Misc/Microtonal.cpp:641:12: warning: ‘char* strncpy(char*, const char*, size_t)’ output may be truncated copying 119 bytes from a string of length 499 [-Wstringop-truncation]
+      641 |     strncpy(scl.Pcomment, tmp, MICROTONAL_MAX_NAME_LEN);
+          |     ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note: this warning is reported by gcc 11.2.1, on Fedora 35.
+
+Signed-off-by: Julien Olivain <ju.o@free.fr>
+---
+ src/Misc/Microtonal.cpp | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index c28555e4..4389f1b6 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -637,10 +637,10 @@ int Microtonal::loadscl(SclInfo &scl, const char *filename)
+         if(tmp[i] < 32)
+             tmp[i] = 0;
+ 
+-    strncpy(scl.Pname,    tmp, MICROTONAL_MAX_NAME_LEN);
+-    strncpy(scl.Pcomment, tmp, MICROTONAL_MAX_NAME_LEN);
+-    scl.Pname[MICROTONAL_MAX_NAME_LEN-1] = 0;
+-    scl.Pcomment[MICROTONAL_MAX_NAME_LEN-1] = 0;
++    strncpy(scl.Pname,    tmp, MICROTONAL_MAX_NAME_LEN-1);
++    scl.Pname[MICROTONAL_MAX_NAME_LEN-1] = '\0';
++    strncpy(scl.Pcomment, tmp, MICROTONAL_MAX_NAME_LEN-1);
++    scl.Pcomment[MICROTONAL_MAX_NAME_LEN-1] = '\0';
+ 
+     //loads the number of the notes
+     if(loadline(file, &tmp[0]) != 0)
+-- 
+2.47.0
+

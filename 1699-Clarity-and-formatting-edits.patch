@@ -1,0 +1,308 @@
+From c880db1a67e4af83bfe46257951840f7536015d1 Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Tue, 15 Dec 2020 19:23:19 -0800
+Subject: [PATCH 1699/1936] Clarity and formatting edits.
+
+---
+ src/DSP/AnalogFilter.cpp           | 11 +++++------
+ src/DSP/AnalogFilter.h             |  2 +-
+ src/DSP/FormantFilter.cpp          |  8 ++++----
+ src/DSP/FormantFilter.h            |  4 ++--
+ src/DSP/Value_Smoothing_Filter.cpp | 28 +++++++++++++++-------------
+ src/DSP/Value_Smoothing_Filter.h   |  9 ++++-----
+ src/Misc/Master.cpp                | 12 ++++++------
+ src/Misc/Master.h                  |  8 +++-----
+ 8 files changed, 40 insertions(+), 42 deletions(-)
+
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index 102282ba..b6033812 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -376,7 +376,7 @@ void AnalogFilter::singlefilterout_freqbuf(float *smp, fstage &hist,
+ 	/* recompute coeffs for each 8 samples */
+ 	freq = freqbuf[i];
+ 	computefiltercoefs();
+-	
++
+ 	if(order == 1) {  //First order filter
+ 	    for ( int j = 0; j < 8; j++ )
+ 	    {
+@@ -390,7 +390,7 @@ void AnalogFilter::singlefilterout_freqbuf(float *smp, fstage &hist,
+ 
+ 	    const float coeff_[5] = {coeff.c[0], coeff.c[1], coeff.c[2],  coeff.d[1], coeff.d[2]};
+ 	    float work[4]  = {hist.x1, hist.x2, hist.y1, hist.y2};
+-	    
++
+ 	    AnalogBiquadFilterA(coeff_, smp[i + 0], work);
+ 	    AnalogBiquadFilterB(coeff_, smp[i + 1], work);
+ 	    AnalogBiquadFilterA(coeff_, smp[i + 2], work);
+@@ -399,7 +399,7 @@ void AnalogFilter::singlefilterout_freqbuf(float *smp, fstage &hist,
+ 	    AnalogBiquadFilterB(coeff_, smp[i + 5], work);
+ 	    AnalogBiquadFilterA(coeff_, smp[i + 6], work);
+ 	    AnalogBiquadFilterB(coeff_, smp[i + 7], work);
+-	    
++
+ 	    hist.x1 = work[0];
+ 	    hist.x2 = work[1];
+ 	    hist.y1 = work[2];
+@@ -413,9 +413,8 @@ void AnalogFilter::singlefilterout_freqbuf(float *smp, fstage &hist,
+ 
+ void AnalogFilter::filterout(float *smp)
+ {
+-
+     float freqbuf[buffersize];
+-    
++
+     if ( freq_smoothing.apply( freqbuf, buffersize, freq ) )
+     {
+ 	/* in transition, need to do fine grained interpolation */
+@@ -428,7 +427,7 @@ void AnalogFilter::filterout(float *smp)
+ 	for(int i = 0; i < stages + 1; ++i)
+ 	    singlefilterout(smp, history[i], coeff);
+     }
+-    
++
+     for(int i = 0; i < buffersize; ++i)
+         smp[i] *= outgain;
+ }
+diff --git a/src/DSP/AnalogFilter.h b/src/DSP/AnalogFilter.h
+index d754f537..41cc62ff 100644
+--- a/src/DSP/AnalogFilter.h
++++ b/src/DSP/AnalogFilter.h
+@@ -74,7 +74,7 @@ class AnalogFilter:public Filter
+ 
+         int order; //the order of the filter (number of poles)
+ 
+-    Value_Smoothing_Filter freq_smoothing; /* for smoothing freq modulations to avoid zipper effect */
++        Value_Smoothing_Filter freq_smoothing; /* for smoothing freq modulations to avoid zipper effect */
+ };
+ 
+ }
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index e9a56bc9..c2ab63c3 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -44,7 +44,7 @@ FormantFilter::FormantFilter(const FilterParams *pars, Allocator *alloc, unsigne
+ 	formant_amp_smoothing[i].sample_rate(srate);
+ 	formant_amp_smoothing[i].reset(1.0f);
+     }
+-        
++
+     for(int i = 0; i < numformants; ++i) {
+         currentformants[i].freq = 1000.0f;
+         currentformants[i].amp  = 1.0f;
+@@ -202,16 +202,16 @@ void FormantFilter::filterout(float *smp)
+     memset(smp, 0, bufferbytes);
+ 
+     float formantbuf[buffersize];
+-    
++
+     for(int j = 0; j < numformants; ++j) {
+-	
++
+         float tmpbuf[buffersize];
+ 
+ 	for(int i = 0; i < buffersize; ++i)
+             tmpbuf[i] = inbuffer[i] * outgain;
+ 
+ 	formant[j]->filterout(tmpbuf);
+-	
++
+ 	if ( formant_amp_smoothing[j].apply( formantbuf, buffersize, currentformants[j].amp ) )
+ 	{
+ 	    for(int i = 0; i < buffersize; ++i)
+diff --git a/src/DSP/FormantFilter.h b/src/DSP/FormantFilter.h
+index 0e0e027b..0e3763fa 100644
+--- a/src/DSP/FormantFilter.h
++++ b/src/DSP/FormantFilter.h
+@@ -54,8 +54,8 @@ class FormantFilter:public Filter
+         float Qfactor, formantslowness, oldQfactor;
+         float vowelclearness, sequencestretch;
+         Allocator &memory;
+-    
+-    Value_Smoothing_Filter formant_amp_smoothing[FF_MAX_FORMANTS];
++
++        Value_Smoothing_Filter formant_amp_smoothing[FF_MAX_FORMANTS];
+ };
+ 
+ }
+diff --git a/src/DSP/Value_Smoothing_Filter.cpp b/src/DSP/Value_Smoothing_Filter.cpp
+index f11aff25..4066c09f 100644
+--- a/src/DSP/Value_Smoothing_Filter.cpp
++++ b/src/DSP/Value_Smoothing_Filter.cpp
+@@ -20,15 +20,18 @@
+ #include "Value_Smoothing_Filter.h"
+ #include <math.h>
+ 
++/* compensate for missing nonlib macro */
++#define assume_aligned(x) (x)
++
+ void
+ Value_Smoothing_Filter::sample_rate ( nframes_t n )
+ {
+     const float FS = n;
+     const float T = 0.05f;
+-	    
++
+     w = _cutoff / (FS * T);
+ }
+-    
++
+ bool
+ Value_Smoothing_Filter::apply( sample_t * __restrict__ dst, nframes_t nframes, float gt )
+ {
+@@ -41,32 +44,31 @@ Value_Smoothing_Filter::apply( sample_t * __restrict__ dst, nframes_t nframes, f
+ 
+     if ( target_reached(gt) )
+ 	return false;
+-	    
+-    /* sample_t * dst_ = (sample_t*) assume_aligned(dst); */
+-    sample_t * dst_ = (sample_t*)(dst);
+-	    
++
++    sample_t * dst_ = (sample_t*) assume_aligned(dst);
++
+     const float a = 0.07f;
+     const float b = 1 + a;
+-	    
++
+     const float gm = b * gt;
+-	    
++
+     float g1 = this->g1;
+     float g2 = this->g2;
+-	    
++
+     for (nframes_t i = 0; i < nframes; i++)
+     {
+ 	g1 += w * (gm - g1 - a * g2);
+ 	g2 += w * (g1 - g2);
+ 	dst_[i] = g2;
+     }
+-	    
++
+     g2 += 1e-10f;		/* denormal protection */
+-	    
++
+     if ( fabsf( gt - g2 ) < 0.0001f )
+ 	g2 = gt;
+-	    
++
+     this->g1 = g1;
+     this->g2 = g2;
+-	    
++
+     return true;
+ }
+diff --git a/src/DSP/Value_Smoothing_Filter.h b/src/DSP/Value_Smoothing_Filter.h
+index b5c1a846..ed104741 100644
+--- a/src/DSP/Value_Smoothing_Filter.h
++++ b/src/DSP/Value_Smoothing_Filter.h
+@@ -26,11 +26,11 @@ typedef float sample_t;
+ class Value_Smoothing_Filter
+ {
+     float w, g1, g2;
+-    
++
+     float _cutoff;
+ 
+     bool _reset_on_next_apply;
+-    
++
+ public:
+ 
+     Value_Smoothing_Filter ( )
+@@ -40,9 +40,8 @@ public:
+ 	    _reset_on_next_apply = false;
+ 	}
+ 
+-
+     void reset_on_next_apply ( bool v ) { _reset_on_next_apply = v; }
+-    
++
+     void cutoff ( float v ) { _cutoff = v; }
+ 
+     void reset ( float v ) { g2 = g1 = v; }
+@@ -50,7 +49,7 @@ public:
+     inline bool target_reached ( float gt ) const { return gt == g2; }
+ 
+     void sample_rate ( nframes_t n );
+-	
++
+     bool apply( sample_t * __restrict__ dst, nframes_t nframes, float gt );
+ };
+ 
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 7d88182b..4f358152 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -777,7 +777,7 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+         fakepeakpart[npart]  = 0;
+     }
+ 
+-    
++
+     ScratchString ss;
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
+     {
+@@ -792,7 +792,7 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+ 
+     smoothing.sample_rate( synth.samplerate );
+     smoothing.reset_on_next_apply( true ); /* necessary to make CI tests happy, otherwise of no practical use */
+-    
++
+     //Insertion Effects init
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+         insefx[nefx] = new EffectMgr(*memory, synth, 1, &time);
+@@ -1269,7 +1269,7 @@ bool Master::AudioOut(float *outr, float *outl)
+             continue;
+ 
+         Stereo<float> newvol(part[npart]->volume);
+-	
++
+         float pan = part[npart]->panning;
+         if(pan < 0.5f)
+             newvol.l *= pan * 2.0f;
+@@ -1291,7 +1291,7 @@ bool Master::AudioOut(float *outr, float *outl)
+ 	    for ( int i = 0; i < synth.buffersize; ++i )
+ 		part[npart]->partoutl[i] *= newvol.l;
+ 	}
+-	
++
+ 	if ( smoothing_part_r[npart].apply( gainbuf, synth.buffersize, newvol.r ) )
+ 	{
+ 	    for ( int i = 0; i < synth.buffersize; ++i )
+@@ -1302,8 +1302,8 @@ bool Master::AudioOut(float *outr, float *outl)
+ 	    for ( int i = 0; i < synth.buffersize; ++i )
+ 		part[npart]->partoutr[i] *= newvol.r;
+ 	}
+-    }	
+-	
++    }
++
+     //System effects
+     for(int nefx = 0; nefx < NUM_SYS_EFX; ++nefx) {
+         if(sysefx[nefx]->geteffect() == 0)
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index b0617d1d..174d93db 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -252,12 +252,10 @@ class Master
+                            class DataObj& d, int msg_id = -1,
+                            Master* master_from_mw = nullptr);
+ 
+-    Value_Smoothing_Filter smoothing;
++        Value_Smoothing_Filter smoothing;
+ 
+-    Value_Smoothing_Filter smoothing_part_l[NUM_MIDI_PARTS];
+-    Value_Smoothing_Filter smoothing_part_r[NUM_MIDI_PARTS];
+-    
+-    
++        Value_Smoothing_Filter smoothing_part_l[NUM_MIDI_PARTS];
++        Value_Smoothing_Filter smoothing_part_r[NUM_MIDI_PARTS];
+ };
+ 
+ class master_dispatcher_t : public rtosc::savefile_dispatcher_t
+-- 
+2.47.0
+

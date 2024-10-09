@@ -1,0 +1,37 @@
+From bfd3afa05129fa6630e8e24dde0108fdade53791 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 6 Nov 2015 18:09:55 -0500
+Subject: [PATCH 0687/1936] Fix PADnoteUI Initialization Crash
+
+Resolves https://sourceforge.net/p/zynaddsubfx/bugs/96/
+---
+ src/UI/PADnoteUI.fl | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 93e53a36..b2d687e1 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -71,6 +71,7 @@ oscui=NULL;
+ osc_i = osc_;
+ resui=new ResonanceUI(osc_i, location+"resonance/");
+ initialized = false;
++applybutton = NULL;
+ make_window();
+ initialized = true;} {selected
+     }
+@@ -281,8 +282,9 @@ oscui=new OscilEditor(false, location+"oscilgen/",osc_i);}
+           Fl_Box cbwidget {
+             label {Harmonic Content}
+             callback {opui->update();
+-applybutton->color(FL_RED);
+-applybutton->redraw();}
++            if(applybutton) {
++                applybutton->color(FL_RED);
++                applybutton->redraw();}}
+             xywh {125 135 205 20} align 16
+           }
+           Fl_Button {} {
+-- 
+2.47.0
+

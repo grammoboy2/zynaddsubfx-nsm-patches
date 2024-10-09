@@ -1,0 +1,116 @@
+From bb61ef376967f83ce129f287f0d8bf687b362d2f Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 28 Mar 2015 15:46:14 +0100
+Subject: [PATCH 0400/1936] Added switch in order to turn PIDs on for jack.
+
+---
+ src/Nio/JackEngine.cpp      |  3 ++-
+ src/Nio/JackMultiEngine.cpp |  3 ++-
+ src/Nio/Nio.cpp             |  7 ++++---
+ src/Nio/Nio.h               |  1 +
+ src/main.cpp                | 10 +++++++++-
+ 5 files changed, 18 insertions(+), 6 deletions(-)
+
+diff --git a/src/Nio/JackEngine.cpp b/src/Nio/JackEngine.cpp
+index c8e7db0a..ed4ac6f0 100644
+--- a/src/Nio/JackEngine.cpp
++++ b/src/Nio/JackEngine.cpp
+@@ -68,7 +68,8 @@ bool JackEngine::connectServer(string server)
+     string postfix    = Nio::getPostfix();
+     if(!postfix.empty())
+         clientname += "_" + postfix;
+-    clientname += "_" + os_pid_as_padded_string();
++    if(Nio::pidInClientName)
++        clientname += "_" + os_pid_as_padded_string();
+ 
+     jack_status_t jackstatus;
+     bool use_server_name = server.size() && server.compare("default") != 0;
+diff --git a/src/Nio/JackMultiEngine.cpp b/src/Nio/JackMultiEngine.cpp
+index cc621957..3602b348 100644
+--- a/src/Nio/JackMultiEngine.cpp
++++ b/src/Nio/JackMultiEngine.cpp
+@@ -83,7 +83,8 @@ bool JackMultiEngine::Start(void)
+     string postfix    = Nio::getPostfix();
+     if(!postfix.empty())
+         clientname += "_" + postfix;
+-    clientname += "_" + os_pid_as_padded_string();
++    if(Nio::pidInClientName)
++        clientname += "_" + os_pid_as_padded_string();
+     jack_status_t jackstatus;
+ 
+     impl->client = jack_client_open(clientname.c_str(), JackNullOption, &jackstatus);
+diff --git a/src/Nio/Nio.cpp b/src/Nio/Nio.cpp
+index b76d24a3..558f3c94 100644
+--- a/src/Nio/Nio.cpp
++++ b/src/Nio/Nio.cpp
+@@ -24,9 +24,10 @@ OutMgr    *out = NULL;
+ EngineMgr *eng = NULL;
+ string     postfix;
+ 
+-bool   Nio::autoConnect   = false;
+-string Nio::defaultSource = IN_DEFAULT;
+-string Nio::defaultSink   = OUT_DEFAULT;
++bool   Nio::autoConnect     = false;
++bool   Nio::pidInClientName = false;
++string Nio::defaultSource   = IN_DEFAULT;
++string Nio::defaultSink     = OUT_DEFAULT;
+ 
+ void Nio::init(class Master *master)
+ {
+diff --git a/src/Nio/Nio.h b/src/Nio/Nio.h
+index 0f84c597..e70fe151 100644
+--- a/src/Nio/Nio.h
++++ b/src/Nio/Nio.h
+@@ -43,6 +43,7 @@ namespace Nio
+     void waveEnd(void);
+ 
+     extern bool autoConnect;
++    extern bool pidInClientName;
+     extern std::string defaultSource;
+     extern std::string defaultSink;
+ };
+diff --git a/src/main.cpp b/src/main.cpp
+index 32b2cb4b..e92d1525 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -201,6 +201,9 @@ int main(int argc, char *argv[])
+         {
+             "auto-connect", 0, NULL, 'a'
+         },
++        {
++            "pid-in-client-name", 0, NULL, 'p'
++        },
+         {
+             "output", 1, NULL, 'O'
+         },
+@@ -228,7 +231,7 @@ int main(int argc, char *argv[])
+         /**\todo check this process for a small memory leak*/
+         opt = getopt_long(argc,
+                           argv,
+-                          "l:L:r:b:o:I:O:N:e:hvaSDUY",
++                          "l:L:r:b:o:I:O:N:e:hvapSDUY",
+                           opts,
+                           &option_index);
+         char *optarguments = optarg;
+@@ -315,6 +318,9 @@ int main(int argc, char *argv[])
+             case 'a':
+                 Nio::autoConnect = true;
+                 break;
++            case 'p':
++                Nio::pidInClientName = true;
++                break;
+             case 'e':
+                 GETOP(execAfterInit);
+                 break;
+@@ -361,6 +367,8 @@ int main(int argc, char *argv[])
+         "  -U , --no-gui\t\t\t\t Run ZynAddSubFX without user interface\n"
+              << "  -N , --named\t\t\t\t Postfix IO Name when possible\n"
+              << "  -a , --auto-connect\t\t\t AutoConnect when using JACK\n"
++             << "  -p , --pid-in-client-name\t\t Append PID to (JACK) "
++                "client name\n"
+              << "  -O , --output\t\t\t\t Set Output Engine\n"
+              << "  -I , --input\t\t\t\t Set Input Engine\n"
+              << "  -e , --exec-after-init\t\t Run post-initialization script\n"
+-- 
+2.47.0
+

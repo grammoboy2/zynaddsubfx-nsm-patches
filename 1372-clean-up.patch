@@ -1,0 +1,83 @@
+From b12f7adc3c5f0b1e0cb9b71a94570da3226b8639 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Wed, 19 Jun 2019 17:27:20 +0300
+Subject: [PATCH 1372/1936] clean up
+
+---
+ src/Synth/WatchPoint.cpp | 15 ++-------------
+ src/Synth/WatchPoint.h   |  2 +-
+ 2 files changed, 3 insertions(+), 14 deletions(-)
+
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index b47a85c7..9b95e685 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -100,15 +100,13 @@ void WatchManager::tick(void)
+     //Try to send out any vector stuff
+     for(int i=0; i<MAX_WATCH; ++i) {
+         if(sample_list[i]) {
+-            if(accumulate_index[i] >= 109){
++            if(accumulate_index[i] >= 127){
+                 char        arg_types[MAX_SAMPLE+1] = {0};
+                 rtosc_arg_t arg_val[MAX_SAMPLE];
+                 for(int j=0; j<sample_list[i]; ++j) {
+                     arg_types[j] = 'f';
+                     arg_val[j].f = data_list[i][j];
+-                    printf("%f ",data_list[i][j]);
+                 }
+-                printf("\n");
+ 
+                 write_back->writeArray(active_list[i], arg_types, arg_val);
+                 deactivate[i] = true;
+@@ -161,8 +159,6 @@ void WatchManager::satisfy(const char *id, float f)
+ 
+ void WatchManager::satisfy(const char *id, float *f, int n)
+ {
+-   
+-
+     int selected = -1;    
+     for(int i=0; i<MAX_WATCH; ++i)
+         if(!strcmp(active_list[i], id))
+@@ -171,25 +167,18 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+     if(selected == -1)
+         return;
+ 
+-     if(accumulate_index[selected]%32 == 0)
+-        {
+-            triggerPerframe[selected] = 0;
+-        }
+-
+     int space = MAX_SAMPLE - accumulate_index[selected];
+ 
+     if(space >= n)
+         space = n;
+ 
+     //FIXME buffer overflow
+-    if(space && triggerPerframe[selected] == 0){
++    if(space){
+         for(int i=0; i<space; ++i)
+             data_list[selected][sample_list[selected]++] = f[i];
+ 
+         accumulate_index[selected] += space;
+-
+     }
+-    triggerPerframe[selected] += 1;
+ }
+ 
+ }
+diff --git a/src/Synth/WatchPoint.h b/src/Synth/WatchPoint.h
+index 2a94716a..79b06f01 100644
+--- a/src/Synth/WatchPoint.h
++++ b/src/Synth/WatchPoint.h
+@@ -43,7 +43,7 @@ struct WatchManager
+     int     sample_list[MAX_WATCH];
+     bool    deactivate[MAX_WATCH];
+     int   accumulate_index[MAX_WATCH];
+-    int triggerPerframe[MAX_WATCH];
++
+     //External API
+     WatchManager(thrlnk *link=0);
+     void add_watch(const char *);
+-- 
+2.47.0
+

@@ -1,0 +1,160 @@
+From a72f20390a39516afaab15004d780f8762f936ff Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Sat, 15 Jun 2019 12:58:45 +0300
+Subject: [PATCH 1366/1936] add watchpoint and test for SubNote
+
+---
+ src/Synth/ADnote.cpp    |  4 ++--
+ src/Synth/SUBnote.cpp   |  8 ++++++--
+ src/Synth/SUBnote.h     |  5 +++--
+ src/Tests/SubNoteTest.h | 22 ++++++++++++++++++++--
+ 4 files changed, 31 insertions(+), 8 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 5c336818..6bda0ee0 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -1703,8 +1703,8 @@ int ADnote::noteout(float *outl, float *outr)
+                     tmpwavel[i] += tw[i];
+             if(nvoice == 0)
+                 watchOut(tmpwavel,synth.buffersize);
+-            if(nvoice == 1)
+-                watchOut1(tmpwavel,synth.buffersize);
++            
++            watchOut1(tmpwavel,synth.buffersize);
+         }
+         float unison_amplitude = 1.0f / sqrt(unison_size[nvoice]); //reduce the amplitude for large unison sizes
+         // Amplitude
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 494e2d44..32028d6e 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -44,7 +44,8 @@ SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars, WatchM
+     GlobalFilter(nullptr),
+     GlobalFilterEnvelope(nullptr),
+     NoteEnabled(true),
+-    lfilter(nullptr), rfilter(nullptr)
++    lfilter(nullptr), rfilter(nullptr),
++    watchOut(wm, prefix, "out"), watchOut1(wm,prefix,"out1")
+ {
+     setup(spars.frequency, spars.velocity, spars.portamento, spars.note_log2_freq, false, wm, prefix);
+ }
+@@ -518,6 +519,9 @@ void SUBnote::chanOutput(float *out, bpfilter *bp, int buffer_size)
+ 
+         for(int i = 0; i < synth.buffersize; ++i)
+             out[i] += tmpsmp[i] * rolloff;
++        
++        if(n == 0)
++            watchOut(tmpsmp,buffer_size);
+     }
+ }
+ 
+@@ -547,7 +551,7 @@ int SUBnote::noteout(float *outl, float *outr)
+ 
+         memcpy(outr, outl, synth.bufferbytes);
+     }
+-
++    watchOut1(outl,synth.buffersize);
+     if(firsttick) {
+         int n = 10;
+         if(n > synth.buffersize)
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 027abdab..2454716f 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -16,6 +16,7 @@
+ 
+ #include "SynthNote.h"
+ #include "../globals.h"
++#include "WatchPoint.h"
+ 
+ namespace zyn {
+ 
+@@ -28,7 +29,7 @@ class SUBnote:public SynthNote
+ 
+         SynthNote *cloneLegato(void);
+         void legatonote(LegatoParams pars);
+-
++        VecWatchPoint watchOut,watchOut1;
+         int noteout(float *outl, float *outr); //note output,return 0 if the note is finished
+         void releasekey();
+         bool finished() const;
+@@ -50,7 +51,7 @@ class SUBnote:public SynthNote
+         void KillNote();
+ 
+         const SUBnoteParameters &pars;
+-
++        
+         //parameters
+         bool       stereo;
+         int       numstages; //number of stages of filters
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index f771278b..793bd4f4 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -25,6 +25,7 @@
+ #include "../Params/SUBnoteParameters.h"
+ #include "../Params/Presets.h"
+ #include "../globals.h"
++#include <rtosc/thread-link.h>
+ 
+ using namespace std;
+ using namespace zyn;
+@@ -42,6 +43,8 @@ class SubNoteTest:public CxxTest::TestSuite
+         Controller   *controller;
+         unsigned char testnote;
+         Alloc         memory;
++        rtosc::ThreadLink *tr;
++        WatchManager *w;
+ 
+ 
+         float *outR, *outL;
+@@ -59,6 +62,9 @@ class SubNoteTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 *(outR + i) = 0;
+ 
++            tr  = new rtosc::ThreadLink(1024,3);
++            w   = new WatchManager(tr);
++
+             //prepare the default settings
+             SUBnoteParameters *defaultPreset = new SUBnoteParameters(time);
+             XMLwrapper wrap;
+@@ -79,7 +85,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+ 
+             SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
+-            note = new SUBnote(defaultPreset, pars);
++            note = new SUBnote(defaultPreset, pars, w);
+             this->pars = defaultPreset;
+         }
+ 
+@@ -124,13 +130,25 @@ class SubNoteTest:public CxxTest::TestSuite
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.0011f, 0.0001f);
+-
++            
++            TS_ASSERT(!tr->hasNext());
++            w->add_watch("out");
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
++            w->tick();
++            TS_ASSERT(tr->hasNext());
++            TS_ASSERT_EQUALS(string("out"), tr->read());
++            TS_ASSERT(!tr->hasNext());
+             TS_ASSERT_DELTA(outL[255], -0.0017f, 0.0001f);
+ 
++            TS_ASSERT(!tr->hasNext());
++            w->add_watch("out1");
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
++            w->tick();
++            TS_ASSERT(tr->hasNext());
++            TS_ASSERT_EQUALS(string("out1"), tr->read());
++            TS_ASSERT(!tr->hasNext());
+             TS_ASSERT_DELTA(outL[255], -0.0005f, 0.0001f);
+ 
+             while(!note->finished()) {
+-- 
+2.47.0
+

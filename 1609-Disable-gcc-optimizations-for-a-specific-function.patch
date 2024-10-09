@@ -1,0 +1,54 @@
+From a1abae354e826802f8b6f990cae225d6fb06b2ac Mon Sep 17 00:00:00 2001
+From: justnope <nobody@invalid>
+Date: Wed, 7 Oct 2020 13:56:12 +0200
+Subject: [PATCH 1609/1936] Disable gcc optimizations for a specific function
+
+Due to a gcc opt bug a piece of code was put in a separate function to
+prevent gcc from optimizing it. Later versions of gcc inlined the
+function and the bug reappeared. So now we explicitly tell gcc to not
+optimize it.
+---
+ src/Misc/MiddleWare.cpp | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 13bae053..49da9d50 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1282,8 +1282,12 @@ void save_cb(const char *msg, RtData &d)
+                 file.c_str(), request_time);
+ }
+ 
+-void
+-gcc_10_1_0_is_dumb(const std::vector<std::string> &files,
++#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
++#pragma GCC push_options
++#pragma GCC optimize("O0")
++#endif
++
++void gcc_10_1_0_is_dumb(const std::vector<std::string> &files,
+         const int N,
+         char *types,
+         rtosc_arg_t *args)
+@@ -1295,6 +1299,10 @@ gcc_10_1_0_is_dumb(const std::vector<std::string> &files,
+         }
+ }
+ 
++#if defined(__GNUC__) && !defined(__clang__) && !defined(__INTEL_COMPILER)
++#pragma GCC pop_options
++#endif
++
+ /*
+  * BASE/part#/kititem#
+  * BASE/part#/kit#/adpars/voice#/oscil/\*
+@@ -1440,7 +1448,6 @@ static rtosc::Ports middwareSnoopPorts = {
+         const int N = files.size();
+         rtosc_arg_t *args  = new rtosc_arg_t[N];
+         char        *types = new char[N+1];
+-        string      *data  = files.data();
+         gcc_10_1_0_is_dumb(files, N, types, args);
+ 
+         d.replyArray(d.loc, types, args);
+-- 
+2.47.0
+

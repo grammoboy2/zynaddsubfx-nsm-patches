@@ -1,0 +1,32 @@
+From 5a437f0719916974610dc41dc0fbe58ee8640023 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 22 Nov 2015 10:38:26 -0500
+Subject: [PATCH 0750/1936] =?UTF-8?q?Apply=20Bank=20LSB=20Patch=20By=20Jos?=
+ =?UTF-8?q?=C3=A9=20Fernando=20Moyano?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Fixes setprogram when bank LSB is non-zero
+---
+ src/Misc/MiddleWare.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index e7f577c7..d70e5b48 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1071,8 +1071,9 @@ static rtosc::Ports middlewareReplyPorts = {
+         rEnd},
+     {"setprogram:cc:ii", 0, 0,
+         rBegin;
++        Bank &bank        = impl.master->bank;
+         const int part    = rtosc_argument(msg, 0).i;
+-        const int program = rtosc_argument(msg, 1).i;
++        const int program = rtosc_argument(msg, 1).i + 128*bank.bank_lsb;
+         impl.loadPart(part, impl.master->bank.ins[program].filename.c_str(), impl.master);
+         impl.uToB->write(("/part"+to_s(part)+"/Pname").c_str(), "s", impl.master->bank.ins[program].name.c_str());
+         rEnd},
+-- 
+2.47.0
+

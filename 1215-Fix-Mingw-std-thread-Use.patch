@@ -1,0 +1,37 @@
+From 02aa9b6b80a9419a9e3de35f6529b36aac35d514 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 15 Oct 2017 11:32:49 -0400
+Subject: [PATCH 1215/1936] Fix Mingw std::thread Use
+
+This is the third attempt, hopefully there's no remaining issues...
+---
+ src/Params/PADnoteParameters.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index e1f7d579..2e82c34b 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -965,6 +965,11 @@ int PADnoteParameters::sampleGenerator(PADnoteParameters::callback cb,
+         delete[] spectrum;
+     };
+ 
++#ifdef WIN32
++    //Temporarily disable multi-threading here as C++11 threads are broken on
++    //mingw cross compilation
++    thread_cb(1,0);
++#else
+     unsigned nthreads = std::min(max_threads,
+                                  std::thread::hardware_concurrency());
+     std::vector<std::thread> threads(nthreads);
+@@ -972,6 +977,7 @@ int PADnoteParameters::sampleGenerator(PADnoteParameters::callback cb,
+         threads[i] = std::thread(thread_cb, nthreads, i);
+     for(unsigned i = 0; i < nthreads; ++i)
+         threads[i].join();
++#endif
+ 
+     return samplemax;
+ }
+-- 
+2.47.0
+

@@ -1,0 +1,1616 @@
+From eefbd143fe7f19aaf3f85577547b4a1c055f41bf Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 13 Dec 2015 18:24:14 +0100
+Subject: [PATCH 0787/1936] Add the rest of the zyn fx plugins
+
+---
+ src/Plugin/CMakeLists.txt                    |   6 +
+ src/Plugin/Chorus/CMakeLists.txt             |  11 +
+ src/Plugin/Chorus/Chorus.cpp                 | 195 +++++++++++++++++
+ src/Plugin/Chorus/DistrhoPluginInfo.h        |  37 ++++
+ src/Plugin/Distortion/CMakeLists.txt         |  11 +
+ src/Plugin/Distortion/Distortion.cpp         | 205 ++++++++++++++++++
+ src/Plugin/Distortion/DistrhoPluginInfo.h    |  37 ++++
+ src/Plugin/DynamicFilter/CMakeLists.txt      |  11 +
+ src/Plugin/DynamicFilter/DistrhoPluginInfo.h |  37 ++++
+ src/Plugin/DynamicFilter/DynamicFilter.cpp   | 170 +++++++++++++++
+ src/Plugin/Echo/CMakeLists.txt               |  11 +
+ src/Plugin/Echo/DistrhoPluginInfo.h          |  37 ++++
+ src/Plugin/Echo/Echo.cpp                     | 160 ++++++++++++++
+ src/Plugin/Phaser/CMakeLists.txt             |  11 +
+ src/Plugin/Phaser/DistrhoPluginInfo.h        |  37 ++++
+ src/Plugin/Phaser/Phaser.cpp                 | 217 +++++++++++++++++++
+ src/Plugin/Reverb/CMakeLists.txt             |  11 +
+ src/Plugin/Reverb/DistrhoPluginInfo.h        |  37 ++++
+ src/Plugin/Reverb/Reverb.cpp                 | 212 ++++++++++++++++++
+ 19 files changed, 1453 insertions(+)
+ create mode 100644 src/Plugin/Chorus/CMakeLists.txt
+ create mode 100644 src/Plugin/Chorus/Chorus.cpp
+ create mode 100644 src/Plugin/Chorus/DistrhoPluginInfo.h
+ create mode 100644 src/Plugin/Distortion/CMakeLists.txt
+ create mode 100644 src/Plugin/Distortion/Distortion.cpp
+ create mode 100644 src/Plugin/Distortion/DistrhoPluginInfo.h
+ create mode 100644 src/Plugin/DynamicFilter/CMakeLists.txt
+ create mode 100644 src/Plugin/DynamicFilter/DistrhoPluginInfo.h
+ create mode 100644 src/Plugin/DynamicFilter/DynamicFilter.cpp
+ create mode 100644 src/Plugin/Echo/CMakeLists.txt
+ create mode 100644 src/Plugin/Echo/DistrhoPluginInfo.h
+ create mode 100644 src/Plugin/Echo/Echo.cpp
+ create mode 100644 src/Plugin/Phaser/CMakeLists.txt
+ create mode 100644 src/Plugin/Phaser/DistrhoPluginInfo.h
+ create mode 100644 src/Plugin/Phaser/Phaser.cpp
+ create mode 100644 src/Plugin/Reverb/CMakeLists.txt
+ create mode 100644 src/Plugin/Reverb/DistrhoPluginInfo.h
+ create mode 100644 src/Plugin/Reverb/Reverb.cpp
+
+diff --git a/src/Plugin/CMakeLists.txt b/src/Plugin/CMakeLists.txt
+index 71a1c395..4da83fbf 100644
+--- a/src/Plugin/CMakeLists.txt
++++ b/src/Plugin/CMakeLists.txt
+@@ -1,2 +1,8 @@
+ 
+ add_subdirectory(AlienWah)
++add_subdirectory(Chorus)
++add_subdirectory(Distortion)
++add_subdirectory(DynamicFilter)
++add_subdirectory(Echo)
++add_subdirectory(Phaser)
++add_subdirectory(Reverb)
+diff --git a/src/Plugin/Chorus/CMakeLists.txt b/src/Plugin/Chorus/CMakeLists.txt
+new file mode 100644
+index 00000000..3cbc5c06
+--- /dev/null
++++ b/src/Plugin/Chorus/CMakeLists.txt
+@@ -0,0 +1,11 @@
++
++include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
++
++add_library(ZynChorus_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Chorus.cpp)
++add_library(ZynChorus_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Chorus.cpp)
++
++set_target_properties(ZynChorus_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++set_target_properties(ZynChorus_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++
++target_link_libraries(ZynChorus_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++target_link_libraries(ZynChorus_vst zynaddsubfx_core ${OS_LIBRARIES})
+diff --git a/src/Plugin/Chorus/Chorus.cpp b/src/Plugin/Chorus/Chorus.cpp
+new file mode 100644
+index 00000000..63554f5a
+--- /dev/null
++++ b/src/Plugin/Chorus/Chorus.cpp
+@@ -0,0 +1,195 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Chorus.cpp - DPF + Zyn Plugin for Chorus
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++// DPF includes
++#include "../AbstractFX.hpp"
++
++// ZynAddSubFX includes
++#include "Effects/Chorus.h"
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Chorus plugin class */
++
++class ChorusPlugin : public AbstractPluginFX<Chorus>
++{
++public:
++    ChorusPlugin()
++        : AbstractPluginFX(12, 10) {}
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * Information */
++
++   /**
++      Get the plugin label.
++      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
++    */
++    const char* getLabel() const noexcept override
++    {
++        return "Chorus";
++    }
++
++   /**
++      Get an extensive comment/description about the plugin.
++    */
++    const char* getDescription() const noexcept override
++    {
++        // TODO
++        return "";
++    }
++
++   /**
++      Get the plugin unique Id.
++      This value is used by LADSPA, DSSI and VST plugin formats.
++    */
++    int64_t getUniqueId() const noexcept override
++    {
++        return d_cconst('Z', 'X', 'c', 'h');
++    }
++
++   /* --------------------------------------------------------------------------------------------------------
++    * Init */
++
++   /**
++      Initialize the parameter @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initParameter(uint32_t index, Parameter& parameter) noexcept override
++    {
++        parameter.hints = kParameterIsInteger|kParameterIsAutomable;
++        parameter.name  = "";
++        parameter.unit  = "";
++        parameter.ranges.min = 0.0f;
++        parameter.ranges.max = 127.0f;
++
++        switch (index)
++        {
++        case 0:
++            parameter.name = "LFO Frequency";
++            parameter.ranges.def = 50.0f;
++            break;
++        case 1:
++            parameter.name = "LFO Randomness";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 2:
++            parameter.name = "LFO Type";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            /*
++            TODO: support for scalePoints in DPF
++            scalePoints[0].label = "Sine";
++            scalePoints[1].label = "Triangle";
++            scalePoints[0].value = 0.0f;
++            scalePoints[1].value = 1.0f;
++            */
++            break;
++        case 3:
++            parameter.name = "LFO Stereo";
++            parameter.ranges.def = 90.0f;
++            break;
++        case 4:
++            parameter.name = "Depth";
++            parameter.ranges.def = 40.0f;
++            break;
++        case 5:
++            parameter.name = "Delay";
++            parameter.ranges.def = 85.0f;
++            break;
++        case 6:
++            parameter.name = "Feedback";
++            parameter.ranges.def = 64.0f;
++            break;
++        case 7:
++            parameter.name = "L/R Cross";
++            parameter.ranges.def = 119.0f;
++            break;
++        case 8:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Flange Mode";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        case 9:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Subtract Output";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        }
++    }
++
++   /**
++      Set the name of the program @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initProgramName(uint32_t index, String& programName) noexcept override
++    {
++        switch (index)
++        {
++        case 0:
++            programName = "Chorus 1";
++            break;
++        case 1:
++            programName = "Chorus 2";
++            break;
++        case 2:
++            programName = "Chorus 3";
++            break;
++        case 3:
++            programName = "Celeste 1";
++            break;
++        case 4:
++            programName = "Celeste 2";
++            break;
++        case 5:
++            programName = "Flange 1";
++            break;
++        case 6:
++            programName = "Flange 2";
++            break;
++        case 7:
++            programName = "Flange 3";
++            break;
++        case 8:
++            programName = "Flange 4";
++            break;
++        case 9:
++            programName = "Flange 5";
++            break;
++        }
++    }
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(ChorusPlugin)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create plugin, entry point */
++
++START_NAMESPACE_DISTRHO
++
++Plugin* createPlugin()
++{
++    return new ChorusPlugin();
++}
++
++END_NAMESPACE_DISTRHO
+diff --git a/src/Plugin/Chorus/DistrhoPluginInfo.h b/src/Plugin/Chorus/DistrhoPluginInfo.h
+new file mode 100644
+index 00000000..e3c68016
+--- /dev/null
++++ b/src/Plugin/Chorus/DistrhoPluginInfo.h
+@@ -0,0 +1,37 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DistrhoPluginInfo.h - DPF information header
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
++#define DISTRHO_PLUGIN_INFO_H_INCLUDED
++
++#define DISTRHO_PLUGIN_BRAND "ZynAddSubFX"
++#define DISTRHO_PLUGIN_NAME  "Chorus"
++#define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Chorus"
++
++#define DISTRHO_PLUGIN_HAS_UI        0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_SYNTH      0
++#define DISTRHO_PLUGIN_NUM_INPUTS    2
++#define DISTRHO_PLUGIN_NUM_OUTPUTS   2
++#define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++
++#endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Distortion/CMakeLists.txt b/src/Plugin/Distortion/CMakeLists.txt
+new file mode 100644
+index 00000000..b33686c6
+--- /dev/null
++++ b/src/Plugin/Distortion/CMakeLists.txt
+@@ -0,0 +1,11 @@
++
++include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
++
++add_library(ZynDistortion_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Distortion.cpp)
++add_library(ZynDistortion_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Distortion.cpp)
++
++set_target_properties(ZynDistortion_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++set_target_properties(ZynDistortion_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++
++target_link_libraries(ZynDistortion_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++target_link_libraries(ZynDistortion_vst zynaddsubfx_core ${OS_LIBRARIES})
+diff --git a/src/Plugin/Distortion/Distortion.cpp b/src/Plugin/Distortion/Distortion.cpp
+new file mode 100644
+index 00000000..ab58c431
+--- /dev/null
++++ b/src/Plugin/Distortion/Distortion.cpp
+@@ -0,0 +1,205 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Distortion.cpp - DPF + Zyn Plugin for Distortion
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++// DPF includes
++#include "../AbstractFX.hpp"
++
++// ZynAddSubFX includes
++#include "Effects/Distorsion.h"
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Distortion plugin class */
++
++class DistortionPlugin : public AbstractPluginFX<Distorsion>
++{
++public:
++    DistortionPlugin()
++        : AbstractPluginFX(11, 6) {}
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * Information */
++
++   /**
++      Get the plugin label.
++      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
++    */
++    const char* getLabel() const noexcept override
++    {
++        return "Distortion";
++    }
++
++   /**
++      Get an extensive comment/description about the plugin.
++    */
++    const char* getDescription() const noexcept override
++    {
++        // TODO
++        return "";
++    }
++
++   /**
++      Get the plugin unique Id.
++      This value is used by LADSPA, DSSI and VST plugin formats.
++    */
++    int64_t getUniqueId() const noexcept override
++    {
++        return d_cconst('Z', 'X', 'd', 's');
++    }
++
++   /* --------------------------------------------------------------------------------------------------------
++    * Init */
++
++   /**
++      Initialize the parameter @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initParameter(uint32_t index, Parameter& parameter) noexcept override
++    {
++        parameter.hints = kParameterIsInteger|kParameterIsAutomable;
++        parameter.name  = "";
++        parameter.unit  = "";
++        parameter.ranges.min = 0.0f;
++        parameter.ranges.max = 127.0f;
++
++        switch (index)
++        {
++        case 0:
++            parameter.name = "L/R Cross";
++            parameter.ranges.def = 35.0f;
++            break;
++        case 1:
++            parameter.name = "Drive";
++            parameter.ranges.def = 56.0f;
++            break;
++        case 2:
++            parameter.name = "Level";
++            parameter.ranges.def = 70.0f;
++            break;
++        case 3:
++            parameter.name = "Type";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 13.0f;
++            /*
++            TODO: support for scalePoints in DPF
++            scalePoints[ 0].label = "Arctangent";
++            scalePoints[ 1].label = "Asymmetric";
++            scalePoints[ 2].label = "Pow";
++            scalePoints[ 3].label = "Sine";
++            scalePoints[ 4].label = "Quantisize";
++            scalePoints[ 5].label = "Zigzag";
++            scalePoints[ 6].label = "Limiter";
++            scalePoints[ 7].label = "Upper Limiter";
++            scalePoints[ 8].label = "Lower Limiter";
++            scalePoints[ 9].label = "Inverse Limiter";
++            scalePoints[10].label = "Clip";
++            scalePoints[11].label = "Asym2";
++            scalePoints[12].label = "Pow2";
++            scalePoints[13].label = "Sigmoid";
++            scalePoints[ 0].value = 0.0f;
++            scalePoints[ 1].value = 1.0f;
++            scalePoints[ 2].value = 2.0f;
++            scalePoints[ 3].value = 3.0f;
++            scalePoints[ 4].value = 4.0f;
++            scalePoints[ 5].value = 5.0f;
++            scalePoints[ 6].value = 6.0f;
++            scalePoints[ 7].value = 7.0f;
++            scalePoints[ 8].value = 8.0f;
++            scalePoints[ 9].value = 9.0f;
++            scalePoints[10].value = 10.0f;
++            scalePoints[11].value = 11.0f;
++            scalePoints[12].value = 12.0f;
++            scalePoints[13].value = 13.0f;
++            */
++            break;
++        case 4:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Negate";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        case 5:
++            parameter.name = "Low-Pass Filter";
++            parameter.ranges.def = 96.0f;
++            break;
++        case 6:
++            parameter.name = "High-Pass Filter";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 7:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Stereo";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        case 8:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Pre-Filtering";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        }
++    }
++
++   /**
++      Set the name of the program @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initProgramName(uint32_t index, String& programName) noexcept override
++    {
++        switch (index)
++        {
++        case 0:
++            programName = "Overdrive 1";
++            break;
++        case 1:
++            programName = "Overdrive 2";
++            break;
++        case 2:
++            programName = "A. Exciter 1";
++            break;
++        case 3:
++            programName = "A. Exciter 2";
++            break;
++        case 4:
++            programName = "Guitar Amp";
++            break;
++        case 5:
++            programName = "Quantisize";
++            break;
++        }
++    }
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(DistortionPlugin)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create plugin, entry point */
++
++START_NAMESPACE_DISTRHO
++
++Plugin* createPlugin()
++{
++    return new DistortionPlugin();
++}
++
++END_NAMESPACE_DISTRHO
+diff --git a/src/Plugin/Distortion/DistrhoPluginInfo.h b/src/Plugin/Distortion/DistrhoPluginInfo.h
+new file mode 100644
+index 00000000..5e68a381
+--- /dev/null
++++ b/src/Plugin/Distortion/DistrhoPluginInfo.h
+@@ -0,0 +1,37 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DistrhoPluginInfo.h - DPF information header
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
++#define DISTRHO_PLUGIN_INFO_H_INCLUDED
++
++#define DISTRHO_PLUGIN_BRAND "ZynAddSubFX"
++#define DISTRHO_PLUGIN_NAME  "Distortion"
++#define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Distortion"
++
++#define DISTRHO_PLUGIN_HAS_UI        0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_SYNTH      0
++#define DISTRHO_PLUGIN_NUM_INPUTS    2
++#define DISTRHO_PLUGIN_NUM_OUTPUTS   2
++#define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++
++#endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/DynamicFilter/CMakeLists.txt b/src/Plugin/DynamicFilter/CMakeLists.txt
+new file mode 100644
+index 00000000..f454bc80
+--- /dev/null
++++ b/src/Plugin/DynamicFilter/CMakeLists.txt
+@@ -0,0 +1,11 @@
++
++include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
++
++add_library(ZynDynamicFilter_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DynamicFilter.cpp)
++add_library(ZynDynamicFilter_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp DynamicFilter.cpp)
++
++set_target_properties(ZynDynamicFilter_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++set_target_properties(ZynDynamicFilter_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++
++target_link_libraries(ZynDynamicFilter_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++target_link_libraries(ZynDynamicFilter_vst zynaddsubfx_core ${OS_LIBRARIES})
+diff --git a/src/Plugin/DynamicFilter/DistrhoPluginInfo.h b/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
+new file mode 100644
+index 00000000..2bd909e5
+--- /dev/null
++++ b/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
+@@ -0,0 +1,37 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DistrhoPluginInfo.h - DPF information header
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
++#define DISTRHO_PLUGIN_INFO_H_INCLUDED
++
++#define DISTRHO_PLUGIN_BRAND "ZynAddSubFX"
++#define DISTRHO_PLUGIN_NAME  "Dynamic Filter"
++#define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#DynamicFilter"
++
++#define DISTRHO_PLUGIN_HAS_UI        0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_SYNTH      0
++#define DISTRHO_PLUGIN_NUM_INPUTS    2
++#define DISTRHO_PLUGIN_NUM_OUTPUTS   2
++#define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++
++#endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/DynamicFilter/DynamicFilter.cpp b/src/Plugin/DynamicFilter/DynamicFilter.cpp
+new file mode 100644
+index 00000000..37b63f06
+--- /dev/null
++++ b/src/Plugin/DynamicFilter/DynamicFilter.cpp
+@@ -0,0 +1,170 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DynamicFilter.cpp - DPF + Zyn Plugin for DynamicFilter
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++// DPF includes
++#include "../AbstractFX.hpp"
++
++// ZynAddSubFX includes
++#include "Effects/DynamicFilter.h"
++
++/* ------------------------------------------------------------------------------------------------------------
++ * DynamicFilter plugin class */
++
++class DynamicFilterPlugin : public AbstractPluginFX<DynamicFilter>
++{
++public:
++    DynamicFilterPlugin()
++        : AbstractPluginFX(10, 5) {}
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * Information */
++
++   /**
++      Get the plugin label.
++      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
++    */
++    const char* getLabel() const noexcept override
++    {
++        return "DynamicFilter";
++    }
++
++   /**
++      Get an extensive comment/description about the plugin.
++    */
++    const char* getDescription() const noexcept override
++    {
++        // TODO
++        return "";
++    }
++
++   /**
++      Get the plugin unique Id.
++      This value is used by LADSPA, DSSI and VST plugin formats.
++    */
++    int64_t getUniqueId() const noexcept override
++    {
++        return d_cconst('Z', 'X', 'd', 'f');
++    }
++
++   /* --------------------------------------------------------------------------------------------------------
++    * Init */
++
++   /**
++      Initialize the parameter @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initParameter(uint32_t index, Parameter& parameter) noexcept override
++    {
++        parameter.hints = kParameterIsInteger|kParameterIsAutomable;
++        parameter.name  = "";
++        parameter.unit  = "";
++        parameter.ranges.min = 0.0f;
++        parameter.ranges.max = 127.0f;
++
++        switch (index)
++        {
++        case 0:
++            parameter.name = "LFO Frequency";
++            parameter.ranges.def = 80.0f;
++            break;
++        case 1:
++            parameter.name = "LFO Randomness";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 2:
++            parameter.name = "LFO Type";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            /*
++            TODO: support for scalePoints in DPF
++            scalePoints[0].label = "Sine";
++            scalePoints[1].label = "Triangle";
++            scalePoints[0].value = 0.0f;
++            scalePoints[1].value = 1.0f;
++            */
++            break;
++        case 3:
++            parameter.name = "LFO Stereo";
++            parameter.ranges.def = 64.0f;
++            break;
++        case 4:
++            parameter.name = "LFO Depth";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 5:
++            parameter.name = "Amp sns";
++            parameter.ranges.def = 90.0f;
++            break;
++        case 6:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Amp sns inv";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        case 7:
++            parameter.name = "Amp Smooth";
++            parameter.ranges.def = 60.0f;
++            break;
++        }
++    }
++
++   /**
++      Set the name of the program @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initProgramName(uint32_t index, String& programName) noexcept override
++    {
++        switch (index)
++        {
++        case 0:
++            programName = "Wah Wah";
++            break;
++        case 1:
++            programName = "Auto Wah";
++            break;
++        case 2:
++            programName = "Sweep";
++            break;
++        case 3:
++            programName = "Vocal Morph 1";
++            break;
++        case 4:
++            programName = "Vocal Morph 2";
++            break;
++        }
++    }
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(DynamicFilterPlugin)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create plugin, entry point */
++
++START_NAMESPACE_DISTRHO
++
++Plugin* createPlugin()
++{
++    return new DynamicFilterPlugin();
++}
++
++END_NAMESPACE_DISTRHO
+diff --git a/src/Plugin/Echo/CMakeLists.txt b/src/Plugin/Echo/CMakeLists.txt
+new file mode 100644
+index 00000000..61d9ea6d
+--- /dev/null
++++ b/src/Plugin/Echo/CMakeLists.txt
+@@ -0,0 +1,11 @@
++
++include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
++
++add_library(ZynEcho_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Echo.cpp)
++add_library(ZynEcho_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Echo.cpp)
++
++set_target_properties(ZynEcho_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++set_target_properties(ZynEcho_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++
++target_link_libraries(ZynEcho_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++target_link_libraries(ZynEcho_vst zynaddsubfx_core ${OS_LIBRARIES})
+diff --git a/src/Plugin/Echo/DistrhoPluginInfo.h b/src/Plugin/Echo/DistrhoPluginInfo.h
+new file mode 100644
+index 00000000..c457e6a6
+--- /dev/null
++++ b/src/Plugin/Echo/DistrhoPluginInfo.h
+@@ -0,0 +1,37 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DistrhoPluginInfo.h - DPF information header
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
++#define DISTRHO_PLUGIN_INFO_H_INCLUDED
++
++#define DISTRHO_PLUGIN_BRAND "ZynAddSubFX"
++#define DISTRHO_PLUGIN_NAME  "Echo"
++#define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Echo"
++
++#define DISTRHO_PLUGIN_HAS_UI        0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_SYNTH      0
++#define DISTRHO_PLUGIN_NUM_INPUTS    2
++#define DISTRHO_PLUGIN_NUM_OUTPUTS   2
++#define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++
++#endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Echo/Echo.cpp b/src/Plugin/Echo/Echo.cpp
+new file mode 100644
+index 00000000..a87f43cc
+--- /dev/null
++++ b/src/Plugin/Echo/Echo.cpp
+@@ -0,0 +1,160 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Echo.cpp - DPF + Zyn Plugin for Echo
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++// DPF includes
++#include "../AbstractFX.hpp"
++
++// ZynAddSubFX includes
++#include "Effects/Echo.h"
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Echo plugin class */
++
++class EchoPlugin : public AbstractPluginFX<Echo>
++{
++public:
++    EchoPlugin()
++        : AbstractPluginFX(7, 9) {}
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * Information */
++
++   /**
++      Get the plugin label.
++      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
++    */
++    const char* getLabel() const noexcept override
++    {
++        return "Echo";
++    }
++
++   /**
++      Get an extensive comment/description about the plugin.
++    */
++    const char* getDescription() const noexcept override
++    {
++        // TODO
++        return "";
++    }
++
++   /**
++      Get the plugin unique Id.
++      This value is used by LADSPA, DSSI and VST plugin formats.
++    */
++    int64_t getUniqueId() const noexcept override
++    {
++        return d_cconst('Z', 'X', 'e', 'c');
++    }
++
++   /* --------------------------------------------------------------------------------------------------------
++    * Init */
++
++   /**
++      Initialize the parameter @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initParameter(uint32_t index, Parameter& parameter) noexcept override
++    {
++        parameter.hints = kParameterIsInteger|kParameterIsAutomable;
++        parameter.name  = "";
++        parameter.unit  = "";
++        parameter.ranges.min = 0.0f;
++        parameter.ranges.max = 127.0f;
++
++        switch (index)
++        {
++        case 0:
++            parameter.name = "Delay";
++            parameter.ranges.def = 35.0f;
++            break;
++        case 1:
++            parameter.name = "L/R Delay";
++            parameter.ranges.def = 64.0f;
++            break;
++        case 2:
++            parameter.name = "L/R Cross";
++            parameter.ranges.def = 30.0f;
++            break;
++        case 3:
++            parameter.name = "Feedback";
++            parameter.ranges.def = 59.0f;
++            break;
++        case 4:
++            parameter.name = "High Damp";
++            parameter.ranges.def = 0.0f;
++            break;
++        }
++    }
++
++   /**
++      Set the name of the program @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initProgramName(uint32_t index, String& programName) noexcept override
++    {
++        switch (index)
++        {
++        case 0:
++            programName = "Echo 1";
++            break;
++        case 1:
++            programName = "Echo 2";
++            break;
++        case 2:
++            programName = "Echo 3";
++            break;
++        case 3:
++            programName = "Simple Echo";
++            break;
++        case 4:
++            programName = "Canyon";
++            break;
++        case 5:
++            programName = "Panning Echo 1";
++            break;
++        case 6:
++            programName = "Panning Echo 2";
++            break;
++        case 7:
++            programName = "Panning Echo 3";
++            break;
++        case 8:
++            programName = "Feedback Echo";
++            break;
++        }
++    }
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(EchoPlugin)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create plugin, entry point */
++
++START_NAMESPACE_DISTRHO
++
++Plugin* createPlugin()
++{
++    return new EchoPlugin();
++}
++
++END_NAMESPACE_DISTRHO
+diff --git a/src/Plugin/Phaser/CMakeLists.txt b/src/Plugin/Phaser/CMakeLists.txt
+new file mode 100644
+index 00000000..12b108b0
+--- /dev/null
++++ b/src/Plugin/Phaser/CMakeLists.txt
+@@ -0,0 +1,11 @@
++
++include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
++
++add_library(ZynPhaser_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Phaser.cpp)
++add_library(ZynPhaser_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Phaser.cpp)
++
++set_target_properties(ZynPhaser_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++set_target_properties(ZynPhaser_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++
++target_link_libraries(ZynPhaser_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++target_link_libraries(ZynPhaser_vst zynaddsubfx_core ${OS_LIBRARIES})
+diff --git a/src/Plugin/Phaser/DistrhoPluginInfo.h b/src/Plugin/Phaser/DistrhoPluginInfo.h
+new file mode 100644
+index 00000000..a428037e
+--- /dev/null
++++ b/src/Plugin/Phaser/DistrhoPluginInfo.h
+@@ -0,0 +1,37 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DistrhoPluginInfo.h - DPF information header
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
++#define DISTRHO_PLUGIN_INFO_H_INCLUDED
++
++#define DISTRHO_PLUGIN_BRAND "ZynAddSubFX"
++#define DISTRHO_PLUGIN_NAME  "Phaser"
++#define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Phaser"
++
++#define DISTRHO_PLUGIN_HAS_UI        0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_SYNTH      0
++#define DISTRHO_PLUGIN_NUM_INPUTS    2
++#define DISTRHO_PLUGIN_NUM_OUTPUTS   2
++#define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++
++#endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Phaser/Phaser.cpp b/src/Plugin/Phaser/Phaser.cpp
+new file mode 100644
+index 00000000..396686fc
+--- /dev/null
++++ b/src/Plugin/Phaser/Phaser.cpp
+@@ -0,0 +1,217 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Phaser.cpp - DPF + Zyn Plugin for Phaser
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++// DPF includes
++#include "../AbstractFX.hpp"
++
++// ZynAddSubFX includes
++#include "Effects/Phaser.h"
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Phaser plugin class */
++
++class PhaserPlugin : public AbstractPluginFX<Phaser>
++{
++public:
++    PhaserPlugin()
++        : AbstractPluginFX(15, 12) {}
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * Information */
++
++   /**
++      Get the plugin label.
++      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
++    */
++    const char* getLabel() const noexcept override
++    {
++        return "Phaser";
++    }
++
++   /**
++      Get an extensive comment/description about the plugin.
++    */
++    const char* getDescription() const noexcept override
++    {
++        // TODO
++        return "";
++    }
++
++   /**
++      Get the plugin unique Id.
++      This value is used by LADSPA, DSSI and VST plugin formats.
++    */
++    int64_t getUniqueId() const noexcept override
++    {
++        return d_cconst('Z', 'X', 'p', 'h');
++    }
++
++   /* --------------------------------------------------------------------------------------------------------
++    * Init */
++
++   /**
++      Initialize the parameter @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initParameter(uint32_t index, Parameter& parameter) noexcept override
++    {
++        parameter.hints = kParameterIsInteger|kParameterIsAutomable;
++        parameter.name  = "";
++        parameter.unit  = "";
++        parameter.ranges.min = 0.0f;
++        parameter.ranges.max = 127.0f;
++
++        switch (index)
++        {
++        case 0:
++            parameter.name = "LFO Frequency";
++            parameter.ranges.def = 36.0f;
++            break;
++        case 1:
++            parameter.name = "LFO Randomness";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 2:
++            parameter.name = "LFO Type";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            /*
++            TODO: support for scalePoints in DPF
++            scalePoints[0].label = "Sine";
++            scalePoints[1].label = "Triangle";
++            scalePoints[0].value = 0.0f;
++            scalePoints[1].value = 1.0f;
++            */
++            break;
++        case 3:
++            parameter.name = "LFO Stereo";
++            parameter.ranges.def = 64.0f;
++            break;
++        case 4:
++            parameter.name = "Depth";
++            parameter.ranges.def = 110.0f;
++            break;
++        case 5:
++            parameter.name = "Feedback";
++            parameter.ranges.def = 64.0f;
++            break;
++        case 6:
++            parameter.name = "Stages";
++            parameter.ranges.def = 1.0f;
++            parameter.ranges.min = 1.0f;
++            parameter.ranges.max = 12.0f;
++            break;
++        case 7:
++            parameter.name = "L/R Cross|Offset";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 8:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Subtract Output";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        case 9:
++            parameter.name = "Phase|Width";
++            parameter.ranges.def = 20.0f;
++            break;
++        case 10:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Hyper";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        case 11:
++            parameter.name = "Distortion";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 12:
++            parameter.hints |= kParameterIsBoolean;
++            parameter.name = "Analog";
++            parameter.ranges.def = 0.0f;
++            parameter.ranges.max = 1.0f;
++            break;
++        }
++    }
++
++   /**
++      Set the name of the program @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initProgramName(uint32_t index, String& programName) noexcept override
++    {
++        switch (index)
++        {
++        case 0:
++            programName = "Phaser 1";
++            break;
++        case 1:
++            programName = "Phaser 2";
++            break;
++        case 2:
++            programName = "Phaser 3";
++            break;
++        case 3:
++            programName = "Phaser 4";
++            break;
++        case 4:
++            programName = "Phaser 5";
++            break;
++        case 5:
++            programName = "Phaser 6";
++            break;
++        case 6:
++            programName = "Analog Phaser 1";
++            break;
++        case 7:
++            programName = "Analog Phaser 2";
++            break;
++        case 8:
++            programName = "Analog Phaser 3";
++            break;
++        case 9:
++            programName = "Analog Phaser 4";
++            break;
++        case 10:
++            programName = "Analog Phaser 5";
++            break;
++        case 11:
++            programName = "Analog Phaser 6";
++            break;
++        }
++    }
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(PhaserPlugin)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create plugin, entry point */
++
++START_NAMESPACE_DISTRHO
++
++Plugin* createPlugin()
++{
++    return new PhaserPlugin();
++}
++
++END_NAMESPACE_DISTRHO
+diff --git a/src/Plugin/Reverb/CMakeLists.txt b/src/Plugin/Reverb/CMakeLists.txt
+new file mode 100644
+index 00000000..94c3e930
+--- /dev/null
++++ b/src/Plugin/Reverb/CMakeLists.txt
+@@ -0,0 +1,11 @@
++
++include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
++
++add_library(ZynReverb_lv2 SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Reverb.cpp)
++add_library(ZynReverb_vst SHARED ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp Reverb.cpp)
++
++set_target_properties(ZynReverb_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++set_target_properties(ZynReverb_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++
++target_link_libraries(ZynReverb_lv2 zynaddsubfx_core ${OS_LIBRARIES})
++target_link_libraries(ZynReverb_vst zynaddsubfx_core ${OS_LIBRARIES})
+diff --git a/src/Plugin/Reverb/DistrhoPluginInfo.h b/src/Plugin/Reverb/DistrhoPluginInfo.h
+new file mode 100644
+index 00000000..dd28244b
+--- /dev/null
++++ b/src/Plugin/Reverb/DistrhoPluginInfo.h
+@@ -0,0 +1,37 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DistrhoPluginInfo.h - DPF information header
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef DISTRHO_PLUGIN_INFO_H_INCLUDED
++#define DISTRHO_PLUGIN_INFO_H_INCLUDED
++
++#define DISTRHO_PLUGIN_BRAND "ZynAddSubFX"
++#define DISTRHO_PLUGIN_NAME  "Reverb"
++#define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Reverb"
++
++#define DISTRHO_PLUGIN_HAS_UI        0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_SYNTH      0
++#define DISTRHO_PLUGIN_NUM_INPUTS    2
++#define DISTRHO_PLUGIN_NUM_OUTPUTS   2
++#define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++
++#endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Reverb/Reverb.cpp b/src/Plugin/Reverb/Reverb.cpp
+new file mode 100644
+index 00000000..faf429fe
+--- /dev/null
++++ b/src/Plugin/Reverb/Reverb.cpp
+@@ -0,0 +1,212 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Reverb.cpp - DPF + Zyn Plugin for Reverb
++  Copyright (C) 2015 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++// DPF includes
++#include "../AbstractFX.hpp"
++
++// ZynAddSubFX includes
++#include "Effects/Reverb.h"
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Reverb plugin class */
++
++class ReverbPlugin : public AbstractPluginFX<Reverb>
++{
++public:
++    ReverbPlugin()
++        : AbstractPluginFX(13, 13) {}
++
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * Information */
++
++   /**
++      Get the plugin label.
++      This label is a short restricted name consisting of only _, a-z, A-Z and 0-9 characters.
++    */
++    const char* getLabel() const noexcept override
++    {
++        return "Reverb";
++    }
++
++   /**
++      Get an extensive comment/description about the plugin.
++    */
++    const char* getDescription() const noexcept override
++    {
++        // TODO
++        return "";
++    }
++
++   /**
++      Get the plugin unique Id.
++      This value is used by LADSPA, DSSI and VST plugin formats.
++    */
++    int64_t getUniqueId() const noexcept override
++    {
++        return d_cconst('Z', 'X', 'r', 'v');
++    }
++
++   /* --------------------------------------------------------------------------------------------------------
++    * Init */
++
++   /**
++      Initialize the parameter @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initParameter(uint32_t index, Parameter& parameter) noexcept override
++    {
++        parameter.hints = kParameterIsInteger;
++        parameter.name  = "";
++        parameter.unit  = "";
++        parameter.ranges.def = 1.0f;
++        parameter.ranges.min = 0.0f;
++        parameter.ranges.max = 127.0f;
++
++        switch (index)
++        {
++        case 0:
++            parameter.hints |= kParameterIsAutomable;
++            parameter.name = "Time";
++            parameter.ranges.def = 63.0f;
++            break;
++        case 1:
++            parameter.name = "Delay";
++            parameter.ranges.def = 24.0f;
++            break;
++        case 2:
++            parameter.hints |= kParameterIsAutomable;
++            parameter.name = "Feedback";
++            parameter.ranges.def = 0.0f;
++            break;
++        case 3:
++            // FIXME: unused
++            parameter.name = "bw";
++            break;
++        case 4:
++            // FIXME: unused
++            parameter.name = "E/R";
++            break;
++        case 5:
++            parameter.name = "Low-Pass Filter";
++            parameter.ranges.def = 85.0f;
++            break;
++        case 6:
++            parameter.name = "High-Pass Filter";
++            parameter.ranges.def = 5.0f;
++            break;
++        case 7:
++            parameter.hints |= kParameterIsAutomable;
++            parameter.name = "Damp";
++            parameter.ranges.def = 83.0f;
++            parameter.ranges.min = 64.0f;
++            break;
++        case 8:
++            parameter.name = "Type";
++            parameter.ranges.def = 1.0f;
++            parameter.ranges.max = 2.0f;
++            /*
++            TODO: support for scalePoints in DPF
++            scalePoints[0].label = "Random";
++            scalePoints[1].label = "Freeverb";
++            scalePoints[2].label = "Bandwidth";
++            scalePoints[0].value = 0.0f;
++            scalePoints[1].value = 1.0f;
++            scalePoints[2].value = 2.0f;
++            */
++            break;
++        case 9:
++            parameter.name = "Room size";
++            parameter.ranges.def = 64.0f;
++            parameter.ranges.min = 1.0f;
++            break;
++        case 10:
++            parameter.name = "Bandwidth";
++            parameter.ranges.def = 20.0f;
++            break;
++        }
++    }
++
++   /**
++      Set the name of the program @a index.
++      This function will be called once, shortly after the plugin is created.
++    */
++    void initProgramName(uint32_t index, String& programName) noexcept override
++    {
++        switch (index)
++        {
++        case 0:
++            programName = "Cathedral 1";
++            break;
++        case 1:
++            programName = "Cathedral 2";
++            break;
++        case 2:
++            programName = "Cathedral 3";
++            break;
++        case 3:
++            programName = "Hall 1";
++            break;
++        case 4:
++            programName = "Hall 2";
++            break;
++        case 5:
++            programName = "Room 1";
++            break;
++        case 6:
++            programName = "Room 2";
++            break;
++        case 7:
++            programName = "Basement";
++            break;
++        case 8:
++            programName = "Tunnel";
++            break;
++        case 9:
++            programName = "Echoed 1";
++            break;
++        case 10:
++            programName = "Echoed 2";
++            break;
++        case 11:
++            programName = "Very Long 1";
++            break;
++        case 12:
++            programName = "Very Long 2";
++            break;
++        }
++    }
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(ReverbPlugin)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create plugin, entry point */
++
++START_NAMESPACE_DISTRHO
++
++Plugin* createPlugin()
++{
++    return new ReverbPlugin();
++}
++
++END_NAMESPACE_DISTRHO
+-- 
+2.47.0
+

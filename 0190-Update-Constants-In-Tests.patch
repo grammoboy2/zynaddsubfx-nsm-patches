@@ -1,0 +1,109 @@
+From 9cc8dd8d56aa1cd75757e9d845c4ec6133479053 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 18 Jun 2014 12:37:26 -0400
+Subject: [PATCH 0190/1936] Update Constants In Tests
+
+The last set of commits does result in some minor
+changes in the output sounds, but as they are intentional,
+the tests just get new constants.
+---
+ src/Tests/AdNoteTest.h      | 4 ++--
+ src/Tests/PadNoteTest.h     | 6 +++---
+ src/Tests/guitar-adnote.xmz | 8 ++++++++
+ 3 files changed, 13 insertions(+), 5 deletions(-)
+
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index c296e9cb..bd66704e 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -158,7 +158,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.111422f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.111261f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+@@ -166,7 +166,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.149882f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.149149f, 0.0001f);
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index 5e202b36..086efcdf 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -163,15 +163,15 @@ class PadNoteTest:public CxxTest::TestSuite
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.0613f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.060818f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.0378f, 0.0005f);
++            TS_ASSERT_DELTA(outL[255], 0.036895f, 0.0005f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0070f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.006623f, 0.0001f);
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 9922ba96..eddd7ebf 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -180,6 +180,7 @@ version-revision="3" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="unison_vibratto" value="64" />
+ <par name="unison_vibratto_speed" value="64" />
+ <par name="unison_invert_phase" value="0" />
++<par name="unison_phase_randomness" value="127" />
+ <par name="delay" value="0" />
+ <par_bool name="resonance" value="yes" />
+ <par name="ext_oscil" value="-1" />
+@@ -424,6 +425,7 @@ version-revision="3" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="unison_vibratto" value="64" />
+ <par name="unison_vibratto_speed" value="64" />
+ <par name="unison_invert_phase" value="0" />
++<par name="unison_phase_randomness" value="127" />
+ <par name="delay" value="0" />
+ <par_bool name="resonance" value="yes" />
+ <par name="ext_oscil" value="0" />
+@@ -506,6 +508,7 @@ version-revision="3" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="unison_vibratto" value="64" />
+ <par name="unison_vibratto_speed" value="64" />
+ <par name="unison_invert_phase" value="0" />
++<par name="unison_phase_randomness" value="127" />
+ <par name="delay" value="0" />
+ <par_bool name="resonance" value="yes" />
+ <par name="ext_oscil" value="0" />
+@@ -588,6 +591,7 @@ version-revision="3" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="unison_vibratto" value="64" />
+ <par name="unison_vibratto_speed" value="64" />
+ <par name="unison_invert_phase" value="0" />
++<par name="unison_phase_randomness" value="127" />
+ <par name="delay" value="0" />
+ <par_bool name="resonance" value="yes" />
+ <par name="ext_oscil" value="-1" />
+@@ -989,6 +993,10 @@ version-revision="3" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="fixed_freq_et" value="103" />
+ <par name="detune" value="8192" />
+ <par name="coarse_detune" value="0" />
++<par name="overtone_spread_type" value="0" />
++<par name="overtone_spread_par1" value="0" />
++<par name="overtone_spread_par2" value="0" />
++<par name="overtone_spread_par3" value="0" />
+ <par name="detune_type" value="1" />
+ <par name="bandwidth" value="40" />
+ <par name="bandwidth_scale" value="38" />
+-- 
+2.47.0
+

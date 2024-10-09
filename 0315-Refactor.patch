@@ -1,0 +1,330 @@
+From 68ec39daf32b8a36cb8c3029183a7d3da94950d1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 14 Feb 2015 13:09:48 -0500
+Subject: [PATCH 0315/1936] Refactor
+
+---
+ src/Misc/Allocator.h          |  9 ++---
+ src/Synth/ADnote.cpp          | 12 +++----
+ src/Synth/LFO.cpp             | 65 +++++++++++++++--------------------
+ src/Synth/LFO.h               |  4 +--
+ src/Synth/PADnote.cpp         |  6 ++--
+ src/Tests/InstrumentStats.cpp |  2 +-
+ src/globals.h                 | 21 ++++++++++-
+ 7 files changed, 63 insertions(+), 56 deletions(-)
+
+diff --git a/src/Misc/Allocator.h b/src/Misc/Allocator.h
+index 1e6794b2..80bfc599 100644
+--- a/src/Misc/Allocator.h
++++ b/src/Misc/Allocator.h
+@@ -1,4 +1,5 @@
+ #include <cstdlib>
++#include <utility>
+ 
+ class Allocator
+ {
+@@ -10,22 +11,22 @@ class Allocator
+         void dealloc_mem(void *memory);
+ 
+         template <typename T, typename... Ts>
+-        T *alloc(Ts... ts)
++        T *alloc(Ts&&... ts)
+         {
+             void *data = alloc_mem(sizeof(T));
+             if(!data)
+                 return nullptr;
+-            return new (data) T(ts...);
++            return new (data) T(std::forward<Ts>(ts)...);
+         }
+ 
+         template <typename T, typename... Ts>
+-        T *valloc(size_t len, Ts... ts)
++        T *valloc(size_t len, Ts&&... ts)
+         {
+             T *data = (T*)alloc_mem(len*sizeof(T));
+             if(!data)
+                 return nullptr;
+             for(unsigned i=0; i<len; ++i)
+-                new ((void*)&data[i]) T(ts...);
++                new ((void*)&data[i]) T(std::forward<Ts>(ts)...);
+ 
+             return data;
+         }
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index a55bc786..5d9776d4 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -759,7 +759,7 @@ void ADnote::initparameters()
+         }
+ 
+         if(param.PAmpLfoEnabled) {
+-            vce.AmpLfo = memory.alloc<LFO>(param.AmpLfo, basefreq);
++            vce.AmpLfo = memory.alloc<LFO>(*param.AmpLfo, basefreq);
+             newamplitude[nvoice] *= vce.AmpLfo->amplfoout();
+         }
+ 
+@@ -768,7 +768,7 @@ void ADnote::initparameters()
+             vce.FreqEnvelope = memory.alloc<Envelope>(param.FreqEnvelope, basefreq);
+ 
+         if(param.PFreqLfoEnabled)
+-            vce.FreqLfo = memory.alloc<LFO>(param.FreqLfo, basefreq);
++            vce.FreqLfo = memory.alloc<LFO>(*param.FreqLfo, basefreq);
+ 
+         /* Voice Filter Parameters Init */
+         if(param.PFilterEnabled != 0) {
+@@ -780,7 +780,7 @@ void ADnote::initparameters()
+             vce.FilterEnvelope = memory.alloc<Envelope>(param.FilterEnvelope, basefreq);
+ 
+         if(param.PFilterLfoEnabled)
+-            vce.FilterLfo = memory.alloc<LFO>(param.FilterLfo, basefreq);
++            vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq);
+ 
+         vce.FilterFreqTracking =
+             param.VoiceFilter->getfreqtracking(basefreq);
+@@ -1784,10 +1784,10 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+                                     bool stereo)
+ {
+     FreqEnvelope = memory.alloc<Envelope>(param.FreqEnvelope, basefreq);
+-    FreqLfo      = memory.alloc<LFO>(param.FreqLfo, basefreq);
++    FreqLfo      = memory.alloc<LFO>(*param.FreqLfo, basefreq);
+ 
+     AmpEnvelope = memory.alloc<Envelope>(param.AmpEnvelope, basefreq);
+-    AmpLfo      = memory.alloc<LFO>(param.AmpLfo, basefreq);
++    AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq);
+ 
+     Volume = 4.0f * powf(0.1f, 3.0f * (1.0f - param.PVolume / 96.0f)) //-60 dB .. 0 dB
+              * VelF(velocity, param.PAmpVelocityScaleFunction);     //sensing
+@@ -1799,7 +1799,7 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+         GlobalFilterR = NULL;
+ 
+     FilterEnvelope = memory.alloc<Envelope>(param.FilterEnvelope, basefreq);
+-    FilterLfo      = memory.alloc<LFO>(param.FilterLfo, basefreq);
++    FilterLfo      = memory.alloc<LFO>(*param.FilterLfo, basefreq);
+     FilterQ = param.GlobalFilter->getq();
+     FilterFreqTracking = param.GlobalFilter->getfreqtracking(basefreq);
+ }
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index af9d10d7..33edf74f 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -21,32 +21,35 @@
+ */
+ 
+ #include "LFO.h"
++#include "../Params/LFOParams.h"
+ #include "../Misc/Util.h"
+ 
+-#include <stdlib.h>
+-#include <stdio.h>
+-#include <math.h>
++#include <cstdlib>
++#include <cstdio>
++#include <cmath>
+ 
+-LFO::LFO(LFOParams *lfopars, float basefreq)
++LFO::LFO(const LFOParams &lfopars, float basefreq)
+ {
+-    if(lfopars->Pstretch == 0)
+-        lfopars->Pstretch = 1;
+-    float lfostretch = powf(basefreq / 440.0f,
+-                            (lfopars->Pstretch - 64.0f) / 63.0f);           //max 2x/octave
++    int stretch = lfopars.Pstretch;
++    if(stretch == 0)
++        stretch = 1;
++
++    //max 2x/octave
++    const float lfostretch = powf(basefreq / 440.0f, (stretch - 64.0f) / 63.0f);
+ 
+     float lfofreq =
+-        (powf(2, lfopars->Pfreq * 10.0f) - 1.0f) / 12.0f * lfostretch;
++        (powf(2, lfopars.Pfreq * 10.0f) - 1.0f) / 12.0f * lfostretch;
+     incx = fabs(lfofreq) * synth->buffersize_f / synth->samplerate_f;
+ 
+-    if(lfopars->Pcontinous == 0) {
+-        if(lfopars->Pstartphase == 0)
++    if(!lfopars.Pcontinous) {
++        if(lfopars.Pstartphase == 0)
+             x = RND;
+         else
+-            x = fmod((lfopars->Pstartphase - 64.0f) / 127.0f + 1.0f, 1.0f);
++            x = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f, 1.0f);
+     }
+     else {
+-        float tmp = fmod(lfopars->time * incx, 1.0f);
+-        x = fmod((lfopars->Pstartphase - 64.0f) / 127.0f + 1.0f + tmp, 1.0f);
++        const float tmp = fmod(lfopars.time * incx, 1.0f);
++        x = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f + tmp, 1.0f);
+     }
+ 
+     //Limit the Frequency(or else...)
+@@ -54,35 +57,28 @@ LFO::LFO(LFOParams *lfopars, float basefreq)
+         incx = 0.499999999f;
+ 
+ 
+-    lfornd = lfopars->Prandomness / 127.0f;
+-    if(lfornd < 0.0f)
+-        lfornd = 0.0f;
+-    else
+-    if(lfornd > 1.0f)
+-        lfornd = 1.0f;
+-
+-//    lfofreqrnd=powf(lfopars->Pfreqrand/127.0f,2.0f)*2.0f*4.0f;
+-    lfofreqrnd = powf(lfopars->Pfreqrand / 127.0f, 2.0f) * 4.0f;
++    lfornd = limit(lfopars.Prandomness / 127.0f, 0.0f, 1.0f);
++    lfofreqrnd = powf(lfopars.Pfreqrand / 127.0f, 2.0f) * 4.0f;
+ 
+-    switch(lfopars->fel) {
++    switch(lfopars.fel) {
+         case 1:
+-            lfointensity = lfopars->Pintensity / 127.0f;
++            lfointensity = lfopars.Pintensity / 127.0f;
+             break;
+         case 2:
+-            lfointensity = lfopars->Pintensity / 127.0f * 4.0f;
++            lfointensity = lfopars.Pintensity / 127.0f * 4.0f;
+             break; //in octave
+         default:
+-            lfointensity = powf(2, lfopars->Pintensity / 127.0f * 11.0f) - 1.0f; //in centi
++            lfointensity = powf(2, lfopars.Pintensity / 127.0f * 11.0f) - 1.0f; //in centi
+             x -= 0.25f; //chance the starting phase
+             break;
+     }
+ 
+     amp1     = (1 - lfornd) + lfornd * RND;
+     amp2     = (1 - lfornd) + lfornd * RND;
+-    lfotype  = lfopars->PLFOtype;
+-    lfodelay = lfopars->Pdelay / 127.0f * 4.0f; //0..4 sec
++    lfotype  = lfopars.PLFOtype;
++    lfodelay = lfopars.Pdelay / 127.0f * 4.0f; //0..4 sec
+     incrnd   = nextincrnd = 1.0f;
+-    freqrndenabled = (lfopars->Pfreqrand != 0);
++    freqrndenabled = (lfopars.Pfreqrand != 0);
+     computenextincrnd();
+     computenextincrnd(); //twice because I want incrnd & nextincrnd to be random
+ }
+@@ -163,14 +159,7 @@ float LFO::lfoout()
+  */
+ float LFO::amplfoout()
+ {
+-    float out;
+-    out = 1.0f - lfointensity + lfoout();
+-    if(out < -1.0f)
+-        out = -1.0f;
+-    else
+-    if(out > 1.0f)
+-        out = 1.0f;
+-    return out;
++    return limit(1.0f - lfointensity + lfoout(), -1.0f, 1.0f);
+ }
+ 
+ 
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index 2b933a34..619f1d90 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -24,7 +24,6 @@
+ #define LFO_H
+ 
+ #include "../globals.h"
+-#include "../Params/LFOParams.h"
+ 
+ /**Class for creating Low Frequency Ocillators*/
+ class LFO
+@@ -35,7 +34,7 @@ class LFO
+          * @param lfopars pointer to a LFOParams object
+          * @param basefreq base frequency of LFO
+          */
+-        LFO(LFOParams *lfopars, float basefreq);
++        LFO(const LFOParams &lfopars, float basefreq);
+         /**Deconstructor*/
+         ~LFO();
+         float lfoout();
+@@ -51,7 +50,6 @@ class LFO
+         char lfotype;
+         int  freqrndenabled;
+ 
+-
+         void computenextincrnd();
+ };
+ 
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index f91a18ab..5c8475c4 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -131,10 +131,10 @@ void PADnote::setup(float freq,
+             NoteGlobalPar.Punch.Enabled = 0;
+ 
+         NoteGlobalPar.FreqEnvelope = memory.alloc<Envelope>(pars->FreqEnvelope, basefreq);
+-        NoteGlobalPar.FreqLfo      = memory.alloc<LFO>(pars->FreqLfo, basefreq);
++        NoteGlobalPar.FreqLfo      = memory.alloc<LFO>(*pars->FreqLfo, basefreq);
+ 
+         NoteGlobalPar.AmpEnvelope = memory.alloc<Envelope>(pars->AmpEnvelope, basefreq);
+-        NoteGlobalPar.AmpLfo      = memory.alloc<LFO>(pars->AmpLfo, basefreq);
++        NoteGlobalPar.AmpLfo      = memory.alloc<LFO>(*pars->AmpLfo, basefreq);
+     }
+ 
+     NoteGlobalPar.Volume = 4.0f
+@@ -152,7 +152,7 @@ void PADnote::setup(float freq,
+         NoteGlobalPar.GlobalFilterR = Filter::generate(memory, pars->GlobalFilter);
+ 
+         NoteGlobalPar.FilterEnvelope = memory.alloc<Envelope>(pars->FilterEnvelope, basefreq);
+-        NoteGlobalPar.FilterLfo      = memory.alloc<LFO>(pars->FilterLfo, basefreq);
++        NoteGlobalPar.FilterLfo      = memory.alloc<LFO>(*pars->FilterLfo, basefreq);
+     }
+     NoteGlobalPar.FilterQ = pars->GlobalFilter->getq();
+     NoteGlobalPar.FilterFreqTracking = pars->GlobalFilter->getfreqtracking(
+diff --git a/src/Tests/InstrumentStats.cpp b/src/Tests/InstrumentStats.cpp
+index 8dd52c27..8bbe5c64 100644
+--- a/src/Tests/InstrumentStats.cpp
++++ b/src/Tests/InstrumentStats.cpp
+@@ -135,7 +135,7 @@ int main(int argc, char **argv)
+         return 1;
+     }
+ 
+-    mode = MODE_PROFILE;
++    mode = MODE_TEST;
+     setup();
+     xml(argv[1]);
+     load();
+diff --git a/src/globals.h b/src/globals.h
+index f59d28eb..541ac86f 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -24,7 +24,6 @@
+ 
+ #ifndef GLOBALS_H
+ #define GLOBALS_H
+-#include <stdint.h>
+ 
+ #if defined(__clang__)
+ #define REALTIME __attribute__((annotate("realtime")))
+@@ -39,6 +38,26 @@ namespace rtosc{struct Ports; class ThreadLink;};
+ extern rtosc::ThreadLink *bToU;
+ extern rtosc::ThreadLink *uToB;
+ 
++//Forward Declarations
++class  EffectMgr;
++class  ADnoteParameters;
++struct ADnoteGlobalParam;
++class  SUBnoteParameters;
++class  PADnoteParameters;
++class  SynthNote;
++
++class  Microtonal;
++class  XMLwrapper;
++class  FFTwrapper;
++class  LFOParams;
++class  FilterParams;
++class  LFO;
++class  Envelope;
++
++class  Controller;
++class  Master;
++class  Part;
++
+ /**
+  * The number of harmonics of additive synth
+  * This must be smaller than OSCIL_SIZE/2
+-- 
+2.47.0
+

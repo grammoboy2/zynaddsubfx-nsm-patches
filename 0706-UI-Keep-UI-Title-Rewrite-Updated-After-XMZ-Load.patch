@@ -1,0 +1,75 @@
+From d7ebd07043e46807e5a3a387296231077567d6f9 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 7 Nov 2015 14:53:27 -0500
+Subject: [PATCH 0706/1936] UI: Keep UI Title Rewrite Updated After XMZ Load
+
+---
+ src/UI/Fl_Osc_Pane.H   | 2 ++
+ src/UI/Fl_Osc_Pane.cpp | 7 +++++++
+ src/UI/MasterUI.fl     | 5 ++++-
+ 3 files changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/Fl_Osc_Pane.H b/src/UI/Fl_Osc_Pane.H
+index 9d9e9b80..7c6a10e4 100644
+--- a/src/UI/Fl_Osc_Pane.H
++++ b/src/UI/Fl_Osc_Pane.H
+@@ -18,6 +18,7 @@ class Fl_Osc_Pane
+ class Fl_Osc_Window:public Fl_Double_Window, public Fl_Osc_Pane
+ {
+     Osc_DataModel *title_ext;
++    std::string rewrite_rule;
+     std::string title_orig;
+     std::string title_new;
+     public:
+@@ -28,6 +29,7 @@ class Fl_Osc_Window:public Fl_Double_Window, public Fl_Osc_Pane
+         virtual std::string loc(void) const;
+         virtual void rebase(std::string new_base);
+         void update();
++        void update_title();
+ };
+ 
+ 
+diff --git a/src/UI/Fl_Osc_Pane.cpp b/src/UI/Fl_Osc_Pane.cpp
+index 012d3cef..5c60a085 100644
+--- a/src/UI/Fl_Osc_Pane.cpp
++++ b/src/UI/Fl_Osc_Pane.cpp
+@@ -17,6 +17,7 @@ void Fl_Osc_Window::init(Fl_Osc_Interface *osc_, std::string loc_)
+     title_ext  = new Osc_DataModel(osc_);
+     title_ext->doUpdate("/ui/title");
+     title_ext->callback = [this](string next) {
++        rewrite_rule = next;
+         //printf("old: %s\n", title_orig.c_str());
+         const char *orig = title_orig.c_str();
+         //                               12345678901
+@@ -77,6 +78,12 @@ void Fl_Osc_Window::update(void)
+     }
+ }
+ 
++void Fl_Osc_Window::update_title(void)
++{
++    title_orig = label();
++    title_ext->callback(rewrite_rule);
++}
++
+ static void nested_rebase(Fl_Group *g, std::string new_base)
+ {
+     unsigned nchildren = g->children();
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 13df78e2..0f654a96 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1534,7 +1534,10 @@ osc->write("/config/cfg.UserInterfaceMode", "i", 2);}
+   else snprintf(&masterwindowlabel[0],100,"%s","ZynAddSubFX");
+ masterwindowlabel[99]='\\0';
+ masterwindow->label(&masterwindowlabel[0]);
+-simplemasterwindow->label(&masterwindowlabel[0]);} {}
++simplemasterwindow->label(&masterwindowlabel[0]);
++masterwindow->update_title();
++simplemasterwindow->update_title();
++} {}
+   }
+   Function {MasterUI(int *exitprogram_, class Fl_Osc_Interface *osc_):nioui(osc_)} {open
+   } {
+-- 
+2.47.0
+

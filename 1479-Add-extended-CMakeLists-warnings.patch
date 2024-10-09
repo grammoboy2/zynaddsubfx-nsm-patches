@@ -1,0 +1,620 @@
+From 6ef11b39fd1afbb8d6f286c4ffe4d898187eaac1 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 15 Mar 2020 00:26:45 +0100
+Subject: [PATCH 1479/1936] Add extended CMakeLists warnings
+
+... and fix them for PADnotParameters.cpp and OscilGen.cpp
+---
+ rtosc                            |  2 +-
+ src/CMakeLists.txt               | 43 ++++++++++++++++-
+ src/DSP/FFTwrapper.h             |  6 +--
+ src/Misc/Time.h                  |  2 +-
+ src/Params/FilterParams.h        | 14 +++---
+ src/Params/PADnoteParameters.cpp | 36 +++++++-------
+ src/Synth/OscilGen.cpp           | 83 ++++++++++++++++----------------
+ 7 files changed, 114 insertions(+), 72 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 6a65b244..f4b31cc0 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 6a65b24469068a8f334567b72a3125bd1d7fd1b1
++Subproject commit f4b31cc0463504fdf9d52a8f27d95fb82b7dfb3e
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index ad0b290c..f92fbe51 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -182,11 +182,49 @@ endif()
+ option (BuildForAMD_X86_64 "Build for AMD x86_64 system" OFF)
+ option (BuildForCore2_X86_64 "Build for Intel Core2 x86_64 system" OFF)
+ option (BuildForDebug "Include gdb debugging support" OFF)
++option (ExtendedWarnings "Enable all useful warnings" OFF)
+ option (IncludeWhatYouUse "Check for useless includes" OFF)
+ mark_as_advanced(IncludeWhatYouUse)
+ 
+ set(CMAKE_BUILD_TYPE "Release")
+ 
++set (BuildOptions_ExtendedWarnings "")
++if (ExtendedWarnings)
++    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
++        # The following generates a list of warning exceptions
++        # (after it enables all warnings).
++        # This is for developers who want to make sure they really
++        # see all possible warnings, with a few exceptions that don't
++        # make sense in this code base.
++        # You can remove those exceptions if they don't complain too
++        # often about the code base. If you want to add exceptions,
++        # be VERY CAREFUL, ask the project maintainers for
++        # their consent.
++        set (BuildOptions_ExtendedWarnings_List
++        "-Wall" "-Wextra" "-Weverything" # start with really everything
++        "-Wno-c++98-compat" "-Wno-c++98-compat-extra-semi" "-Wno-c++98-compat-pedantic" # C++11 is a zyn build requirement
++        "-Wno-cast-align" # not relevant for our case
++        "-Wno-double-promotion" # Used too often to fix
++        "-Wno-old-style-cast" # forces you to use static_cast<> etc everywhere! too many errors
++        "-Wno-padded" # this tells you to realign your structs to have better memory management
++        "-Wno-zero-as-null-pointer-constant" # wants you to use nullptr in the whole code base
++        "-Wno-implicit-int-conversion" # too often to fix
++        "-Wno-extra-semi" # one semicolon more than useful - no danger to disable this
++        "-Wno-vla-extension" "-Wno-vla" # rtosc currently heavily uses them, and they are supported by our CI
++        "-Wno-exit-time-destructors" "-Wno-global-constructors" # used too often in rtosc
++        "-Wno-gnu-zero-variadic-macro-arguments" # used too often in zyn
++        "-Wno-shadow" # used too often in zyn
++        "-Wno-cast-align" # used too often in zyn
++        "-Wno-missing-prototypes" # used too often in zyn
++        "-Wno-sign-conversion" # used too often in zyn
++	"-Wno-float-equal" # can be disturbing in some cases
++        )
++        STRING(REPLACE ";" " " BuildOptions_ExtendedWarnings "${BuildOptions_ExtendedWarnings_List}")
++        MESSAGE(STATUS "Using extended Warning options: ${BuildOptions_ExtendedWarnings}")
++    else()
++        MESSAGE(WARNING "\"ExtendedWarnings\" selected, but this is only supported for clang - ignoring")
++    endif()
++endif()
+ 
+ set (BuildOptions_x86_64AMD
+     "-march=athlon64 -m64 -Wall -Wno-unused-parameter"
+@@ -211,9 +249,12 @@ set (BuildOptionsBasic
+     "-std=c++11 -Wno-unused-parameter -O3 -ffast-math -fomit-frame-pointer"
+     CACHE STRING "basic X86 compiler options"
+ )
++STRING(APPEND BuildOptionsBasic " ${BuildOptions_ExtendedWarnings}")
+ 
+ set (BuildOptionsDebug
+-    "-std=c++11 -O0 -g3 -ggdb -Wall -Wno-unused-parameter -Wpointer-arith" CACHE STRING "Debug build flags")
++    "-std=c++11 -O0 -g3 -ggdb -Wall -Wno-unused-parameter -Wpointer-arith"
++    CACHE STRING "Debug build flags")
++STRING(APPEND BuildOptionsDebug " ${BuildOptions_ExtendedWarnings}")
+ 
+ if(${CMAKE_VERSION} VERSION_LESS "3.3.0")
+     set(IwyuErr "disabled (cmake < 3.3.0)")
+diff --git a/src/DSP/FFTwrapper.h b/src/DSP/FFTwrapper.h
+index 6a31cb41..ff3c47ac 100644
+--- a/src/DSP/FFTwrapper.h
++++ b/src/DSP/FFTwrapper.h
+@@ -24,7 +24,7 @@ class FFTwrapper
+ {
+     public:
+         /**Constructor
+-         * @param fftsize The size of samples to be fed to fftw*/
++         * @param fftsize_ The size of samples to be fed to fftw*/
+         FFTwrapper(int fftsize_);
+         /**Destructor*/
+         ~FFTwrapper();
+@@ -50,10 +50,10 @@ template<class _Tp>
+ std::complex<_Tp>
+ FFTpolar(const _Tp& __rho, const _Tp& __theta = _Tp(0))
+ {
+-        _Tp __x = __rho * cos(__theta);
++        _Tp __x = __rho * std::cos(__theta);
+         if (std::isnan(__x))
+                 __x = 0;
+-        _Tp __y = __rho * sin(__theta);
++        _Tp __y = __rho * std::sin(__theta);
+         if (std::isnan(__y))
+                 __y = 0;
+         return std::complex<_Tp>(__x, __y);
+diff --git a/src/Misc/Time.h b/src/Misc/Time.h
+index 09bc3a5c..9baabdbf 100644
+--- a/src/Misc/Time.h
++++ b/src/Misc/Time.h
+@@ -43,7 +43,7 @@ class RelTime
+             double deltaFrames = sec*t.framesPerSec();
+             int64_t tmp = (int64_t)deltaFrames;
+             frame = t.time() + tmp;
+-            sample = t.samplesPerFrame()*(deltaFrames-tmp);
++            sample = (int32_t)(t.samplesPerFrame()*(deltaFrames-tmp));
+         }
+         bool inThisFrame() {return t.time() == frame;};
+         bool inPast() {return t.time() > frame;}
+diff --git a/src/Params/FilterParams.h b/src/Params/FilterParams.h
+index 06cf4d54..05629cca 100644
+--- a/src/Params/FilterParams.h
++++ b/src/Params/FilterParams.h
+@@ -52,13 +52,13 @@ class FilterParams:public PresetsArray
+         float getfreqtracking(float notefreq) const ;
+         float getgain() const ;
+ 
+-        unsigned Pcategory:2;  //< Filter category (Analog/Formant/StVar)
+-        unsigned Ptype:8;      //< Filter type  (for analog lpf,hpf,bpf..)
+-        unsigned Pstages:8;    //< filter stages+1
+-        float    basefreq;     //< Base cutoff frequency (Hz)
+-        float    baseq;        //< Q parameters (resonance or bandwidth)
+-        float    freqtracking; //< Tracking of center frequency with note frequency (percentage)
+-        float    gain;         //< filter's output gain (dB)
++        unsigned Pcategory:2;  //!< Filter category (Analog/Formant/StVar)
++        unsigned Ptype:8;      //!< Filter type  (for analog lpf,hpf,bpf..)
++        unsigned Pstages:8;    //!< filter stages+1
++        float    basefreq;     //!< Base cutoff frequency (Hz)
++        float    baseq;        //!< Q parameters (resonance or bandwidth)
++        float    freqtracking; //!< Tracking of center frequency with note frequency (percentage)
++        float    gain;         //!< filter's output gain (dB)
+ 
+         int Pq;         //dummy
+         int Pfreq;      //dummy
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index ceb38925..022872ac 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -90,7 +90,7 @@ static const rtosc::Ports realtime_ports =
+             PADnoteParameters *p = (PADnoteParameters*)d.obj;
+             const char *mm = m;
+             while(!isdigit(*mm))++mm;
+-            unsigned n = atoi(mm);
++            int n = atoi(mm);
+             p->sample[n].size     = rtosc_argument(m,0).i;
+             p->sample[n].basefreq = rtosc_argument(m,1).f;
+             p->sample[n].smp      = *(float**)rtosc_argument(m,2).b.data;
+@@ -442,14 +442,14 @@ float PADnoteParameters::getprofile(float *smp, int size)
+         smp[i] = 0.0f;
+     const int supersample = 16;
+     float     basepar     = powf(2.0f, (1.0f - Php.base.par1 / 127.0f) * 12.0f);
+-    float     freqmult    = floor(powf(2.0f,
++    float     freqmult    = floorf(powf(2.0f,
+                                        Php.freqmult / 127.0f
+                                        * 5.0f) + 0.000001f);
+ 
+-    float modfreq = floor(powf(2.0f,
++    float modfreq = floorf(powf(2.0f,
+                                Php.modulator.freq / 127.0f
+                                * 5.0f) + 0.000001f);
+-    float modpar1 = powf(Php.modulator.par1 / 127.0f, 4.0f) * 5.0f / sqrt(
++    float modpar1 = powf(Php.modulator.par1 / 127.0f, 4.0f) * 5.0f / sqrtf(
+         modfreq);
+     float amppar1 =
+         powf(2.0f, powf(Php.amp.par1 / 127.0f, 2.0f) * 10.0f) - 0.999f;
+@@ -491,7 +491,7 @@ float PADnoteParameters::getprofile(float *smp, int size)
+ 
+         //do the modulation of the profile
+         x += sinf(x_before_freq_mult * 3.1415926f * modfreq) * modpar1;
+-        x  = fmod(x + 1000.0f, 1.0f) * 2.0f - 1.0f;
++        x  = fmodf(x + 1000.0f, 1.0f) * 2.0f - 1.0f;
+ 
+ 
+         //this is the base function of the profile
+@@ -505,7 +505,7 @@ float PADnoteParameters::getprofile(float *smp, int size)
+                     f = 1.0f;
+                 break;
+             case 2:
+-                f = expf(-(fabsf(x)) * sqrt(basepar));
++                f = expf(-(fabsf(x)) * sqrtf(basepar));
+                 break;
+             default:
+                 f = expf(-(x * x) * basepar);
+@@ -525,7 +525,7 @@ float PADnoteParameters::getprofile(float *smp, int size)
+             case 2:
+                 amp = 0.5f
+                       * (1.0f
+-                         + cosf(3.1415926f * origx * sqrt(amppar1 * 4.0f + 1.0f)));
++                         + cosf(3.1415926f * origx * sqrtf(amppar1 * 4.0f + 1.0f)));
+                 break;
+             case 3:
+                 amp = 1.0f
+@@ -535,7 +535,7 @@ float PADnoteParameters::getprofile(float *smp, int size)
+ 
+         //apply the amplitude multiplier
+         float finalsmp = f;
+-        if(Php.amp.type != 0)
++        if(Php.amp.type != 0) {
+             switch(Php.amp.mode) {
+                 case 0:
+                     finalsmp = amp * (1.0f - amppar2) + finalsmp * amppar2;
+@@ -553,7 +553,7 @@ float PADnoteParameters::getprofile(float *smp, int size)
+                                   + powf(amppar2, 4.0f) * 20.0f + 0.0001f);
+                     break;
+             }
+-        ;
++        }
+ 
+         smp[i / supersample] += finalsmp / supersample;
+     }
+@@ -640,7 +640,7 @@ float PADnoteParameters::getNhr(int n) const
+         case 5:
+             result = n0
+                      + sinf(n0 * par2 * par2 * PI
+-                            * 0.999f) * sqrt(par1) * 2.0f + 1.0f;
++                            * 0.999f) * sqrtf(par1) * 2.0f + 1.0f;
+             break;
+         case 6:
+             tmp    = powf(par2 * 2.0f, 2.0f) + 0.1f;
+@@ -656,7 +656,7 @@ float PADnoteParameters::getNhr(int n) const
+ 
+     const float par3 = Phrpos.par3 / 255.0f;
+ 
+-    const float iresult = floor(result + 0.5f);
++    const float iresult = floorf(result + 0.5f);
+     const float dresult = result - iresult;
+ 
+     return iresult + (1.0f - par3) * dresult;
+@@ -740,12 +740,12 @@ void PADnoteParameters::generatespectrum_bandwidthMode(float *spectrum,
+             amp *= resonance->getfreqresponse(realfreq);
+ 
+         if(ibw > profilesize) { //if the bandwidth is larger than the profilesize
+-            const float rap   = sqrt((float)profilesize / (float)ibw);
++            const float rap   = sqrtf((float)profilesize / (float)ibw);
+             const int   cfreq =
+                 (int) (realfreq
+                        / (synth.samplerate_f * 0.5f) * size) - ibw / 2;
+             for(int i = 0; i < ibw; ++i) {
+-                const int src    = i * rap * rap;
++                const int src    = (int)(i * rap * rap);
+                 const int spfreq = i + cfreq;
+                 if(spfreq < 0)
+                     continue;
+@@ -755,7 +755,7 @@ void PADnoteParameters::generatespectrum_bandwidthMode(float *spectrum,
+             }
+         }
+         else {  //if the bandwidth is smaller than the profilesize
+-            const float rap = sqrt((float)ibw / (float)profilesize);
++            const float rap = sqrtf((float)ibw / (float)profilesize);
+             const float ibasefreq = realfreq / (synth.samplerate_f * 0.5f) * size;
+             for(int i = 0; i < profilesize; ++i) {
+                 const float idfreq = (i / (float)profilesize - 0.5f) * ibw;
+@@ -804,9 +804,9 @@ void PADnoteParameters::generatespectrum_otherModes(float *spectrum,
+         float amp = harmonics[nh - 1];
+         if(resonance->Penabled)
+             amp *= resonance->getfreqresponse(realfreq);
+-        const int cfreq = realfreq / (synth.samplerate_f * 0.5f) * size;
++        const int cfreq = (int)(realfreq / (synth.samplerate_f * 0.5f) * size);
+ 
+-        spectrum[cfreq] = amp + 1e-9;
++        spectrum[cfreq] = amp + (float)1e-9;
+     }
+ 
+     //In continous mode the spectrum gets additional interpolation between the
+@@ -951,10 +951,10 @@ int PADnoteParameters::sampleGenerator(PADnoteParameters::callback cb,
+             float rms = 0.0f;
+             for(int i = 0; i < samplesize; ++i)
+                 rms += newsample.smp[i] * newsample.smp[i];
+-            rms = sqrt(rms);
++            rms = sqrtf(rms);
+             if(rms < 0.000001f)
+                 rms = 1.0f;
+-            rms *= sqrt(262144.0f / samplesize);//262144=2^18
++            rms *= sqrtf(262144.0f / samplesize);//262144=2^18
+             for(int i = 0; i < samplesize; ++i)
+                 newsample.smp[i] *= 1.0f / rms * 50.0f;
+ 
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index f82822de..670354b6 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -200,8 +200,9 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+             d.reply("/damage", "s", repath);
+         }}};
+ 
+-#define rForwardCb [](const char *msg, rtosc::RtData &d) {\
+-    printf("forwarding...\n"); d.forward();}
++//unused:
++//#define rForwardCb [](const char *msg, rtosc::RtData &d) {\
++//    printf("forwarding...\n"); d.forward();}
+ const rtosc::Ports OscilGen::realtime_ports{
+     rSelf(OscilGen),
+     rPresetType,
+@@ -282,20 +283,20 @@ inline void clearDC(fft_t *freqs)
+ //return magnitude squared
+ inline float normal(const fft_t *freqs, off_t x)
+ {
+-    return norm(freqs[x]);
++    return (float)norm(freqs[x]);
+ }
+ 
+ //return magnitude
+ inline float abs(const fft_t *freqs, off_t x)
+ {
+-    return abs(freqs[x]);
++    return (float)abs(freqs[x]);
+ }
+ 
+ //return angle aka phase from a sine (not cosine wave)
+ inline float arg(const fft_t *freqs, off_t x)
+ {
+     const fft_t tmp(freqs[x].imag(), freqs[x].real());
+-    return arg(tmp);
++    return (float)arg(tmp);
+ }
+ 
+ /**
+@@ -312,7 +313,7 @@ void normalize(fft_t *freqs, int oscilsize)
+             normMax = norm;
+     }
+ 
+-    const float max = sqrt(normMax);
++    const float max = sqrtf(normMax);
+     if(max < 1e-8) //data is all ~zero, do not amplify noise
+         return;
+ 
+@@ -330,7 +331,7 @@ void rmsNormalize(fft_t *freqs, int oscilsize)
+     if(sum < 0.000001f)
+         return;  //data is all ~zero, do not amplify noise
+ 
+-    const float gain = 1.0f / sqrt(sum);
++    const float gain = 1.0f / sqrtf(sum);
+ 
+     for(int i = 1; i < oscilsize / 2; ++i)
+         freqs[i] *= gain;
+@@ -510,13 +511,13 @@ void OscilGen::getbasefunction(float *smps)
+     switch(Pbasefuncmodulation) {
+         case 1:
+             p1 = (powf(2, p1 * 5.0f) - 1.0f) / 10.0f;
+-            p3 = floor(powf(2, p3 * 5.0f) - 1.0f);
++            p3 = floorf(powf(2, p3 * 5.0f) - 1.0f);
+             if(p3 < 0.9999f)
+                 p3 = -1.0f;
+             break;
+         case 2:
+             p1 = (powf(2, p1 * 5.0f) - 1.0f) / 10.0f;
+-            p3 = 1.0f + floor(powf(2, p3 * 5.0f) - 1.0f);
++            p3 = 1.0f + floorf(powf(2, p3 * 5.0f) - 1.0f);
+             break;
+         case 3:
+             p1 = (powf(2, p1 * 7.0f) - 1.0f) / 10.0f;
+@@ -540,11 +541,11 @@ void OscilGen::getbasefunction(float *smps)
+                 t += powf((1.0f - cosf((t + p2) * 2.0f * PI)) * 0.5f, p3) * p1;
+                 break;
+             case 4: //chop
+-                t = t * (powf(2.0, Pbasefuncmodulationpar1/32.0 +
+-                              Pbasefuncmodulationpar2/2048.0)) + p3;
++                t = t * (powf(2.0, Pbasefuncmodulationpar1/32.f +
++                              Pbasefuncmodulationpar2/2048.f)) + p3;
+         }
+ 
+-        t = t - floor(t);
++        t = t - floorf(t);
+ 
+         if(func)
+             smps[i] = func(t, par);
+@@ -660,14 +661,14 @@ void OscilGen::modulation(fft_t *freqs)
+     switch(Pmodulation) {
+         case 1:
+             modulationpar1 = (powf(2, modulationpar1 * 7.0f) - 1.0f) / 100.0f;
+-            modulationpar3 = floor((powf(2, modulationpar3 * 5.0f) - 1.0f));
++            modulationpar3 = floorf((powf(2, modulationpar3 * 5.0f) - 1.0f));
+             if(modulationpar3 < 0.9999f)
+                 modulationpar3 = -1.0f;
+             break;
+         case 2:
+             modulationpar1 = (powf(2, modulationpar1 * 7.0f) - 1.0f) / 100.0f;
+             modulationpar3 = 1.0f
+-                             + floor((powf(2, modulationpar3 * 5.0f) - 1.0f));
++                             + floorf((powf(2, modulationpar3 * 5.0f) - 1.0f));
+             break;
+         case 3:
+             modulationpar1 = (powf(2, modulationpar1 * 9.0f) - 1.0f) / 100.0f;
+@@ -715,10 +716,10 @@ void OscilGen::modulation(fft_t *freqs)
+                 break;
+         }
+ 
+-        t = (t - floor(t)) * synth.oscilsize;
++        t = (t - floorf(t)) * synth.oscilsize;
+ 
+         const int   poshi = (int) t;
+-        const float poslo = t - floor(t);
++        const float poslo = t - floorf(t);
+ 
+         tmpsmps[i] = in[poshi] * (1.0f - poslo) + in[poshi + 1] * poslo;
+     }
+@@ -756,7 +757,7 @@ void OscilGen::spectrumadjust(fft_t *freqs)
+ 
+     for(int i = 0; i < synth.oscilsize / 2; ++i) {
+         float mag   = abs(freqs, i);
+-        float phase = M_PI_2 - arg(freqs, i);
++        float phase = ((float)M_PI_2) - arg(freqs, i);
+ 
+         switch(Psatype) {
+             case 1:
+@@ -905,7 +906,7 @@ void OscilGen::prepare(fft_t *freqs)
+ 
+ fft_t operator*(float a, fft_t b)
+ {
+-    return std::complex<float>(a*b.real(), a*b.imag());
++    return std::complex<float>((float)(a*b.real()), (float)(a*b.imag()));
+ }
+ 
+ void OscilGen::adaptiveharmonic(fft_t *f, float freq)
+@@ -936,7 +937,7 @@ void OscilGen::adaptiveharmonic(fft_t *f, float freq)
+ 
+     for(int i = 0; i < synth.oscilsize / 2 - 2; ++i) {
+         const int   high = (int)(i * rap);
+-        const float low  = fmod(i * rap, 1.0f);
++        const float low  = fmodf(i * rap, 1.0f);
+ 
+         if(high >= (synth.oscilsize / 2 - 2))
+             break;
+@@ -1192,7 +1193,7 @@ void OscilGen::getspectrum(int n, float *spc, int what)
+         adaptiveharmonic(outoscilFFTfreqs, 0.0f);
+         adaptiveharmonicpostprocess(outoscilFFTfreqs, n - 1);
+         for(int i = 0; i < n; ++i)
+-            spc[i] = outoscilFFTfreqs[i].imag();
++            spc[i] = (float)outoscilFFTfreqs[i].imag();
+     }
+ }
+ 
+@@ -1327,8 +1328,8 @@ void OscilGen::add2XML(XMLwrapper& xml)
+ 
+         xml.beginbranch("BASE_FUNCTION");
+         for(int i = 1; i < synth.oscilsize / 2; ++i) {
+-            float xc = basefuncFFTfreqs[i].real();
+-            float xs = basefuncFFTfreqs[i].imag();
++            float xc = (float)basefuncFFTfreqs[i].real();
++            float xs = (float)basefuncFFTfreqs[i].imag();
+             if((fabsf(xs) > 1e-6f) || (fabsf(xc) > 1e-6f)) {
+                 xml.beginbranch("BF_HARMONIC", i);
+                 xml.addparreal("cos", xc);
+@@ -1444,7 +1445,7 @@ void OscilGen::getfromXML(XMLwrapper& xml)
+ 
+ FUNC(pulse)
+ {
+-    return (fmod(x, 1.0f) < a) ? -1.0f : 1.0f;
++    return (fmodf(x, 1.0f) < a) ? -1.0f : 1.0f;
+ }
+ 
+ FUNC(saw)
+@@ -1454,7 +1455,7 @@ FUNC(saw)
+     else
+     if(a > 0.99999f)
+         a = 0.99999f;
+-    x = fmod(x, 1);
++    x = fmodf(x, 1);
+     if(x < a)
+         return x / a * 2.0f - 1.0f;
+     else
+@@ -1463,7 +1464,7 @@ FUNC(saw)
+ 
+ FUNC(triangle)
+ {
+-    x = fmod(x + 0.25f, 1);
++    x = fmodf(x + 0.25f, 1);
+     a = 1 - a;
+     if(a < 0.00001f)
+         a = 0.00001f;
+@@ -1481,7 +1482,7 @@ FUNC(triangle)
+ 
+ FUNC(power)
+ {
+-    x = fmod(x, 1);
++    x = fmodf(x, 1);
+     if(a < 0.00001f)
+         a = 0.00001f;
+     else
+@@ -1492,7 +1493,7 @@ FUNC(power)
+ 
+ FUNC(gauss)
+ {
+-    x = fmod(x, 1) * 2.0f - 1.0f;
++    x = fmodf(x, 1) * 2.0f - 1.0f;
+     if(a < 0.00001f)
+         a = 0.00001f;
+     return expf(-x * x * (expf(a * 8) + 5.0f)) * 2.0f - 1.0f;
+@@ -1514,7 +1515,7 @@ FUNC(diode)
+ 
+ FUNC(abssine)
+ {
+-    x = fmod(x, 1);
++    x = fmodf(x, 1);
+     if(a < 0.00001f)
+         a = 0.00001f;
+     else
+@@ -1527,7 +1528,7 @@ FUNC(pulsesine)
+ {
+     if(a < 0.00001f)
+         a = 0.00001f;
+-    x = (fmod(x, 1) - 0.5f) * expf((a - 0.5f) * logf(128));
++    x = (fmodf(x, 1) - 0.5f) * expf((a - 0.5f) * logf(128));
+     if(x < -0.5f)
+         x = -0.5f;
+     else
+@@ -1539,7 +1540,7 @@ FUNC(pulsesine)
+ 
+ FUNC(stretchsine)
+ {
+-    x = fmod(x + 0.5f, 1) * 2.0f - 1.0f;
++    x = fmodf(x + 0.5f, 1) * 2.0f - 1.0f;
+     a = (a - 0.5f) * 4;
+     if(a > 0.0f)
+         a *= 2;
+@@ -1552,7 +1553,7 @@ FUNC(stretchsine)
+ 
+ FUNC(chirp)
+ {
+-    x = fmod(x, 1.0f) * 2.0f * PI;
++    x = fmodf(x, 1.0f) * 2.0f * PI;
+     a = (a - 0.5f) * 4;
+     if(a < 0.0f)
+         a *= 2.0f;
+@@ -1562,7 +1563,7 @@ FUNC(chirp)
+ 
+ FUNC(absstretchsine)
+ {
+-    x = fmod(x + 0.5f, 1) * 2.0f - 1.0f;
++    x = fmodf(x + 0.5f, 1) * 2.0f - 1.0f;
+     a = (a - 0.5f) * 9;
+     a = powf(3.0f, a);
+     float b = powf(fabsf(x), a);
+@@ -1585,22 +1586,22 @@ FUNC(sqr)
+ 
+ FUNC(spike)
+ {
+-    float b = a * 0.66666; // the width of the range: if a == 0.5, b == 0.33333
++    float b = a * 0.66666f; // the width of the range: if a == 0.5, b == 0.33333
+ 
+     if(x < 0.5) {
+         if(x < (0.5 - (b / 2.0)))
+             return 0.0;
+         else {
+-            x = (x + (b / 2) - 0.5) * (2.0 / b); // shift to zero, and expand to range from 0 to 1
+-            return x * (2.0 / b); // this is the slope: 1 / (b / 2)
++            x = (x + (b / 2) - 0.5f) * (2.f / b); // shift to zero, and expand to range from 0 to 1
++            return x * (2.f / b); // this is the slope: 1 / (b / 2)
+         }
+     }
+     else {
+         if(x > (0.5 + (b / 2.0)))
+             return 0.0;
+         else {
+-            x = (x - 0.5) * (2.0 / b);
+-            return (1 - x) * (2.0 / b);
++            x = (x - .5f) * (2.f / b);
++            return (1 - x) * (2.f / b);
+         }
+     }
+ }
+@@ -1618,14 +1619,14 @@ FUNC(circle)
+         if((x < -b) || (x > b))
+             y = 0;
+         else
+-            y = sqrt(1 - (pow(x, 2) / pow(b, 2)));  // normally * a^2, but a stays 1
++            y = sqrtf(1 - (powf(x, 2) / powf(b, 2)));  // normally * a^2, but a stays 1
+     }
+     else {
+         x = x - 3; // x goes from -1 to 1 as well
+         if((x < -b) || (x > b))
+             y = 0;
+         else
+-            y = -sqrt(1 - (pow(x, 2) / pow(b, 2)));
++            y = -sqrtf(1 - (powf(x, 2) / powf(b, 2)));
+     }
+     return y;
+ }
+@@ -1696,7 +1697,7 @@ FILTER(bp1)
+     float tmp = powf(5.0f, par2 * 2.0f);
+     gain = powf(gain, tmp);
+     if(gain < 1e-5)
+-        gain = 1e-5;
++        gain = (float)1e-5;
+     return gain;
+ }
+ 
+@@ -1741,7 +1742,7 @@ FILTER(bs2)
+ 
+ bool floatEq(float a, float b)
+ {
+-    const float fudge = .01;
++    const float fudge = .01f;
+     return a + fudge > b && a - fudge < b;
+ }
+ 
+-- 
+2.47.0
+

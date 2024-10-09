@@ -1,0 +1,25 @@
+From e5ba0692e316525a83eb8aa5aa03f5907f94c546 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 31 Mar 2017 17:00:09 -0400
+Subject: [PATCH 1128/1936] Clear Key/Note Indicators On Patch Load
+
+---
+ src/Misc/Master.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index b0ea444e..37c9ebbe 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -160,6 +160,8 @@ static const Ports master_ports = {
+        d.reply("/free", "sb", "Part", sizeof(void*), &m->part[i]);
+        m->part[i] = p;
+        p->initialize_rt();
++       for(int i=0; i<128; ++i)
++           m->activeNotes[i] = 0;
+        }},
+     {"active_keys:", rProp("Obtain a list of active notes"), 0,
+         rBegin;
+-- 
+2.47.0
+

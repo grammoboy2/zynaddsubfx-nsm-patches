@@ -1,0 +1,25 @@
+From 20b7437729d9568b01ccd1330edf096fc961bca9 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 29 Nov 2015 19:52:29 -0500
+Subject: [PATCH 0770/1936] Fix too-close knobs
+
+---
+ src/UI/ADnoteUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index e1536952..f5bcf6e8 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -571,7 +571,7 @@ o->redraw();}
+             }
+             Fl_Dial bendadjdial {
+               label Bend
+-              tooltip {How the frequency varies according to the pitch wheel} xywh {64 270 15 15} box ROUND_UP_BOX labelsize 10 align 8 minimum -64 maximum 63 step 1
++              tooltip {How the frequency varies according to the pitch wheel} xywh {60 270 15 15} box ROUND_UP_BOX labelsize 10 align 8 minimum -64 maximum 63 step 1
+               code0 {o->init("PBendAdjust");o->reset_value=24;o->set_transform([](float x){return x/24.0f;});o->set_rounding(2);}
+               class Fl_Osc_Dial
+             }
+-- 
+2.47.0
+

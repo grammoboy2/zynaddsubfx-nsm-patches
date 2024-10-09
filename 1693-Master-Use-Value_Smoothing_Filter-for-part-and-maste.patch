@@ -1,0 +1,207 @@
+From 8412ed8f5e063f78b56d4e33750415fa46fa384d Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Sat, 5 Dec 2020 12:13:09 -0800
+Subject: [PATCH 1693/1936] Master: Use Value_Smoothing_Filter for part and
+ master volume smoothing too (incudes part pan).
+
+---
+ src/Misc/Master.cpp | 96 ++++++++++++++++++++++++---------------------
+ src/Misc/Master.h   |  9 ++++-
+ 2 files changed, 60 insertions(+), 45 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 2106b81a..6b9e677f 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -777,12 +777,20 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+         fakepeakpart[npart]  = 0;
+     }
+ 
++    
+     ScratchString ss;
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
++    {
+         part[npart] = new Part(*memory, synth, time, config->cfg.GzipCompression,
+                                config->cfg.Interpolation, &microtonal, fft, &watcher,
+                                (ss+"/part"+npart+"/").c_str);
++	smoothing_part_l[npart].sample_rate( synth.samplerate );
++	smoothing_part_r[npart].sample_rate( synth.samplerate );
++	
++    }
+ 
++    smoothing.sample_rate( synth.samplerate );
++    
+     //Insertion Effects init
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+         insefx[nefx] = new EffectMgr(*memory, synth, 1, &time);
+@@ -891,7 +899,6 @@ void Master::defaults()
+     union {float f; uint32_t i;} convert;
+     convert.i = 0xC0D55556;
+     Volume = convert.f;
+-    oldVolume = Volume;
+     setPkeyshift(64);
+ 
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) {
+@@ -1252,15 +1259,15 @@ bool Master::AudioOut(float *outr, float *outl)
+         }
+ 
+ 
++    float gainbuf[synth.buffersize];
++
+     //Apply the part volumes and pannings (after insertion effects)
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) {
+         if(!part[npart]->Penabled)
+             continue;
+ 
+-        Stereo<float> newvol(part[npart]->volume),
+-        oldvol(part[npart]->oldvolumel,
+-               part[npart]->oldvolumer);
+-
++        Stereo<float> newvol(part[npart]->volume);
++	
+         float pan = part[npart]->panning;
+         if(pan < 0.5f)
+             newvol.l *= pan * 2.0f;
+@@ -1269,29 +1276,32 @@ bool Master::AudioOut(float *outr, float *outl)
+         //if(npart==0)
+         //printf("[%d]vol = %f->%f\n", npart, oldvol.l, newvol.l);
+ 
+-        //the volume or the panning has changed and needs interpolation
+-        if(ABOVE_AMPLITUDE_THRESHOLD(oldvol.l, newvol.l)
+-           || ABOVE_AMPLITUDE_THRESHOLD(oldvol.r, newvol.r)) {
+-            for(int i = 0; i < synth.buffersize; ++i) {
+-                Stereo<float> vol(INTERPOLATE_AMPLITUDE(oldvol.l, newvol.l,
+-                                                        i, synth.buffersize),
+-                                  INTERPOLATE_AMPLITUDE(oldvol.r, newvol.r,
+-                                                        i, synth.buffersize));
+-                part[npart]->partoutl[i] *= vol.l;
+-                part[npart]->partoutr[i] *= vol.r;
+-            }
+-            part[npart]->oldvolumel = newvol.l;
+-            part[npart]->oldvolumer = newvol.r;
+-        }
+-        else {
+-            for(int i = 0; i < synth.buffersize; ++i) { //the volume did not changed
+-                part[npart]->partoutl[i] *= newvol.l;
+-                part[npart]->partoutr[i] *= newvol.r;
+-            }
+-        }
+-    }
+ 
+ 
++	/* This is where the part volume (and pan) smoothing and application happens */
++	if ( smoothing_part_l[npart].apply( gainbuf, synth.buffersize, newvol.l ) )
++	{
++	    for ( int i = 0; i < synth.buffersize; ++i )
++		part[npart]->partoutl[i] *= gainbuf[i];
++	}
++	else
++	{
++	    for ( int i = 0; i < synth.buffersize; ++i )
++		part[npart]->partoutl[i] *= newvol.l;
++	}
++	
++	if ( smoothing_part_r[npart].apply( gainbuf, synth.buffersize, newvol.r ) )
++	{
++	    for ( int i = 0; i < synth.buffersize; ++i )
++		part[npart]->partoutr[i] *= gainbuf[i];
++	}
++	else
++	{
++	    for ( int i = 0; i < synth.buffersize; ++i )
++		part[npart]->partoutr[i] *= newvol.r;
++	}
++    }	
++	
+     //System effects
+     for(int nefx = 0; nefx < NUM_SYS_EFX; ++nefx) {
+         if(sysefx[nefx]->geteffect() == 0)
+@@ -1354,27 +1364,26 @@ bool Master::AudioOut(float *outr, float *outl)
+         if(Pinsparts[nefx] == -2)
+             insefx[nefx]->out(outl, outr);
+ 
++    float vol = dB2rap(Volume);
+ 
+     //Master Volume
+-    float oldvol = dB2rap(oldVolume);
+-    float newvol = dB2rap(Volume);
+-    if(ABOVE_AMPLITUDE_THRESHOLD(oldvol, newvol)) {
+-        for(int i = 0; i < synth.buffersize; ++i) {
+-            float vol = INTERPOLATE_AMPLITUDE(oldvol, newvol,
+-                                              i, synth.buffersize);
+-            outl[i] *= vol;
+-            outr[i] *= vol;
+-        }
++    /* this is where the master volume smoothing and application happens */
++    if ( smoothing.apply( gainbuf, synth.buffersize, vol ) )
++    {
++	for ( int i = 0; i < synth.buffersize; ++i )
++	{
++	    outl[i] *= gainbuf[i];
++	    outr[i] *= gainbuf[i];
++	}
+     }
+-    else {
+-        // No interpolation
+-        float vol = dB2rap(Volume);
+-        for(int i = 0; i < synth.buffersize; ++i) {
+-            outl[i] *= vol;
+-            outr[i] *= vol;
+-        }
++    else
++    {
++	for ( int i = 0; i < synth.buffersize; ++i )
++	{
++	    outl[i] *= vol;
++	    outr[i] *= vol;
++	}
+     }
+-    oldVolume = Volume;
+ 
+     vuUpdate(outl, outr);
+ 
+@@ -1666,7 +1675,6 @@ void Master::getfromXML(XMLwrapper& xml)
+         Volume = xml.getparreal("volume", Volume);
+     } else {
+         Volume  = volume127ToFloat(xml.getpar127("volume", 0));
+-        oldVolume = Volume;
+     }
+     setPkeyshift(xml.getpar127("key_shift", Pkeyshift));
+     ctl.NRPN.receive = xml.getparbool("nrpn_receive", ctl.NRPN.receive);
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 0dddf33d..b0617d1d 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -26,6 +26,7 @@
+ 
+ #include "../Params/Controller.h"
+ #include "../Synth/WatchPoint.h"
++#include "../DSP/Value_Smoothing_Filter.h"
+ 
+ namespace zyn {
+ 
+@@ -186,7 +187,6 @@ class Master
+         class FFTwrapper * fft;
+ 
+         static const rtosc::Ports &ports;
+-        float oldVolume;
+         float  Volume;
+ 
+         //Statistics on output levels
+@@ -251,6 +251,13 @@ class Master
+                            bool offline, bool nio,
+                            class DataObj& d, int msg_id = -1,
+                            Master* master_from_mw = nullptr);
++
++    Value_Smoothing_Filter smoothing;
++
++    Value_Smoothing_Filter smoothing_part_l[NUM_MIDI_PARTS];
++    Value_Smoothing_Filter smoothing_part_r[NUM_MIDI_PARTS];
++    
++    
+ };
+ 
+ class master_dispatcher_t : public rtosc::savefile_dispatcher_t
+-- 
+2.47.0
+

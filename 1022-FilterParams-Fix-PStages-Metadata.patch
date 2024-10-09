@@ -1,0 +1,28 @@
+From 4e15c84259ebbb22cd16d30cfdc7a009a91ad351 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 19 Sep 2016 16:55:46 -0400
+Subject: [PATCH 1022/1936] FilterParams: Fix PStages Metadata
+
+---
+ src/Params/FilterParams.cpp | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index dffbffd7..2d46a43b 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -68,9 +68,8 @@ const rtosc::Ports FilterParams::ports = {
+     rParamZyn(Pfreq,            rShort("cutoff"),   "Center Freq"),
+     rParamZyn(Pq,               rShort("q"),
+             "Quality Factor (resonance/bandwidth)"),
+-    rOption(Pstages,            rShort("stages"),
+-            rLinear(1,5),
+-            rOptions(1, 2, 3, 4, 5), "Filter Stages"),
++    rParamI(Pstages,            rShort("stages"),
++            rLinear(0,5),  "Filter Stages"),
+     rParamZyn(Pfreqtrack,       rShort("f.track"),
+             "Frequency Tracking amount"),
+     rParamZyn(Pgain,            rShort("gain"),     "Output Gain"),
+-- 
+2.47.0
+

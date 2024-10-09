@@ -1,0 +1,26 @@
+From 4e47b36a22a8ed8b5b78d600bd13f164aa9ae46e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 5 Mar 2016 12:11:27 -0500
+Subject: [PATCH 0880/1936] ModFilter: Fix Compiler Warning
+
+Add a return -1 for when an invalid (and non-recoverable)
+input is supplied.
+---
+ src/Synth/ModFilter.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Synth/ModFilter.cpp b/src/Synth/ModFilter.cpp
+index 27ad7ff6..fe2da153 100644
+--- a/src/Synth/ModFilter.cpp
++++ b/src/Synth/ModFilter.cpp
+@@ -125,6 +125,7 @@ static int current_category(Filter *f)
+         return 2;
+ 
+     assert(false);
++    return -1;
+ }
+ 
+ void ModFilter::paramUpdate(Filter *&f)
+-- 
+2.47.0
+

@@ -1,0 +1,150 @@
+From 8be356765f67d4c2285f21d7577093bac092c540 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 4 Oct 2021 12:55:39 -0400
+Subject: [PATCH 1776/1936] Update DPF
+
+This commit should update from a 2016 version of DPF, so for plugins
+this should hopefully improve plugin host compatiability.
+While I've confirmed that this commit builds on Linux, I haven't tested
+the execution, so some regressions may have occured, but the general
+expectation is that this will be a step forward.
+---
+ CMakeLists.txt                          | 2 +-
+ DPF                                     | 2 +-
+ src/Plugin/AlienWah/CMakeLists.txt      | 2 +-
+ src/Plugin/Chorus/CMakeLists.txt        | 2 +-
+ src/Plugin/Distortion/CMakeLists.txt    | 2 +-
+ src/Plugin/DynamicFilter/CMakeLists.txt | 2 +-
+ src/Plugin/Echo/CMakeLists.txt          | 2 +-
+ src/Plugin/Phaser/CMakeLists.txt        | 2 +-
+ src/Plugin/Reverb/CMakeLists.txt        | 2 +-
+ src/Plugin/ZynAddSubFX/CMakeLists.txt   | 2 +-
+ 10 files changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c2133d31..5c708574 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -15,7 +15,7 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rtosc/CMakeLists.txt")
+     message(STATUS "RTOSC NOT FOUND")
+     message(STATUS "Attempting to checkout submodule")
+     find_package(Git REQUIRED)
+-    execute_process(COMMAND git submodule update --init)
++    execute_process(COMMAND git submodule update --init --recursive)
+     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rtosc/CMakeLists.txt")
+         message(FATAL_ERROR "FAILED TO CHECKOUT RTOSC\n"
+         "please check file permissions and your network")
+diff --git a/DPF b/DPF
+index e0d8e14a..86a621bf 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit e0d8e14a14d407648768da7e34bcf31812245387
++Subproject commit 86a621bfd86922a49ce593fec2a618a1e0cc6ef3
+diff --git a/src/Plugin/AlienWah/CMakeLists.txt b/src/Plugin/AlienWah/CMakeLists.txt
+index e03fabaf..85b5768f 100644
+--- a/src/Plugin/AlienWah/CMakeLists.txt
++++ b/src/Plugin/AlienWah/CMakeLists.txt
+@@ -9,7 +9,7 @@ set_target_properties(ZynAlienWah_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynAlienWah_lv2 PROPERTIES OUTPUT_NAME "ZynAlienWah")
+ set_target_properties(ZynAlienWah_lv2 PROPERTIES PREFIX "")
+ 
+-set_target_properties(ZynAlienWah_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynAlienWah_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynAlienWah_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynAlienWah_vst PROPERTIES OUTPUT_NAME "ZynAlienWah")
+ set_target_properties(ZynAlienWah_vst PROPERTIES PREFIX "")
+diff --git a/src/Plugin/Chorus/CMakeLists.txt b/src/Plugin/Chorus/CMakeLists.txt
+index e6321647..07a24e81 100644
+--- a/src/Plugin/Chorus/CMakeLists.txt
++++ b/src/Plugin/Chorus/CMakeLists.txt
+@@ -9,7 +9,7 @@ set_target_properties(ZynChorus_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynChorus_lv2 PROPERTIES OUTPUT_NAME "ZynChorus")
+ set_target_properties(ZynChorus_lv2 PROPERTIES PREFIX "")
+ 
+-set_target_properties(ZynChorus_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynChorus_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynChorus_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynChorus_vst PROPERTIES OUTPUT_NAME "ZynChorus")
+ set_target_properties(ZynChorus_vst PROPERTIES PREFIX "")
+diff --git a/src/Plugin/Distortion/CMakeLists.txt b/src/Plugin/Distortion/CMakeLists.txt
+index 6188774a..3337829e 100644
+--- a/src/Plugin/Distortion/CMakeLists.txt
++++ b/src/Plugin/Distortion/CMakeLists.txt
+@@ -9,7 +9,7 @@ set_target_properties(ZynDistortion_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2
+ set_target_properties(ZynDistortion_lv2 PROPERTIES OUTPUT_NAME "ZynDistortion")
+ set_target_properties(ZynDistortion_lv2 PROPERTIES PREFIX "")
+ 
+-set_target_properties(ZynDistortion_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynDistortion_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynDistortion_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynDistortion_vst PROPERTIES OUTPUT_NAME "ZynDistortion")
+ set_target_properties(ZynDistortion_vst PROPERTIES PREFIX "")
+diff --git a/src/Plugin/DynamicFilter/CMakeLists.txt b/src/Plugin/DynamicFilter/CMakeLists.txt
+index c562783b..cc080207 100644
+--- a/src/Plugin/DynamicFilter/CMakeLists.txt
++++ b/src/Plugin/DynamicFilter/CMakeLists.txt
+@@ -9,7 +9,7 @@ set_target_properties(ZynDynamicFilter_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "
+ set_target_properties(ZynDynamicFilter_lv2 PROPERTIES OUTPUT_NAME "ZynDynamicFilter")
+ set_target_properties(ZynDynamicFilter_lv2 PROPERTIES PREFIX "")
+ 
+-set_target_properties(ZynDynamicFilter_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynDynamicFilter_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES OUTPUT_NAME "ZynDynamicFilter")
+ set_target_properties(ZynDynamicFilter_vst PROPERTIES PREFIX "")
+diff --git a/src/Plugin/Echo/CMakeLists.txt b/src/Plugin/Echo/CMakeLists.txt
+index fa7c31c6..a202da07 100644
+--- a/src/Plugin/Echo/CMakeLists.txt
++++ b/src/Plugin/Echo/CMakeLists.txt
+@@ -9,7 +9,7 @@ set_target_properties(ZynEcho_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynEcho_lv2 PROPERTIES OUTPUT_NAME "ZynEcho")
+ set_target_properties(ZynEcho_lv2 PROPERTIES PREFIX "")
+ 
+-set_target_properties(ZynEcho_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynEcho_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynEcho_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynEcho_vst PROPERTIES OUTPUT_NAME "ZynEcho")
+ set_target_properties(ZynEcho_vst PROPERTIES PREFIX "")
+diff --git a/src/Plugin/Phaser/CMakeLists.txt b/src/Plugin/Phaser/CMakeLists.txt
+index f344d939..6dc59366 100644
+--- a/src/Plugin/Phaser/CMakeLists.txt
++++ b/src/Plugin/Phaser/CMakeLists.txt
+@@ -9,7 +9,7 @@ set_target_properties(ZynPhaser_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynPhaser_lv2 PROPERTIES OUTPUT_NAME "ZynPhaser")
+ set_target_properties(ZynPhaser_lv2 PROPERTIES PREFIX "")
+ 
+-set_target_properties(ZynPhaser_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynPhaser_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynPhaser_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynPhaser_vst PROPERTIES OUTPUT_NAME "ZynPhaser")
+ set_target_properties(ZynPhaser_vst PROPERTIES PREFIX "")
+diff --git a/src/Plugin/Reverb/CMakeLists.txt b/src/Plugin/Reverb/CMakeLists.txt
+index c2d74a97..d15f2a70 100644
+--- a/src/Plugin/Reverb/CMakeLists.txt
++++ b/src/Plugin/Reverb/CMakeLists.txt
+@@ -9,7 +9,7 @@ set_target_properties(ZynReverb_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+ set_target_properties(ZynReverb_lv2 PROPERTIES OUTPUT_NAME "ZynReverb")
+ set_target_properties(ZynReverb_lv2 PROPERTIES PREFIX "")
+ 
+-set_target_properties(ZynReverb_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynReverb_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynReverb_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynReverb_vst PROPERTIES OUTPUT_NAME "ZynReverb")
+ set_target_properties(ZynReverb_vst PROPERTIES PREFIX "")
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 0503e0ef..88951c55 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -100,7 +100,7 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+     set_target_properties(ZynAddSubFX_lv2 PROPERTIES PREFIX "")
+ endif()
+ 
+-set_target_properties(ZynAddSubFX_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
++set_target_properties(ZynAddSubFX_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST2")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES OUTPUT_NAME "ZynAddSubFX")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES PREFIX "")
+-- 
+2.47.0
+

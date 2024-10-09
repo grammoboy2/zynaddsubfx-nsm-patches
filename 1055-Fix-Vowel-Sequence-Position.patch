@@ -1,0 +1,58 @@
+From 5e6c74cd2673a7c97a1969ce2764a50552432099 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 9 Oct 2016 22:15:58 -0400
+Subject: [PATCH 1055/1936] Fix Vowel Sequence Position
+
+---
+ src/Params/FilterParams.cpp | 12 +++++++++++-
+ src/UI/FilterUI.fl          |  4 +++-
+ 2 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 2d46a43b..33a93129 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -89,7 +89,17 @@ const rtosc::Ports FilterParams::ports = {
+     rParamZyn(Psequencestretch, rShort("seq.str"), "How modulators stretch the sequence"),
+     rToggle(Psequencereversed,  rShort("reverse"), "If the modulator input is inverted"),
+ 
+-    //{"Psequence#" FF_MAX_SEQUENCE "/nvowel", "", NULL, [](){}},
++    {"vowel_seq#" STRINGIFY(FF_MAX_SEQUENCE) "::i", "", NULL,
++        [](const char *msg, RtData &d){
++            FilterParams *obj = (FilterParams *) d.obj;
++            const char *mm = msg;
++            while(*mm && !isdigit(*mm)) ++mm;
++            unsigned idx = atoi(mm);
++            if(rtosc_narguments(msg)) {
++                obj->Psequence[idx].nvowel = rtosc_argument(msg, 0).i;
++            } else
++                d.broadcast(d.loc, "i", obj->Psequence[idx].nvowel);
++        }},
+     {"type-svf::i", rProp(parameter) rShort("type")
+         rOptions(low, high, band, notch)
+             rDoc("Filter Type"), 0, rOptionCb(Ptype)},
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index ff467e35..3562d79d 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -333,7 +333,7 @@ formantfiltergraph->redraw();}
+         }
+         Fl_Counter {} {
+           label {S.Pos.}
+-          callback {nseqpos = o->value();update_formant_window();}
++          callback {nseqpos = o->value();update_formant_window();vowel_counter->oscMove("vowel_seq"+to_s(nseqpos));}
+           tooltip {Current position from the sequence} xywh {595 97 40 15} type Simple labelfont 1 labelsize 10 align 9 minimum 0 maximum 127 step 1 textsize 10
+           code0 {o->bounds(0,FF_MAX_SEQUENCE-2);}
+           code1 {o->value(nseqpos);}
+@@ -343,6 +343,8 @@ formantfiltergraph->redraw();}
+           callback {(void)o;//pars->Psequence[nseqpos].nvowel=(int) o->value(); pars->changed=true;}
+           xywh {640 97 40 15} type Simple labelsize 10 align 1 minimum 0 maximum 127 step 1 textsize 10
+           code0 {o->bounds(0,FF_MAX_VOWELS-1);}
++          code1 {o->init("vowel_seq0");}
++          class Fl_Osc_Counter
+         }
+         Fl_Check_Button {} {
+           label {Neg.Input}
+-- 
+2.47.0
+

@@ -1,0 +1,27 @@
+From b7e1152aec02d4601f7d0c22c5241f1f6c6a5c93 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Fri, 8 Jan 2016 06:20:24 +0000
+Subject: [PATCH 0818/1936] Hide some menu actions when running as plugin
+
+---
+ src/UI/guimain.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index cf8c9216..a1af935c 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -197,6 +197,10 @@ ui_handle_t GUI::createUi(Fl_Osc_Interface *osc, void *exit)
+     {
+         if (long long winId = atoll(embedId))
+         {
++            // running embed as plugin
++            MasterUI::menu_mastermenu[11].hide(); // file -> nio settings
++            MasterUI::menu_mastermenu[13].hide(); // file -> exit
++            MasterUI::menu_mastermenu[26].hide(); // misc -> switch interface mode
+             fl_embed(ui->masterwindow, winId);
+             ui->masterwindow->show();
+         }
+-- 
+2.47.0
+

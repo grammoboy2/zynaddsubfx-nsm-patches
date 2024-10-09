@@ -1,0 +1,42 @@
+From 7ddcca67a0858a8d9000a8b53ee0743e1d0a91c0 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <ricard2013@butoba.net>
+Date: Wed, 15 Sep 2021 20:25:29 +0200
+Subject: [PATCH 1767/1936] NotePool: Minor formatting and typo fixes
+
+---
+ src/Containers/NotePool.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index e971bafb..44ba2ad6 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -125,7 +125,7 @@ static int getMergeableDescriptor(note_t note, uint8_t sendto, bool legato,
+     return desc_id;
+ }
+ 
+-NotePool::activeDescIter      NotePool::activeDesc(void)
++NotePool::activeDescIter NotePool::activeDesc(void)
+ {
+     cleanup();
+     return activeDescIter{*this};
+@@ -252,7 +252,7 @@ bool NotePool::synthFull(int sdesc_count) const
+     return actually_free < sdesc_count;
+ }
+ 
+-//Note that isn't KEY_PLAYING or KEY_RELEASED_AND_SUSTAINING
++//Note that isn't KEY_PLAYING or KEY_RELEASED_AND_SUSTAINED
+ bool NotePool::existsRunningNote(void) const
+ {
+     //printf("running note # =%d\n", getRunningNotes());
+@@ -274,6 +274,7 @@ int NotePool::getRunningNotes(void) const
+     }
+     return running_count;
+ }
++
+ void NotePool::enforceKeyLimit(int limit)
+ {
+     int notes_to_kill = getRunningNotes() - limit;
+-- 
+2.47.0
+

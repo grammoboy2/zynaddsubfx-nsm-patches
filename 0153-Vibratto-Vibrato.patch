@@ -1,0 +1,40 @@
+From 8ef2b3d01dd48ed10165884ee0781a5e0b26de13 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Mar 2014 13:32:13 -0400
+Subject: [PATCH 0153/1936] Vibratto->Vibrato
+
+This only fixes the UI display within the adnote voices.
+The typo still exists within the named variables, but those are not user visible
+and changing those might result in a fair bit of pain for the impending merge
+---
+ src/UI/ADnoteUI.fl | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index ed20e82e..53993eb3 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -566,9 +566,9 @@ voiceonbutton->redraw();} open
+               code1 {o->value(pars->get_unison_size_index(nvoice));}
+             } {}
+             Fl_Dial {} {
+-              label Vibratto
++              label Vibrato
+               callback {pars->VoicePar[nvoice].Unison_vibratto=(int)o->value();}
+-              tooltip Vibratto xywh {340 555 25 30} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
++              tooltip Vibrato xywh {340 555 25 30} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+               code0 {o->value(pars->VoicePar[nvoice].Unison_vibratto);}
+               class WidgetPDial
+             }
+@@ -595,7 +595,7 @@ unisonspreadoutput->do_callback();}
+             Fl_Dial {} {
+               label {Vib.speed}
+               callback {pars->VoicePar[nvoice].Unison_vibratto_speed=(int)o->value();}
+-              tooltip {Vibratto Average Speed} xywh {390 555 25 30} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
++              tooltip {Vibrato Average Speed} xywh {390 555 25 30} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+               code0 {o->value(pars->VoicePar[nvoice].Unison_vibratto_speed);}
+               class WidgetPDial
+             }
+-- 
+2.47.0
+

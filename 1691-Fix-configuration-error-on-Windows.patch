@@ -1,0 +1,31 @@
+From 330e1873ca80604e8da094f78bd03db63194fc07 Mon Sep 17 00:00:00 2001
+From: Carlo Bramini <30959007+carlo-bramini@users.noreply.github.com>
+Date: Sun, 10 Jan 2021 13:06:10 +0100
+Subject: [PATCH 1691/1936] Fix configuration error on Windows.
+
+I'm trying to compile ZynAddSubFx with MinGW-W64, but I got this error when CMake configured the build:
+
+CMake Error at src/CMakeLists.txt:455 (string):
+  string sub-command STRIP requires two arguments.
+
+While CMakeLists.txt file does syntactically contain two arguments, ${FLTK_LDFLAGS} can be empty. If this happens, then the string() function never receives the correct number of parameters, which then sees just one. If the string could be empty, then CMakeLists.txt must quote it.
+---
+ src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 4c8c259a..b39fe06e 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -451,7 +451,7 @@ if(FltkGui)
+ 	find_program (FLTK_CONFIG fltk-config)
+ 	if (FLTK_CONFIG)
+ 		execute_process (COMMAND ${FLTK_CONFIG} --use-images --ldflags OUTPUT_VARIABLE FLTK_LDFLAGS)
+-		string(STRIP ${FLTK_LDFLAGS} FLTK_LIBRARIES)
++		string(STRIP "${FLTK_LDFLAGS}" FLTK_LIBRARIES)
+ 	endif()
+ 
+ 	message(STATUS ${FLTK_LDFLAGS})
+-- 
+2.47.0
+

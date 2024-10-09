@@ -1,0 +1,37 @@
+From e0ad125a423e77d29101d078cbfc25520413fac5 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Mon, 8 Jun 2015 10:39:11 +0200
+Subject: [PATCH 0490/1936] Fix build of DSSI plugin
+
+---
+ src/Output/DSSIaudiooutput.cpp | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index 18cf3373..295993c7 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -37,6 +37,7 @@
+ #include <string.h>
+ #include <limits.h>
+ 
++using std::set;
+ using std::string;
+ using std::vector;
+ 
+@@ -51,6 +52,12 @@ namespace Nio {
+     void waveStart(void){}
+     void waveStop(void){}
+     void waveEnd(void){}
++    bool setSource(string){}
++    bool setSink(string){}
++    set<string> getSources(void){return set<string>();}
++    set<string> getSinks(void){return set<string>();}
++    string getSource(void){return "";}
++    string getSink(void){return "";}
+ }
+ 
+ //
+-- 
+2.47.0
+

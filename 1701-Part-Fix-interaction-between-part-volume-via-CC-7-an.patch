@@ -1,0 +1,223 @@
+From 0d2ef00cd5164b623648aabc3c0efc32650baa52 Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Sun, 27 Dec 2020 17:44:24 -0800
+Subject: [PATCH 1701/1936] Part: Fix interaction between part volume (via CC
+ 7) and expression control.
+
+Before this commit, simultaneously adjusting CC 7 (Volume) and CC 11 (Expression) resulted in conflict, where the actual gain level would jump around wildly and sometimes apply multipliers on the order of 100x due to units being mixed up.
+
+Also, add some assertions for insane gain levels.
+---
+ src/Misc/Master.cpp       |  2 +-
+ src/Misc/Part.cpp         | 46 +++++++++++++++++++++++----------------
+ src/Misc/Part.h           |  7 +++---
+ src/Params/Controller.cpp | 14 +++++++++++-
+ 4 files changed, 45 insertions(+), 24 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 4f358152..fc707bb9 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1268,7 +1268,7 @@ bool Master::AudioOut(float *outr, float *outl)
+         if(!part[npart]->Penabled)
+             continue;
+ 
+-        Stereo<float> newvol(part[npart]->volume);
++        Stereo<float> newvol(part[npart]->gain);
+ 
+         float pan = part[npart]->panning;
+         if(pan < 0.5f)
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 2bd4982b..4c383770 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -57,7 +57,7 @@ static const Ports partPorts = {
+ #undef rChangeCb
+ #define rChangeCb
+ #undef rChangeCb
+-#define rChangeCb obj->setVolume(obj->Volume);
++#define rChangeCb obj->setVolumedB(obj->Volume);
+     rParamF(Volume, rShort("Vol"), rDefault(0.0), rUnit(dB), 
+             rLinear(-40.0, 13.3333), "Part Volume"),
+ #undef rChangeCb
+@@ -68,8 +68,8 @@ static const Ports partPorts = {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "i", (int) roundf(96.0f * obj->Volume / 40.0f + 96.0f));
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
+-            obj->Volume  = obj->volume127ToFloat(limit<unsigned char>(rtosc_argument(m, 0).i, 0, 127));
+-            obj->setVolume(obj->Volume);
++            obj->Volume  = obj->volume127TodB(limit<unsigned char>(rtosc_argument(m, 0).i, 0, 127));
++            obj->setVolumedB(obj->Volume);
+             d.broadcast(d.loc, "i", limit<char>(rtosc_argument(m, 0).i, 0, 127));
+         }}},
+ #define rChangeCb obj->setPpanning(obj->Ppanning);
+@@ -314,7 +314,6 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+ 
+     Pname = new char[PART_MAX_NAME_LEN];
+ 
+-    oldvolumel = oldvolumer = 0.5f;
+     lastnote = -1;
+ 
+     defaults();
+@@ -337,7 +336,7 @@ void Part::cloneTraits(Part &p) const
+ #define CLONE(x) p.x = this->x
+     CLONE(Penabled);
+ 
+-    p.setVolume(this->Volume);
++    p.setVolumedB(this->Volume);
+     p.setPpanning(this->Ppanning);
+ 
+     CLONE(Pminkey);
+@@ -366,7 +365,7 @@ void Part::defaults()
+     Pnoteon     = 1;
+     Ppolymode   = 1;
+     Plegatomode = 0;
+-    setVolume(0.0);
++    setVolumedB(0.0);
+     Pkeyshift = 64;
+     Prcvchn   = 0;
+     setPpanning(64);
+@@ -655,7 +654,7 @@ void Part::SetController(unsigned int type, int par)
+             break;
+         case C_expression:
+             ctl.setexpression(par);
+-            setVolume(Volume); //update the volume
++            setVolumedB(Volume); //update the volume
+             break;
+         case C_portamento:
+             ctl.setportamento(par);
+@@ -682,9 +681,10 @@ void Part::SetController(unsigned int type, int par)
+         case C_volume:
+             ctl.setvolume(par);
+             if(ctl.volume.receive != 0)
+-                volume = ctl.volume.volume;
++		setVolumedB(volume127TodB( ctl.volume.volume * 127.0f ) );
+             else
+-                setVolume(Volume);
++		/* FIXME: why do this? */
++                setVolumedB(Volume);
+             break;
+         case C_sustain:
+             ctl.setsustain(par);
+@@ -698,10 +698,9 @@ void Part::SetController(unsigned int type, int par)
+             ctl.resetall();
+             ReleaseSustainedKeys();
+             if(ctl.volume.receive != 0)
+-                volume = ctl.volume.volume;
++		setVolumedB(volume127TodB( ctl.volume.volume * 127.0f ) );
+             else
+-                setVolume(Volume);
+-            setVolume(Volume); //update the volume
++                setVolumedB(Volume);
+             setPpanning(Ppanning); //update the panning
+ 
+             for(int item = 0; item < NUM_KIT_ITEMS; ++item) {
+@@ -939,12 +938,15 @@ void Part::ComputePartSmps()
+ /*
+  * Parameter control
+  */
+-float Part::volume127ToFloat(unsigned char volume_)
++
++float Part::volume127TodB(unsigned char volume_)
+ {
+-    return (volume_ - 96.0f) / 96.0f * 40.0;
++    assert( volume_  <= 127 );
++
++    return 20.0f * log10f(volume_ / 127.0f);
+ }
+ 
+-void Part::setVolume(float Volume_)
++void Part::setVolumedB(float Volume_)
+ {
+     //Fixes bug with invalid loading
+     if(fabs(Volume_ - 50.0f) < 0.001)
+@@ -954,8 +956,14 @@ void Part::setVolume(float Volume_)
+ 
+     assert(Volume_ < 40.0);
+     Volume = Volume_;
+-    volume =
+-        dB2rap(Volume) * ctl.expression.relvolume;
++
++    float volume = dB2rap( Volume_ );
++
++    /* printf( "Volume: %f, Expression %f\n", volume, ctl.expression.relvolume ); */
++
++    assert( volume <= 1.0f );
++
++    gain = volume * ctl.expression.relvolume;
+ }
+ 
+ void Part::setPpanning(char Ppanning_)
+@@ -1291,9 +1299,9 @@ void Part::getfromXML(XMLwrapper& xml)
+ {
+     Penabled = xml.getparbool("enabled", Penabled);
+     if (xml.hasparreal("volume")) {
+-        setVolume(xml.getparreal("volume", Volume));
++        setVolumedB(xml.getparreal("volume", Volume));
+     } else {
+-        setVolume(volume127ToFloat(xml.getpar127("volume", 96)));
++        setVolumedB(volume127TodB( xml.getpar127("volume", gain * 127.0f )));
+     }
+     setPpanning(xml.getpar127("panning", Ppanning));
+ 
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 0cd7e837..b8ad4d05 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -130,8 +130,9 @@ class Part
+         float         Volume; /**<part volume*/
+         unsigned char Pminkey; /**<the minimum key that the part receives noteon messages*/
+         unsigned char Pmaxkey; //the maximum key that the part receives noteon messages
+-        static float volume127ToFloat(unsigned char volume_);
+-        void setVolume(float Volume);
++        static float volume127TodB(unsigned char volume_);
++        void setVolumeGain(float Volume);
++        void setVolumedB(float Volume);
+         unsigned char Pkeyshift; //Part keyshift
+         unsigned char Prcvchn; //from what midi channel it receives commands
+         unsigned char Ppanning; //part panning
+@@ -163,7 +164,7 @@ class Part
+         *partfxinputr[NUM_PART_EFX + 1];          //partfxinput l/r [NUM_PART_EFX] is for "no effect" buffer
+ 
+ 
+-        float volume, oldvolumel, oldvolumer; //this is applied by Master
++        float gain;
+         float panning; //this is applied by Master, too
+ 
+         Controller ctl; //Part controllers
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index a61bf41d..89f76a9b 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -166,7 +166,11 @@ void Controller::setexpression(int value)
+ {
+     expression.data = value;
+     if(expression.receive != 0)
++    {
++	assert( value <= 127 );	/* to protect what's left of JML's hearing */
++
+         expression.relvolume = value / 127.0f;
++    }
+     else
+         expression.relvolume = 1.0f;
+ }
+@@ -238,7 +242,15 @@ void Controller::setvolume(int value)
+ {
+     volume.data = value;
+     if(volume.receive != 0)
+-        volume.volume = powf(0.1f, (127 - value) / 127.0f * 2.0f);
++    {
++        /* volume.volume = powf(0.1f, (127 - value) / 127.0f * 2.0f); */
++	/* rather than doing something fancy that results in a value
++	 * of 0 not completely muting the output, do the reasonable
++	 * thing and just give the value the user ordered. */
++	assert( value <= 127 );
++
++	volume.volume = value / 127.0f;
++    }
+     else
+         volume.volume = 1.0f;
+ }
+-- 
+2.47.0
+

@@ -1,0 +1,230 @@
+From 984d659beec023fc56871fe461cb097e207054ca Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 28 Jan 2016 21:15:43 -0500
+Subject: [PATCH 0835/1936] NotePool: Enforce Keylimit For Sustained Notes
+
+When a note is played twice the old version is prevented from
+entering the sustain state and if it is already in the sustain
+state it is forced into the release state.
+This prevents the buildup of (often silent) sustained notes when
+using a sustain controller.
+---
+ src/Containers/NotePool.cpp | 28 +++++++++++--
+ src/Containers/NotePool.h   |  5 ++-
+ src/Misc/Part.cpp           | 11 ++++-
+ src/Tests/KitTest.h         | 80 +++++++++++++++++++++++++++++++++++++
+ 4 files changed, 118 insertions(+), 6 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 17f5ff37..e493bfb7 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -5,7 +5,8 @@
+ #include <cassert>
+ #include <iostream>
+ 
+-#define NOTE_MASK 0x03
++#define SUSTAIN_BIT 0x04
++#define NOTE_MASK   0x03
+ 
+ enum NoteStatus {
+     KEY_OFF                    = 0x00,
+@@ -53,6 +54,16 @@ void NotePool::NoteDescriptor::doSustain(void)
+     setStatus(KEY_RELEASED_AND_SUSTAINED);
+ }
+ 
++bool NotePool::NoteDescriptor::canSustain(void) const
++{
++    return !(status & SUSTAIN_BIT);
++}
++
++void NotePool::NoteDescriptor::makeUnsustainable(void)
++{
++    status |= SUSTAIN_BIT;
++}
++
+ NotePool::activeNotesIter NotePool::activeNotes(NoteDescriptor &n)
+ {
+     const int off_d1 = &n-ndesc;
+@@ -81,7 +92,7 @@ static int getMergeableDescriptor(uint8_t note, uint8_t sendto, bool legato,
+     if(desc_id != 0) {
+         auto &nd = ndesc[desc_id-1];
+         if(nd.age == 0 && nd.note == note && nd.sendto == sendto
+-                && nd.playing() && nd.legatoMirror == legato)
++                && nd.playing() && nd.legatoMirror == legato && nd.canSustain())
+             return desc_id-1;
+     }
+ 
+@@ -180,7 +191,18 @@ void NotePool::applyLegato(LegatoParams &par)
+                 std::cerr << "failed to create legato note: " << ba.what() << std::endl;
+             }
+     }
+-};
++}
++
++void NotePool::makeUnsustainable(uint8_t note)
++{
++    for(auto &desc:activeDesc()) {
++        if(desc.note == note) {
++            desc.makeUnsustainable();
++            if(desc.sustained())
++                release(desc);
++        }
++    }
++}
+ 
+ bool NotePool::full(void) const
+ {
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 956edb0a..d0c38140 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -35,7 +35,8 @@ class NotePool
+             void setStatus(uint8_t s);
+             void doSustain(void);
+ 
+-            void canSustain(void) const;
++            bool canSustain(void) const;
++            void makeUnsustainable(void);
+         };
+ 
+         //To be pedantic this wastes 2 or 6 bytes per descriptor
+@@ -109,6 +110,8 @@ class NotePool
+         void upgradeToLegato(void);
+         void applyLegato(LegatoParams &par);
+ 
++        void makeUnsustainable(uint8_t note);
++
+         bool full(void) const;
+         bool synthFull(int sdesc_count) const;
+ 
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 1458c97c..6e7f4c29 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -475,6 +475,9 @@ bool Part::NoteOn(unsigned char note,
+         return true;
+     }
+ 
++    if(Ppolymode)
++        notePool.makeUnsustainable(note);
++
+     //Create New Notes
+     for(uint8_t i = 0; i < NUM_KIT_ITEMS; ++i) {
+         auto &item = kit[i];
+@@ -530,8 +533,12 @@ void Part::NoteOff(unsigned char note) //release the key
+             else 
+                 notePool.release(desc);
+         }
+-        else    //the sustain pedal is pushed
+-            desc.doSustain();
++        else {   //the sustain pedal is pushed
++            if(desc.canSustain())
++                desc.doSustain();
++            else
++                notePool.release(desc);
++        }
+     }
+ }
+ 
+diff --git a/src/Tests/KitTest.h b/src/Tests/KitTest.h
+index effcb9cc..1b1d5e74 100644
+--- a/src/Tests/KitTest.h
++++ b/src/Tests/KitTest.h
+@@ -17,6 +17,7 @@ int dummy=0;
+ 
+ using namespace std;
+ 
++#define SUSTAIN_BIT 0x04
+ enum PrivateNoteStatus {
+     KEY_OFF                    = 0x00,
+     KEY_PLAYING                = 0x01,
+@@ -50,6 +51,85 @@ class KitTest:public CxxTest::TestSuite
+             part = new Part(alloc, *synth, *time, dummy, dummy, &microtonal, &fft);
+         }
+ 
++        //Standard poly mode with sustain
++        void testSustainCase1() {
++            //enable sustain
++            part->ctl.setsustain(127);
++
++            part->NoteOn(64, 127, 0);
++            part->NoteOn(64, 127, 0);
++            part->NoteOff(64);
++
++            //first note has moved to release state
++            //second note has moved to sustain state
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=64,
++                    .sendto=0,
++                    .size=1,
++                    .status=KEY_RELEASED|SUSTAIN_BIT,
++                    .legatoMirror=false}));
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=64,
++                    .sendto=0,
++                    .size=1,
++                    .status=KEY_RELEASED_AND_SUSTAINED,
++                    .legatoMirror=false}));
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=0,
++                    .sendto=0,
++                    .size=0,
++                    .status=0,
++                    .legatoMirror=false}));
++        }
++
++        void testSustainCase2() {
++            //enable sustain
++            part->ctl.setsustain(127);
++
++            part->NoteOn(64, 127, 0);
++            part->NoteOff(64);
++            part->NoteOn(64, 127, 0);
++
++            //first note has moved to release state
++            //second note has stayed in playing state
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=64,
++                    .sendto=0,
++                    .size=1,
++                    .status=KEY_RELEASED|SUSTAIN_BIT,
++                    .legatoMirror=false}));
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=64,
++                    .sendto=0,
++                    .size=1,
++                    .status=KEY_PLAYING,
++                    .legatoMirror=false}));
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=0,
++                    .sendto=0,
++                    .size=0,
++                    .status=0,
++                    .legatoMirror=false}));
++        }
++
+         //Enumerate cases of:
+         //Legato = {disabled,enabled}
+         //Mono   = {diabled, enabled}
+-- 
+2.47.0
+

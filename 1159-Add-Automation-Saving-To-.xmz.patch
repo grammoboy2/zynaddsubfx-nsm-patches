@@ -1,0 +1,67 @@
+From b63fc32b21ef33f2aed72f7ecf356a644ffd2cef Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 14 Jul 2017 21:43:59 -0400
+Subject: [PATCH 1159/1936] Add Automation Saving To .xmz
+
+---
+ src/Misc/Master.cpp         | 8 ++++++--
+ src/Tests/guitar-adnote.xmz | 3 +++
+ 2 files changed, 9 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 8b4ee0ba..1ae4994e 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -631,7 +631,7 @@ void Master::saveAutomation(XMLwrapper &xml, const rtosc::AutomationMgr &midi)
+         for(int i=0; i<midi.nslots; ++i) {
+             const auto &slot = midi.slots[i];
+             if(!slot.used)
+-                return;
++                continue;
+             xml.beginbranch("slot", i);
+             XmlNode params("params");
+             params["midi-cc"] = to_s(slot.midi_cc);
+@@ -639,7 +639,7 @@ void Master::saveAutomation(XMLwrapper &xml, const rtosc::AutomationMgr &midi)
+             for(int j=0; j<midi.per_slot; ++j) {
+                 const auto &au = slot.automations[j];
+                 if(!au.used)
+-                    return;
++                    continue;
+                 xml.beginbranch("automation", j);
+                 XmlNode automation("params");
+                 automation["path"] = au.param_path;
+@@ -1418,6 +1418,8 @@ void Master::add2XML(XMLwrapper& xml)
+     microtonal.add2XML(xml);
+     xml.endbranch();
+ 
++    saveAutomation(xml, automate);
++
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) {
+         xml.beginbranch("PART", npart);
+         part[npart]->add2XML(xml);
+@@ -1542,6 +1544,8 @@ void Master::getfromXML(XMLwrapper& xml)
+         xml.exitbranch();
+     }
+ 
++    loadAutomation(xml, automate);
++
+     sysefx[0]->changeeffect(0);
+     if(xml.enterbranch("SYSTEM_EFFECTS")) {
+         for(int nefx = 0; nefx < NUM_SYS_EFX; ++nefx) {
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index a65e7e57..c5687e33 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -28,6 +28,9 @@ version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="a_note" value="69" />
+ <par_real name="a_freq" value="440" exact_value="0x43DC0000" />
+ </MICROTONAL>
++<automation>
++<mgr-info nslots="16" nautomations="4" ncontrol="8" />
++</automation>
+ <PART id="0">
+ <par_bool name="enabled" value="yes" />
+ <par name="volume" value="96" />
+-- 
+2.47.0
+

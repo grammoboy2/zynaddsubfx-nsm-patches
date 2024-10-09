@@ -1,0 +1,727 @@
+From 59079cae6988e3db0cea8e286931765da4061abd Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 27 Apr 2015 19:49:10 -0400
+Subject: [PATCH 0427/1936] Prune Globals/Out-Of-Date Code
+
+---
+ src/Effects/EffectMgr.cpp           |  5 ++-
+ src/Effects/EffectMgr.h             |  2 +-
+ src/Misc/MiddleWare.cpp             | 32 +++++++++------
+ src/Misc/Util.cpp                   |  7 ----
+ src/Misc/Util.h                     | 63 +++--------------------------
+ src/Params/ADnoteParameters.cpp     | 34 ++++++++--------
+ src/Params/PADnoteParameters.cpp    | 26 ++++++------
+ src/UI/ADnoteUI.fl                  | 42 +++++++++----------
+ src/UI/Connection.cpp               | 16 ++------
+ src/UI/Fl_Osc_Choice.cpp            |  4 +-
+ src/UI/Fl_PADnoteHarmonicProfile.h  |  4 +-
+ src/UI/Fl_PADnoteOvertonePosition.h | 17 ++++----
+ src/UI/OscilGenUI.fl                |  2 +-
+ src/UI/PADnoteUI.fl                 |  4 +-
+ 14 files changed, 101 insertions(+), 157 deletions(-)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 44cb47d7..bb580532 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -39,10 +39,10 @@
+ 
+ 
+ #define rObject EffectMgr
+-const rtosc::Ports EffectMgr::ports = {
++static const rtosc::Ports local_ports = {
+     rSelf(EffectMgr),
+     rPaste(),
+-    RECURP(EffectMgr, FilterParams, Filter, filterpars, "Filter Parameter for Dynamic Filter"),
++    rRecurp(filterpars, "Filter Parameter for Dynamic Filter"),
+     {"parameter#64::i", rProp(alias) rDoc("Parameter Accessor"), NULL,
+         [](const char *msg, rtosc::RtData &d)
+         {
+@@ -106,6 +106,7 @@ const rtosc::Ports EffectMgr::ports = {
+ 
+ };
+ 
++const rtosc::Ports &EffectMgr::ports = local_ports;
+ 
+ EffectMgr::EffectMgr(Allocator &alloc, const bool insertion_)
+     :insertion(insertion_),
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index 6a12386c..49d91256 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -81,7 +81,7 @@ class EffectMgr:public Presets
+ 
+         FilterParams *filterpars;
+ 
+-        static const rtosc::Ports ports;
++        static const rtosc::Ports &ports;
+         int     nefx;
+         Effect *efx;
+     private:
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 7547d034..cf70b5a5 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -36,7 +36,6 @@
+ 
+ using std::string;
+ extern rtosc::ThreadLink *the_bToU;//XXX
+-rtosc::UndoHistory undo;
+ 
+ /******************************************************************************
+  *                        LIBLO And Reflection Code                           *
+@@ -45,15 +44,12 @@ rtosc::UndoHistory undo;
+  * Thus, changes in the current interface sending messages can be encoded     *
+  * into the stream via events which simply echo back the active interface     *
+  ******************************************************************************/
+-static lo_server server;
+-static string last_url, curr_url;
+-
+ static void liblo_error_cb(int i, const char *m, const char *loc)
+ {
+     fprintf(stderr, "liblo :-( %d-%s@%s\n",i,m,loc);
+ }
+ 
+-void path_search(const char *m)
++void path_search(const char *m, const char *url)
+ {
+     using rtosc::Ports;
+     using rtosc::Port;
+@@ -102,8 +98,8 @@ void path_search(const char *m)
+     char buffer[1024*20];
+     size_t length = rtosc_amessage(buffer, sizeof(buffer), "/paths", types, args);
+     if(length) {
+-	lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
+-        lo_address addr = lo_address_new_from_url(last_url.c_str());
++        lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
++        lo_address addr = lo_address_new_from_url(url);
+         if(addr)
+             lo_send_message(addr, buffer, msg);
+     }
+@@ -119,9 +115,9 @@ static int handler_function(const char *path, const char *types, lo_arg **argv,
+     lo_address addr = lo_message_get_source(msg);
+     if(addr) {
+         const char *tmp = lo_address_get_url(addr);
+-        if(tmp != last_url) {
++        if(tmp != mw->activeUrl()) {
+             mw->transmitMsg("/echo", "ss", "OSC_URL", tmp);
+-            last_url = tmp;
++            mw->activeUrl(tmp);
+         }
+ 
+     }
+@@ -131,7 +127,7 @@ static int handler_function(const char *path, const char *types, lo_arg **argv,
+     size_t size = 2048;
+     lo_message_serialise(msg, path, buffer, &size);
+     if(!strcmp(buffer, "/path-search") && !strcmp("ss", rtosc_argument_string(buffer))) {
+-        path_search(buffer);
++        path_search(buffer, mw->activeUrl().c_str());
+     } else
+         mw->transmitMsg(buffer);
+ 
+@@ -758,9 +754,15 @@ public:
+     std::atomic_int pending_load[NUM_MIDI_PARTS];
+     std::atomic_int actual_load[NUM_MIDI_PARTS];
+ 
++    rtosc::UndoHistory undo;
++
+     //Link To the Realtime
+     rtosc::ThreadLink *bToU;
+     rtosc::ThreadLink *uToB;
++
++    //LIBLO
++    lo_server server;
++    string last_url, curr_url;
+ };
+ 
+ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw)
+@@ -1075,7 +1077,7 @@ void MiddleWareImpl::handleMsg(const char *msg)
+         bankPos(master->bank, osc);
+     } else if(obj_store.has(obj_rl)) {
+         //try some over simplified pattern matching
+-        if(strstr(msg, "oscil/")) {
++        if(strstr(msg, "oscilgen/") || strstr(msg, "FMSmp/") || strstr(msg, "OscilSmp/")) {
+             if(!handleOscil(obj_rl, last_path+1, obj_store.get(obj_rl)))
+                 uToB->raw_write(msg);
+             //else if(strstr(obj_rl.c_str(), "kititem"))
+@@ -1116,6 +1118,10 @@ void MiddleWareImpl::handleMsg(const char *msg)
+     } else if(strstr(msg, "Padenabled") || strstr(msg, "Ppadenabled") || strstr(msg, "Psubenabled")) {
+         kitEnable(msg);
+         uToB->raw_write(msg);
++    } else if(!strcmp(msg, "/undo")) {
++        undo.seekHistory(-1);
++    } else if(!strcmp(msg, "/redo")) {
++        undo.seekHistory(+1);
+     } else
+         uToB->raw_write(msg);
+ }
+@@ -1219,10 +1225,10 @@ void MiddleWare::pendingSetProgram(int part, int program)
+ 
+ std::string MiddleWare::activeUrl(void)
+ {
+-    return last_url;
++    return impl->last_url;
+ }
+ 
+ void MiddleWare::activeUrl(std::string u)
+ {
+-    last_url = u;
++    impl->last_url = u;
+ }
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index 08ae50c9..2ff0f1b6 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -211,10 +211,3 @@ float cinterpolate(const float *data, size_t len, float pos)
+     const float leftness = pos - l_pos;
+     return data[l_pos] * leftness + data[r_pos] * (1.0f - leftness);
+ }
+-
+-const char *message_snip(const char *m)
+-{
+-    while(*m && *m!='/')++m;
+-    return *m?m+1:m;
+-}
+-
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 4d23ddf3..cb5c1e8a 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -147,71 +147,18 @@ float interpolate(const float *data, size_t len, float pos);
+ //Linear circular interpolation
+ float cinterpolate(const float *data, size_t len, float pos);
+ 
+-/**
+- * Port macros - these produce easy and regular port definitions for common
+- * types
+- */
+-
+-///trims a path in recursions
+-const char *message_snip(const char *m);
+-
+ template<class T>
+ static inline void nullify(T &t) {delete t; t = NULL; }
+ template<class T>
+ static inline void arrayNullify(T &t) {delete [] t; t = NULL; }
++
++/**
++ * Port macros - these produce easy and regular port definitions for common
++ * types
++ */
+ #define rParamZyn(name, ...) \
+   {STRINGIFY(name) "::i",  rProp(parameter) rMap(min, 0) rMap(max, 127) DOC(__VA_ARGS__), NULL, rParamICb(name)}
+ 
+-///floating point parameter - with lookup code
+-#define PARAMF(type, var, name, scale, _min, _max, desc) \
+-{#name"::f", ":parameter\0:documentation\0=" desc "\0", 0, \
+-    [](const char *m, rtosc::RtData &d) { \
+-        if(rtosc_narguments(m)==0) {\
+-            d.reply(d.loc, "f", ((type*)d.obj)->var); \
+-        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='f') {\
+-            ((type*)d.obj)->var = limit<float>(rtosc_argument(m,0).f,_min,_max); \
+-            d.broadcast(d.loc, "f", ((type*)d.obj)->var);}}}
+-
+-///character parameter - with lookup code
+-#define PARAMC(type, var, name, desc) \
+-{#name"::c", ":parameter\0:old-param\0:documentation\0=" desc"\0", 0, \
+-    [](const char *m, rtosc::RtData &d) { \
+-        if(rtosc_narguments(m)==0) {\
+-            d.reply(d.loc, "c", ((type*)d.obj)->var); \
+-        } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='c') {\
+-            ((type*)d.obj)->var = limit<char>(rtosc_argument(m,0).i,0,127); \
+-            d.broadcast(d.loc, "c", ((type*)d.obj)->var);}}}
+-
+-///Recur - perform a simple recursion
+-#define RECUR(type, cast, name, var, desc) \
+-{#name"/", ":recursion\0:documentation\0=" desc"\0", &cast::ports, [](const char *m, rtosc::RtData &d){\
+-    d.obj = &(((type*)d.obj)->var); \
+-    cast::ports.dispatch(message_snip(m), d);}}
+-
+-///Recurs - perform a ranged recursion
+-#define RECURS(type, cast, name, var, length, desc) \
+-{#name "#" #length "/", ":recursion\0:documentation\0=" desc"\0", &cast::ports, \
+-    [](const char *m, rtosc::RtData &d){ \
+-        const char *mm = m; \
+-        while(!isdigit(*mm))++mm; \
+-        d.obj = &(((type*)d.obj)->var)[atoi(mm)]; \
+-        cast::ports.dispatch(message_snip(m), d);}}
+-
+-///Recur - perform a simple recursion (on pointer member)
+-#define RECURP(type, cast, name, var, desc) \
+-{#name"/", ":recursion\0:documentation\0=" desc"\0", &cast::ports, [](const char *m, rtosc::RtData &d){\
+-    d.obj = (((type*)d.obj)->var); \
+-    if(d.obj) cast::ports.dispatch(message_snip(m), d);}}
+-
+-///Recurs - perform a ranged recursion (on pointer array member)
+-#define RECURSP(type, cast, name, var, length, desc) \
+-{#name "#" #length "/", ":recursion\0:documentation\0=" desc"\0", &cast::ports, \
+-    [](const char *m, rtosc::RtData &d){ \
+-        const char *mm = m; \
+-        while(!isdigit(*mm))++mm; \
+-        d.obj = (((type*)d.obj)->var)[atoi(mm)]; \
+-        cast::ports.dispatch(message_snip(m), d);}}
+-
+ #define rSelf(type) \
+ {"self", rProp(internal) rMap(class, type) rDoc("port metadata"), 0, \
+     [](const char *, rtosc::RtData &d){ \
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 08fcfcc6..79a2af5c 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -42,11 +42,11 @@ using rtosc::RtData;
+ #define rObject ADnoteVoiceParam
+ 
+ static const Ports voicePorts = {
+-    RECURP(ADnoteVoiceParam, OscilGen, oscil,     OscilSmp, "Primary Oscillator"),
+-    RECURP(ADnoteVoiceParam, OscilGen, mod-oscil, FMSmp,    "Modulating Oscillator"),
+-    RECURP(ADnoteVoiceParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
+-    RECURP(ADnoteVoiceParam, LFOParams, AmpLfo, AmpLfo, "Amplitude LFO"),
+-    RECURP(ADnoteVoiceParam, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
++    rRecurp(OscilSmp, "Primary Oscillator"),
++    rRecurp(FMSmp,    "Modulating Oscillator"),
++    rRecurp(FreqLfo, "Frequency LFO"),
++    rRecurp(AmpLfo, "Amplitude LFO"),
++    rRecurp(FilterLfo, "Filter LFO"),
+     rRecurp(FreqEnvelope,   "Frequency Envelope"),
+     rRecurp(AmpEnvelope,    "Amplitude Envelope"),
+     rRecurp(FilterEnvelope, "Filter Envelope"),
+@@ -189,15 +189,15 @@ static const Ports voicePorts = {
+ #define rObject ADnoteGlobalParam
+ 
+ static const Ports globalPorts = {
+-    PARAMC(ADnoteGlobalParam, PPanning, panning, "Panning (0 random, 1 left, 127 right)"),
+-    RECURP(ADnoteGlobalParam, Resonance, Reson,   Reson, "Resonance"),
+-    RECURP(ADnoteGlobalParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
+-    RECURP(ADnoteGlobalParam, LFOParams, AmpLfo, AmpLfo, "Amplitude LFO"),
+-    RECURP(ADnoteGlobalParam, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
+-    RECURP(ADnoteGlobalParam,  EnvelopeParams, FreqEnvelope, FreqEnvelope, "Frequency Envelope"),
+-    RECURP(ADnoteGlobalParam,  EnvelopeParams, AmpEnvelope, AmpEnvelope, "Frequency Envelope"),
+-    RECURP(ADnoteGlobalParam,  EnvelopeParams, FilterEnvelope, FilterEnvelope, "Frequency Envelope"),
+-    RECURP(ADnoteGlobalParam, FilterParams, GlobalFilter, GlobalFilter, "Filter"),
++    rParamZyn(PPanning, "Panning (0 random, 1 left, 127 right)"),
++    rRecurp(Reson, "Resonance"),
++    rRecurp(FreqLfo, "Frequency LFO"),
++    rRecurp(AmpLfo, "Amplitude LFO"),
++    rRecurp(FilterLfo, "Filter LFO"),
++    rRecurp(FreqEnvelope, "Frequency Envelope"),
++    rRecurp(AmpEnvelope, "Frequency Envelope"),
++    rRecurp(FilterEnvelope, "Frequency Envelope"),
++    rRecurp(GlobalFilter, "Filter"),
+     rToggle(PStereo, "Mono/Stereo Enable"),
+ 
+     //Frequency
+@@ -259,9 +259,11 @@ static const Ports globalPorts = {
+ 
+ };
+ 
++#undef  rObject
++#define rObject ADnoteParameters
+ static const Ports adPorts = {//XXX 16 should not be hard coded
+-    RECURS(ADnoteParameters, ADnoteVoiceParam, voice, VoicePar, 16, "Voice Parameters"),
+-    RECUR(ADnoteParameters, ADnoteGlobalParam, global, GlobalPar, "Adnote Parameters"),
++    rRecurs(VoicePar, NUM_VOICES),
++    rRecur(GlobalPar, "Adnote Parameters"),
+ };
+ 
+ const Ports &ADnoteParameters::ports  = adPorts;
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 9324f30f..fb32f37c 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -52,20 +52,16 @@ void simpleset(const char *m, rtosc::RtData &d)
+     simpleset<__builtin_offsetof(class PADnoteParameters, P##x)>}
+ static const rtosc::Ports localPorts =
+ {
+-    RECURP(PADnoteParameters, OscilGen, oscil, oscilgen, "Oscillator"),
+-    RECURP(PADnoteParameters, LFOParams, FreqLfo,   FreqLfo, "Frequency LFO"),
+-    RECURP(PADnoteParameters, LFOParams, AmpLfo,    AmpLfo,   "Amplitude LFO"),
+-    RECURP(PADnoteParameters, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
+-    RECURP(PADnoteParameters, Resonance, resonance, resonance, "Resonance"),
+-    RECURP(PADnoteParameters, EnvelopeParams, FreqEnvelope, FreqEnvelope,
+-            "Frequency Envelope"),
+-    RECURP(PADnoteParameters, EnvelopeParams, AmpEnvelope, AmpEnvelope,
+-            "Amplitude Envelope"),
+-    RECURP(PADnoteParameters, EnvelopeParams, FilterEnvelope, FilterEnvelope,
+-            "Filter Envelope"),
++    rRecurp(oscilgen, "Oscillator"),
++    rRecurp(FreqLfo, "Frequency LFO"),
++    rRecurp(AmpLfo,   "Amplitude LFO"),
++    rRecurp(FilterLfo, "Filter LFO"),
++    rRecurp(resonance, "Resonance"),
++    rRecurp(FreqEnvelope, "Frequency Envelope"),
++    rRecurp(AmpEnvelope, "Amplitude Envelope"),
++    rRecurp(FilterEnvelope, "Filter Envelope"),
+     rRecurp(GlobalFilter, "Post Filter"),
+-    PARAMC(PADnoteParameters, Pmode, mode,
+-            "0 - bandwidth, 1 - discrete 2 - continious"),
++    rParamI(Pmode, rMap(min, 0), rMap(max, 2), "0 - bandwidth, 1 - discrete 2 - continious"),
+     PC(Volume),
+     PC(hp.base.type),
+     PC(hp.base.par1),
+@@ -107,6 +103,10 @@ static const rtosc::Ports localPorts =
+     PC(FilterVelocityScale),
+     PC(FilterVelocityScaleFunction),
+ 
++    rParamI(PDetune,        "Fine Detune"),
++    rParamI(PCoarseDetune,  "Coarse Detune"),
++    rParamZyn(PDetuneType,  "Magnitude of Detune"),
++
+     {"Pbandwidth::i:c", NULL, NULL,
+         [](const char *msg, rtosc::RtData &d) {
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index fd8cfae9..bf718490 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -98,7 +98,7 @@ class ADvoicelistitem {open : {public Fl_Osc_Group}
+         }
+         Fl_Value_Slider voicelfofreq {
+           tooltip {Frequency LFO amount} xywh {500 5 115 20} type {Horz Knob} box NO_BOX labelsize 8 align 5 maximum 127 step 1
+-          code0 {o->init("FreqLfo/Pintensity");}
++          code0 {o->init("FreqLfo/Pintensity", 'i');}
+           class Fl_Osc_Slider
+         }
+         Fl_Dial voicepanning {
+@@ -108,7 +108,7 @@ class ADvoicelistitem {open : {public Fl_Osc_Group}
+         }
+         Fl_Group voiceoscil {open
+           xywh {60 5 30 20} box THIN_DOWN_BOX color 32 selection_color 71 labelcolor 179
+-          code0 {voiceoscil->ext = "oscil/";}
++          code0 {voiceoscil->ext = "OscilSmp/";}
+           code1 {oscil=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");}
+           code2 {oscil->init(false);}
+           class Fl_Osc_Group
+@@ -207,7 +207,7 @@ class ADvoiceUI {open : {public Fl_Group}
+       Fl_Box {} {
+         label label
+         xywh {25 25 35 16}
+-        code0 {ADnoteVoiceParameters->base = base+"voice"+to_s(nvoice)+"/";}
++        code0 {ADnoteVoiceParameters->base = base+"VoicePar"+to_s(nvoice)+"/";}
+         code1 {ADnoteVoiceParameters->osc = osc_i;}
+       }
+       Fl_Group voiceparametersgroup {open
+@@ -317,7 +317,7 @@ o->redraw();}
+             } {
+               Fl_Group fmoscil {open
+                 xywh {535 440 220 140} box THIN_DOWN_BOX color 32 selection_color 71 labelcolor 179
+-                code0 {fmoscil->base = loc; fmoscil->ext="mod-oscil/";fmoscil->osc = osc_i;fmoscil->begin();}
++                code0 {fmoscil->base = loc; fmoscil->ext="FMSmp/";fmoscil->osc = osc_i;fmoscil->begin();}
+                 code1 {oscFM=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");}
+                 code2 {//int nv=nvoice; if (pars->VoicePar[nvoice].PextFMoscil>=0) nv=pars->VoicePar[nvoice].PextFMoscil;}
+                 code3 {oscFM->parent(fmoscil);oscFM->init(false);oscFM->update();fmoscil->end();}
+@@ -336,7 +336,7 @@ o->redraw();}
+ //if (extFMoscil->value()>=0)
+ //    nv=extFMoscil->value();
+ 
+-oscedit=new OscilEditor(true, loc+"mod-oscil/", osc_i);}
++oscedit=new OscilEditor(true, loc+"FMSmp/", osc_i);}
+                 xywh {700 380 55 15} box THIN_UP_BOX labelfont 1 labelsize 11
+                 code0 {(void)o;/*if (extFMoscil->value()>=0) o->labelcolor(FL_BLUE);*/}
+               }
+@@ -502,7 +502,7 @@ o->redraw();}
+           }
+           Fl_Group voiceoscil {
+             xywh {80 390 445 145} box THIN_DOWN_BOX color 32 selection_color 71 labelcolor 179
+-            code0 {voiceoscil->base = loc;voiceoscil->ext="oscil/";voiceoscil->begin();//int nv=nvoice; if (extoscil->value()>=0) nv=extoscil->value();}
++            code0 {voiceoscil->base = loc;voiceoscil->ext="OscilSmp/";voiceoscil->begin();//int nv=nvoice; if (extoscil->value()>=0) nv=extoscil->value();}
+             code1 {osc=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");}
+             code2 {voiceoscil->osc = osc_i;}
+             code3 {osc->parent(voiceoscil); osc->init(false);voiceoscil->end();}
+@@ -514,7 +514,7 @@ o->redraw();}
+                 //if(extoscil->value()>=0)
+                 //    nv=extoscil->value();
+ 
+-                oscedit=new OscilEditor(true,loc+"oscil/", osc_i);}
++                oscedit=new OscilEditor(true,loc+"OscilSmp/", osc_i);}
+             xywh {5 490 65 20} box THIN_UP_BOX labelfont 1 labelsize 11
+             code0 {(void)o;/*if (extoscil->value()>=0) o->labelcolor(FL_BLUE);*/}
+           }
+@@ -784,7 +784,7 @@ oscedit=NULL;} {}
+     code {assert(osc_);
+ assert(!loc_.empty());
+ nvoice=nvoice_;
+-loc=loc_+"voice"+to_s(nvoice)+"/";
++loc=loc_+"VoicePar"+to_s(nvoice)+"/";
+ base = loc_;
+ osc_i=osc_;
+ make_window();
+@@ -801,10 +801,10 @@ delete(oscedit);
+   Function {change_voice(int nvoice_)} {open
+   } {
+     code {nvoice = nvoice_;
+-    loc = base+"voice"+to_s(nvoice)+"/";
++    loc = base+"VoicePar"+to_s(nvoice)+"/";
+     char tmp[10];snprintf(tmp,10,"%d",nvoice+1);
+     activeVoiceID->label(strdup(tmp));
+-ADnoteVoiceParameters->rebase(base+"voice"+to_s(nvoice)+"/");} {selected
++ADnoteVoiceParameters->rebase(base+"VoicePar"+to_s(nvoice)+"/");} {selected
+     }
+   }
+   decl {int nvoice;} {private local
+@@ -834,7 +834,7 @@ class ADnoteUI {open : {public PresetsUI_}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {ADnoteGlobalParameters->base = loc + "global/"; ADnoteGlobalParameters->osc = osc;}
++        code0 {ADnoteGlobalParameters->base = loc + "GlobalPar/"; ADnoteGlobalParameters->osc = osc;}
+       }
+       Fl_Group {} {
+         label FREQUENCY open
+@@ -843,7 +843,7 @@ class ADnoteUI {open : {public PresetsUI_}
+         Fl_Group freqenv {
+           label {ADSynth Global - Frequency Envelope} open
+           xywh {10 320 205 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(ENV_ASR, osc, loc, "global/FreqEnvelope/");}
++          code0 {o->init(ENV_ASR, osc, loc, "GlobalPar/FreqEnvelope/");}
+           class EnvelopeUI
+         } {}
+         Fl_Counter octave {
+@@ -862,7 +862,7 @@ class ADnoteUI {open : {public PresetsUI_}
+         Fl_Group freqlfo {
+           label {Frequency LFO     } open
+           xywh {220 320 230 70} box FLAT_BOX color 47 align 144
+-          code0 {o->init(osc, loc, "global/FreqLfo/");}
++          code0 {o->init(osc, loc, "GlobalPar/FreqLfo/");}
+           class LFOUI
+         } {}
+         Fl_Slider detune {
+@@ -944,13 +944,13 @@ class ADnoteUI {open : {public PresetsUI_}
+         Fl_Group ampenv {
+           label {ADSynth Global - Amplitude Envelope} open
+           xywh {10 75 205 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(ENV_ADSR, osc, loc, "global/AmpEnvelope/");}
++          code0 {o->init(ENV_ADSR, osc, loc, "GlobalPar/AmpEnvelope/");}
+           class EnvelopeUI
+         } {}
+         Fl_Group amplfo {
+           label {Amplitude LFO          } open
+           xywh {10 150 230 70} box FLAT_BOX color 47 align 144
+-          code0 {o->init(osc, loc, "global/AmpLfo/");}
++          code0 {o->init(osc, loc, "GlobalPar/AmpLfo/");}
+           class LFOUI
+         } {}
+         Fl_Check_Button rndgrp {
+@@ -967,20 +967,20 @@ class ADnoteUI {open : {public PresetsUI_}
+         Fl_Group filterenv {
+           label {ADSynth Global - Filter Envelope} open
+           xywh {255 118 275 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(ENV_ADSR_FILTER, osc, loc, "global/FilterEnvelope/");}
++          code0 {o->init(ENV_ADSR_FILTER, osc, loc, "GlobalPar/FilterEnvelope/");}
+           class EnvelopeUI
+         } {}
+         Fl_Group filterlfo {
+           label {Filter LFO} open
+           xywh {255 195 230 70} box FLAT_BOX color 47 align 144
+-          code0 {o->init(osc, loc, "global/FilterLfo/");}
++          code0 {o->init(osc, loc, "GlobalPar/FilterLfo/");}
+           class LFOUI
+         } {}
+         Fl_Group filterui {
+           label {ADsynth Global - Filter} open
+           xywh {255 35 275 75} box FLAT_BOX color 50 align 144
+-          code0 {o->init(loc + "global/PFilter",
+-          osc, loc, "global/GlobalFilter/");}
++          code0 {o->init(loc + "GlobalPar/PFilter",
++          osc, loc, "GlobalPar/GlobalFilter/");}
+           class FilterUI
+         } {}
+       }
+@@ -1108,7 +1108,7 @@ advoice->change_voice(nvoice);}
+       } {
+         Fl_Pack {} {open
+           xywh {0 20 620 210}
+-          code0 {o->begin();for (int i=0;i<NUM_VOICES;i++){voicelistitem[i]=new ADvoicelistitem(0,0,620,25,"");voicelistitem[i]->init(i,loc+"voice"+to_s(i)+"/",osc);}o->end();}
++          code0 {o->begin();for (int i=0;i<NUM_VOICES;i++){voicelistitem[i]=new ADvoicelistitem(0,0,620,25,"");voicelistitem[i]->init(i,loc+"VoicePar"+to_s(i)+"/",osc);}o->end();}
+         } {}
+       }
+     }
+@@ -1119,7 +1119,7 @@ advoice->change_voice(nvoice);}
+ assert(!loc_.empty());
+ 
+ nvoice=0;
+-resui=new ResonanceUI(osc_, loc_+"global/Reson/");
++resui=new ResonanceUI(osc_, loc_+"GlobalPar/Reson/");
+ loc=loc_;
+ osc=osc_;
+ make_window();} {}
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index cd45cc22..c4a0f79d 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -6,7 +6,6 @@
+ 
+ #include <rtosc/rtosc.h>
+ #include <rtosc/ports.h>
+-#include <rtosc/undo-history.h>
+ 
+ #include <FL/Fl.H>
+ #include "Fl_Osc_Tree.H"
+@@ -27,9 +26,6 @@
+ 
+ using namespace GUI;
+ class MasterUI *ui;
+-extern rtosc::UndoHistory undo;
+-
+-Fl_Osc_Interface *osc;//TODO: the scope of this should be narrowed
+ 
+ #ifdef NTK_GUI
+ static Fl_Tiled_Image *module_backdrop;
+@@ -39,13 +35,10 @@ int undo_redo_handler(int)
+ {
+     const bool undo_ = Fl::event_ctrl() && Fl::event_key() == 'z';
+     const bool redo = Fl::event_ctrl() && Fl::event_key() == 'r';
+-    if(undo_) {
+-        printf("Trying to undo an action\n");
+-        undo.seekHistory(-1);
+-    } else if(redo) {
+-        printf("Trying to redo an action\n");
+-        undo.seekHistory(+1);
+-    }
++    if(undo_)
++        ui->osc->write("/undo", "");
++    else if(redo)
++        ui->osc->write("/redo", "");
+     return undo_ || redo;
+ }
+ 
+@@ -71,7 +64,6 @@ set_module_parameters ( Fl_Widget *o )
+ 
+ ui_handle_t GUI::createUi(Fl_Osc_Interface *osc, void *exit)
+ {
+-    ::osc = osc;
+ #ifdef NTK_GUI
+     fl_register_images();
+ 
+diff --git a/src/UI/Fl_Osc_Choice.cpp b/src/UI/Fl_Osc_Choice.cpp
+index c7e5f902..665186fd 100644
+--- a/src/UI/Fl_Osc_Choice.cpp
++++ b/src/UI/Fl_Osc_Choice.cpp
+@@ -32,7 +32,7 @@ void Fl_Osc_Choice::init(std::string path_, int base)
+ 
+ Fl_Osc_Choice::~Fl_Osc_Choice(void)
+ {}
+-        
++
+ void Fl_Osc_Choice::callback(Fl_Callback *cb, void *p)
+ {
+     cb_data.first = cb;
+@@ -41,6 +41,8 @@ void Fl_Osc_Choice::callback(Fl_Callback *cb, void *p)
+ 
+ void Fl_Osc_Choice::OSC_value(int v)
+ {
++    if(v-min == value())
++        return;
+     value(v-min);
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+diff --git a/src/UI/Fl_PADnoteHarmonicProfile.h b/src/UI/Fl_PADnoteHarmonicProfile.h
+index e9b64134..54b97706 100644
+--- a/src/UI/Fl_PADnoteHarmonicProfile.h
++++ b/src/UI/Fl_PADnoteHarmonicProfile.h
+@@ -31,7 +31,7 @@ class PADnoteHarmonicProfile: public Fl_Box, public Fl_Osc_Widget
+         {
+             osc->write(loc, "i", w());
+         }
+-        
++
+         void OSC_value(unsigned N, void *data, const char *name) override
+         {
+             assert(!strcmp(name, "profile"));
+@@ -122,4 +122,4 @@ class PADnoteHarmonicProfile: public Fl_Box, public Fl_Osc_Widget
+     private:
+         float *smps;
+         float realbw;
+-}; 
++};
+diff --git a/src/UI/Fl_PADnoteOvertonePosition.h b/src/UI/Fl_PADnoteOvertonePosition.h
+index c5430e86..34a9d751 100644
+--- a/src/UI/Fl_PADnoteOvertonePosition.h
++++ b/src/UI/Fl_PADnoteOvertonePosition.h
+@@ -23,11 +23,11 @@ class PADnoteOvertonePosition: public Fl_Box, Fl_Osc_Widget
+ 
+         ~PADnoteOvertonePosition(void)
+         {
+-            osc->removeLink(base_path + "oscil/spectrum",
++            osc->removeLink(base_path + "oscilgen/spectrum",
+                     (Fl_Osc_Widget*) this);
+             osc->removeLink(base_path + "nhr",
+                     (Fl_Osc_Widget*) this);
+-            osc->removeLink(base_path + "mode",
++            osc->removeLink(base_path + "Pmode",
+                     (Fl_Osc_Widget*) this);
+             delete [] spc;
+             delete [] nhr;
+@@ -45,9 +45,9 @@ class PADnoteOvertonePosition: public Fl_Box, Fl_Osc_Widget
+ 
+             osc->createLink(base_path + "nhr",
+                     (Fl_Osc_Widget*) this);
+-            osc->createLink(base_path + "oscil/spectrum",
++            osc->createLink(base_path + "oscilgen/spectrum",
+                     (Fl_Osc_Widget*) this);
+-            osc->createLink(base_path + "mode",
++            osc->createLink(base_path + "Pmode",
+                     (Fl_Osc_Widget*) this);
+ 
+             fprintf(stderr, "registered at my location '%s'\n", (base_path + "nhr").c_str());
+@@ -56,9 +56,10 @@ class PADnoteOvertonePosition: public Fl_Box, Fl_Osc_Widget
+ 
+         void update(void)
+         {
++            printf("Update...\n");
+             osc->requestValue(base_path + "nhr");
+-            osc->requestValue(base_path + "oscil/spectrum");
+-            osc->requestValue(base_path + "mode");
++            osc->requestValue(base_path + "oscilgen/spectrum");
++            osc->requestValue(base_path + "Pmode");
+         }
+ 
+         virtual void OSC_value(unsigned N, void *data, const char *name)
+@@ -73,9 +74,9 @@ class PADnoteOvertonePosition: public Fl_Box, Fl_Osc_Widget
+             else
+                 assert(false);
+         }
+-        virtual void OSC_value(char x, const char *name) override
++        virtual void OSC_value(int x, const char *name) override
+         {
+-            assert(!strcmp(name, "mode"));
++            assert(!strcmp(name, "Pmode"));
+             mode = x;
+             regenerateOvertones();
+         }
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 763dacfb..ae974cf3 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -829,7 +829,7 @@ redrawoscil();}
+             label baseF
+             callback {redrawoscil();}
+             tooltip {Adaptive harmonics base frequency} xywh {675 465 25 25} labelsize 10 maximum 255 step 1
+-            code0 {o->init("Padaptiveharmoicsbasefreq");}
++            code0 {o->init("Padaptiveharmonicsbasefreq");}
+             class Fl_Osc_Dial
+           }
+           Fl_Slider adhrpar {
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 11a36e92..3236b5c2 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -265,14 +265,14 @@ cbwidget->do_callback();}
+           }
+           Fl_Group oscilgroup {open
+             xywh {100 155 270 135} box THIN_DOWN_BOX color 32 selection_color 71 labelcolor 179 align 6
+-            code0 {oscilgroup->base = location; oscilgroup->ext="oscil/"; oscilgroup->osc = osc_i;}
++            code0 {oscilgroup->base = location; oscilgroup->ext="oscilgen/"; oscilgroup->osc = osc_i;}
+             code1 {osc=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");osc->init(false);}
+             class Fl_Osc_Group
+           } {}
+           Fl_Button {} {
+             label Change
+             callback {if (oscui!=NULL) delete (oscui);
+-oscui=new OscilEditor(false, location+"oscil/",osc_i);}
++oscui=new OscilEditor(false, location+"oscilgen/",osc_i);}
+             xywh {375 270 60 20} box THIN_UP_BOX labelfont 1 labelsize 11
+           }
+           Fl_Box cbwidget {
+-- 
+2.47.0
+

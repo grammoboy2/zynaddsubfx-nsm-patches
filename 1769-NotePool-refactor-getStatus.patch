@@ -1,0 +1,57 @@
+From 5e2cf0dc40682d144a133517342ed00d6f715f98 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Sat, 18 Sep 2021 10:14:45 +0200
+Subject: [PATCH 1769/1936] NotePool: refactor getStatus()
+
+Use symbolic constants for note status and move function to top of file so
+that it is easily accessed for potential debugging.
+---
+ src/Containers/NotePool.cpp | 25 ++++++++++++-------------
+ 1 file changed, 12 insertions(+), 13 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index db13c088..0e5be890 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -29,6 +29,18 @@ enum NoteStatus {
+     KEY_LATCHED                = 0x04
+ };
+ 
++const char *getStatus(int status)
++{
++    switch((enum NoteStatus)(status&NOTE_MASK))
++    {
++        case KEY_OFF:                     return "OFF ";
++        case KEY_PLAYING:                 return "PLAY";
++        case KEY_RELEASED_AND_SUSTAINED:  return "SUST";
++        case KEY_RELEASED:                return "RELA";
++        case KEY_LATCHED:                 return "LTCH";
++        default:                          return "INVD";
++    }
++}
+ 
+ NotePool::NotePool(void)
+     :needs_cleaning(0)
+@@ -374,19 +386,6 @@ void NotePool::entomb(NoteDescriptor &d)
+         s.note->entomb();
+ }
+ 
+-const char *getStatus(int status_bits)
+-{
+-    switch(status_bits)
+-    {
+-        case 0:  return "OFF ";
+-        case 1:  return "PLAY";
+-        case 2:  return "SUST";
+-        case 3:  return "RELA";
+-        case 4:  return "LTCH";
+-        default: return "INVD";
+-    }
+-}
+-
+ void NotePool::cleanup(void)
+ {
+     if(!needs_cleaning)
+-- 
+2.47.0
+

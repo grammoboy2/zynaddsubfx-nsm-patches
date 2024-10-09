@@ -1,0 +1,25 @@
+From 783f6193962d4a7ca37a5b74f834e921d91dcef6 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 18 Jun 2015 15:07:38 -0400
+Subject: [PATCH 0508/1936] Fix Version Change Related Test Failure
+
+---
+ src/Tests/guitar-adnote.xmz | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index acd391bf..956fd1a1 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -2,7 +2,7 @@
+ <?xml version="1.0f" encoding="UTF-8"?>
+ <!DOCTYPE ZynAddSubFX-data>
+ <ZynAddSubFX-data version-major="2" version-minor="5"
+-version-revision="0" ZynAddSubFX-author="Nasca Octavian Paul">
++version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
+ <INFORMATION>
+ <par_bool name="PADsynth_used" value="yes" />
+ </INFORMATION>
+-- 
+2.47.0
+

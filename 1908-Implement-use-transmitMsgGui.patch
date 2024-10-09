@@ -1,0 +1,182 @@
+From a65229667fef62a644e3a81cec53876bfea5c626 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 12 May 2023 19:57:42 +0200
+Subject: [PATCH 1908/1936] Implement/use transmitMsgGui
+
+This fixes an issue only related to in-process remotes, aka "GUI".
+
+`MwDataObj::reply` uses `MiddleWareImpl::sendToCurrentRemote`, which
+sometimes uses `MiddleWareImpl::last_url` as the reply URL. However,
+the latter variable is only being set in `handler_function`, i.e. in
+the liblo callback, so in case the GUI was last, `last_url` has not
+been updated, and `MwDataObj::reply` sends to "nowhere".
+
+In the other case, `MiddleWareImpl::sendToCurrentRemote` makes use
+of `MiddleWareImpl::current_url` as the reply URL. This variable is
+only being set by an `echo` reply from Master, so `echo` needs to
+be sent to `MiddleWare`, which - once again - is only being done in
+`handler_function` before this patch.
+
+This commit provides `transmitMsgGui*` functions, which are like the
+`transmitMsg*` functions, except that they set `last_url` and
+`current_url` accordingly. All usages of `transmitMsg*` shall be
+transferred to `transmitMsgGui` if being done in GUI context and if
+there is a chance that you care about the answer.
+
+* UI/:  Wherever we call `MiddleWare::transmitMsg` (not the case in
+        Connection.cpp)
+* Tests/: Only in SaveOSC.cpp (because the answer is relevant
+* PresetExtractor.cpp: Nowhere, because all calls are in callbacks
+        which were already preceeded by a call to either
+        `transmitMsg*` or `transmitMsgGui*`, which has already set
+        `last_url` correctly
+* MiddleWare: Nowhere, because all calls are either in the
+        `handler_function`, or they are in callbacks like
+        `loadPart`, which were already preceeded by a call to
+        either `transmitMsg*` or `transmitMsgGui*` which has
+        already set `last_url` correctly
+* main.cpp: Nowhere, because a reply does not make sense here
+---
+ src/Misc/MiddleWare.cpp | 30 ++++++++++++++++++++++++++++++
+ src/Misc/MiddleWare.h   |  7 +++++++
+ src/Tests/SaveOSC.cpp   |  2 +-
+ src/UI/Connection.cpp   | 11 +++--------
+ src/UI/NSM.C            |  6 +++---
+ 5 files changed, 44 insertions(+), 12 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d1b43072..0ed340d2 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -2547,6 +2547,36 @@ void MiddleWare::transmitMsg_va(const char *path, const char *args, va_list va)
+         fprintf(stderr, "Error in transmitMsg(va)n");
+ }
+ 
++void MiddleWare::transmitMsgGui(const char *msg)
++{
++    if(activeUrl() != "GUI") {
++        transmitMsg("/echo", "ss", "OSC_URL", "GUI");
++        activeUrl("GUI");
++    }
++    transmitMsg(msg);
++}
++
++void MiddleWare::transmitMsgGui(const char *path, const char *args, ...)
++{
++    char buffer[1024];
++    va_list va;
++    va_start(va,args);
++    if(rtosc_vmessage(buffer,1024,path,args,va))
++        transmitMsgGui(buffer);
++    else
++        fprintf(stderr, "Error in transmitMsgGui(...)\n");
++    va_end(va);
++}
++
++void MiddleWare::transmitMsgGui_va(const char *path, const char *args, va_list va)
++{
++    char buffer[1024];
++    if(rtosc_vmessage(buffer, 1024, path, args, va))
++        transmitMsgGui(buffer);
++    else
++        fprintf(stderr, "Error in transmitMsgGui(va)n");
++}
++
+ void MiddleWare::messageAnywhere(const char *path, const char *args, ...)
+ {
+     auto *mem = impl->multi_thread_source.alloc();
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index cbfd42de..80815373 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -65,6 +65,13 @@ class MiddleWare
+         //Handle a rtosc Message uToB
+         void transmitMsg_va(const char *, const char *args, va_list va);
+ 
++        //Handle a rtosc Message uToB, if sender is GUI
++        void transmitMsgGui(const char * msg);
++        //Handle a rtosc Message uToB, if sender is GUI
++        void transmitMsgGui(const char *, const char *args, ...);
++        //Handle a rtosc Message uToB, if sender is GUI
++        void transmitMsgGui_va(const char *, const char *args, va_list va);
++
+         //Send a message to middleware from an arbitrary thread
+         void messageAnywhere(const char *msg, const char *args, ...);
+ 
+diff --git a/src/Tests/SaveOSC.cpp b/src/Tests/SaveOSC.cpp
+index a7103937..7270e359 100644
+--- a/src/Tests/SaveOSC.cpp
++++ b/src/Tests/SaveOSC.cpp
+@@ -85,7 +85,7 @@ class SaveOSCTest
+             rtosc_arg_val_t start_time;
+             rtosc_arg_val_current_time(&start_time);
+ 
+-            mw->transmitMsg(osc_path, "stT", arg1, start_time.val.t);
++            mw->transmitMsgGui(osc_path, "stT", arg1, start_time.val.t);
+ 
+             int attempt;
+             for(attempt = 0; attempt < tries; ++attempt)
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index 4cf98413..04b143b6 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -295,12 +295,7 @@ class UI_Interface:public Fl_Osc_Interface
+             char *tmp = strdup(s.c_str());
+             s = rtosc::Ports::collapsePath(tmp);
+             free(tmp);
+-            if(impl->activeUrl() != "GUI") {
+-                impl->transmitMsg("/echo", "ss", "OSC_URL", "GUI");
+-                impl->activeUrl("GUI");
+-            }
+-
+-            impl->transmitMsg(s.c_str(),"");
++            impl->transmitMsgGui(s.c_str(),"");
+         }
+ 
+         void write(string s, const char *args, ...) override
+@@ -314,7 +309,7 @@ class UI_Interface:public Fl_Osc_Interface
+             ////fprintf(stderr, ".");
+             //fprintf(stderr, "write(%s:%s)\n", s.c_str(), args);
+             //fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+-            impl->transmitMsg_va(s.c_str(), args, va);
++            impl->transmitMsgGui_va(s.c_str(), args, va);
+             va_end(va);
+         }
+ 
+@@ -324,7 +319,7 @@ class UI_Interface:public Fl_Osc_Interface
+             ////fprintf(stderr, ".");
+             //fprintf(stderr, "rawWrite(%s:%s)\n", msg, rtosc_argument_string(msg));
+             //fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+-            impl->transmitMsg(rtosc::Ports::collapsePath((char*)msg));
++            impl->transmitMsgGui(rtosc::Ports::collapsePath((char*)msg));
+         }
+ 
+         void writeValue(string s, string ss) override
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index d544dcb0..f67bb64e 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -62,7 +62,7 @@ NSM_Client::command_save(char **out_msg)
+     if(!project_filename)
+         return ERR_NO_SESSION_OPEN;
+ 
+-    middleware->transmitMsg("/save_xmz", "s", project_filename);
++    middleware->transmitMsgGui("/save_xmz", "s", project_filename);
+ 
+     return r;
+ }
+@@ -97,9 +97,9 @@ NSM_Client::command_open(const char *name,
+     int r = ERR_OK;
+ 
+     if(0 == stat(new_filename, &st))
+-        middleware->transmitMsg("/load_xmz", "s", new_filename);
++        middleware->transmitMsgGui("/load_xmz", "s", new_filename);
+     else
+-        middleware->transmitMsg("/reset_master", "");
++        middleware->transmitMsgGui("/reset_master", "");
+ 
+     if(project_filename)
+         free(project_filename);
+-- 
+2.47.0
+

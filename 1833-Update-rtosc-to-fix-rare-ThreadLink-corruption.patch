@@ -1,0 +1,26 @@
+From 4352974e0a558f125ca5eda95b4d9e2792c6c296 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 19 Mar 2022 08:42:24 +0100
+Subject: [PATCH 1833/1936] Update rtosc to fix rare ThreadLink corruption
+
+This updates submodule rtosc. One of the updates fixes an issue where
+ThreadLink reads a message wrong in case the message crosses the end of
+the internal ringbuffer (i.e. is split into two halves).
+
+Since zyn's ThreadLink is rather big, and the corruption does not
+have an impact on most messages, this fixes a very rare issue, which
+could, however, have impact on various other inexplicable issues.
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 2aec2632..2499e094 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 2aec26327e0139131c9bd7439c9928370fccf1ce
++Subproject commit 2499e094e759fe1e4532cc7fe67037ed5da20fba
+-- 
+2.47.0
+

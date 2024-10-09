@@ -1,0 +1,120 @@
+From eea687deb6be33c6b571d8db4eafafaea0a672f1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 26 Oct 2016 14:21:23 -0400
+Subject: [PATCH 1070/1936] Fix NSM File Saving
+
+---
+ src/UI/NSM.C | 29 ++++++++++-------------------
+ src/UI/NSM.H |  4 +++-
+ src/main.cpp |  2 +-
+ 3 files changed, 14 insertions(+), 21 deletions(-)
+
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index 03fad935..d37d2264 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -33,7 +33,7 @@
+ #include <stdlib.h>
+ 
+ extern int Pexitprogram;
+-#ifndef NO_UI
++#if defined(FLTK_UI) || defined(NTK_UI)
+ #include "MasterUI.h"
+ extern MasterUI *ui;
+ #endif
+@@ -41,10 +41,11 @@ extern MasterUI *ui;
+ extern NSM_Client *nsm;
+ extern char       *instance_name;
+ 
+-NSM_Client::NSM_Client()
++NSM_Client::NSM_Client(MiddleWare *m)
++    :project_filename(0),
++     display_name(0),
++     middleware(m)
+ {
+-    project_filename = 0;
+-    display_name     = 0;
+ }
+ 
+ int command_open(const char *name,
+@@ -59,9 +60,7 @@ NSM_Client::command_save(char **out_msg)
+     (void) out_msg;
+     int r = ERR_OK;
+ 
+-#ifndef NO_UI 
+-    ui->do_save_master(project_filename);
+-#endif
++    middleware->transmitMsg("/save_xmz", "s", project_filename);
+ 
+     return r;
+ }
+@@ -92,18 +91,10 @@ NSM_Client::command_open(const char *name,
+ 
+     int r = ERR_OK;
+ 
+-#ifndef NO_UI
+-    if(0 == stat(new_filename, &st)) {
+-        if(ui->do_load_master_unconditional(new_filename, display_name) < 0) {
+-            *out_msg = strdup("Failed to load for unknown reason");
+-            r = ERR_GENERAL;
+-
+-            return r;
+-        }
+-    }
++    if(0 == stat(new_filename, &st))
++        middleware->transmitMsg("/load_xmz", "s", new_filename);
+     else
+-        ui->do_new_master_unconditional();
+-#endif
++        middleware->transmitMsg("/reset_master", "");
+ 
+     if(project_filename)
+         free(project_filename);
+@@ -129,7 +120,7 @@ static void save_callback(Fl_Widget *, void *v)
+ void
+ NSM_Client::command_active(bool active)
+ {
+-#ifndef NO_UI 
++#if defined(FLTK_UI) || defined(NTK_UI)
+     if(active) {
+         Fl_Menu_Item *m;
+         //TODO see if there is a cleaner way of doing this without voiding
+diff --git a/src/UI/NSM.H b/src/UI/NSM.H
+index ac4c0bb5..8e3577cc 100644
+--- a/src/UI/NSM.H
++++ b/src/UI/NSM.H
+@@ -21,6 +21,7 @@
+ 
+ #if USE_NSM
+ #include "NSM/Client.H"
++#include "../Misc/MiddleWare.h"
+ 
+ class NSM_Client:public NSM::Client
+ {
+@@ -28,8 +29,9 @@ class NSM_Client:public NSM::Client
+ 
+         char *project_filename;
+         char *display_name;
++        MiddleWare *middleware;
+ 
+-        NSM_Client();
++        NSM_Client(MiddleWare *m);
+         ~NSM_Client() { }
+ 
+     protected:
+diff --git a/src/main.cpp b/src/main.cpp
+index 9a7f8d40..f16a4ec2 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -609,7 +609,7 @@ int wmidi = -1;
+     char *nsm_url = getenv("NSM_URL");
+ 
+     if(nsm_url) {
+-        nsm = new NSM_Client;
++        nsm = new NSM_Client(middleware);
+ 
+         if(!nsm->init(nsm_url))
+             nsm->announce("ZynAddSubFX", ":switch:", argv[0]);
+-- 
+2.47.0
+

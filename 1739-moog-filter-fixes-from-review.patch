@@ -1,0 +1,143 @@
+From 18012fbb5c92c4b2f45a4ec8c6d85bea8341a5c7 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sat, 5 Jun 2021 17:32:41 +0200
+Subject: [PATCH 1739/1936] moog filter fixes from review
+
+---
+ src/DSP/MoogFilter.cpp | 21 ++++++++++-----------
+ src/DSP/MoogFilter.h   | 15 +++++++--------
+ src/UI/FilterUI.fl     | 10 +++++++++-
+ 3 files changed, 26 insertions(+), 20 deletions(-)
+
+diff --git a/src/DSP/MoogFilter.cpp b/src/DSP/MoogFilter.cpp
+index e9ff4d38..4e33ac8b 100644
+--- a/src/DSP/MoogFilter.cpp
++++ b/src/DSP/MoogFilter.cpp
+@@ -13,10 +13,10 @@ namespace zyn{
+ 
+ MoogFilter::MoogFilter(unsigned char Ftype, float Ffreq, float Fq,
+     unsigned int srate, int bufsize)
+-    :Filter(srate, bufsize), sr(srate), gain(1.0f), type(Ftype)
++    :Filter(srate, bufsize), sr(srate), gain(1.0f)
+ {
+     setfreq_and_q(Ffreq/srate, Fq);
+-    settype(type); // q must be set before
++    settype(Ftype); // q must be set before
+     for (unsigned int i = 0; i<(sizeof(state)/sizeof(*state)); i++)
+     {
+         state[i] = 0.0f;
+@@ -28,14 +28,14 @@ MoogFilter::~MoogFilter(void)
+ 
+ }
+ 
+-inline float MoogFilter::tan_2(const float x)
++inline float MoogFilter::tan_2(const float x) const
+ {
+     //Pade approximation tan(x) hand tuned to map fCutoff
+     float x2 = x*x;
+     return ((9.5f*(11.15f*x - x2*x))/(105.0f - 45.0f*x2 + x2*x2));
+ }
+ 
+-inline float MoogFilter::tanhX(const float x)
++inline float MoogFilter::tanhX(const float x) const
+ {
+     // Pade approximation of tanh(x) bound to [-1 .. +1]
+     // https://mathr.co.uk/blog/2017-09-06_approximating_hyperbolic_tangent.html
+@@ -44,7 +44,7 @@ inline float MoogFilter::tanhX(const float x)
+ }
+ 
+ 
+-inline float MoogFilter::tanhXdivX(float x)
++inline float MoogFilter::tanhXdivX(float x) const
+ {
+     // Pade approximation for tanh(x)/x used in filter stages
+     float x2 = x*x;
+@@ -153,17 +153,16 @@ void MoogFilter::setgain(float dBgain)
+     gain = dB2rap(dBgain);
+ }
+ 
+-void MoogFilter::settype(unsigned char type_)
++void MoogFilter::settype(unsigned char ftype)
+ {
+-    type = type_;
+-    switch (type)
++    switch (ftype)
+     {
+-        case 1:
+-            a0 = 0.0f; a1 = 0.0f; a2 = 4.0f; a3 =-8.0f; a4 = 4.0f;
+-            break;
+         case 0:
+             a0 = 1.0f; a1 =-4.0f; a2 = 6.0f; a3 =-4.0f; a4 = 1.0f;
+             break;
++        case 1:
++            a0 = 0.0f; a1 = 0.0f; a2 = 4.0f; a3 =-8.0f; a4 = 4.0f;
++            break;
+         case 2:
+         default:
+             a0 = 0.0f; a1 = 0.0f; a2 = 0.0f; a3 = 0.0f; a4 = passbandCompensation;
+diff --git a/src/DSP/MoogFilter.h b/src/DSP/MoogFilter.h
+index 4a0b0f15..3207f867 100644
+--- a/src/DSP/MoogFilter.h
++++ b/src/DSP/MoogFilter.h
+@@ -1,9 +1,9 @@
+ /*
+   ZynAddSubFX - a software synthesizer
+ 
+-  Moog Filter.h - Several analog filters (lowpass, highpass...)
+-  Copyright (C) 2018-2018 Mark McCurry
+-  Author: Mark McCurry
++  Moog Filter.h - moog style multimode filter (lowpass, highpass...)
++  Copyright (C) 2020-2020 Michael Kirchner
++  Author: Michael Kirchner
+ 
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+@@ -28,18 +28,17 @@ class MoogFilter:public Filter
+         void setfreq_and_q(float frequency, float q_) override;
+         void setq(float /*q_*/) override;
+         void setgain(float dBgain) override;
+-        void settype(unsigned char type); //
++        void settype(unsigned char ftype);
+ 
+     private:
+         unsigned sr;
+         float gain;
+-        unsigned char type;
+ 
+         float step(float x);
+ 
+-        float tanhXdivX(const float x);
+-        float tanhX(const float x);
+-        float tan_2(const float x);
++        float tanhXdivX(const float x) const;
++        float tanhX(const float x) const;
++        float tan_2(const float x) const;
+ 
+         float feedbackGain;
+         // aN: multimode coefficients for LP,BP,HP configurations
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index 9686e4ff..e0f0fcd5 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -171,9 +171,17 @@ delete (formantparswindow);} {}
+           class Fl_Osc_Choice
+         } {
+           MenuItem {} {
+-            label LPF
++            label LP
+             xywh {134 134 100 20} labelfont 1 labelsize 10
+           }
++          MenuItem {} {
++            label HP
++            xywh {144 144 100 20} labelfont 1 labelsize 10
++          }
++          MenuItem {} {
++            label BP
++            xywh {154 154 100 20} labelfont 1 labelsize 10
++          }
+         }
+         Fl_Choice filtertype {
+           label Category
+-- 
+2.47.0
+

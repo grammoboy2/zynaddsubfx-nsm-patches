@@ -1,0 +1,26 @@
+From 4c6822497a05b7733fbff2e98e12b5d38b21e3e8 Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Fri, 5 Jan 2018 07:45:21 +0100
+Subject: [PATCH 1244/1936] Fix uninitialized variable (OSX libzest lookup)
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+index 9b2da1ab..7c95f673 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+@@ -61,8 +61,7 @@ public:
+         if(!handle)
+             handle = LoadLibrary("libzest.dll");
+ #elif defined __APPLE__
+-        if(!handle) // LV2
+-            handle = dlopen("@loader_path/libzest.dylib", RTLD_LAZY);
++        handle = dlopen("@loader_path/libzest.dylib", RTLD_NOW | RTLD_LOCAL);
+         if(!handle) // VST
+             handle = dlopen("@loader_path/../Resources/libzest.dylib", RTLD_LAZY);
+ #else
+-- 
+2.47.0
+

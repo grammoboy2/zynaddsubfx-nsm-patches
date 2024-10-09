@@ -1,0 +1,151 @@
+From a9a82d8b5c4f4029f046b0fb6bf5192ab566c87d Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Wed, 3 May 2023 23:31:53 +0200
+Subject: [PATCH 1911/1936] Fix individual synth panning direction (#376)
+
+Fix panning direction for the individual synths.
+---
+ src/Synth/ADnote.cpp     | 16 ++++++++--------
+ src/Synth/PADnote.cpp    |  8 ++++----
+ src/Synth/SUBnote.cpp    |  8 ++++----
+ src/Tests/AdNoteTest.cpp | 12 ++++++------
+ 4 files changed, 22 insertions(+), 22 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index f5626117..e111c7bc 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -1837,9 +1837,9 @@ int ADnote::noteout(float *outl, float *outr)
+             if(stereo)
+                 for(int i = 0; i < synth.buffersize; ++i) { //stereo
+                     outl[i] += tmpwavel[i] * NoteVoicePar[nvoice].Volume
+-                               * NoteVoicePar[nvoice].Panning * 2.0f;
+-                    outr[i] += tmpwaver[i] * NoteVoicePar[nvoice].Volume
+                                * (1.0f - NoteVoicePar[nvoice].Panning) * 2.0f;
++                    outr[i] += tmpwaver[i] * NoteVoicePar[nvoice].Volume
++                               * NoteVoicePar[nvoice].Panning * 2.0f;
+                 }
+             else
+                 for(int i = 0; i < synth.buffersize; ++i) //mono
+@@ -1849,10 +1849,10 @@ int ADnote::noteout(float *outl, float *outr)
+             if(stereo)
+                 for(int i = 0; i < synth.buffersize; ++i) { //stereo
+                     bypassl[i] += tmpwavel[i] * NoteVoicePar[nvoice].Volume
+-                                  * NoteVoicePar[nvoice].Panning * 2.0f;
+-                    bypassr[i] += tmpwaver[i] * NoteVoicePar[nvoice].Volume
+                                   * (1.0f
+                                      - NoteVoicePar[nvoice].Panning) * 2.0f;
++                    bypassr[i] += tmpwaver[i] * NoteVoicePar[nvoice].Volume
++                                  * NoteVoicePar[nvoice].Panning * 2.0f;
+                 }
+             else
+                 for(int i = 0; i < synth.buffersize; ++i) //mono
+@@ -1885,13 +1885,13 @@ int ADnote::noteout(float *outl, float *outr)
+                                                  globalnewamplitude,
+                                                  i,
+                                                  synth.buffersize);
+-            outl[i] *= tmpvol * NoteGlobalPar.Panning;
+-            outr[i] *= tmpvol * (1.0f - NoteGlobalPar.Panning);
++            outl[i] *= tmpvol * (1.0f - NoteGlobalPar.Panning);
++            outr[i] *= tmpvol * NoteGlobalPar.Panning;
+         }
+     else
+         for(int i = 0; i < synth.buffersize; ++i) {
+-            outl[i] *= globalnewamplitude * NoteGlobalPar.Panning;
+-            outr[i] *= globalnewamplitude * (1.0f - NoteGlobalPar.Panning);
++            outl[i] *= globalnewamplitude * (1.0f - NoteGlobalPar.Panning);
++            outr[i] *= globalnewamplitude * NoteGlobalPar.Panning;
+         }
+ 
+     //Apply the punch
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 299dd752..a6ffad98 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -417,13 +417,13 @@ int PADnote::noteout(float *outl, float *outr)
+                                                  globalnewamplitude,
+                                                  i,
+                                                  synth.buffersize);
+-            outl[i] *= tmpvol * NoteGlobalPar.Panning;
+-            outr[i] *= tmpvol * (1.0f - NoteGlobalPar.Panning);
++            outl[i] *= tmpvol * (1.0f - NoteGlobalPar.Panning);
++            outr[i] *= tmpvol * NoteGlobalPar.Panning;
+         }
+     else
+         for(int i = 0; i < synth.buffersize; ++i) {
+-            outl[i] *= globalnewamplitude * NoteGlobalPar.Panning;
+-            outr[i] *= globalnewamplitude * (1.0f - NoteGlobalPar.Panning);
++            outl[i] *= globalnewamplitude * (1.0f - NoteGlobalPar.Panning);
++            outr[i] *= globalnewamplitude * NoteGlobalPar.Panning;
+         }
+ 
+     watch_amp_int(outl,synth.buffersize);
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 99ac37fa..d249b7ff 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -587,13 +587,13 @@ int SUBnote::noteout(float *outl, float *outr)
+                                                  newamplitude,
+                                                  i,
+                                                  synth.buffersize);
+-            outl[i] *= tmpvol * panning;
+-            outr[i] *= tmpvol * (1.0f - panning);
++            outl[i] *= tmpvol * (1.0f - panning);
++            outr[i] *= tmpvol * panning;
+         }
+     else
+         for(int i = 0; i < synth.buffersize; ++i) {
+-            outl[i] *= newamplitude * panning;
+-            outr[i] *= newamplitude * (1.0f - panning);
++            outl[i] *= newamplitude * (1.0f - panning);
++            outr[i] *= newamplitude * panning;
+         }
+     watch_amp_int(outl,synth.buffersize);
+     oldamplitude = newamplitude;
+diff --git a/src/Tests/AdNoteTest.cpp b/src/Tests/AdNoteTest.cpp
+index e2a5db7d..ba71b5dc 100644
+--- a/src/Tests/AdNoteTest.cpp
++++ b/src/Tests/AdNoteTest.cpp
+@@ -170,33 +170,33 @@ class AdNoteTest
+             note->noteout(outL, outR);
+ #ifdef WRITE_OUTPUT
+             for(int i = 0; i < synth->buffersize; ++i)
+-                file << outL[i] << std::endl;
++                file << outR[i] << std::endl;
+ 
+ #endif
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.25552f, 0.0001f);
++            TS_ASSERT_DELTA(outR[255], 0.25552f, 0.0001f);
+             note->releasekey();
+ 
+             TS_ASSERT(!tr->hasNext());
+             w->add_watch("noteout/be4_mix");
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.46883f, 0.0001f);
++            TS_ASSERT_DELTA(outR[255], -0.46883f, 0.0001f);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             w->tick();
+-            TS_ASSERT_DELTA(outL[255], 0.06695f, 0.0001f);
++            TS_ASSERT_DELTA(outR[255], 0.06695f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.11621f, 0.0001f);
++            TS_ASSERT_DELTA(outR[255], 0.11621f, 0.0001f);
+             w->tick();
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.1169f, 0.0001f);
++            TS_ASSERT_DELTA(outR[255], -0.1169f, 0.0001f);
+             w->tick();
+ 
+             TS_ASSERT(tr->hasNext());
+-- 
+2.47.0
+

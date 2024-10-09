@@ -1,0 +1,100 @@
+From c5c9dfe90dda2352a8425959095a1deed8533af7 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 12 May 2015 18:09:00 -0400
+Subject: [PATCH 0461/1936] Middleware: Permit External Master Changes
+
+Patch By FalkTX
+---
+ src/Misc/MiddleWare.cpp | 26 ++++++++++++++++----------
+ src/Misc/MiddleWare.h   |  2 ++
+ 2 files changed, 18 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 81de3a40..ec86666a 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -682,10 +682,7 @@ public:
+         }
+ 
+         //Update resource locator table
+-        obj_store.clear();
+-        obj_store.extractMaster(m);
+-        for(int i=0; i<NUM_MIDI_PARTS; ++i)
+-            kits.extractPart(m->part[i], i);
++        updateResources(m);
+ 
+         master = m;
+ 
+@@ -694,6 +691,14 @@ public:
+         uToB->write("/load-master", "b", sizeof(Master*), &m);
+     }
+ 
++    void updateResources(Master *m)
++    {
++        obj_store.clear();
++        obj_store.extractMaster(m);
++        for(int i=0; i<NUM_MIDI_PARTS; ++i)
++            kits.extractPart(m->part[i], i);
++    }
++
+     //If currently broadcasting messages
+     bool broadcast = false;
+     //If accepting undo events as user driven
+@@ -839,8 +844,10 @@ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, SYNTH_T synth_, int prefered_port
+     lo_server_add_method(server, NULL, NULL, handler_function, mw);
+     fprintf(stderr, "lo server running on %d\n", lo_server_get_port(server));
+ 
++#ifndef CARLA_VERSION_STRING
+     clean_up_tmp_nams();
+     create_tmp_file((unsigned)lo_server_get_port(server));
++#endif
+ 
+     //dummy callback for starters
+     cb = [](void*, const char*){};
+@@ -853,12 +860,7 @@ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, SYNTH_T synth_, int prefered_port
+     osc    = GUI::genOscInterface(mw);
+ 
+     //Grab objects of interest from master
+-    obj_store.extractMaster(master);
+-
+-    //Load Part Status
+-    for(int i=0; i < NUM_MIDI_PARTS; ++i) {
+-        kits.extractPart(master->part[i], i);
+-    }
++    updateResources(master);
+ 
+     //Null out Load IDs
+     for(int i=0; i < NUM_MIDI_PARTS; ++i) {
+@@ -1246,6 +1248,10 @@ MiddleWare::~MiddleWare(void)
+ {
+     delete impl;
+ }
++void MiddleWare::updateResources(Master *m)
++{
++    impl->updateResources(m);
++}
+ Master *MiddleWare::spawnMaster(void)
+ {
+     return impl->master;
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 26ca3f87..023b930b 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -4,12 +4,14 @@
+ #include <string>
+ 
+ struct SYNTH_T;
++class  Master;
+ //Link between realtime and non-realtime layers
+ class MiddleWare
+ {
+     public:
+         MiddleWare(SYNTH_T synth, int prefered_port = -1);
+         ~MiddleWare(void);
++        void updateResources(Master *m);
+         //returns internal master pointer
+         class Master *spawnMaster(void);
+         //return  UI interface
+-- 
+2.47.0
+

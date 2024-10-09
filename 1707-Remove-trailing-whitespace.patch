@@ -1,0 +1,1183 @@
+From 00bc5bf3b6f9e9267fb872f1df39ac43b9925238 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 6 Feb 2021 16:35:25 +0100
+Subject: [PATCH 1707/1936] Remove trailing whitespace
+
+... in all cpp/h files, using `sed -i 's/[[:space:]]\+$//'`.
+
+Checked with `git diff -w` and manually.
+---
+ src/Containers/ScratchString.cpp    |  2 +-
+ src/DSP/AnalogFilter.cpp            |  2 +-
+ src/Misc/Bank.cpp                   |  2 +-
+ src/Misc/BankDb.cpp                 |  2 +-
+ src/Misc/Config.cpp                 |  4 ++--
+ src/Misc/Config.h                   |  2 +-
+ src/Misc/MemLocker.h                |  2 +-
+ src/Misc/Part.cpp                   |  4 ++--
+ src/Misc/PresetExtractor.cpp        |  2 +-
+ src/Misc/WaveShapeSmps.cpp          |  8 ++++----
+ src/Misc/WaveShapeSmps.h            |  4 ++--
+ src/Nio/JackMultiEngine.cpp         |  6 +++---
+ src/Nio/OssEngine.h                 |  4 ++--
+ src/Nio/jack_osc.h                  | 12 ++++++------
+ src/Params/ADnoteParameters.cpp     |  6 +++---
+ src/Params/ADnoteParameters.h       |  2 +-
+ src/Params/EnvelopeParams.cpp       |  4 ++--
+ src/Params/EnvelopeParams.h         |  6 +++---
+ src/Params/LFOParams.cpp            |  2 +-
+ src/Synth/ADnote.cpp                | 22 +++++++++++-----------
+ src/Synth/ADnote.h                  |  2 +-
+ src/Synth/Envelope.cpp              |  2 +-
+ src/Synth/LFO.cpp                   |  4 ++--
+ src/Synth/LFO.h                     |  6 +++---
+ src/Synth/ModFilter.cpp             | 10 +++++-----
+ src/Synth/ModFilter.h               |  2 +-
+ src/Synth/PADnote.cpp               |  2 +-
+ src/Synth/Resonance.cpp             |  2 +-
+ src/Synth/SUBnote.h                 |  2 +-
+ src/Synth/WatchPoint.cpp            | 20 ++++++++++----------
+ src/Tests/AdNoteTest.h              | 14 +++++++-------
+ src/Tests/SubNoteTest.h             |  4 ++--
+ src/Tests/TriggerTest.h             |  4 ++--
+ src/Tests/WatchTest.h               |  2 +-
+ src/UI/BankView.cpp                 |  4 ++--
+ src/UI/Fl_EQGraph.cpp               |  6 +++---
+ src/UI/Fl_Osc_ListView.cpp          |  4 ++--
+ src/UI/Fl_Osc_Output.cpp            |  6 +++---
+ src/UI/Fl_Osc_Roller.cpp            |  4 ++--
+ src/UI/Fl_Osc_Slider.cpp            |  2 +-
+ src/UI/Fl_Osc_TSlider.cpp           |  2 +-
+ src/UI/Fl_OscilSpectrum.h           |  8 ++++----
+ src/UI/Fl_PADnoteOvertonePosition.h |  8 ++++----
+ src/UI/Fl_Resonance_Graph.cpp       |  4 ++--
+ src/UI/VuMeter.h                    |  2 +-
+ src/UI/VuPartMeter.h                |  4 ++--
+ src/UI/WidgetPDial.cpp              |  2 +-
+ 47 files changed, 115 insertions(+), 115 deletions(-)
+
+diff --git a/src/Containers/ScratchString.cpp b/src/Containers/ScratchString.cpp
+index 0ca6ddaa..a696216c 100644
+--- a/src/Containers/ScratchString.cpp
++++ b/src/Containers/ScratchString.cpp
+@@ -14,7 +14,7 @@ ScratchString::ScratchString(int num)
+ {
+     snprintf(c_str, SCRATCH_SIZE, "%d", num);
+ }
+-    
++
+ ScratchString::ScratchString(unsigned char num)
+ {
+     snprintf(c_str, SCRATCH_SIZE, "%d", num);
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index d84484cc..1bb47534 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -394,7 +394,7 @@ void AnalogFilter::singlefilterout_freqbuf(float *smp, fstage &hist,
+     assert((buffersize % 8) == 0);
+ 
+     float frequency = -1.0f;
+-    
++
+     for ( int i = 0; i < buffersize; i += 8 )
+     {
+         /* recompute coeffs for each 8 samples */
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index f2c18735..9a08709d 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -516,7 +516,7 @@ std::vector<std::string> Bank::search(std::string s) const
+     }
+     return out;
+ }
+-        
++
+ std::vector<std::string> Bank::blist(std::string s)
+ {
+     std::vector<std::string> out;
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index ecedde10..7f5cf6a3 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -246,7 +246,7 @@ BankEntry BankDb::processXiz(std::string filename,
+     int ret = 0;
+     time = rand();
+ #endif
+-    
++
+ 
+     //quickly check if the file exists in the cache and if it is up-to-date
+     if(cache.find(fname) != cache.end() &&
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 34e68ed7..ef1e4b5d 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -369,7 +369,7 @@ void Config::readConfig(const char *filename)
+                 cfg.presetsDirList[i] = xmlcfg.getparstr("presets_root", "");
+                 xmlcfg.exitbranch();
+             }
+-        
++
+         //Get favs
+         for(int i = 0; i < MAX_BANK_ROOT_DIRS; ++i)
+             if(xmlcfg.enterbranch("FAVSROOT", i)) {
+@@ -437,7 +437,7 @@ void Config::saveConfig(const char *filename) const
+             xmlcfg->addparstr("presets_root", cfg.presetsDirList[i]);
+             xmlcfg->endbranch();
+         }
+-        
++
+     for(int i = 0; i < MAX_BANK_ROOT_DIRS; ++i)
+         if(!cfg.favoriteList[i].empty()) {
+             xmlcfg->beginbranch("FAVSROOT", i);
+diff --git a/src/Misc/Config.h b/src/Misc/Config.h
+index 7dc7911f..f307cc1d 100644
+--- a/src/Misc/Config.h
++++ b/src/Misc/Config.h
+@@ -38,7 +38,7 @@ class Config
+         Config();
+         Config(const Config& ) = delete;
+         ~Config();
+-        
++
+         struct {
+             oss_devs_t oss_devs;
+             int   SampleRate, SoundBufferSize, OscilSize, SwapStereo;
+diff --git a/src/Misc/MemLocker.h b/src/Misc/MemLocker.h
+index dd7248e9..3210d8f4 100644
+--- a/src/Misc/MemLocker.h
++++ b/src/Misc/MemLocker.h
+@@ -13,7 +13,7 @@
+ 
+ namespace zyn {
+ 
+-//! Class to lock all pages in memory 
++//! Class to lock all pages in memory
+ class MemLocker
+ {
+     bool isLocked = false;
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 35d3026c..bd30ec7f 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -58,7 +58,7 @@ static const Ports partPorts = {
+ #define rChangeCb
+ #undef rChangeCb
+ #define rChangeCb obj->setVolumedB(obj->Volume);
+-    rParamF(Volume, rShort("Vol"), rDefault(0.0), rUnit(dB), 
++    rParamF(Volume, rShort("Vol"), rDefault(0.0), rUnit(dB),
+             rLinear(-40.0, 13.3333), "Part Volume"),
+ #undef rChangeCb
+     {"Pvolume::i", rShort("Vol") rProp(parameter) rLinear(0,127)
+@@ -176,7 +176,7 @@ static const Ports partPorts = {
+                 char filename[32];
+                 time (&rawtime);
+                 const struct tm* timeinfo = localtime (&rawtime);
+-                strftime (filename,23,"%F_%R.xiz",timeinfo); 
++                strftime (filename,23,"%F_%R.xiz",timeinfo);
+                 p->saveXML(filename);
+                 fprintf(stderr, "Part %d saved to %s\n", (p->partno + 1), filename);
+             }
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index d34f4b7e..eae57637 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -221,7 +221,7 @@ void doPaste(MiddleWare &mw, string url, string type, XMLwrapper &xml, Ts&&... a
+ {
+     //Generate a new object
+     T *t = new T(std::forward<Ts>(args)...);
+-    
++
+     //Old workaround for LFO parameters
+     if(strstr(type.c_str(), "Plfo"))
+         type = "Plfo";
+diff --git a/src/Misc/WaveShapeSmps.cpp b/src/Misc/WaveShapeSmps.cpp
+index afa53e7b..a48f563e 100644
+--- a/src/Misc/WaveShapeSmps.cpp
++++ b/src/Misc/WaveShapeSmps.cpp
+@@ -19,7 +19,7 @@ namespace zyn {
+ float polyblampres(float smp, float ws, float dMax)
+ {
+     // Formula from: Esqueda, Välimäki, Bilbao (2015): ALIASING REDUCTION IN SOFT-CLIPPING ALGORITHMS
+-    // http://dafx16.vutbr.cz/dafxpapers/18-DAFx-16_paper_33-PN.pdf pg 123, table 1 
++    // http://dafx16.vutbr.cz/dafxpapers/18-DAFx-16_paper_33-PN.pdf pg 123, table 1
+     // Four-point polyBLAMP residual:
+     // [−2T, T] d^5/120
+     // [−T, 0] −d^5/40 + d^4/24 + d^3/12 + d^2/12 + d/24 + 1/120
+@@ -137,7 +137,7 @@ void waveShapeSmps(int n,
+             if (par > ws - 0.01) par = ws - 0.01;
+             for(i = 0; i < n; ++i) {
+                 // add the offset: x = smps[i] + offs
+-                smps[i] += offs; 
++                smps[i] += offs;
+                 float res = polyblampres(smps[i], ws, par);
+                 // now apply the polyblamped limiter: y = f(x)
+                 if (smps[i]>=0)
+@@ -248,7 +248,7 @@ void waveShapeSmps(int n,
+                 if(tmpo > 10.0f)
+                     tmpo = 10.0f;
+                 tmpo     = 0.5f - 1.0f / (expf(tmpo) + 1.0f);
+-                
++
+                 smps[i] = tmp / tmpv;
+                 smps[i] -= tmpo / tmpv; // subtract offset
+             }
+@@ -278,7 +278,7 @@ void waveShapeSmps(int n,
+                 else
+                     smps[i] = (smps[i] > 0 ? 1.0f : -1.0f);
+                 //subtract offset with distorsion function applied
+-                smps[i] -= 1.5 * (offs - (offs*offs*offs / 3.0)); 
++                smps[i] -= 1.5 * (offs - (offs*offs*offs / 3.0));
+             }
+             break;
+         case 17: //square distortion
+diff --git a/src/Misc/WaveShapeSmps.h b/src/Misc/WaveShapeSmps.h
+index 7676d4aa..a521b519 100644
+--- a/src/Misc/WaveShapeSmps.h
++++ b/src/Misc/WaveShapeSmps.h
+@@ -24,8 +24,8 @@ void waveShapeSmps(int n,
+                    unsigned char funcpar = 0);
+ 
+ //calculate the polyblamp residual value (called by waveshape function)
+-float polyblampres(float smp, 
+-                   float ws, 
++float polyblampres(float smp,
++                   float ws,
+                    float dMax);
+ }
+ 
+diff --git a/src/Nio/JackMultiEngine.cpp b/src/Nio/JackMultiEngine.cpp
+index 3689a9f5..982df973 100644
+--- a/src/Nio/JackMultiEngine.cpp
++++ b/src/Nio/JackMultiEngine.cpp
+@@ -85,8 +85,8 @@ bool JackMultiEngine::Start(void)
+ 
+     if(!impl->client)
+         errx(1, "failed to connect to jack...");
+-    
+-    
++
++
+     //Create the set of jack ports
+     char portName[20];
+     memset(portName,0,sizeof(portName));
+@@ -117,7 +117,7 @@ bool JackMultiEngine::Start(void)
+     jack_set_process_callback(impl->client, _processCallback, this);
+ 
+     //run
+-    if(jack_activate(impl->client)) 
++    if(jack_activate(impl->client))
+         errx(1, "failed at starting the jack client");
+     impl->running = true;
+     return true;
+diff --git a/src/Nio/OssEngine.h b/src/Nio/OssEngine.h
+index cfc6e160..a2157479 100644
+--- a/src/Nio/OssEngine.h
++++ b/src/Nio/OssEngine.h
+@@ -80,7 +80,7 @@ class OssEngine:public AudioOut, MidiIn
+             bool en;
+             bool is32bit;
+         } audio;
+-        
++
+         const char* linux_oss_wave_out_dev;
+ 
+         //Midi
+@@ -93,7 +93,7 @@ class OssEngine:public AudioOut, MidiIn
+             bool en;
+             bool run;
+         } midi;
+-        
++
+         const char* linux_oss_seq_in_dev;
+ };
+ 
+diff --git a/src/Nio/jack_osc.h b/src/Nio/jack_osc.h
+index 321cb228..c5702933 100644
+--- a/src/Nio/jack_osc.h
++++ b/src/Nio/jack_osc.h
+@@ -1,22 +1,22 @@
+ /*
+  * Copyright (c) 2014 Hanspeter Portner (dev@open-music-kontrollers.ch)
+- * 
++ *
+  * This software is provided 'as-is', without any express or implied
+  * warranty. In no event will the authors be held liable for any damages
+  * arising from the use of this software.
+- * 
++ *
+  * Permission is granted to anyone to use this software for any purpose,
+  * including commercial applications, and to alter it and redistribute it
+  * freely, subject to the following restrictions:
+- * 
++ *
+  *     1. The origin of this software must not be misrepresented; you must not
+  *     claim that you wrote the original software. If you use this software
+  *     in a product, an acknowledgment in the product documentation would be
+  *     appreciated but is not required.
+- * 
++ *
+  *     2. Altered source versions must be plainly marked as such, and must not be
+  *     misrepresented as being the original software.
+- * 
++ *
+  *     3. This notice may not be removed or altered from any source
+  *     distribution.
+  */
+@@ -50,7 +50,7 @@ extern "C" {
+ #define JACK_DEFAULT_OSC_TYPE           JACK_DEFAULT_MIDI_TYPE
+ 
+ /*
+- * Use this as value for metadata key JACKEY_EVENT_TYPES 
++ * Use this as value for metadata key JACKEY_EVENT_TYPES
+  * (http://jackaudio.org/metadata/event-type) to mark/query/unmark a port
+  * as OSC carrier in jack_{set,get,remove}_property.
+  *
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index aa12f637..b606c546 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -134,7 +134,7 @@ static const Ports voicePorts = {
+             rObject *obj = (rObject *)d.obj;
+             if (!rtosc_narguments(msg))
+                 d.reply(d.loc, "i", (int)roundf(127.0f * (1.0f + obj->volume/60.0f)));
+-            else 
++            else
+                 obj->volume = -60.0f * (1.0f - rtosc_argument(msg, 0).i / 127.0f);
+         }},
+     {"volume::f", rShort("volume") rProp(parameter) rUnit(dB) rDefault(-12.75) rLinear(-60.0f, 0.0f)
+@@ -172,7 +172,7 @@ static const Ports voicePorts = {
+     rParamZyn(PFilterVelocityScaleFunction, rShort("v.sense"), rDefault(64),
+         "Filter Velocity Function Shape"),
+ 
+- 
++
+     //Modulator Stuff
+     rOption(PFMEnabled, rShort("mode"), rOptions(none, mix, ring, phase,
+                 frequency, pulse), rDefault(none), "Modulator mode"),
+@@ -364,7 +364,7 @@ static const Ports globalPorts = {
+             rObject *obj = (rObject *)d.obj;
+             if (!rtosc_narguments(msg))
+                 d.reply(d.loc, "i", (int)roundf(96.0f * (1.0f + (obj->Volume - 12.0412f)/60.0f)));
+-            else 
++            else
+                 obj->Volume = 12.0412f - 60.0f * (1.0f - rtosc_argument(msg, 0).i / 96.0f);
+         }},
+     rParamZyn(Fadein_adjustment, rDefault(FADEIN_ADJUSTMENT_SCALE),
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index 4657b540..5274299a 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -218,7 +218,7 @@ struct ADnoteVoiceParam {
+ 
+     /* If the Volume negative */
+     unsigned char PVolumeminus;
+-    
++
+     /* if AntiAliasing is enabled */
+     bool PAAEnabled;
+ 
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index f483d9ca..d0af6ef6 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -111,7 +111,7 @@ static const rtosc::Ports localPorts = {
+             rPresetAtMulti(true, ad_global_amp, ad_global_filter, ad_voice_amp,
+                                  ad_voice_fm_amp),
+             rDefault(false),
+-            "Force Envelope to fully evaluate"),    
++            "Force Envelope to fully evaluate"),
+     rToggle(Plinearenvelope, rShort("lin/log"), rDefault(false),
+             "Linear or Logarithmic Envelopes"),
+     rToggle(Prepeating, rShort("repeat"), rDefault(false),
+@@ -181,7 +181,7 @@ static const rtosc::Ports localPorts = {
+         rEnd},
+     {"dt", rDoc("Envelope Delay Times (sec)"), NULL,
+         rBegin;
+-        
++
+         const int N = MAX_ENVELOPE_POINTS;
+         const int M = rtosc_narguments(msg);
+         if(M == 0) {
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index b2ab8ea5..2aca26dc 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -19,7 +19,7 @@
+ #include "Presets.h"
+ 
+ namespace zyn {
+-    
++
+    enum envmode_enum {
+         ADSR_lin = 1,
+         ADSR_dB = 2,
+@@ -64,14 +64,14 @@ class EnvelopeParams:public Presets
+         unsigned char PA_val, PD_val, PS_val, PR_val;
+ 
+ 
+-        
++
+ 
+         envmode_enum Envmode; // 1 for ADSR parameters (linear amplitude)
+                      // 2 for ADSR_dB parameters (dB amplitude)
+                      // 3 for ASR parameters (frequency LFO)
+                      // 4 for ADSR_filter parameters (filter parameters)
+                      // 5 for ASR_bw parameters (bandwidth parameters)
+-                    
++
+ 
+ 
+         const AbsTime *time;
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 7dcbc459..11945d3e 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -68,7 +68,7 @@ static const rtosc::Ports _ports = {
+     rParamZyn(Pstartphase, rShort("start"), rSpecial(random),
+               rDefaultDepends(loc), rDefault(64), rPreset(ad_voice_freq, 0),
+               "Starting Phase"),
+-    rParamZyn(Pcutoff, rShort("lp"), rDefault(127), 
++    rParamZyn(Pcutoff, rShort("lp"), rDefault(127),
+             "RND/SQR lp-filter freq"),
+     rOption(PLFOtype, rShort("type"), rOptions(sine, triangle, square, up, down,
+                 exp1, exp2, random), rDefault(sine), "Shape of LFO"),
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index b3dede16..24b2b742 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -140,7 +140,7 @@ void ADnote::setupVoice(int nvoice)
+ 
+     voice.oscfreqhi   = memory.valloc<int>(unison);
+     voice.oscfreqlo   = memory.valloc<float>(unison);
+-    
++
+     voice.oscfreqhiFM = memory.valloc<unsigned int>(unison);
+     voice.oscfreqloFM = memory.valloc<float>(unison);
+     voice.oscposhi    = memory.valloc<int>(unison);
+@@ -673,10 +673,10 @@ void ADnote::legatonote(const LegatoParams &lpars)
+ 
+         if(pars.VoicePar[nvoice].PVolumeminus != 0)
+             NoteVoicePar[nvoice].Volume = -NoteVoicePar[nvoice].Volume;
+-            
++
+         NoteVoicePar[nvoice].AAEnabled =
+                 pars.VoicePar[nvoice].PAAEnabled;
+-                
++
+         if(pars.VoicePar[nvoice].PPanning == 0) {
+             NoteVoicePar[nvoice].Panning = getRandomFloat();
+         } else
+@@ -1221,7 +1221,7 @@ inline void ADnote::ComputeVoiceOscillator_LinearInterpolation(int nvoice)
+     Voice& vce = NoteVoicePar[nvoice];
+     for(int k = 0; k < vce.unison_size; ++k) {
+         int    poshi  = vce.oscposhi[k];
+-        // convert floating point fractional part (sample interval phase) 
++        // convert floating point fractional part (sample interval phase)
+         // with range [0.0 ... 1.0] to fixed point with 1 digit is 2^-24
+         // by multiplying with precalculated 2^24 and casting to integer:
+         int    poslo  = (int)(vce.oscposlo[k] * 16777216.0f);
+@@ -1263,7 +1263,7 @@ inline void ADnote::ComputeVoiceOscillator_LinearInterpolation(int nvoice)
+  */
+ inline void ADnote::ComputeVoiceOscillator_SincInterpolation(int nvoice)
+ {
+-    // windowed sinc kernel factor Fs*0.3, rejection 80dB      
++    // windowed sinc kernel factor Fs*0.3, rejection 80dB
+     const float_t kernel[] = {
+         0.0010596256917418426f,
+         0.004273442181254887f,
+@@ -1286,8 +1286,8 @@ inline void ADnote::ComputeVoiceOscillator_SincInterpolation(int nvoice)
+         0.0010596256917418426f
+         };
+ 
+-        
+-    
++
++
+     Voice& vce = NoteVoicePar[nvoice];
+     for(int k = 0; k < vce.unison_size; ++k) {
+         int    poshi  = vce.oscposhi[k];
+@@ -1297,7 +1297,7 @@ inline void ADnote::ComputeVoiceOscillator_SincInterpolation(int nvoice)
+         int    ovsmpfreqhi = vce.oscfreqhi[k] / 2;
+         int    ovsmpfreqlo = (int)((vce.oscfreqlo[k] / 2) * (1<<24));
+ 
+-        int    ovsmpposlo; 
++        int    ovsmpposlo;
+         int    ovsmpposhi;
+         int    uflow;
+         float *smps   = NoteVoicePar[nvoice].OscilSmp;
+@@ -1314,7 +1314,7 @@ inline void ADnote::ComputeVoiceOscillator_SincInterpolation(int nvoice)
+             out = 0;
+             for (int l = 0; l<LENGTHOF(kernel); l++) {
+                 out += kernel[l] * (
+-                    smps[ovsmpposhi]     * ((1<<24) - ovsmpposlo) + 
++                    smps[ovsmpposhi]     * ((1<<24) - ovsmpposlo) +
+                     smps[ovsmpposhi + 1] * ovsmpposlo)/(1.0f*(1<<24));
+                 // advance to next kernel sample
+                 ovsmpposlo += ovsmpfreqlo;
+@@ -1331,7 +1331,7 @@ inline void ADnote::ComputeVoiceOscillator_SincInterpolation(int nvoice)
+             poshi &= synth.oscilsize - 1;
+ 
+             tw[i] = out;
+-            
++
+         }
+         vce.oscposhi[k] = poshi;
+         vce.oscposlo[k] = poslo/(1.0f*(1<<24));
+@@ -2025,7 +2025,7 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+     AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq, time, wm,
+                    (pre+"GlobalPar/AmpLfo/").c_str);
+ 
+-    Volume = dB2rap(param.Volume) 
++    Volume = dB2rap(param.Volume)
+              * VelF(velocity, param.PAmpVelocityScaleFunction);     //sensing
+ 
+     Filter = memory.alloc<ModFilter>(*param.GlobalFilter, synth, time, memory,
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 163e2fd5..91749506 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -176,7 +176,7 @@ class ADnote:public SynthNote
+             void kill(Allocator &memory, const SYNTH_T &synth);
+             /* If the voice is enabled */
+             ONOFFTYPE Enabled;
+-            
++
+             /* if AntiAliasing is enabled */
+             bool AAEnabled;
+ 
+diff --git a/src/Synth/Envelope.cpp b/src/Synth/Envelope.cpp
+index 85b37bdb..a06a2361 100644
+--- a/src/Synth/Envelope.cpp
++++ b/src/Synth/Envelope.cpp
+@@ -201,7 +201,7 @@ float Envelope::envout(bool doWatch)
+         // but if reached sustain point, repeating activated and key still pressed or sustained
+         else if (repeating && currentpoint == envsustain && !keyreleased) {
+             // set first value to sustain value to prevent jump
+-            envval[0] = envval[currentpoint]; 
++            envval[0] = envval[currentpoint];
+             // reset current point
+             currentpoint = 1;
+         }
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index 476e45ed..62c2a92e 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -103,7 +103,7 @@ float LFO::baseOut(const char waveShape, const float phase)
+                 lfo_out = -1;
+             else
+                 lfo_out = 1;
+-                
++
+             return biquad(lfo_out);
+             break;
+         case LFO_RAMPUP:    return (phase - 0.5f) * 2.0f;
+@@ -114,7 +114,7 @@ float LFO::baseOut(const char waveShape, const float phase)
+             if ((phase < 0.5) != first_half) {
+                 first_half = phase < 0.5;
+                 last_random = 2*RND-1;
+-            }    
++            }
+             return biquad(last_random);
+             break;
+         default:
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index 35e03a52..a323f263 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -68,16 +68,16 @@ class LFO
+         const float     dt_;
+         const LFOParams &lfopars_;
+         const float basefreq_;
+-        
++
+         float FcAbs, K, norm;
+-        
++
+         //biquad coefficients for lp filtering in noise-LFO
+         float a0 = 0.0007508914611009499;
+         float a1 = 0.0015017829222018998;
+         float a2 = 0.0007508914611009499;
+         float b1 = -1.519121359805288;
+         float b2 =  0.5221249256496917;
+-        
++
+         char cutoff = 127;
+ 
+         VecWatchPoint watchOut;
+diff --git a/src/Synth/ModFilter.cpp b/src/Synth/ModFilter.cpp
+index e3cc181e..ac2fab9e 100644
+--- a/src/Synth/ModFilter.cpp
++++ b/src/Synth/ModFilter.cpp
+@@ -31,10 +31,10 @@ ModFilter::ModFilter(const FilterParams &pars_,
+                            float        notefreq)
+     :pars(pars_), synth(synth_), time(time_), alloc(alloc_),
+     noteFreq(notefreq),
+-    left(nullptr), 
++    left(nullptr),
+     right(nullptr),
+     env(nullptr),
+-    lfo(nullptr)  
++    lfo(nullptr)
+ {
+     tracking = pars.getfreqtracking(notefreq);
+     baseQ    = pars.getq();
+@@ -53,7 +53,7 @@ ModFilter::~ModFilter(void)
+     alloc.dealloc(left);
+     alloc.dealloc(right);
+ }
+-        
++
+ void ModFilter::addMod(LFO &lfo_)
+ {
+     lfo = &lfo_;
+@@ -107,7 +107,7 @@ void ModFilter::updateSense(float velocity, uint8_t scale,
+     const float velScale = scale / 127.0f;
+     sense = velScale * 6.0f * (VelF(velocity, func) - 1);
+ }
+-        
++
+ void ModFilter::filter(float *l, float *r)
+ {
+     if(left && l)
+@@ -134,7 +134,7 @@ void ModFilter::paramUpdate(Filter *&f)
+     //Common parameters
+     baseQ    = pars.getq();
+     baseFreq = pars.getfreq();
+-    
++
+     if(current_category(f) != pars.Pcategory) {
+         alloc.dealloc(f);
+         f = Filter::generate(alloc, &pars,
+diff --git a/src/Synth/ModFilter.h b/src/Synth/ModFilter.h
+index 8370c2ff..c09541bf 100644
+--- a/src/Synth/ModFilter.h
++++ b/src/Synth/ModFilter.h
+@@ -46,7 +46,7 @@ class ModFilter
+         void svParamUpdate(SVFilter &sv);
+         void anParamUpdate(AnalogFilter &an);
+ 
+-        
++
+         const FilterParams &pars;  //Parameters to Pull Updates From
+         const SYNTH_T      &synth; //Synthesizer Buffer Parameters
+         const AbsTime      &time;  //Time for RT Updates
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 05feb55c..9495c1f5 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -406,7 +406,7 @@ int PADnote::noteout(float *outl, float *outr)
+                 break;
+             }
+         }
+-    
++
+     watch_punch(outl,synth.buffersize);
+ 
+     if(ABOVE_AMPLITUDE_THRESHOLD(globaloldamplitude, globalnewamplitude))
+diff --git a/src/Synth/Resonance.cpp b/src/Synth/Resonance.cpp
+index 3a6a7530..05d27441 100644
+--- a/src/Synth/Resonance.cpp
++++ b/src/Synth/Resonance.cpp
+@@ -209,7 +209,7 @@ void Resonance::randomize(int type)
+ 
+ void Resonance::zero(void)
+ {
+-    for(int i=0; i<N_RES_POINTS; ++i) 
++    for(int i=0; i<N_RES_POINTS; ++i)
+         setpoint(i,64);
+ }
+ 
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 32489394..1c1fd464 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -50,7 +50,7 @@ class SUBnote:public SynthNote
+         void KillNote();
+ 
+         const SUBnoteParameters &pars;
+-        
++
+         //parameters
+         bool       stereo;
+         int       numstages; //number of stages of filters
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index d2fbc6eb..570c5cbb 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -79,10 +79,10 @@ WatchManager::WatchManager(thrlnk *link)
+     memset(prebuffer_done,  0, sizeof(prebuffer_done));
+     memset(call_count,0,sizeof(call_count));
+ 
+-} 
++}
+ 
+ void WatchManager::add_watch(const char *id)
+-{   
++{
+     //Don't add duplicate watchs
+     for(int i=0; i<MAX_WATCH; ++i)
+         if(!strcmp(active_list[i], id))
+@@ -101,7 +101,7 @@ void WatchManager::add_watch(const char *id)
+ }
+ 
+ void WatchManager::del_watch(const char *id)
+-{   
++{
+     //Queue up the delete
+     for(int i=0; i<MAX_WATCH; ++i)
+         if(!strcmp(active_list[i], id))
+@@ -109,7 +109,7 @@ void WatchManager::del_watch(const char *id)
+ }
+ 
+ void WatchManager::tick(void)
+-{   
++{
+     //Try to send out any vector stuff
+     for(int i=0; i<MAX_WATCH; ++i) {
+         int framesize = 2;
+@@ -184,7 +184,7 @@ void WatchManager::satisfy(const char *id, float f)
+ 
+ void WatchManager::satisfy(const char *id, float *f, int n)
+ {
+-    int selected = -1;    
++    int selected = -1;
+     for(int i=0; i<MAX_WATCH; ++i)
+         if(!strcmp(active_list[i], id))
+             selected = i;
+@@ -207,10 +207,10 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+             const float prev = prebuffer[selected][(prebuffer_sample[selected]+MAX_SAMPLE/2-1)%(MAX_SAMPLE/2)];
+             if(!trigger[selected]){
+                 prebuffer[selected][prebuffer_sample[selected]%(MAX_SAMPLE/2)] = f[i];
+-                prebuffer_sample[selected]++;     
++                prebuffer_sample[selected]++;
+                 //printf("\n before trigger %s  prebuffer at index %d   %f \n",active_list[selected],prebuffer_sample[selected],prebuffer[selected][prebuffer_sample[selected]%(MAX_SAMPLE/2)]);
+             }
+-            if(!trigger[selected] && prebuffer_sample[selected] >= (MAX_SAMPLE/2)){                
++            if(!trigger[selected] && prebuffer_sample[selected] >= (MAX_SAMPLE/2)){
+                 if (prev <= 0 && f[i] > 0){
+                     //printf("\n trigger at %s  prebuffer at index %f  %d   f[i] %f \n",active_list[selected],prebuffer[selected][prebuffer_sample[selected]%(MAX_SAMPLE/2)-2],prebuffer_sample[selected],f[i]);
+                     trigger[selected] = true;
+@@ -219,7 +219,7 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+                         sample_list[selected]++;
+                         prebuffer_sample[selected]++;
+                     }
+-                    prebuffer_done[selected] = true;          
++                    prebuffer_done[selected] = true;
+                     space = MAX_SAMPLE - sample_list[selected];
+                     if(n >= i+space)
+                         space = i+space;
+@@ -256,7 +256,7 @@ void WatchManager::trigger_other(int selected){
+             if(!strcmp(tmp1,tmp)){
+                 trigger[k] = true;
+                 // printf("\n putting prebuffer size of %d into %s watchpoint \n",prebuffer_sample[k]%(MAX_SAMPLE/2),active_list[k]);
+-                // printf("\n value of first buffer %f \n",prebuffer[k][prebuffer_sample[k]%(MAX_SAMPLE/2)]);                            
++                // printf("\n value of first buffer %f \n",prebuffer[k][prebuffer_sample[k]%(MAX_SAMPLE/2)]);
+                 for(int j = prebuffer_sample[k]%(MAX_SAMPLE/2); j < (MAX_SAMPLE/2); ++j){
+                     data_list[k][sample_list[k]] = prebuffer[k][j];
+                     sample_list[k]++;
+@@ -266,7 +266,7 @@ void WatchManager::trigger_other(int selected){
+                     sample_list[k]++;
+                 }
+                 //prebuffer_done[k] = true;
+-                //printf("\n t Trigger for %s happen at sample %d \n",active_list[k],sample_list[k] ); 
++                //printf("\n t Trigger for %s happen at sample %d \n",active_list[k],sample_list[k] );
+             }
+         }
+     }
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index 06ae843e..7386fe49 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -46,7 +46,7 @@ class AdNoteTest:public CxxTest::TestSuite
+         float test_freq_log2;
+         WatchManager *w;
+         float *outR, *outL;
+-        
++
+         LFO          *lfo;
+         LFOParams    *lfop;
+         int randval(int min, int max)
+@@ -55,7 +55,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             //printf("ret = %d (%d..%d)\n",ret, min,max);
+             return ret;
+         }
+-        
++
+         void randomize_params(void) {
+             lfop->Pintensity  = randval(0,255);
+             lfop->Pstartphase = randval(0,255);
+@@ -66,7 +66,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             lfop->Pcontinous  = randval(0,1);
+             lfop->Pstretch    = randval(0,255);
+         }
+-        
++
+         void run_lfo_randomtest(void)
+         {
+             lfo  = new LFO(*lfop, 440.0f, *time);
+@@ -167,7 +167,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             TS_ASSERT_DELTA(outL[255], -0.4717f, 0.0001f);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+-            
++
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             w->tick();
+@@ -204,7 +204,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ #endif
+ 
+             TS_ASSERT_EQUALS(sampleCount, 9472);
+-            
++
+               lfop = new LFOParams();
+             lfop->fel  = zyn::consumer_location_type_t::amp;
+             lfop->freq = 2.0f;
+@@ -213,8 +213,8 @@ class AdNoteTest:public CxxTest::TestSuite
+                 randomize_params();
+                 run_lfo_randomtest();
+             }
+-            
+-            
++
++
+         }
+ 
+ #define OUTPUT_PROFILE
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index ec6fe627..84c868ab 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -123,7 +123,7 @@ class SubNoteTest:public CxxTest::TestSuite
+ 
+             TS_ASSERT(!tr->hasNext());
+             w->add_watch("noteout/filter");
+-            
++
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], 0.0114f, 0.0001f);
+@@ -143,7 +143,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.0020f, 0.0001f);
+             w->tick();
+-            
++
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.0005f, 0.0001f);
+diff --git a/src/Tests/TriggerTest.h b/src/Tests/TriggerTest.h
+index 9c6ed03a..ec128559 100644
+--- a/src/Tests/TriggerTest.h
++++ b/src/Tests/TriggerTest.h
+@@ -217,12 +217,12 @@ class TriggerTest:public CxxTest::TestSuite
+             note->noteout(outL, outR);
+             w->tick();
+             dump_samples("Step 3 pre-buffer\n");
+-            TS_ASSERT(!w->trigger_active("noteout/filter"));   
++            TS_ASSERT(!w->trigger_active("noteout/filter"));
+             TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 0); // Is 0 as prebuffer not filled
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 0);
+-            
++
+             //Finish accumulating samples
+             note->noteout(outL, outR);
+             w->tick();
+diff --git a/src/Tests/WatchTest.h b/src/Tests/WatchTest.h
+index 8cad5a02..4422c580 100644
+--- a/src/Tests/WatchTest.h
++++ b/src/Tests/WatchTest.h
+@@ -53,7 +53,7 @@ class WatchTest:public CxxTest::TestSuite
+             w   = new WatchManager(tr);
+             par = new LFOParams;
+             l   = new LFO(*par, 440.0, *at, w);
+-            
++
+         }
+ 
+         void tearDown() {
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index 10c7b232..3f298bfc 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -104,7 +104,7 @@ void BankSlot::update(const char *name__, const char *fname__)
+     filename_ = fname__;
+     snprintf(labelstr, 127, "%d. %s", nslot, name_.c_str());
+     label(labelstr);
+-    
++
+     if(name_.empty())
+         label("");
+ 
+@@ -382,7 +382,7 @@ void BankView::OSC_raw(const char *msg)
+             slots[nslot]->update(name, fname);
+     }
+ }
+-        
++
+ void BankView::cbwig(Fl_Widget *w)
+ {
+     cbwig_ = w;
+diff --git a/src/UI/Fl_EQGraph.cpp b/src/UI/Fl_EQGraph.cpp
+index a89746ec..c207d8a8 100644
+--- a/src/UI/Fl_EQGraph.cpp
++++ b/src/UI/Fl_EQGraph.cpp
+@@ -69,7 +69,7 @@ void Fl_EQGraph::draw_freq_line(float freq, int type)
+                    break;
+         case 1:fl_line_style(FL_DOT);break;
+         case 2:fl_line_style(FL_DASH);break;
+-    }; 
++    };
+ 
+ 
+     if ((freqx>0.0)&&(freqx<1.0))
+@@ -103,7 +103,7 @@ void Fl_EQGraph::draw(void)
+         if(i==1) {
+             draw_freq_line(i*100.0,0);
+             draw_freq_line(i*1000.0,0);
+-        } else 
++        } else
+             if (i==5) {
+                 draw_freq_line(i*10.0,2);
+                 draw_freq_line(i*100.0,2);
+@@ -160,7 +160,7 @@ double Fl_EQGraph::getresponse(int maxy,float freq) const
+     float mag = 1;
+     //std::complex<float> num_res = 0;
+     //std::complex<float> dem_res = 0;
+-         
++
+ 
+     for(int i = 0; i < MAX_EQ_BANDS*MAX_FILTER_STAGES; ++i) {
+         if(num[3*i] == 0)
+diff --git a/src/UI/Fl_Osc_ListView.cpp b/src/UI/Fl_Osc_ListView.cpp
+index 492dd18d..baf05bb7 100644
+--- a/src/UI/Fl_Osc_ListView.cpp
++++ b/src/UI/Fl_Osc_ListView.cpp
+@@ -18,11 +18,11 @@ Fl_Osc_ListView::Fl_Osc_ListView(int x,int y, int w, int h, const char *label)
+     :Fl_Browser(x,y,w,h,label), data(0)
+ {}
+ 
+-Fl_Osc_ListView::~Fl_Osc_ListView(void) 
++Fl_Osc_ListView::~Fl_Osc_ListView(void)
+ {
+     delete data;
+ };
+-        
++
+ void Fl_Osc_ListView::init(const char *path_)
+ {
+     Fl_Osc_Pane *pane = fetch_osc_pane(this);
+diff --git a/src/UI/Fl_Osc_Output.cpp b/src/UI/Fl_Osc_Output.cpp
+index fed2b05d..eae2629d 100644
+--- a/src/UI/Fl_Osc_Output.cpp
++++ b/src/UI/Fl_Osc_Output.cpp
+@@ -44,7 +44,7 @@ void Fl_Osc_Output::OSC_value(char v)
+ {
+     newvalue_ = v;
+     value(v);
+-    
++
+     //Hide the fact that this widget is async
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+@@ -54,12 +54,12 @@ void Fl_Osc_Output::OSC_value(float v)
+ {
+     newvalue_ = v;
+     value(v);
+-   
++
+     //Hide the fact that this widget is async
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+ }
+-        
++
+ void Fl_Osc_Output::update(void)
+ {
+     oscWrite(ext);
+diff --git a/src/UI/Fl_Osc_Roller.cpp b/src/UI/Fl_Osc_Roller.cpp
+index 9034f0ed..4d1833d7 100644
+--- a/src/UI/Fl_Osc_Roller.cpp
++++ b/src/UI/Fl_Osc_Roller.cpp
+@@ -48,7 +48,7 @@ void Fl_Osc_Roller::OSC_value(char v)
+ {
+     value(v);
+ }
+-        
++
+ void Fl_Osc_Roller::update(void)
+ {
+     oscWrite(name);
+@@ -57,7 +57,7 @@ void Fl_Osc_Roller::update(void)
+ void Fl_Osc_Roller::cb(void)
+ {
+     oscWrite(name, "i", (int)value());
+-    
++
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+ }
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index 076269a5..e2a69c1d 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -233,7 +233,7 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+         default:
+             handled = Fl_Slider::handle(ev, X, Y, W, H);
+     }
+-    
++
+     return handled;
+ }
+ 
+diff --git a/src/UI/Fl_Osc_TSlider.cpp b/src/UI/Fl_Osc_TSlider.cpp
+index ed33ab1c..91d42970 100644
+--- a/src/UI/Fl_Osc_TSlider.cpp
++++ b/src/UI/Fl_Osc_TSlider.cpp
+@@ -65,7 +65,7 @@ int Fl_Osc_TSlider::handle(int event)
+                 tipwin->hide();
+             return 1;
+     }
+-    
++
+     return super;
+ }
+ 
+diff --git a/src/UI/Fl_OscilSpectrum.h b/src/UI/Fl_OscilSpectrum.h
+index 872d8c40..0435d4f3 100644
+--- a/src/UI/Fl_OscilSpectrum.h
++++ b/src/UI/Fl_OscilSpectrum.h
+@@ -84,13 +84,13 @@ class Fl_OscilSpectrum : public Fl_Box, public Fl_Osc_Widget
+             int n=lx/GX-1;
+             if (n>(int)nsamples)
+                 n=nsamples;
+-                
++
+             fl_rectf(ox,oy,lx,ly,0,0,0);
+ 
+             //draw
+-            if(this->active_r()) 
++            if(this->active_r())
+                 fl_color(0,0,255);
+-            else 
++            else
+                 fl_color(this->parent()->color());
+             fl_line_style(FL_DOT);
+ 
+@@ -132,4 +132,4 @@ class Fl_OscilSpectrum : public Fl_Box, public Fl_Osc_Widget
+ 
+         size_t nsamples;
+         float *spc;
+-}; 
++};
+diff --git a/src/UI/Fl_PADnoteOvertonePosition.h b/src/UI/Fl_PADnoteOvertonePosition.h
+index cf2a94ee..a6b616ef 100644
+--- a/src/UI/Fl_PADnoteOvertonePosition.h
++++ b/src/UI/Fl_PADnoteOvertonePosition.h
+@@ -53,7 +53,7 @@ class PADnoteOvertonePosition: public Fl_Box, public Fl_Osc_Widget
+             base_path = og->base;
+             osc = og->osc;
+             assert(osc);
+-            
++
+             osc->createLink("/oscilsize", (Fl_Osc_Widget*) this);
+             osc->requestValue("/oscilsize");
+ 
+@@ -181,7 +181,7 @@ class PADnoteOvertonePosition: public Fl_Box, public Fl_Osc_Widget
+ 
+             if (!visible())
+                 return;
+-            
++
+             if (damage()!=1){
+                 fl_color(fl_color_average(FL_BLACK,
+                             FL_BACKGROUND_COLOR, 0.5 ));
+@@ -197,7 +197,7 @@ class PADnoteOvertonePosition: public Fl_Box, public Fl_Osc_Widget
+                 int kx=(int)(lx/(float)maxharmonic*i);
+                 fl_line(ox+kx,oy,ox+kx,oy+ly);
+             };
+-            
++
+             fl_color(180,0,0);
+             fl_line_style(0);
+ 
+@@ -220,4 +220,4 @@ class PADnoteOvertonePosition: public Fl_Box, public Fl_Osc_Widget
+ 
+         std::string base_path;
+         Fl_Osc_Interface *osc;
+-}; 
++};
+diff --git a/src/UI/Fl_Resonance_Graph.cpp b/src/UI/Fl_Resonance_Graph.cpp
+index 5072a5b9..98fd9327 100644
+--- a/src/UI/Fl_Resonance_Graph.cpp
++++ b/src/UI/Fl_Resonance_Graph.cpp
+@@ -85,7 +85,7 @@ void Fl_Resonance_Graph::draw()
+         if(i==1) {
+             draw_freq_line(i*100.0,0);
+             draw_freq_line(i*1000.0,0);
+-        } else 
++        } else
+             if (i==5) {
+                 draw_freq_line(i*100.0,2);
+                 draw_freq_line(i*1000.0,2);
+@@ -202,7 +202,7 @@ void Fl_Resonance_Graph::update(void)
+     oscWrite("Poctavesfreq");
+     oscWrite("PmaxdB");
+ }
+-        
++
+ void Fl_Resonance_Graph::OSC_raw(const char *msg)
+ {
+     //TODO check the types (OSC regex)
+diff --git a/src/UI/VuMeter.h b/src/UI/VuMeter.h
+index cc74c748..9e28c1fe 100644
+--- a/src/UI/VuMeter.h
++++ b/src/UI/VuMeter.h
+@@ -30,5 +30,5 @@ class VuMeter: public Fl_Box
+                 x=1.0;
+             return x;
+         }
+-}; 
++};
+ #endif
+diff --git a/src/UI/VuPartMeter.h b/src/UI/VuPartMeter.h
+index c6c05350..43b234c3 100644
+--- a/src/UI/VuPartMeter.h
++++ b/src/UI/VuPartMeter.h
+@@ -35,7 +35,7 @@ class VuPartMeter: public VuMeter
+             //}
+ 
+             //draw the vu lines
+-            const int idb = db*(H-2); 
++            const int idb = db*(H-2);
+ 
+             fl_rectf(X,Y+H-idb,W,idb,0,200,255);
+             fl_rectf(X,Y,W,H-idb,0,0,0);
+@@ -48,7 +48,7 @@ class VuPartMeter: public VuMeter
+                 if(i%10 == 0) fl_rectf(X, Y+H-ty, W, 1,0, 230, 240);
+             }
+         }
+-        
++
+         void update(float x)
+         {
+             const float _db = limit((MIN_DB-rap2dB(x))/MIN_DB);
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index e6830689..e268ab21 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -189,7 +189,7 @@ void WidgetPDial::draw()
+     box( FL_NO_BOX );
+ 
+     Fl_Dial::draw();
+-    
++
+     return;
+ #else
+     const int cx = x(), cy = y(), sx = w(), sy = h();
+-- 
+2.47.0
+

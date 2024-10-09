@@ -1,0 +1,563 @@
+From 8d7d52284878b552a9cc752ed19156997d531e56 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 15 Apr 2017 22:58:00 +0200
+Subject: [PATCH 1131/1936] Adjust namespaces for FLTK ui and tests.
+
+---
+ src/Misc/Util.h               |  7 +++----
+ src/Tests/AdNoteTest.h        |  4 +++-
+ src/Tests/AllocatorTest.h     |  2 ++
+ src/Tests/ControllerTest.h    |  1 +
+ src/Tests/EchoTest.h          |  4 +++-
+ src/Tests/EffectTest.h        |  2 ++
+ src/Tests/InstrumentStats.cpp |  5 +++--
+ src/Tests/KitTest.h           |  6 ++++--
+ src/Tests/MemoryStressTest.h  |  2 ++
+ src/Tests/MessageTest.h       |  5 +++--
+ src/Tests/MicrotonalTest.h    |  5 +++--
+ src/Tests/MiddlewareTest.h    |  5 +++--
+ src/Tests/MqTest.h            |  1 +
+ src/Tests/OscilGenTest.h      |  5 +++--
+ src/Tests/PadNoteTest.h       |  4 +++-
+ src/Tests/PluginTest.h        |  6 ++++--
+ src/Tests/RandTest.h          |  1 +
+ src/Tests/SubNoteTest.h       |  4 +++-
+ src/Tests/UnisonTest.h        |  4 ++--
+ src/Tests/WatchTest.h         |  1 +
+ src/Tests/XMLwrapperTest.h    |  4 +++-
+ src/UI/BankView.cpp           |  2 ++
+ src/UI/ConfigUI.fl            |  3 +++
+ src/UI/EffUI.fl               |  5 ++++-
+ src/UI/EnvelopeFreeEdit.cpp   |  2 ++
+ src/UI/FilterUI.fl            |  3 +++
+ src/UI/Fl_EQGraph.cpp         |  2 ++
+ src/UI/Fl_Resonance_Graph.cpp |  1 +
+ src/UI/OscilGenUI.fl          |  3 +++
+ src/UI/VirKeyboard.fl         |  3 +++
+ src/UI/VuMasterMeter.h        |  1 +
+ src/UI/guimain.cpp            | 26 +++++++++++++++-----------
+ 32 files changed, 92 insertions(+), 37 deletions(-)
+
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 98d1d129..d4409424 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -25,16 +25,15 @@
+ 
+ namespace zyn {
+ 
++extern bool isPlugin;
++bool fileexists(const char *filename);
++
+ using std::min;
+ using std::max;
+ 
+ //Velocity Sensing function
+ extern float VelF(float velocity, unsigned char scaling);
+ 
+-extern bool isPlugin;
+-
+-bool fileexists(const char *filename);
+-
+ #define N_DETUNE_TYPES 4 //the number of detune types
+ extern float getdetune(unsigned char type,
+                        unsigned short int coarsedetune,
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index 19953502..0cc3d578 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -25,9 +25,11 @@
+ #include "../Params/Presets.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../globals.h"
+-SYNTH_T *synth;
+ 
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
+ 
+ 
+ class AdNoteTest:public CxxTest::TestSuite
+diff --git a/src/Tests/AllocatorTest.h b/src/Tests/AllocatorTest.h
+index 45448655..443c24cd 100644
+--- a/src/Tests/AllocatorTest.h
++++ b/src/Tests/AllocatorTest.h
+@@ -21,6 +21,8 @@
+ #include "../Misc/Allocator.h"
+ //using namespace std;
+ using std::vector;
++using namespace zyn;
++
+ class AllocatorTest:public CxxTest::TestSuite
+ {
+     public:
+diff --git a/src/Tests/ControllerTest.h b/src/Tests/ControllerTest.h
+index 62314525..6cefd1db 100644
+--- a/src/Tests/ControllerTest.h
++++ b/src/Tests/ControllerTest.h
+@@ -15,6 +15,7 @@
+ #include "../Params/Controller.h"
+ #include "../globals.h"
+ #include "../Misc/Time.h"
++using namespace zyn;
+ 
+ SYNTH_T *synth;
+ 
+diff --git a/src/Tests/EchoTest.h b/src/Tests/EchoTest.h
+index 1ffd2f07..bcb2a82b 100644
+--- a/src/Tests/EchoTest.h
++++ b/src/Tests/EchoTest.h
+@@ -18,9 +18,11 @@
+ #include "../Effects/Echo.h"
+ #include "../Misc/Allocator.h"
+ #include "../globals.h"
+-SYNTH_T *synth;
+ 
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
+ 
+ class EchoTest:public CxxTest::TestSuite
+ {
+diff --git a/src/Tests/EffectTest.h b/src/Tests/EffectTest.h
+index 982462f2..5d9be7f9 100644
+--- a/src/Tests/EffectTest.h
++++ b/src/Tests/EffectTest.h
+@@ -18,6 +18,8 @@
+ #include "../Effects/Reverb.h"
+ #include "../Effects/Echo.h"
+ #include "../globals.h"
++using namespace zyn;
++
+ SYNTH_T *synth;
+ 
+ class EchoTest:public CxxTest::TestSuite
+diff --git a/src/Tests/InstrumentStats.cpp b/src/Tests/InstrumentStats.cpp
+index f371a087..67268c45 100644
+--- a/src/Tests/InstrumentStats.cpp
++++ b/src/Tests/InstrumentStats.cpp
+@@ -22,11 +22,12 @@
+ #include "../Misc/Microtonal.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../globals.h"
++using namespace std;
++using namespace zyn;
++
+ SYNTH_T *synth;
+ AbsTime *time_;
+ 
+-using namespace std;
+-
+ char *instance_name=(char*)"";
+ MiddleWare *middleware;
+ 
+diff --git a/src/Tests/KitTest.h b/src/Tests/KitTest.h
+index a1bc02bb..c1f8192c 100644
+--- a/src/Tests/KitTest.h
++++ b/src/Tests/KitTest.h
+@@ -23,10 +23,12 @@
+ #include "../Synth/SynthNote.h"
+ #include "../Misc/Part.h"
+ #include "../globals.h"
+-SYNTH_T *synth;
+-int dummy=0;
+ 
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
++int dummy=0;
+ 
+ #define SUSTAIN_BIT 0x04
+ enum PrivateNoteStatus {
+diff --git a/src/Tests/MemoryStressTest.h b/src/Tests/MemoryStressTest.h
+index 204c52e6..fac58681 100644
+--- a/src/Tests/MemoryStressTest.h
++++ b/src/Tests/MemoryStressTest.h
+@@ -25,6 +25,8 @@
+ #include "../Params/Presets.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../globals.h"
++using namespace zyn;
++
+ SYNTH_T *synth;
+ 
+ class AdNoteTest:public CxxTest::TestSuite
+diff --git a/src/Tests/MessageTest.h b/src/Tests/MessageTest.h
+index f8560d59..2d36bfcb 100644
+--- a/src/Tests/MessageTest.h
++++ b/src/Tests/MessageTest.h
+@@ -27,11 +27,12 @@
+ #include "../Misc/Util.h"
+ #include "../globals.h"
+ #include "../UI/NSM.H"
++using namespace std;
++using namespace zyn;
++
+ class NSM_Client *nsm = 0;
+ MiddleWare *middleware = 0;
+ 
+-using namespace std;
+-
+ char *instance_name=(char*)"";
+ 
+ #define NUM_MIDDLEWARE 3
+diff --git a/src/Tests/MicrotonalTest.h b/src/Tests/MicrotonalTest.h
+index cc715fec..0e92a6a3 100644
+--- a/src/Tests/MicrotonalTest.h
++++ b/src/Tests/MicrotonalTest.h
+@@ -18,9 +18,10 @@
+ #include <string>
+ #include <cstdio>
+ #include "../globals.h"
+-SYNTH_T *synth;
+-
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
+ 
+ class MicrotonalTest:public CxxTest::TestSuite
+ {
+diff --git a/src/Tests/MiddlewareTest.h b/src/Tests/MiddlewareTest.h
+index 4d97dc06..876d0b4e 100644
+--- a/src/Tests/MiddlewareTest.h
++++ b/src/Tests/MiddlewareTest.h
+@@ -23,11 +23,12 @@
+ #include "../Misc/Util.h"
+ #include "../globals.h"
+ #include "../UI/NSM.H"
++using namespace std;
++using namespace zyn;
++
+ NSM_Client *nsm = 0;
+ MiddleWare *middleware = 0;
+ 
+-using namespace std;
+-
+ char *instance_name=(char*)"";
+ 
+ #define NUM_MIDDLEWARE 3
+diff --git a/src/Tests/MqTest.h b/src/Tests/MqTest.h
+index bd7e3efd..dbcff446 100644
+--- a/src/Tests/MqTest.h
++++ b/src/Tests/MqTest.h
+@@ -21,6 +21,7 @@
+ #include <unistd.h>
+ #include "../Containers/MultiPseudoStack.h"
+ using namespace std;
++using namespace zyn;
+ 
+ char *instance_name=(char*)"";
+ 
+diff --git a/src/Tests/OscilGenTest.h b/src/Tests/OscilGenTest.h
+index 9f9c7b6f..496f2f05 100644
+--- a/src/Tests/OscilGenTest.h
++++ b/src/Tests/OscilGenTest.h
+@@ -17,9 +17,10 @@
+ #include "../DSP/FFTwrapper.h"
+ #include "../Misc/Util.h"
+ #include "../globals.h"
+-SYNTH_T *synth;
+-
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
+ 
+ class OscilGenTest:public CxxTest::TestSuite
+ {
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index 88a9ed91..0d9d7625 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -29,9 +29,11 @@
+ #include "../Params/Presets.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../globals.h"
++using namespace std;
++using namespace zyn;
++
+ SYNTH_T *synth;
+ 
+-using namespace std;
+ #ifndef SOURCE_DIR
+ #define SOURCE_DIR "BE QUIET COMPILER"
+ #endif
+diff --git a/src/Tests/PluginTest.h b/src/Tests/PluginTest.h
+index 04cc86cd..6067dcc0 100644
+--- a/src/Tests/PluginTest.h
++++ b/src/Tests/PluginTest.h
+@@ -23,10 +23,12 @@
+ #include "../Misc/Util.h"
+ #include "../globals.h"
+ #include "../UI/NSM.H"
+-SYNTH_T *synth;
+-NSM_Client *nsm = 0;
+ 
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
++NSM_Client *nsm = 0;
+ 
+ char *instance_name=(char*)"";
+ MiddleWare *middleware;
+diff --git a/src/Tests/RandTest.h b/src/Tests/RandTest.h
+index d5b213c8..0b31d6f7 100644
+--- a/src/Tests/RandTest.h
++++ b/src/Tests/RandTest.h
+@@ -15,6 +15,7 @@
+ #include <cstdlib>
+ #include <cstdio>
+ #include <cxxtest/TestSuite.h>
++using namespace zyn;
+ 
+ class RandTest:public CxxTest::TestSuite
+ {
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index 04a09e3d..c0bf4350 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -25,9 +25,11 @@
+ #include "../Params/SUBnoteParameters.h"
+ #include "../Params/Presets.h"
+ #include "../globals.h"
+-SYNTH_T *synth;
+ 
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
+ 
+ class SubNoteTest:public CxxTest::TestSuite
+ {
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.h
+index 87179687..bf8bc714 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.h
+@@ -25,10 +25,10 @@
+ #include "../Params/Presets.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../globals.h"
+-SYNTH_T *synth;
+-
+ using namespace std;
++using namespace zyn;
+ 
++SYNTH_T *synth;
+ 
+ #define BUF 256
+ class AdNoteTest:public CxxTest::TestSuite
+diff --git a/src/Tests/WatchTest.h b/src/Tests/WatchTest.h
+index 21c72711..ba234a1f 100644
+--- a/src/Tests/WatchTest.h
++++ b/src/Tests/WatchTest.h
+@@ -32,6 +32,7 @@
+ #include "../Synth/LFO.h"
+ #include <unistd.h>
+ using namespace std;
++using namespace zyn;
+ 
+ char *instance_name=(char*)"";
+ 
+diff --git a/src/Tests/XMLwrapperTest.h b/src/Tests/XMLwrapperTest.h
+index f8f3d0f9..5abdea75 100644
+--- a/src/Tests/XMLwrapperTest.h
++++ b/src/Tests/XMLwrapperTest.h
+@@ -14,8 +14,10 @@
+ #include "../Misc/XMLwrapper.h"
+ #include <string>
+ #include "../globals.h"
+-SYNTH_T *synth;
+ using namespace std;
++using namespace zyn;
++
++SYNTH_T *synth;
+ 
+ class XMLwrapperTest:public CxxTest::TestSuite
+ {
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index d440e203..6478ec6f 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -19,6 +19,8 @@
+ #include <cstring>
+ #include <cassert>
+ 
++using namespace zyn;
++
+ BankList::BankList(int x,int y, int w, int h, const char *label)
+     :Fl_Osc_Choice(x,y,w,h,label)
+ {}
+diff --git a/src/UI/ConfigUI.fl b/src/UI/ConfigUI.fl
+index e2a53684..de2464de 100644
+--- a/src/UI/ConfigUI.fl
++++ b/src/UI/ConfigUI.fl
+@@ -53,6 +53,9 @@ decl {\#include "../globals.h"} {public local
+ decl {\#include "../Misc/Util.h"} {public local
+ } 
+ 
++decl {using namespace zyn;} {public local
++}
++
+ class ConfigUI {} {
+   Function {make_window()} {} {
+     Fl_Window configwindow {
+diff --git a/src/UI/EffUI.fl b/src/UI/EffUI.fl
+index e448cf7a..71553072 100644
+--- a/src/UI/EffUI.fl
++++ b/src/UI/EffUI.fl
+@@ -54,7 +54,10 @@ decl {\#include "PresetsUI.h"} {public local
+ } 
+ 
+ decl {\#include "common.H"} {public local
+-} 
++}
++
++decl {using namespace zyn;} {public local
++}
+ 
+ class EffUI {open : {public Fl_Osc_Group,public PresetsUI_}
+ } {
+diff --git a/src/UI/EnvelopeFreeEdit.cpp b/src/UI/EnvelopeFreeEdit.cpp
+index b29e6776..967eb088 100644
+--- a/src/UI/EnvelopeFreeEdit.cpp
++++ b/src/UI/EnvelopeFreeEdit.cpp
+@@ -17,6 +17,8 @@
+ #include <cassert>
+ #include <rtosc/rtosc.h>
+ 
++using namespace zyn;
++
+ EnvelopeFreeEdit::EnvelopeFreeEdit(int x,int y, int w, int h, const char *label)
+ :Fl_Box(x,y,w,h,label), Fl_Osc_Widget(this)
+ {
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index 3562d79d..20de2cec 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -68,6 +68,9 @@ decl {\#include "common.H"} {public local
+ decl {\#include "FormantFilterGraph.H"} {public local
+ } 
+ 
++decl {using namespace zyn;} {public local
++}
++
+ class FilterUI {open : {public Fl_Osc_Group,PresetsUI_}
+ } {
+   Function {FilterUI(int x,int y, int w, int h, const char *label=0):Fl_Osc_Group(x,y,w,h)} {} {
+diff --git a/src/UI/Fl_EQGraph.cpp b/src/UI/Fl_EQGraph.cpp
+index c1daa02f..a89746ec 100644
+--- a/src/UI/Fl_EQGraph.cpp
++++ b/src/UI/Fl_EQGraph.cpp
+@@ -19,6 +19,8 @@
+ 
+ #include <rtosc/rtosc.h>
+ 
++using namespace zyn;
++
+ #define MAX_DB 30
+ 
+ Fl_EQGraph::Fl_EQGraph(int x,int y, int w, int h, const char *label)
+diff --git a/src/UI/Fl_Resonance_Graph.cpp b/src/UI/Fl_Resonance_Graph.cpp
+index 800d84f7..a3bd8acc 100644
+--- a/src/UI/Fl_Resonance_Graph.cpp
++++ b/src/UI/Fl_Resonance_Graph.cpp
+@@ -14,6 +14,7 @@
+ #include <FL/fl_draw.H>
+ #include <FL/Fl_Value_Output.H>
+ #include <rtosc/rtosc.h>
++using namespace zyn;
+ 
+ Fl_Resonance_Graph::Fl_Resonance_Graph(int x,int y, int w, int h, const char *label)
+     :Fl_Box(x,y,w,h,label), Fl_Osc_Widget(this), khzvalue(NULL), dbvalue(NULL),
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index dc1e9057..f89156de 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -71,6 +71,9 @@ decl {\#include "PresetsUI.h"} {public local
+ decl {\#include <FL/fl_draw.H>} {public local
+ } 
+ 
++decl {using namespace zyn;} {public local
++}
++
+ class OGSlider {: {public Fl_Osc_TSlider}
+ } {
+   Function {OGSlider(int x,int y, int w, int h, const char *label=0)
+diff --git a/src/UI/VirKeyboard.fl b/src/UI/VirKeyboard.fl
+index 9af6c53b..34d939f0 100644
+--- a/src/UI/VirKeyboard.fl
++++ b/src/UI/VirKeyboard.fl
+@@ -37,6 +37,9 @@ decl {\#ifdef NTK_GUI
+      \#endif} {public local
+ } 
+ 
++decl {using namespace zyn;} {public local
++}
++
+ decl {const int keyspos[12]={0,-1,1,-2,2,3,-4,4,-5,5,-6,6};} {private local
+ } 
+ 
+diff --git a/src/UI/VuMasterMeter.h b/src/UI/VuMasterMeter.h
+index d8897a8e..9527c249 100644
+--- a/src/UI/VuMasterMeter.h
++++ b/src/UI/VuMasterMeter.h
+@@ -12,6 +12,7 @@
+ #include "VuMeter.h"
+ #include "Fl_Osc_Interface.h"
+ #define MIN_DB (-48)
++using namespace zyn;
+ 
+ class VuMasterMeter: public VuMeter
+ {
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index 7190dffb..6a675b2a 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -36,16 +36,6 @@ void exitprogram()
+     GUI::destroyUi(gui);
+ }
+ 
+-bool fileexists(const char *filename)
+-{
+-    struct stat tmp;
+-    int result = stat(filename, &tmp);
+-    if(result >= 0)
+-        return true;
+-
+-    return false;
+-}
+-
+ int Pexitprogram=0;
+ 
+ 
+@@ -77,7 +67,21 @@ int Pexitprogram=0;
+ 
+ using namespace GUI;
+ class MasterUI *ui=0;
+-bool isPlugin = false;
++
++// exceptionally extension of the namespace outside the core
++namespace zyn
++{
++    bool isPlugin = false;
++    bool fileexists(const char *filename)
++    {
++        struct stat tmp;
++        int result = stat(filename, &tmp);
++        if(result >= 0)
++            return true;
++
++        return false;
++    }
++}
+ 
+ #ifdef NTK_GUI
+ static Fl_Tiled_Image *module_backdrop;
+-- 
+2.47.0
+

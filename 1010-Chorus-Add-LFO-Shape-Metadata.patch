@@ -1,0 +1,26 @@
+From 96ba32a55d386937925457ce4af0d69b623c479f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 30 Aug 2016 18:42:37 -0400
+Subject: [PATCH 1010/1936] Chorus: Add LFO Shape Metadata
+
+---
+ src/Effects/Chorus.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/Effects/Chorus.cpp b/src/Effects/Chorus.cpp
+index 1d97e3b2..3b86f030 100644
+--- a/src/Effects/Chorus.cpp
++++ b/src/Effects/Chorus.cpp
+@@ -32,7 +32,8 @@ rtosc::Ports Chorus::ports = {
+     //Pvolume/Ppanning are common
+     rEffPar(Pfreq,    2, rShort("freq"), "Effect Frequency"),
+     rEffPar(Pfreqrnd, 3, rShort("rand"), "Frequency Randomness"),
+-    rEffPar(PLFOtype, 4, rShort("shape"), "LFO Shape"),
++    rEffPar(PLFOtype, 4, rShort("shape"),
++            rOptions(sine, tri), "LFO Shape"),
+     rEffParTF(PStereo,5, rShort("stereo"), "Stereo/Mono Mode"),
+     rEffPar(Pdepth,   6, rShort("depth"), "LFO Depth"),
+     rEffPar(Pdelay,   7, rShort("delay"), "Delay"),
+-- 
+2.47.0
+

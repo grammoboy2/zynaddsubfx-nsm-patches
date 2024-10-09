@@ -1,0 +1,51 @@
+From aa0a7126c983507a4555f4683d1e920785aa7b6f Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Wed, 4 Nov 2015 14:23:57 -0500
+Subject: [PATCH 0677/1936] Fix display update when switching adaptive
+ harmonics mode
+
+---
+ src/Synth/OscilGen.cpp | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index c6a49c19..2ede7530 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -148,16 +148,6 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+             d.reply(d.loc, "b", n*sizeof(float), smps);
+             delete[] smps;
+         }},
+-    {"spectrum:", rProp(non-realtime) rDoc("Returns spectrum of waveform"),
+-        NULL, [](const char *, rtosc::RtData &d) {
+-            OscilGen &o = *((OscilGen*)d.obj);
+-            const unsigned n = o.synth.oscilsize / 2;
+-            float *spc = new float[n];
+-            memset(spc, 0, 4*n);
+-            ((OscilGen*)d.obj)->getspectrum(n,spc,0);
+-            d.reply(d.loc, "b", n*sizeof(float), spc);
+-            delete[] spc;
+-        }},
+     {"prepare:", rProp(non-realtime) rDoc("Performs setup operation to oscillator"),
+         NULL, [](const char *, rtosc::RtData &d) {
+             //fprintf(stderr, "prepare: got a message from '%s'\n", m);
+@@ -208,6 +198,16 @@ const rtosc::Ports OscilGen::realtime_ports{
+             d.reply(d.loc, "b", n*sizeof(float), smps);
+             delete[] smps;
+         }},
++    {"spectrum:", rDoc("Returns spectrum of waveform"),
++        NULL, [](const char *, rtosc::RtData &d) {
++            OscilGen &o = *((OscilGen*)d.obj);
++            const unsigned n = o.synth.oscilsize / 2;
++            float *spc = new float[n];
++            memset(spc, 0, 4*n);
++            ((OscilGen*)d.obj)->getspectrum(n,spc,0);
++            d.reply(d.loc, "b", n*sizeof(float), spc);
++            delete[] spc;
++        }},
+     {"prepare:b", rProp(internal) rProp(realtime) rProp(pointer) rDoc("Sets prepared fft data"),
+         NULL, [](const char *m, rtosc::RtData &d) {
+             // fprintf(stderr, "prepare:b got a message from '%s'\n", m);
+-- 
+2.47.0
+

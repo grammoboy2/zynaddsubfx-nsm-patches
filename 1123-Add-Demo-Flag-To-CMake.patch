@@ -1,0 +1,35 @@
+From 7d66d9fce6f8f6f6863700166e45996190c4b09e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 20 Mar 2017 17:03:20 -0400
+Subject: [PATCH 1123/1936] Add Demo Flag To CMake
+
+---
+ src/CMakeLists.txt | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 2ecef60e..10412ec8 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -95,6 +95,7 @@ SET (NoNeonPlease False CACHE BOOL
+     "Workaround For Broken Neon Detection")
+ SET (PluginLibDir "lib" CACHE STRING
+     "Install directory for plugin libraries PREFIX/PLUGIN_LIB_DIR/{lv2,vst}")
++SET (DemoMode FALSE CACHE BOOL "Enable 10 minute silence")
+ 
+ # Now, handle the incoming settings and set define flags/variables based
+ # on this
+@@ -116,6 +117,10 @@ else()
+     add_definitions(-DHAVE_ASYNC=0)
+ endif()
+ 
++if(DemoMode)
++    add_definitions(-DDEMO_VERSION=1)
++endif()
++
+ 
+ # Give a good guess on the best Input/Output default backends
+ if (JackEnable)
+-- 
+2.47.0
+

@@ -1,0 +1,27 @@
+From 428b130b1d7030b79eb9d25865f58dc13a3f3370 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Apr 2015 11:40:49 -0400
+Subject: [PATCH 0413/1936] More Travis Fixes
+
+---
+ .travis.yml | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/.travis.yml b/.travis.yml
+index 86b89fc4..444b526d 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -12,8 +12,10 @@ before_install:
+     - git clone https://github.com/radarsat1/liblo
+     - cd liblo
+     - git checkout 0.28
++    - sudo apt-get install autoconf automake
+     - ./autogen.sh
+     - ./configure && make && sudo make install
++    - cd ..
+ 
+ 
+ script:
+-- 
+2.47.0
+

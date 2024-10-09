@@ -1,0 +1,30 @@
+From 12b9ff886be32fb1976d992a5b0c9788c971fb39 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 31 Mar 2016 18:31:51 +0200
+Subject: [PATCH 0894/1936] Fix compilation under FreeBSD
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Plugin/CMakeLists.txt | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/Plugin/CMakeLists.txt b/src/Plugin/CMakeLists.txt
+index d6001bc5..b2b61d86 100644
+--- a/src/Plugin/CMakeLists.txt
++++ b/src/Plugin/CMakeLists.txt
+@@ -1,8 +1,11 @@
+ 
+ add_executable(lv2-ttl-generator ${CMAKE_SOURCE_DIR}/DPF/utils/lv2-ttl-generator/lv2_ttl_generator.c)
+ 
+-# TODO: make this !win32 only
++CHECK_LIBRARY_EXISTS(dl dlopen "" LIBDL_FOUND)
++
++IF(LIBDL_FOUND)
+ target_link_libraries(lv2-ttl-generator "dl")
++ENDIF(LIBDL_FOUND)
+ 
+ add_subdirectory(AlienWah)
+ add_subdirectory(Chorus)
+-- 
+2.47.0
+

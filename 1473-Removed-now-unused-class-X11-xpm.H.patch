@@ -1,0 +1,28 @@
+From ecad06de27082f021d5f2a4fffaf7c025c83cb33 Mon Sep 17 00:00:00 2001
+From: nori li <50680474+thenorili@users.noreply.github.com>
+Date: Tue, 18 Feb 2020 11:20:39 -0500
+Subject: [PATCH 1473/1936] Removed now-unused class X11/xpm.H.
+
+---
+ src/UI/MasterUI.fl | 5 -----
+ 1 file changed, 5 deletions(-)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 54647645..f1761f4a 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -82,11 +82,6 @@ extern NSM_Client *nsm;
+ \#endif} {public local
+ } 
+ 
+-decl {\#if !defined(PLUGINVERSION) && HAS_X11
+-\#include <X11/xpm.h>
+-\#endif} {public local
+-} 
+-
+ decl {\#if !defined(PLUGINVERSION) && HAS_X11
+ \#include <FL/Fl_RGB_Image.H>
+ \#endif} {private local
+-- 
+2.47.0
+

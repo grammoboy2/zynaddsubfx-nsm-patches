@@ -1,0 +1,76 @@
+From 60453050c7965056b049a4b2e99a9b5825513b3d Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Mon, 20 Nov 2023 21:28:10 +0100
+Subject: [PATCH 1931/1936] OscilGen's Resonance can be const
+
+---
+ src/Params/ADnoteParameters.cpp | 2 +-
+ src/Params/ADnoteParameters.h   | 2 +-
+ src/Synth/OscilGen.cpp          | 2 +-
+ src/Synth/OscilGen.h            | 4 ++--
+ 4 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 5afc78b8..3b01cc1c 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -634,7 +634,7 @@ void ADnoteParameters::EnableVoice(const SYNTH_T &synth, int nvoice,
+ }
+ 
+ void ADnoteVoiceParam::enable(const SYNTH_T &synth, FFTwrapper *fft,
+-                              Resonance *Reson, const AbsTime *time)
++                              const Resonance *Reson, const AbsTime *time)
+ {
+     OscilGn  = new OscilGen(synth, fft, Reson);
+     FmGn    = new OscilGen(synth, fft, NULL);
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index ebee50c5..1fc23f9d 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -117,7 +117,7 @@ struct ADnoteVoiceParam {
+     void add2XML(XMLwrapper& xml, bool fmoscilused);
+     void paste(ADnoteVoiceParam &p);
+     void defaults(void);
+-    void enable(const SYNTH_T &synth, FFTwrapper *fft, Resonance *Reson,
++    void enable(const SYNTH_T &synth, FFTwrapper *fft, const Resonance *Reson,
+                 const AbsTime *time);
+     void kill(void);
+     float getUnisonFrequencySpreadCents(void) const;
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index bc03b34f..95eae26b 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -458,7 +458,7 @@ void OscilGenBuffers::defaults()
+     oldsapars     = 0;
+ }
+ 
+-OscilGen::OscilGen(const SYNTH_T &synth_, FFTwrapper *fft_, Resonance *res_)
++OscilGen::OscilGen(const SYNTH_T &synth_, FFTwrapper *fft_, const Resonance *res_)
+     :Presets(),
+       m_myBuffers(OscilGenBuffersCreator(fft_, synth_.oscilsize)),
+       fft(fft_),
+diff --git a/src/Synth/OscilGen.h b/src/Synth/OscilGen.h
+index 26e09a1f..1bffbff5 100644
+--- a/src/Synth/OscilGen.h
++++ b/src/Synth/OscilGen.h
+@@ -84,7 +84,7 @@ private:
+ class OscilGen:public Presets, NoCopyNoMove
+ {
+     public:
+-        OscilGen(const SYNTH_T &synth, FFTwrapper *fft_, Resonance *res_);
++        OscilGen(const SYNTH_T &synth, FFTwrapper *fft_, const Resonance *res_);
+ 
+         //You need to call this func if you need your own buffers for get() etc.
+         OscilGenBuffersCreator createOscilGenBuffers() const;
+@@ -228,7 +228,7 @@ class OscilGen:public Presets, NoCopyNoMove
+         //(that's why the sine and cosine components should be processed with a separate call)
+         void adaptiveharmonicpostprocess(fft_t *f, int size) const;
+ 
+-        Resonance *res;
++        const Resonance *res;
+ 
+         unsigned int randseed;
+     public:
+-- 
+2.47.0
+

@@ -1,0 +1,27 @@
+From d3421c30a2a1547b5849ff117bc021dc7d949daf Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Mon, 12 Oct 2015 22:07:25 +0200
+Subject: [PATCH 0596/1936] Add missing default value for two strings. Fixes
+ garbage characters in UI title.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/UI/MasterUI.fl | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index f9e015c3..220d2f7d 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1506,6 +1506,8 @@ osc=osc_;
+ ninseff=0;
+ nsyseff=0;
+ npart=0;
++last_loaded[0]=0;
++loading_next[0]=0;
+ last_xmz = new Osc_DataModel(osc);
+ last_xmz->callback = [this](std::string filestr) {
+     const char *filename = filestr.c_str();
+-- 
+2.47.0
+

@@ -1,0 +1,60 @@
+From c72dd5ef7b83b9f09191307fc8990e5e72087f0d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 10 Oct 2015 14:05:43 -0400
+Subject: [PATCH 0588/1936] MiddleWare: Update UI On Remote Bank Load
+
+---
+ src/Misc/MiddleWare.cpp | 7 ++++++-
+ src/UI/BankView.cpp     | 4 ++--
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 1e9e8495..5a15442b 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -236,6 +236,11 @@ void rescanForBanks(Bank &bank, std::function<void(const char*)> cb)
+ 
+ void loadBank(Bank &bank, int pos, std::function<void(const char*)> cb)
+ {
++    char response[2048];
++    if(!rtosc_message(response, 2048, "/loadbank", "i", pos))
++        errx(1, "Failure to handle bank update properly...");
++    if(cb)
++        cb(response);
+     if(bank.bankpos != pos) {
+         bank.bankpos = pos;
+         bank.loadbank(bank.banks[pos].dir);
+@@ -1176,7 +1181,7 @@ void MiddleWareImpl::handleMsg(const char *msg)
+     if(last_url == "GUI")
+         bank_cb = [this](const char *msg){if(osc)osc->tryLink(msg);};
+     else
+-        bank_cb = [this](const char *msg){this->bToUhandle(msg, 1);};
++        bank_cb = [this](const char *msg){if(osc)osc->tryLink(msg);this->bToUhandle(msg, 1);};
+ 
+     if(!strcmp(msg, "/refresh_bank") && !strcmp(rtosc_argument_string(msg), "i")) {
+         refreshBankView(master->bank, rtosc_argument(msg,0).i, bank_cb);
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index 5946ef7a..003b86a7 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -21,7 +21,7 @@ void BankList::init(std::string path)
+ 
+ void BankList::OSC_raw(const char *msg)
+ {
+-    if(!strcmp(msg, "/bank-list")) {
++    if(!strcmp(msg, "/bank-list") && !strcmp(rtosc_argument_string(msg),"iss")) {
+ 
+         const int   pos  = rtosc_argument(msg, 0).i;
+         const char *path = rtosc_argument(msg, 1).s;
+@@ -33,7 +33,7 @@ void BankList::OSC_raw(const char *msg)
+         this->add(path);
+         osc->write("/loadbank");
+     }
+-    if(!strcmp(msg, "/loadbank")) {
++    if(!strcmp(msg, "/loadbank")&& !strcmp(rtosc_argument_string(msg),"i")) {
+         value(rtosc_argument(msg, 0).i);
+     }
+ }
+-- 
+2.47.0
+

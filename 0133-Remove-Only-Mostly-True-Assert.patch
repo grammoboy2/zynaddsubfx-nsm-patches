@@ -1,0 +1,24 @@
+From caf844a1666736cb985f41dbb25e866a53d5f970 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 21 Aug 2013 16:12:19 -0400
+Subject: [PATCH 0133/1936] Remove Only Mostly True Assert
+
+---
+ src/UI/Fl_Osc_Widget.cpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/UI/Fl_Osc_Widget.cpp b/src/UI/Fl_Osc_Widget.cpp
+index a7367765..d915923c 100644
+--- a/src/UI/Fl_Osc_Widget.cpp
++++ b/src/UI/Fl_Osc_Widget.cpp
+@@ -45,7 +45,6 @@ void Fl_Osc_Widget::oscWrite(std::string path, const char *args, ...)
+     char buffer[1024];
+     //puts("writing OSC");
+     //printf("Path = '%s'\n", path.c_str());
+-    assert(!path.empty());
+ 
+     va_list va;
+     va_start(va, args);
+-- 
+2.47.0
+

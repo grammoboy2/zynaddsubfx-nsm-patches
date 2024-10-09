@@ -1,0 +1,67 @@
+From 0baebb79578bbcb9d3ad81c2edf642bae14eb4f5 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Fri, 30 Oct 2015 23:57:33 -0400
+Subject: [PATCH 0651/1936] Stab at fixing the sporadic window corruption by
+ Fl_Group labels.
+
+---
+ src/UI/EnvelopeUI.fl | 2 +-
+ src/UI/FilterUI.fl   | 2 +-
+ src/UI/LFOUI.fl      | 8 +++++---
+ 3 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index 47757e05..4fe48490 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -73,7 +73,7 @@ class PointButton {open : {public Fl_Button, public Fl_Osc_Widget}}
+ }
+ class EnvelopeUI {open : {public Fl_Osc_Group,PresetsUI_}
+ } {
+-  Function {EnvelopeUI(int x,int y, int w, int h, const char *label=0):Fl_Osc_Group(x,y,w,h,label)} {} {
++  Function {EnvelopeUI(int x,int y, int w, int h, const char *label=0):Fl_Osc_Group(x,y,w,h)} {} {
+     code {freemodeeditwindow=NULL;
+ envADSR=NULL;
+ envASR=NULL;
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index db5b3912..85b91535 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -70,7 +70,7 @@ decl {\#include "FormantFilterGraph.H"} {public local
+ 
+ class FilterUI {open : {public Fl_Osc_Group,PresetsUI_}
+ } {
+-  Function {FilterUI(int x,int y, int w, int h, const char *label=0):Fl_Osc_Group(x,y,w,h,label)} {} {
++  Function {FilterUI(int x,int y, int w, int h, const char *label=0):Fl_Osc_Group(x,y,w,h)} {} {
+     code {nvowel=0;nformant=0;nseqpos=0;} {}
+   }
+   Function {~FilterUI()} {} {
+diff --git a/src/UI/LFOUI.fl b/src/UI/LFOUI.fl
+index 29e6105c..d0dcb6e6 100644
+--- a/src/UI/LFOUI.fl
++++ b/src/UI/LFOUI.fl
+@@ -46,9 +46,9 @@ decl {\#include "common.H"} {public local
+ 
+ class LFOUI {open : {public Fl_Osc_Group, PresetsUI_}
+ } {
+-  Function {LFOUI(int x,int y, int w, int h, const char *label=0):Fl_Osc_Group(x,y,w,h,label)} {open
++  Function {LFOUI(int x,int y, int w, int h, const char *label=0):Fl_Osc_Group(x,y,w,h)} {open
+   } {
+-    code {} {}
++    code { cached_label = label; } {}
+   }
+   Function {~LFOUI()} {open
+   } {
+@@ -188,6 +188,8 @@ refresh();
+ 
+ lfoui->resize(this->x(),this->y(),this->w(),this->h());
+ 
+-lfoparamswindow->label(this->label());} {}
++lfoparamswindow->label(cached_label);} {}
+   }
++
++  decl { const char *cached_label; } { private }
+ } 
+-- 
+2.47.0
+

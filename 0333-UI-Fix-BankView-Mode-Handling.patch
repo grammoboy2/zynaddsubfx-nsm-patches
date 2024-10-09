@@ -1,0 +1,384 @@
+From 2c36bea55279103db81d9fd44a81b78df7736b64 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 19 Feb 2015 21:19:44 -0500
+Subject: [PATCH 0333/1936] UI: Fix BankView Mode Handling
+
+---
+ src/Misc/Bank.cpp          | 71 +++++++++++++++++++++++++++-----------
+ src/Misc/Bank.h            | 10 +++---
+ src/Misc/MiddleWare.cpp    | 56 ++++++++++++++++++++++++++++++
+ src/Misc/PresetExtractor.h |  1 +
+ src/Tests/PluginTest.h     |  4 +++
+ src/UI/BankView.cpp        | 26 +++++++++-----
+ 6 files changed, 134 insertions(+), 34 deletions(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index bc5a339a..2215c6e2 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -91,10 +91,10 @@ string Bank::getnamenumbered(unsigned int ninstrument)
+ /*
+  * Changes the name of an instrument (and the filename)
+  */
+-void Bank::setname(unsigned int ninstrument, const string &newname, int newslot)
++int Bank::setname(unsigned int ninstrument, const string &newname, int newslot)
+ {
+     if(emptyslot(ninstrument))
+-        return;
++        return 0;
+ 
+     string newfilename;
+     char   tmpfilename[100 + 1];
+@@ -112,10 +112,13 @@ void Bank::setname(unsigned int ninstrument, const string &newname, int newslot)
+ 
+     newfilename = dirname + legalizeFilename(tmpfilename) + ".xiz";
+ 
+-    rename(ins[ninstrument].filename.c_str(), newfilename.c_str());
++    int err = rename(ins[ninstrument].filename.c_str(), newfilename.c_str());
++    if(err)
++        return err;
+ 
+     ins[ninstrument].filename = newfilename;
+     ins[ninstrument].name     = newname;
++    return err;
+ }
+ 
+ /*
+@@ -134,21 +137,31 @@ bool Bank::emptyslot(unsigned int ninstrument)
+ /*
+  * Removes the instrument from the bank
+  */
+-void Bank::clearslot(unsigned int ninstrument)
++int Bank::clearslot(unsigned int ninstrument)
+ {
+     if(emptyslot(ninstrument))
+-        return;
+-
+-    remove(ins[ninstrument].filename.c_str());
+-    deletefrombank(ninstrument);
++        return 0;
++
++    //no error when no file
++    FILE *f = fopen(ins[ninstrument].filename.c_str(), "r");
++    if(!f)
++        return 0;
++    fclose(f);
++
++    int err = remove(ins[ninstrument].filename.c_str());
++    if(!err)
++        deletefrombank(ninstrument);
++    return err;
+ }
+ 
+ /*
+  * Save the instrument to a slot
+  */
+-void Bank::savetoslot(unsigned int ninstrument, Part *part)
++int Bank::savetoslot(unsigned int ninstrument, Part *part)
+ {
+-    clearslot(ninstrument);
++    int err = clearslot(ninstrument);
++    if(err)
++        return err;
+ 
+     const int maxfilename = 200;
+     char      tmpfilename[maxfilename + 20];
+@@ -167,23 +180,35 @@ void Bank::savetoslot(unsigned int ninstrument, Part *part)
+ 
+     string filename = dirname + '/' + legalizeFilename(tmpfilename) + ".xiz";
+ 
+-    remove(filename.c_str());
+-    part->saveXML(filename.c_str());
++    FILE *f = fopen(filename.c_str(), "r");
++    if(f) {
++        fclose(f);
++
++        err = remove(filename.c_str());
++        if(err)
++            return err;
++    }
++
++    err = part->saveXML(filename.c_str());
++    if(err)
++        return err;
+     addtobank(ninstrument, legalizeFilename(tmpfilename) + ".xiz", (char *) part->Pname);
++    return 0;
+ }
+ 
+ /*
+  * Loads the instrument from the bank
+  */
+-void Bank::loadfromslot(unsigned int ninstrument, Part *part)
++int Bank::loadfromslot(unsigned int ninstrument, Part *part)
+ {
+     if(emptyslot(ninstrument))
+-        return;
++        return 0;
+ 
+     part->AllNotesOff();
+     part->defaultsinstrument();
+ 
+     part->loadXMLinstrument(ins[ninstrument].filename.c_str());
++    return 0;
+ }
+ 
+ /*
+@@ -286,17 +311,20 @@ int Bank::locked()
+ /*
+  * Swaps a slot with another
+  */
+-void Bank::swapslot(unsigned int n1, unsigned int n2)
++int Bank::swapslot(unsigned int n1, unsigned int n2)
+ {
++    int err = 0;
+     if((n1 == n2) || (locked()))
+-        return;
++        return 0;
+     if(emptyslot(n1) && (emptyslot(n2)))
+-        return;
++        return 0;
+     if(emptyslot(n1)) //change n1 to n2 in order to make
+         swap(n1, n2);
+ 
+     if(emptyslot(n2)) { //this is just a movement from slot1 to slot2
+-        setname(n1, getname(n1), n2);
++        err |= setname(n1, getname(n1), n2);
++        if(err)
++            return err;
+         ins[n2] = ins[n1];
+         ins[n1] = ins_t();
+     }
+@@ -304,10 +332,13 @@ void Bank::swapslot(unsigned int n1, unsigned int n2)
+         if(ins[n1].name == ins[n2].name) //change the name of the second instrument if the name are equal
+             ins[n2].name += "2";
+ 
+-        setname(n1, getname(n1), n2);
+-        setname(n2, getname(n2), n1);
++        err |= setname(n1, getname(n1), n2);
++        err |= setname(n2, getname(n2), n1);
++        if(err)
++            return err;
+         swap(ins[n2], ins[n1]);
+     }
++    return err;
+ }
+ 
+ 
+diff --git a/src/Misc/Bank.h b/src/Misc/Bank.h
+index d1cd3af9..6f827108 100644
+--- a/src/Misc/Bank.h
++++ b/src/Misc/Bank.h
+@@ -40,7 +40,7 @@ class Bank
+         std::string getname(unsigned int ninstrument);
+         std::string getnamenumbered(unsigned int ninstrument);
+         //if newslot==-1 then this is ignored, else it will be put on that slot
+-        void setname(unsigned int ninstrument,
++        int setname(unsigned int ninstrument,
+                      const std::string &newname,
+                      int newslot);
+ 
+@@ -48,14 +48,14 @@ class Bank
+         bool emptyslot(unsigned int ninstrument);
+ 
+         /**Empties out the selected slot*/
+-        void clearslot(unsigned int ninstrument);
++        int clearslot(unsigned int ninstrument);
+         /**Saves the given Part to slot*/
+-        void savetoslot(unsigned int ninstrument, class Part * part);
++        int savetoslot(unsigned int ninstrument, class Part * part);
+         /**Loads the given slot into a Part*/
+-        void loadfromslot(unsigned int ninstrument, class Part * part);
++        int loadfromslot(unsigned int ninstrument, class Part * part);
+ 
+         /**Swaps Slots*/
+-        void swapslot(unsigned int n1, unsigned int n2);
++        int swapslot(unsigned int n1, unsigned int n2);
+ 
+         int loadbank(std::string bankdirname) NONREALTIME;
+         int newbank(std::string newbankdirname) NONREALTIME;
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 4ee0b0da..0babd93f 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -12,6 +12,7 @@
+ #include <unistd.h>
+ #include <dirent.h>
+ 
++#include "../UI/Connection.h"
+ #include "../UI/Fl_Osc_Interface.h"
+ #ifndef NO_UI
+ #include "../UI/Fl_Osc_Widget.H"
+@@ -549,6 +550,53 @@ public:
+     //Apply function while parameters are write locked
+     void doReadOnlyOp(std::function<void()> read_only_fn);
+ 
++
++    void saveBankSlot(int npart, int nslot, Master *master, Fl_Osc_Interface *osc)
++    {
++        int err = 0;
++        doReadOnlyOp([master,nslot,npart,&err](){
++                err = master->bank.savetoslot(nslot, master->part[npart]);});
++        if(err) {
++            char buffer[1024];
++            rtosc_message(buffer, 1024, "/alert", "s",
++                    "Failed To Save To Bank Slot, please check file permissions");
++            GUI::raiseUi(ui, buffer);
++        }
++    }
++
++    void renameBankSlot(int slot, string name, Master *master, Fl_Osc_Interface *osc)
++    {
++        int err = master->bank.setname(slot, name, -1);
++        if(err) {
++            char buffer[1024];
++            rtosc_message(buffer, 1024, "/alert", "s",
++                    "Failed To Rename Bank Slot, please check file permissions");
++            GUI::raiseUi(ui, buffer);
++        }
++    }
++
++    void swapBankSlot(int slota, int slotb, Master *master, Fl_Osc_Interface *osc)
++    {
++        int err = master->bank.swapslot(slota, slotb);
++        if(err) {
++            char buffer[1024];
++            rtosc_message(buffer, 1024, "/alert", "s",
++                    "Failed To Swap Bank Slots, please check file permissions");
++            GUI::raiseUi(ui, buffer);
++        }
++    }
++
++    void clearBankSlot(int slot, Master *master, Fl_Osc_Interface *osc)
++    {
++        int err = master->bank.clearslot(slot);
++        if(err) {
++            char buffer[1024];
++            rtosc_message(buffer, 1024, "/alert", "s",
++                    "Failed To Clear Bank Slot, please check file permissions");
++            GUI::raiseUi(ui, buffer);
++        }
++    }
++
+     void saveMaster(const char *filename)
+     {
+         //Copy is needed as filename WILL get trashed during the rest of the run
+@@ -999,6 +1047,14 @@ void MiddleWareImpl::handleMsg(const char *msg)
+     } else if(strstr(msg, "load-part") && !strcmp(rtosc_argument_string(msg), "is")) {
+         pending_load[rtosc_argument(msg,0).i]++;
+         loadPart(rtosc_argument(msg,0).i, rtosc_argument(msg,1).s, master, osc);
++    } else if(strstr(msg, "save-bank-part") && !strcmp(rtosc_argument_string(msg), "ii")) {
++        saveBankSlot(rtosc_argument(msg,0).i, rtosc_argument(msg,1).i, master, osc);
++    } else if(strstr(msg, "bank-rename") && !strcmp(rtosc_argument_string(msg), "is")) {
++        renameBankSlot(rtosc_argument(msg,0).i, rtosc_argument(msg,1).s, master, osc);
++    } else if(strstr(msg, "swap-bank-slots") && !strcmp(rtosc_argument_string(msg), "ii")) {
++        swapBankSlot(rtosc_argument(msg,0).i, rtosc_argument(msg,1).i, master, osc);
++    } else if(strstr(msg, "clear-bank-slot") && !strcmp(rtosc_argument_string(msg), "i")) {
++        clearBankSlot(rtosc_argument(msg,0).i, master, osc);
+     } else if(strstr(msg, "Padenabled") || strstr(msg, "Ppadenabled") || strstr(msg, "Psubenabled")) {
+         kitEnable(msg);
+         uToB->raw_write(msg);
+diff --git a/src/Misc/PresetExtractor.h b/src/Misc/PresetExtractor.h
+index 6aa2c180..b58ee4fb 100644
+--- a/src/Misc/PresetExtractor.h
++++ b/src/Misc/PresetExtractor.h
+@@ -1,3 +1,4 @@
++#pragma once
+ #include <string>
+ 
+ struct Clipboard {
+diff --git a/src/Tests/PluginTest.h b/src/Tests/PluginTest.h
+index 39eb4f52..b080f70c 100644
+--- a/src/Tests/PluginTest.h
++++ b/src/Tests/PluginTest.h
+@@ -27,9 +27,13 @@
+ #include <string>
+ #include "../Misc/MiddleWare.h"
+ #include "../Misc/Master.h"
++#include "../Misc/PresetExtractor.h"
++#include "../Misc/PresetExtractor.cpp"
+ #include "../Misc/Util.h"
+ #include "../globals.h"
++#include "../UI/NSM.H"
+ SYNTH_T *synth;
++NSM_Client *nsm = 0;
+ 
+ using namespace std;
+ 
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index 95970896..ece32617 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -191,13 +191,14 @@ void BankViewControls::mode(int m)
+     assert(0 <= M && M <= 3);
+     Fl_Button *buttons[4]{read, write, clear, swap};
+ 
+-    for(int i=0; i<3; ++i)
++    for(int i=0; i<4; ++i)
+         buttons[i]->value(i==M);
+ }
+ 
+ 
+ BankView::BankView(int x,int y, int w, int h, const char *label)
+-    :Fl_Group(x,y,w,h,label)
++    :Fl_Group(x,y,w,h,label), bvc(NULL), slots{0}, osc(0),
++    loc(""), nselected(-1), npart(0)
+ {}
+ 
+ 
+@@ -256,16 +257,17 @@ void BankView::init(Fl_Osc_Interface *osc_, BankViewControls *bvc_, int *npart_)
+  */
+ void BankView::react(int event, int nslot)
+ {
+-    printf("reacting...\n");
+     BankSlot &slot = *slots[nslot];
+     const bool isempty = slot.empty();
+     const int  mode    = bvc->mode();
+-    printf("mode = %d\n", mode);
+ 
+     //Rename slot
+-    if (event==2 && !isempty && mode!=4)
+-        if(const char *name=fl_input("Slot (instrument) name:", slot.name()))
++    if (event==2 && !isempty && mode!=4) {
++        if(const char *name=fl_input("Slot (instrument) name:", slot.name())) {
+             osc->write("/bank-rename", "is", nslot, name);
++            osc->write("/refresh_bank", "i", nslot);
++        }
++    }
+ 
+     //Reads from slot
+     if ((event==1)&&(mode==1)&&(!slot.empty())){
+@@ -279,7 +281,8 @@ void BankView::react(int event, int nslot)
+         if(!isempty && !fl_choice("Overwrite the slot no. %d ?","No","Yes",NULL,nslot+1))
+             return;
+ 
+-        osc->write("/save-bank-part", "i", npart);
++        osc->write("/save-bank-part", "ii", *npart, nslot);
++        osc->write("/refresh_bank", "i", nslot);
+         //pthread_mutex_lock(&master->part[*npart]->load_mutex);
+         //bank->savetoslot(slot,master->part[*npart]);
+         //pthread_mutex_unlock(&master->part[*npart]->load_mutex);
+@@ -289,14 +292,19 @@ void BankView::react(int event, int nslot)
+ 
+ 
+     //Clears the slot
+-    if(event==1 && mode==3 && !isempty)
+-        if (fl_choice("Clear the slot no. %d ?","No","Yes",NULL, nslot+1))
++    if(event==1 && mode==3 && !isempty) {
++        if (fl_choice("Clear the slot no. %d ?","No","Yes",NULL, nslot+1)) {
+             osc->write("/clear-bank-slot", "i", nslot);
++            osc->write("/refresh_bank", "i", nslot);
++        }
++    }
+ 
+     //Swap
+     if(mode==4) {
+         if(event==1 && nselected>=0){
+             osc->write("/swap-bank-slots", "ii", nselected, nslot);
++            osc->write("/refresh_bank", "i", nslot);
++            osc->write("/refresh_bank", "i", nselected);
+             //bank->swapslot(nselected,slot);
+             nselected=-1;
+         } else if(nselected<0 || event==2) {
+-- 
+2.47.0
+

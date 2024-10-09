@@ -1,0 +1,67 @@
+From 2bb67febdc7d930ba0231249615b6469a9cfaf4f Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 16 Nov 2019 10:10:43 +0100
+Subject: [PATCH 1449/1936] Give better name to variable.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/OssEngine.cpp      | 6 +++---
+ src/Nio/OssMultiEngine.cpp | 4 ++--
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/Nio/OssEngine.cpp b/src/Nio/OssEngine.cpp
+index b4764a9a..7d4ccd8d 100644
+--- a/src/Nio/OssEngine.cpp
++++ b/src/Nio/OssEngine.cpp
+@@ -36,7 +36,7 @@ using namespace std;
+ 
+ namespace zyn {
+ 
+-static const int OssBlocking = 0;
++static const int OssNonBlocking = 0;
+ 
+ /*
+  * The following statemachine converts MIDI commands to USB MIDI
+@@ -224,7 +224,7 @@ bool OssEngine::openAudio()
+              << device << '.' << endl;
+         return false;
+     }
+-    ioctl(audio.handle, FIONBIO, &OssBlocking);
++    ioctl(audio.handle, FIONBIO, &OssNonBlocking);
+     ioctl(audio.handle, SNDCTL_DSP_RESET, NULL);
+ 
+     /* Figure out the correct format first */
+@@ -363,7 +363,7 @@ bool OssEngine::openMidi()
+         return false;
+     midi.handle = handle;
+ 
+-    ioctl(midi.handle, FIONBIO, &OssBlocking);
++    ioctl(midi.handle, FIONBIO, &OssNonBlocking);
+ 
+     pthread_attr_t attr;
+     pthread_attr_init(&attr);
+diff --git a/src/Nio/OssMultiEngine.cpp b/src/Nio/OssMultiEngine.cpp
+index bacb0c79..5a9e9f1e 100644
+--- a/src/Nio/OssMultiEngine.cpp
++++ b/src/Nio/OssMultiEngine.cpp
+@@ -37,7 +37,7 @@ extern zyn::MiddleWare *middleware;
+ 
+ namespace zyn {
+ 
+-static const int OssBlocking = 0;
++static const int OssNonBlocking = 0;
+ 
+ OssMultiEngine :: OssMultiEngine(const SYNTH_T &synth,
+     const oss_devs_t &oss_devs)
+@@ -94,7 +94,7 @@ OssMultiEngine :: openAudio()
+             << device << '.' << endl;
+         return (false);
+     }
+-    ioctl(handle, FIONBIO, &OssBlocking);
++    ioctl(handle, FIONBIO, &OssNonBlocking);
+     ioctl(handle, SNDCTL_DSP_RESET, 0);
+ 
+     /* Figure out the correct format first */
+-- 
+2.47.0
+

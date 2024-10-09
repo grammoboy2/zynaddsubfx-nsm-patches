@@ -1,0 +1,31 @@
+From f977cff275eb85b8e905dbf73629aacac1b7c7eb Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Apr 2015 11:29:02 -0400
+Subject: [PATCH 0412/1936] TravisCI: Try To Fix Liblo Dep
+
+---
+ .travis.yml | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index f3017718..86b89fc4 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -8,7 +8,13 @@ before_install:
+     - sudo apt-get -qq update
+     - sudo apt-get -qq install g++-4.8
+     - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
+-    - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev liblo-dev
++    - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev
++    - git clone https://github.com/radarsat1/liblo
++    - cd liblo
++    - git checkout 0.28
++    - ./autogen.sh
++    - ./configure && make && sudo make install
++
+ 
+ script:
+     - mkdir build && cd build
+-- 
+2.47.0
+

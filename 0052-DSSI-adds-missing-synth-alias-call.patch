@@ -1,0 +1,24 @@
+From 48bfe89b94c91e7eaabb1af08951994673ff3b33 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 1 Dec 2012 11:56:50 -0500
+Subject: [PATCH 0052/1936] DSSI: adds missing synth->alias() call
+
+---
+ src/Output/DSSIaudiooutput.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index 1499792f..e9cea86a 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -629,6 +629,7 @@ DSSIaudiooutput::DSSIaudiooutput(unsigned long sampleRate)
+     for(int i = 0; i < synth->buffersize; i++)
+         denormalkillbuf[i] = (RND - 0.5f) * 1e-16;
+ 
++    synth->alias();
+     this->master = new Master();
+ }
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,555 @@
+From 7090b2a03c6d7254766be5bf469578e440514a0b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 11 Aug 2013 13:51:52 -0400
+Subject: [PATCH 0112/1936] First Pass at Oscifying MicrotonalUI
+
+Performing several types of updates have been disabled for the moment as it's
+not safe to go running file IO tasks in the RT thread...
+---
+ rtosc                   |   2 +-
+ src/Misc/Master.cpp     |   8 ++-
+ src/Misc/Microtonal.cpp |  22 +++---
+ src/Misc/Microtonal.h   |   5 +-
+ src/UI/CMakeLists.txt   |   1 +
+ src/UI/Fl_Osc_Input.H   |   1 +
+ src/UI/Fl_Osc_Value.H   |  12 ++++
+ src/UI/Fl_Osc_Value.cpp |  12 ++++
+ src/UI/MasterUI.fl      |   6 +-
+ src/UI/MicrotonalUI.fl  | 145 +++++++++++++++++++++++-----------------
+ 10 files changed, 133 insertions(+), 81 deletions(-)
+ create mode 100644 src/UI/Fl_Osc_Value.H
+ create mode 100644 src/UI/Fl_Osc_Value.cpp
+
+diff --git a/rtosc b/rtosc
+index fbfc2c43..139f55ee 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit fbfc2c43d2ab7135a5c57c9314d187871a0a9799
++Subproject commit 139f55ee905df4ecda97b6246ada0b30a4f6d6ac
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 480f4892..e917443e 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -30,6 +30,7 @@
+ #include "../DSP/FFTwrapper.h"
+ 
+ #include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
+ #include <rtosc/thread-link.h>
+ #include <stdio.h>
+ #include <sys/stat.h>
+@@ -41,14 +42,15 @@
+ #include <unistd.h>
+ 
+ using namespace std;
+-using rtosc::Ports;
+-using rtosc::RtData;
++using namespace rtosc;
++#define rObject Master
+ 
+ static Ports localports = {
+     RECURSP(Master, Part, part, part, 16, "Part"),//NUM_MIDI_PARTS
+     RECURSP(Master, EffectMgr, sysefx, sysefx, 4, "System Effect"),//NUM_SYS_EFX
+     RECURSP(Master, EffectMgr, insefx, insefx, 8, "Insertion Effect"),//NUM_INS_EFX
+-    {"echo", "=doc\0:Hidden port to echo messages\0", 0, [](const char *m, RtData&) {
++    rRecur(microtonal, "Micrtonal Mapping Functionality"),
++    {"echo", "=documentation\0:Hidden port to echo messages\0", 0, [](const char *m, RtData&) {
+        bToU->raw_write(m-1);}},
+     {"get-vu", "", 0, [](const char *, RtData &d) {
+        Master *m = (Master*)d.obj;
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 15537fdc..569cfdd1 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -36,19 +36,22 @@
+ #define MAX_LINE_SIZE 80
+ 
+ #define rObject Microtonal
++using namespace rtosc;
+ 
+ /**
++ * TODO
+  * Consider how much of this should really exist on the rt side of things.
+  * All the rt side needs is a function to map notes at various keyshifts to
+  * frequencies, which does not require this many parameters...
++ *
++ * A good lookup table should be a good finalization of this
+  */
+-/*
+-rtosc::Ports ports = {
++rtosc::Ports Microtonal::ports = {
+     rToggle(Pinvertupdown, "key mapping inverse"),
+     rParam(Pinvertupdowncenter, "center of the inversion"),
+     rToggle(Penabled, "Enable for microtonal mode"),
+     rParam(PAnote, "The note for 'A'"),
+-    //rParamF(PAfreq) (check)
++    rParamF(PAfreq, "Frequency of the 'A' note"),
+     rParam(Pscaleshift, "UNDOCUMENTED"),
+     rParam(Pfirstkey, "First key to retune"),
+     rParam(Plastkey,  "Last key to retune"),
+@@ -58,16 +61,16 @@ rtosc::Ports ports = {
+     rParam(Pmapsize, "UNDOCUMENTED"),
+     rToggle(Pmappingenabled, "Mapping Enable"),
+ 
++    rParams(Pmapping, "UNDOCUMENTED"),
++    rParam(Pglobalfinedetune, "Fine detune for all notes"),
+ 
+-    rString(Pname, )
++    rString(Pname, MICROTONAL_MAX_NAME_LEN, "Microtonal Name"),
++    rString(Pcomment, MICROTONAL_MAX_NAME_LEN, "Microtonal Name"),
+ };
+-*/
+ 
+ 
+ Microtonal::Microtonal()
+ {
+-    Pname    = new unsigned char[MICROTONAL_MAX_NAME_LEN];
+-    Pcomment = new unsigned char[MICROTONAL_MAX_NAME_LEN];
+     defaults();
+ }
+ 
+@@ -114,10 +117,7 @@ void Microtonal::defaults()
+ }
+ 
+ Microtonal::~Microtonal()
+-{
+-    delete [] Pname;
+-    delete [] Pcomment;
+-}
++{}
+ 
+ /*
+  * Get the size of the octave
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index a63d0130..fd1abec8 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -101,9 +101,9 @@ class Microtonal
+         void texttomapping(const char *text);
+ 
+         /**Name of Microtonal tuning*/
+-        unsigned char *Pname;
++        char Pname[MICROTONAL_MAX_NAME_LEN];
+         /**Comment about the tuning*/
+-        unsigned char *Pcomment;
++        char Pcomment[MICROTONAL_MAX_NAME_LEN];
+ 
+         void add2XML(XMLwrapper *xml) const;
+         void getfromXML(XMLwrapper *xml);
+@@ -114,6 +114,7 @@ class Microtonal
+         bool operator==(const Microtonal &micro) const;
+         bool operator!=(const Microtonal &micro) const;
+ 
++        static rtosc::Ports ports;
+     private:
+         int linetotunings(unsigned int nline, const char *line);
+         int loadline(FILE *file, char *line); //loads a line from the text file, while ignoring the lines beggining with "!"
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index 3fcdf59e..b2c5801b 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -47,6 +47,7 @@ add_library(zynaddsubfx_gui STATIC
+         Fl_Osc_Output.cpp
+         Fl_Osc_Counter.cpp
+         Fl_Osc_Input.cpp
++        Fl_Osc_Value.cpp
+         Fl_Resonance_Graph.cpp
+         Fl_EQGraph.cpp
+         FormantFilterGraph.cpp
+diff --git a/src/UI/Fl_Osc_Input.H b/src/UI/Fl_Osc_Input.H
+index 9212aa9a..cfbeb197 100644
+--- a/src/UI/Fl_Osc_Input.H
++++ b/src/UI/Fl_Osc_Input.H
+@@ -1,3 +1,4 @@
++#pragma once
+ #include <FL/Fl_Input.H>
+ #include "Fl_Osc_Widget.H"
+ 
+diff --git a/src/UI/Fl_Osc_Value.H b/src/UI/Fl_Osc_Value.H
+new file mode 100644
+index 00000000..6555d79d
+--- /dev/null
++++ b/src/UI/Fl_Osc_Value.H
+@@ -0,0 +1,12 @@
++#include <FL/Fl_Value_Input.H>
++#include "Fl_Osc_Widget.H"
++
++class Fl_Osc_Value: public Fl_Value_Input, public Fl_Osc_Widget
++{
++    public:
++        Fl_Osc_Value(int X, int Y, int W, int H, const char *label = NULL);
++        virtual ~Fl_Osc_Value(void);
++        
++        //Normal Initialization
++        void init(const char *path);
++};
+diff --git a/src/UI/Fl_Osc_Value.cpp b/src/UI/Fl_Osc_Value.cpp
+new file mode 100644
+index 00000000..af9ecdbb
+--- /dev/null
++++ b/src/UI/Fl_Osc_Value.cpp
+@@ -0,0 +1,12 @@
++#include "Fl_Osc_Value.H"
++
++Fl_Osc_Value::Fl_Osc_Value(int X, int Y, int W, int H, const char *label)
++    :Fl_Value_Input(X,Y,W,H, label), Fl_Osc_Widget(this)
++{
++}
++
++Fl_Osc_Value::~Fl_Osc_Value(void)
++{}
++
++void Fl_Osc_Value::init(const char *path)
++{}
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 4b8a70ad..cf4c7e57 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -312,7 +312,7 @@ pthread_mutex_unlock(&master->mutex);
+ 
+ 
+  delete microtonalui;  
+- microtonalui=new MicrotonalUI(&master->microtonal);
++ microtonalui=new MicrotonalUI(osc, "/microtonal/");
+ 
+ if (result==-10) fl_alert("Error: Could not load the file\\nbecause it is not a scale file.");
+       else if (result<0) fl_alert("Error: Could not load the file.");}
+@@ -1533,7 +1533,7 @@ for (int i=0;i<NUM_SYS_EFX;i++)
+    for (int j=0;j<NUM_SYS_EFX;j++)
+      syseffsend[i][j]=NULL;
+ 
+-microtonalui=new MicrotonalUI(&master->microtonal);
++microtonalui=new MicrotonalUI(osc, "/microtonal/");
+ virkeyboard=new VirKeyboard(osc, "/");
+ bankui=new BankUI(master, &npart, osc);
+ configui=new ConfigUI();
+@@ -1693,7 +1693,7 @@ inseffnocounter->do_callback();
+ masterkeyshiftcounter->value(master->Pkeyshift-64);
+ mastervolumedial->value(master->Pvolume);    
+ globalfinedetuneslider->value(master->microtonal.Pglobalfinedetune);   
+-microtonalui=new MicrotonalUI(&master->microtonal);
++microtonalui=new MicrotonalUI(osc, "/microtonal/");
+ nrpnbutton->value(master->ctl.NRPN.receive);
+ updatesendwindow();
+ updatepanel();
+diff --git a/src/UI/MicrotonalUI.fl b/src/UI/MicrotonalUI.fl
+index 1f1af958..889217f4 100644
+--- a/src/UI/MicrotonalUI.fl
++++ b/src/UI/MicrotonalUI.fl
+@@ -21,38 +21,60 @@ decl {\#include <FL/Fl_File_Chooser.H>} {public
+ decl {\#include <FL/fl_ask.H>} {public
+ } 
+ 
++decl {\#include "Fl_Osc_Pane.H"} {public
++}
++
++decl {\#include "Fl_Osc_Value.H"} {public
++}
++
++decl {\#include "Fl_Osc_Check.H"} {public
++}
++
++decl {\#include "Fl_Osc_Counter.H"} {public
++}
++
++decl {\#include "Fl_Osc_Input.H"} {public
++}
++
++decl {\#include "Fl_Osc_Output.H"} {public
++}
++
+ decl {\#include "../Misc/Microtonal.h"} {public
+ } 
+ 
+ class MicrotonalUI {} {
+-  Function {make_window()} {} {
++  Function {make_window(Fl_Osc_Interface *osc, std::string base)} {} {
+     Fl_Window microtonaluiwindow {
+       label Scales
+       xywh {99 164 405 450} type Double hide
++      class Fl_Osc_Window
+     } {
++      Fl_Box {} {
++        xywh {0 0 0 0}
++        code0 {microtonaluiwindow->osc = osc;}
++        code1 {microtonaluiwindow->base = base;}
++      }
+       Fl_Group {} {
+         tooltip {Center where the note's freqs. are turned upside-down} xywh {249 2 155 45} box ENGRAVED_FRAME
+       } {
+         Fl_Check_Button {} {
+           label {Invert keys}
+-          callback {microtonal->Pinvertupdown=(int) o->value();
+-if (microtonal->Pinvertupdown==0) centerinvertcounter->deactivate();
++          callback {if (o->value()==0) centerinvertcounter->deactivate();
+    else centerinvertcounter->activate();}
+           tooltip {Turn upside-down the note frequencies} xywh {254 13 55 30} down_box DOWN_BOX labelfont 1 labelsize 11 align 148
+-          code0 {o->value(microtonal->Pinvertupdown);}
++          code0 {o->init("Pinvertupdown");}
++          class Fl_Osc_Check
+         }
+         Fl_Counter centerinvertcounter {
+           label Center
+-          callback {microtonal->Pinvertupdowncenter=(int) o->value();}
+           xywh {319 13 80 20} labelfont 1 labelsize 11 align 130 minimum 0 maximum 127 step 1 textfont 1
+-          code0 {o->lstep(microtonal->getoctavesize());}
+-          code1 {o->value(microtonal->Pinvertupdowncenter);}
+-          code2 {if (microtonal->Pinvertupdown==0) o->deactivate();}
++          code0 {o->lstep(12/*microtonal->getoctavesize()*/);}
++          code1 {o->init("Pinvertupdowncenter");}
++          class Fl_Osc_Counter
+         }
+       }
+       Fl_Group microtonalgroup {selected
+         xywh {3 49 402 398} box ENGRAVED_FRAME
+-        code0 {if (microtonal->Penabled==0) o->deactivate();}
+       } {
+         Fl_Button applybutton {
+           label Retune
+@@ -61,15 +83,16 @@ if (microtonal->Pinvertupdown==0) centerinvertcounter->deactivate();
+         }
+         Fl_Value_Output octavesizeoutput {
+           label {nts./oct.}
+-          callback {o->value(microtonal->getoctavesize());}
+           tooltip {Notes/Octave} xywh {150 423 35 17} labelsize 10 align 5 maximum 500 step 1 value 12 textfont 1
+-          code0 {o->value(microtonal->getoctavesize());}
++          code0 {o->init("octavesize");}
++          class Fl_Osc_Output
+         }
+         Fl_Input nameinput {
+           label {Name:}
+-          callback {snprintf((char *)microtonal->Pname,MICROTONAL_MAX_NAME_LEN,"%s",o->value());}
+           xywh {8 64 285 25} labelfont 1 labelsize 11 align 5
+-          code0 {o->insert((char *)microtonal->Pname);}
++          code0 {o->maximum_size(MICROTONAL_MAX_NAME_LEN);}
++          code1 {o->init("Pname");}
++          class Fl_Osc_Input
+         }
+         Fl_Input tuningsinput {
+           label {Tunings:}
+@@ -78,19 +101,20 @@ if (microtonal->Pinvertupdown==0) centerinvertcounter->deactivate();
+         }
+         Fl_Input commentinput {
+           label {Comment:}
+-          callback {snprintf((char *)microtonal->Pcomment,MICROTONAL_MAX_NAME_LEN,"%s",o->value());}
+           xywh {8 104 391 25} labelfont 1 labelsize 11 align 5
+-          code0 {o->insert((char *)microtonal->Pcomment);}
++          code0 {o->maximum_size(MICROTONAL_MAX_NAME_LEN);}
++          code1 {o->init("Pcomment");}
++          class Fl_Osc_Input
+         }
+         Fl_Counter {} {
+           label Shift
+-          callback {microtonal->Pscaleshift=(int) o->value()+64;}
+-          xywh {313 69 70 20} type Simple labelsize 11 align 1 minimum -63 maximum 64 step 1 textfont 1
+-          code0 {o->value(microtonal->Pscaleshift-64);}
++          xywh {313 69 70 20} type Simple labelsize 11 align 1 minimum -64 maximum 63 step 1 textfont 1
++          code0 {o->init("Pscaleshift");}
++          class Fl_Osc_Counter
+         }
+         Fl_Button {} {
+           label {Import .SCL file}
+-          callback {const char *filename;
++          callback {/*const char *filename;
+ filename=fl_file_chooser("Open:","(*.scl)",NULL,0);
+ if (filename==NULL) return;
+ int result=microtonal->loadscl(filename);
+@@ -106,7 +130,7 @@ if (result==0) {
+        octavesizeoutput->do_callback();
+      } else {
+ 	fl_alert("Error: Could not load the file.");   
+-     };}
++     };*/}
+           tooltip {Inport Scala .scl file (tunnings)} xywh {243 411 84 15} box THIN_UP_BOX labelfont 1 labelsize 10
+         }
+         Fl_Group keymappinggroup {
+@@ -119,62 +143,59 @@ if (result==0) {
+           }
+           Fl_Counter firstnotecounter {
+             label {First note}
+-            callback {microtonal->Pfirstkey=(int) o->value();}
+             tooltip {First MIDI note number} xywh {199 195 42 18} type Simple labelsize 10 align 5 minimum 0 maximum 127 step 1 textfont 1 textsize 11
+-            code0 {o->value(microtonal->Pfirstkey);}
++            code0 {o->init("Pfirstkey");}
++            class Fl_Osc_Counter
+           }
+           Fl_Counter lastnotecounter {
+             label {Last note}
+-            callback {microtonal->Plastkey=(int) o->value();}
+             tooltip {Last MIDI note number} xywh {199 225 42 18} type Simple labelsize 10 align 5 minimum 0 maximum 127 step 1 value 127 textfont 1 textsize 11
+-            code0 {o->value(microtonal->Plastkey);}
++            code0 {o->init("Plastkey");}
++            class Fl_Osc_Counter
+           }
+           Fl_Counter middlenotecounter {
+             label {Midle note}
+-            callback {microtonal->Pmiddlenote=(int) o->value();}
+             tooltip {Midle note (where scale degree 0 is mapped to)} xywh {199 267 42 18} type Simple labelsize 10 align 5 minimum 0 maximum 127 step 1 value 60 textfont 1 textsize 11
+-            code0 {o->value(microtonal->Pmiddlenote);}
++            code0 {o->init("Pmiddlenote");}
++            class Fl_Osc_Counter
+           }
+           Fl_Value_Output mapsizeoutput {
+             label {Map Size}
+-            callback {o->value(microtonal->Pmapsize);}
+             xywh {201 382 44 20} labelsize 10 align 5 maximum 500 step 1 value 12 textfont 1
+-            code0 {o->value(microtonal->Pmapsize);}
++            code0 {o->init("Pmapsize");}
++            class Fl_Osc_Output
+           }
+         }
+         Fl_Check_Button mappingenabledbutton {
+           label ON
+-          callback {int x=(int) o->value();
+-microtonal->Pmappingenabled=x;
+-if (x==0) keymappinggroup->deactivate();
++          callback {if (o->value()==0) keymappinggroup->deactivate();
+  else keymappinggroup->activate();
+ o->show();}
+           tooltip {Enable the Mapping (otherwise the mapping is linear)} xywh {198 150 48 21} box FLAT_BOX down_box DOWN_BOX labelfont 1
+-          code0 {o->value(microtonal->Pmappingenabled);}
+-          code1 {if (microtonal->Pmappingenabled==0) keymappinggroup->deactivate();}
++          code0 {o->init("Pmappingenabled");}
++          class Fl_Osc_Check
+         }
+         Fl_Button {} {
+           label {Import .kbm file}
+-          callback {const char *filename;
++          callback {
++          //TODO Disabled until this can be moved into middleware
++          /*const char *filename;
+ filename=fl_file_chooser("Open:","(*.kbm)",NULL,0);
+ if (filename==NULL) return;
+ int result=microtonal->loadkbm(filename);
+ if (result==0) {
+        updateMappingInput();
+        mappinginput->position(0);
+-       mapsizeoutput->do_callback();
+-       firstnotecounter->value(microtonal->Pfirstkey);
+-       lastnotecounter->value(microtonal->Plastkey);
+-       middlenotecounter->value(microtonal->Pmiddlenote);
+-       mapsizeoutput->do_callback();
+-       mappingenabledbutton->value(microtonal->Pmappingenabled);
+-       mappingenabledbutton->do_callback();
+-       afreqinput->value(microtonal->PAfreq);
+-       anotecounter->value(microtonal->PAnote);
+-       anotecounter->do_callback();
++       mapsizeoutput->update();
++       firstnotecounter->update();
++       lastnotecounter->update();
++       middlenotecounter->update();
++       mappingenabledbutton->update();
++       afreqinput->update();
++       anotecounter->update();
+      } else {
+ 	fl_alert("Error: Could not load the file.");   
+-     };}
++     };*/}
+           tooltip {Inport Scala .kbm file (keyboard mapping)} xywh {243 428 84 16} box THIN_UP_BOX labelfont 1 labelsize 10
+         }
+       }
+@@ -183,20 +204,21 @@ if (result==0) {
+       } {
+         Fl_Counter anotecounter {
+           label {"A" Note}
+-          callback {microtonal->PAnote=(int) o->value();
+-if (microtonal->getnotefreq(microtonal->PAnote,0)<0.0) o->textcolor(FL_RED);
+- else o->textcolor(FL_BLACK);
++          callback {
++          /*if (microtonal->getnotefreq(o->value(),0)<0.0) o->textcolor(FL_RED);
++ else o->textcolor(FL_BLACK);*/
+ 
+ o->redraw();}
+           tooltip {The "A" note (the reference note for which freq. ("A" freq) is given)} xywh {173 17 65 20} labelfont 1 labelsize 10 align 129 minimum 0 maximum 127 step 1 value 69 textfont 1 textsize 10
+           code0 {o->lstep(12);}
+-          code1 {o->value(microtonal->PAnote);}
++          code1 {o->init("PAnote");}
++          class Fl_Osc_Counter
+         }
+         Fl_Value_Input afreqinput {
+           label {"A" Freq.}
+-          callback {microtonal->PAfreq=o->value();}
+           tooltip {The freq. of "A" note (default=440.0)} xywh {118 17 45 20} labelfont 1 labelsize 10 align 1 minimum 1 maximum 20000 step 0.001 value 440 textfont 1 textsize 10
+-          code0 {o->value(microtonal->PAfreq);}
++          code0 {o->init("PAfreq");}
++          class Fl_Osc_Value
+         }
+       }
+       Fl_Button {} {
+@@ -206,17 +228,18 @@ o->redraw();}
+       }
+       Fl_Check_Button {} {
+         label {Enable Microtonal}
+-        callback {microtonal->Penabled=(int) o->value();
+-if (microtonal->Penabled==0) microtonalgroup->deactivate();
++        callback {if (o->value()==0) microtonalgroup->deactivate();
+    else microtonalgroup->activate();}
+         xywh {3 3 102 45} box UP_BOX down_box DOWN_BOX labelfont 1 labelsize 11 align 148
+-        code0 {o->value(microtonal->Penabled);}
++        code0 {o->init("Penabled");}
++        class Fl_Osc_Check
+       }
+     }
+   }
+   Function {updateTuningsInput()} {} {
+     code {char *tmpbuf=new char[100];
+ 
++/*
+ tuningsinput->cut(0,tuningsinput->maximum_size());
+ 
+ for (int i=0;i<microtonal->getoctavesize();i++){
+@@ -224,12 +247,14 @@ for (int i=0;i<microtonal->getoctavesize();i++){
+    microtonal->tuningtoline(i,tmpbuf,100);
+    tuningsinput->insert(tmpbuf);
+ };
++*/
+ 
+ delete []tmpbuf;} {}
+   }
+   Function {updateMappingInput()} {} {
+     code {char *tmpbuf=new char[100];
+ 
++/*
+ mappinginput->cut(0,tuningsinput->maximum_size());
+ 
+ for (int i=0;i<microtonal->Pmapsize;i++){
+@@ -239,13 +264,12 @@ for (int i=0;i<microtonal->Pmapsize;i++){
+    else snprintf(tmpbuf,100,"%d",microtonal->Pmapping[i]);
+    mappinginput->insert(tmpbuf);
+ };
++*/
+ 
+ delete []tmpbuf;} {}
+   }
+-  Function {MicrotonalUI(Microtonal *microtonal_)} {} {
+-    code {microtonal=microtonal_;
+-
+-make_window();} {}
++  Function {MicrotonalUI(Fl_Osc_Interface *osc, std::string base)} {} {
++    code {make_window(osc, base);} {}
+   }
+   Function {~MicrotonalUI()} {} {
+     code {microtonaluiwindow->hide();
+@@ -255,7 +279,7 @@ delete(microtonaluiwindow);} {}
+     code {microtonaluiwindow->show();} {}
+   }
+   Function {apply()} {} {
+-    code {int err=microtonal->texttotunings(tuningsinput->value());
++    code {/*int err=microtonal->texttotunings(tuningsinput->value());
+ if (err>=0) fl_alert("Parse Error: The input may contain only numbers (like 232.59)\\n or divisions (like 121/64).");
+ if (err==-2) fl_alert("Parse Error: The input is empty.");
+ octavesizeoutput->do_callback();
+@@ -263,8 +287,7 @@ octavesizeoutput->do_callback();
+ microtonal->texttomapping(mappinginput->value());
+ mapsizeoutput->do_callback();
+ anotecounter->do_callback();
+-
++*/
+ //applybutton->color(FL_GRAY);} {}
+   }
+-  decl {Microtonal *microtonal;} {}
+ } 
+-- 
+2.47.0
+

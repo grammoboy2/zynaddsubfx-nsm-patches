@@ -1,0 +1,2049 @@
+From 4616b4ff038d4085e7bed9e5a857c6a065c134aa Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 1 Aug 2013 17:00:16 -0400
+Subject: [PATCH 0096/1936] EnvUI: Add Basic OSC Support
+
+One less user interface with a pointer to the backend, this is not exactly done.
+
+- Lightly tested migration of envelope user interface
+- Addition of dummy Fl_Osc_Counter widget with still to be determined semantics
+- Misc changes in modules that use the envelope to get this to work
+---
+ rtosc                            |   2 +-
+ src/Params/ADnoteParameters.cpp  |  10 +
+ src/Params/EnvelopeParams.cpp    |  85 +++-
+ src/Params/EnvelopeParams.h      |   4 +-
+ src/Params/PADnoteParameters.cpp |   6 +
+ src/Params/SUBnoteParameters.cpp |   5 +
+ src/Params/SUBnoteParameters.h   |   2 +-
+ src/UI/ADnoteUI.fl               |  21 +-
+ src/UI/CMakeLists.txt            |   2 +
+ src/UI/EnvelopeFreeEdit.cpp      | 193 ++++++++
+ src/UI/EnvelopeFreeEdit.h        |  47 ++
+ src/UI/EnvelopeUI.fl             | 769 ++++++++++++-------------------
+ src/UI/Fl_Osc_Button.cpp         |  35 --
+ src/UI/Fl_Osc_Counter.H          |   8 +
+ src/UI/Fl_Osc_Counter.cpp        |  10 +
+ src/UI/Fl_Osc_Dial.cpp           |   1 +
+ src/UI/PADnoteUI.fl              |   6 +-
+ src/UI/PartUI.fl                 |   9 +-
+ src/UI/SUBnoteUI.fl              |  63 ++-
+ 19 files changed, 711 insertions(+), 567 deletions(-)
+ create mode 100644 src/UI/EnvelopeFreeEdit.cpp
+ create mode 100644 src/UI/EnvelopeFreeEdit.h
+ create mode 100644 src/UI/Fl_Osc_Counter.H
+ create mode 100644 src/UI/Fl_Osc_Counter.cpp
+
+diff --git a/rtosc b/rtosc
+index d96df101..ad3738cc 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit d96df10161a34722bc3ef86f9225ce8c502d1915
++Subproject commit ad3738ccc1dd55bcd6fa453a4469a00d3b1524cf
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 07107f05..6874aa4c 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -34,10 +34,12 @@
+ #include "FilterParams.h"
+ 
+ #include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
+ using rtosc::Ports;
+ using rtosc::RtData;
+ 
+ #define EXPAND(x) x
++#define rObject ADnoteVoiceParam
+ 
+ static Ports voicePorts = {
+     RECURP(ADnoteVoiceParam, OscilGen, oscil,     OscilSmp, "Primary Oscillator"),
+@@ -45,6 +47,11 @@ static Ports voicePorts = {
+     RECURP(ADnoteVoiceParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
+     RECURP(ADnoteVoiceParam, LFOParams, AmpLfo, AmpLfo, "Amplitude LFO"),
+     RECURP(ADnoteVoiceParam, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
++    rRecurp(FreqEnvelope,   "Frequency Envelope"),
++    rRecurp(AmpEnvelope,    "Amplitude Envelope"),
++    rRecurp(FilterEnvelope, "Filter Envelope"),
++    rRecurp(FMFreqEnvelope, "Modulator Frequency Envelope"),
++    rRecurp(FMAmpEnvelope,  "Modulator Amplitude Envelope"),
+ };
+ 
+ static Ports globalPorts = {
+@@ -53,6 +60,9 @@ static Ports globalPorts = {
+     RECURP(ADnoteGlobalParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
+     RECURP(ADnoteGlobalParam, LFOParams, AmpLfo, AmpLfo, "Amplitude LFO"),
+     RECURP(ADnoteGlobalParam, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
++    RECURP(ADnoteGlobalParam,  EnvelopeParams, FreqEnvelope, FreqEnvelope, "Frequency Envelope"),
++    RECURP(ADnoteGlobalParam,  EnvelopeParams, AmpEnvelope, AmpEnvelope, "Frequency Envelope"),
++    RECURP(ADnoteGlobalParam,  EnvelopeParams, FilterEnvelope, FilterEnvelope, "Frequency Envelope"),
+ };
+ 
+ static Ports adPorts = {//XXX 16 should not be hard coded
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index a06704d6..50f0ab53 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -20,17 +20,78 @@
+ 
+ */
+ 
+-#include <stdio.h>
++#include <cmath>
++#include <cstdlib>
++#include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
+ 
+-#include <math.h>
+-#include <stdlib.h>
+ #include "EnvelopeParams.h"
+ 
++#define rObject EnvelopeParams
++using namespace rtosc;
++
++static rtosc::Ports localPorts = {
++    rToggle(Pfreemode, "Complex Envelope Definitions"),
++    rParam(Penvpoints, rProp(internal), "Number of points in complex definition"),
++    rParam(Penvsustain, rProp(internal), "Location of the sustain point"),
++    rParams(Penvdt,  MAX_ENVELOPE_POINTS, "Envelope Delay Times"),
++    rParams(Penvval, MAX_ENVELOPE_POINTS, "Envelope Values"),
++    rParam(Penvstretch, "Stretch with respect to frequency"),
++    rToggle(Pforcedrelease, "Force Envelope to fully evaluate"),
++    rToggle(Plinearenvelope, "Linear or Logarithmic Envelopes"),
++    rParam(PA_dt,  "Attack Time"),
++    rParam(PA_val, "Attack Value"),
++    rParam(PD_dt,  "Decay Time"),
++    rParam(PD_val, "Decay Value"),
++    rParam(PS_val, "Sustain Value"),
++    rParam(PR_dt,  "Release Time"),
++    rParam(PR_val, "Release Value"),
++
++    {"addPoint:i", rProp(internal), NULL, [](const char *msg, RtData &d)
++        {
++            EnvelopeParams *env = (rObject*) d.obj;
++            const int curpoint = rtosc_argument(msg, 0).i;
++            //int curpoint=freeedit->lastpoint;
++            if (curpoint<0 || curpoint>env->Penvpoints || env->Penvpoints>=MAX_ENVELOPE_POINTS)
++                return;
++
++            for (int i=env->Penvpoints; i>=curpoint+1; i--) {
++                env->Penvdt[i]=env->Penvdt[i-1];
++                env->Penvval[i]=env->Penvval[i-1];
++            }
++
++            if (curpoint==0) {
++                env->Penvdt[1]=64;
++            }
++
++            env->Penvpoints++;
++            if (curpoint<=env->Penvsustain) env->Penvsustain++;
++        }},
++    {"delPoint:i", rProp(internal), NULL, [](const char *msg, RtData &d)
++        {
++            EnvelopeParams *env = (rObject*) d.obj;
++            const int curpoint=rtosc_argument(msg, 0).i;
++            if(curpoint<1 || curpoint>=env->Penvpoints-1 || env->Penvpoints<=3)
++                return;
++
++            for (int i=curpoint+1;i<env->Penvpoints;i++){
++                env->Penvdt[i-1]=env->Penvdt[i];
++                env->Penvval[i-1]=env->Penvval[i];
++            };
++
++            env->Penvpoints--;
++
++            if (curpoint<=env->Penvsustain)
++                env->Penvsustain--;
++
++        }},
++};
++
++rtosc::Ports &EnvelopeParams::ports = localPorts;
++
+ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+-                               unsigned char Pforcedrelease_):Presets()
++        unsigned char Pforcedrelease_):Presets()
+ {
+-    int i;
+-
+     PA_dt  = 10;
+     PD_dt  = 10;
+     PR_dt  = 10;
+@@ -39,7 +100,7 @@ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+     PS_val = 64;
+     PR_val = 64;
+ 
+-    for(i = 0; i < MAX_ENVELOPE_POINTS; ++i) {
++    for(int i = 0; i < MAX_ENVELOPE_POINTS; ++i) {
+         Penvdt[i]  = 32;
+         Penvval[i] = 64;
+     }
+@@ -58,10 +119,14 @@ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+ EnvelopeParams::~EnvelopeParams()
+ {}
+ 
+-float EnvelopeParams::getdt(char i)
++float EnvelopeParams::getdt(char i) const
++{
++    return EnvelopeParams::dt(Penvdt[(int)i]);
++}
++
++float EnvelopeParams::dt(char val)
+ {
+-    float result = (powf(2.0f, Penvdt[(int)i] / 127.0f * 12.0f) - 1.0f) * 10.0f; //miliseconds
+-    return result;
++    return (powf(2.0f, val / 127.0f * 12.0f) - 1.0f) * 10.0f; //miliseconds
+ }
+ 
+ 
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index 0b3e99c9..b74ec848 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -52,7 +52,8 @@ class EnvelopeParams:public Presets
+         void defaults();
+         void getfromXML(XMLwrapper *xml);
+ 
+-        float getdt(char i);
++        float getdt(char i) const;
++        static float dt(char val);
+ 
+         /* MIDI Parameters */
+         unsigned char Pfreemode; //1 daca este in modul free sau 0 daca este in mod ADSR,ASR,...
+@@ -75,6 +76,7 @@ class EnvelopeParams:public Presets
+         // 4 for ADSR_filter parameters (filter parameters)
+         // 5 for ASR_bw parameters (bandwidth parameters)
+ 
++        static rtosc::Ports &ports;
+     private:
+         void store2defaults();
+ 
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index baec9450..33fcfbcc 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -47,6 +47,12 @@ static rtosc::Ports localPorts =
+     RECURP(PADnoteParameters, LFOParams, AmpLfo,    AmpLfo,   "Amplitude LFO"),
+     RECURP(PADnoteParameters, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
+     RECURP(PADnoteParameters, Resonance, resonance, resonance, "Resonance"),
++    RECURP(PADnoteParameters, EnvelopeParams, FreqEnvelope, FreqEnvelope,
++            "Frequency Envelope"),
++    RECURP(PADnoteParameters, EnvelopeParams, AmpEnvelope, AmpEnvelope,
++            "Amplitude Envelope"),
++    RECURP(PADnoteParameters, EnvelopeParams, FilterEnvelope, FilterEnvelope,
++            "Filter Envelope"),
+     PARAMC(PADnoteParameters, Pmode, mode,
+             "0 - bandwidth, 1 - discrete 2 - continious"),
+     PC(hp.base.type),
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index c71267c6..8aba9dce 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include "../globals.h"
+ #include "SUBnoteParameters.h"
++#include "EnvelopeParams.h"
+ #include <stdio.h>
+ 
+ #include <rtosc/ports.h>
+@@ -48,6 +49,10 @@ static rtosc::Ports localPorts = {
+     rArray(Phmag, MAX_SUB_HARMONICS, "Harmonic magnitudes"),
+     rArray(Phrelbw, MAX_SUB_HARMONICS, "Relative bandwidth"),
+     rParam(Pbwscale, "Bandwidth scaling with frequency"),
++    rRecurp(AmpEnvelope,          "Amplitude envelope"),
++    rRecurp(FreqEnvelope,         "Frequency Envelope"),
++    rRecurp(BandWidthEnvelope,    "Bandwidth Envelope"),
++    rRecurp(GlobalFilterEnvelope, "Post Filter Envelope"),
+     //rOption(Pstart, rOptions("zero", "random", "ones")),
+ };
+ 
+diff --git a/src/Params/SUBnoteParameters.h b/src/Params/SUBnoteParameters.h
+index 49ef90f0..db9d78de 100644
+--- a/src/Params/SUBnoteParameters.h
++++ b/src/Params/SUBnoteParameters.h
+@@ -25,10 +25,10 @@
+ 
+ #include "../globals.h"
+ #include "../Misc/XMLwrapper.h"
+-#include "EnvelopeParams.h"
+ #include "FilterParams.h"
+ #include "Presets.h"
+ 
++class EnvelopeParams;
+ class SUBnoteParameters:public Presets
+ {
+     public:
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index f0cee3d4..fff4ffd7 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -224,7 +224,8 @@ class ADvoiceUI {: {public Fl_Group}
+               Fl_Group voiceFMfreqenvgroup {
+                 label {ADSynth Modulator - Frequency Envelope}
+                 xywh {540 300 210 70} box FLAT_BOX color 51 align 144
+-                code0 {o->init(pars->VoicePar[nvoice].FMFreqEnvelope);}
++                code0 {o->init(//pars->VoicePar[nvoice].FMFreqEnvelope,
++                ENV_ASR, osc_i, loc + "FMFreqEnvelope/");}
+                 code1 {if (pars->VoicePar[nvoice].PFMFreqEnvelopeEnabled==0) o->deactivate();}
+                 class EnvelopeUI
+               } {}
+@@ -301,7 +302,8 @@ fmdetunevalueoutput->do_callback();} open
+               Fl_Group voiceFMampenvgroup {
+                 label {ADSynth Modulator - Amplitude Envelope} open
+                 xywh {540 145 205 70} box FLAT_BOX color 51 align 144
+-                code0 {o->init(pars->VoicePar[nvoice].FMAmpEnvelope);}
++                code0 {o->init(//pars->VoicePar[nvoice].FMAmpEnvelope,
++                ENV_ADSR, osc_i, loc + "FMAmpEnvelope/");}
+                 code1 {if (pars->VoicePar[nvoice].PFMAmpEnvelopeEnabled==0) o->deactivate();}
+                 class EnvelopeUI
+               } {}
+@@ -433,7 +435,8 @@ o->redraw();}
+             Fl_Group voicefreqenvgroup {
+               label {ADSynth Voice - Frequency Envelope} open
+               xywh {10 305 205 70} box FLAT_BOX color 51 align 144
+-              code0 {o->init(pars->VoicePar[nvoice].FreqEnvelope);}
++              code0 {o->init(//pars->VoicePar[nvoice].FreqEnvelope,
++              ENV_ASR, osc_i, loc + "FreqEnvelope/");}
+               code1 {if (pars->VoicePar[nvoice].PFreqEnvelopeEnabled==0) o->deactivate();}
+               class EnvelopeUI
+             } {}
+@@ -651,7 +654,8 @@ unisonspreadoutput->do_callback();}
+           Fl_Group voiceampenvgroup {
+             label {ADSynth Voice - Amplitude Envelope} open
+             xywh {10 105 205 70} box FLAT_BOX color 51 align 144
+-            code0 {o->init(pars->VoicePar[nvoice].AmpEnvelope);}
++            code0 {o->init(//pars->VoicePar[nvoice].AmpEnvelope,
++            ENV_ADSR, osc_i, loc + "AmpEnvelope/");}
+             code1 {if (pars->VoicePar[nvoice].PAmpEnvelopeEnabled==0) o->deactivate();}
+             class EnvelopeUI
+           } {}
+@@ -708,7 +712,8 @@ o->redraw();}
+           Fl_Group voicefilterenvgroup {
+             label {ADSynth Voice - Filter Envelope} open
+             xywh {250 115 275 70} box FLAT_BOX color 51 align 144
+-            code0 {o->init(pars->VoicePar[nvoice].FilterEnvelope);}
++            code0 {o->init(//pars->VoicePar[nvoice].FilterEnvelope,
++            ENV_ADSR_FILTER, osc_i, loc + "FilterEnvelope/");}
+             code1 {if (pars->VoicePar[nvoice].PFilterEnvelopeEnabled==0) o->deactivate();}
+             class EnvelopeUI
+           } {}
+@@ -861,7 +866,7 @@ class ADnoteUI {open : {public PresetsUI_}
+         Fl_Group freqenv {
+           label {ADSynth Global - Frequency Envelope} open
+           xywh {10 320 205 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(pars->GlobalPar.FreqEnvelope);}
++          code0 {o->init(ENV_ASR, osc, loc + "global/FreqEnvelope/");}
+           class EnvelopeUI
+         } {}
+         Fl_Counter octave {
+@@ -979,7 +984,7 @@ for (int i=0;i<NUM_VOICES;i++){
+         Fl_Group ampenv {
+           label {ADSynth Global - Amplitude Envelope} open
+           xywh {10 75 205 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(pars->GlobalPar.AmpEnvelope);}
++          code0 {o->init(ENV_ADSR, osc, loc + "global/AmpEnvelope/");}
+           class EnvelopeUI
+         } {}
+         Fl_Group amplfo {
+@@ -1002,7 +1007,7 @@ for (int i=0;i<NUM_VOICES;i++){
+         Fl_Group filterenv {
+           label {ADSynth Global - Filter Envelope} open
+           xywh {255 118 275 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(pars->GlobalPar.FilterEnvelope);}
++          code0 {o->init(ENV_ADSR_FILTER, osc, loc + "global/FilterEnvelope/");}
+           class EnvelopeUI
+         } {}
+         Fl_Group filterlfo {
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index ba452bc9..c2cdbcb8 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -43,7 +43,9 @@ add_library(zynaddsubfx_gui STATIC
+         Fl_Osc_Choice.cpp
+         Fl_Osc_Roller.cpp
+         Fl_Osc_Output.cpp
++        Fl_Osc_Counter.cpp
+         Fl_Resonance_Graph.cpp
++        EnvelopeFreeEdit.cpp
+         BankView.cpp
+         Connection.cpp
+ 	)
+diff --git a/src/UI/EnvelopeFreeEdit.cpp b/src/UI/EnvelopeFreeEdit.cpp
+new file mode 100644
+index 00000000..dbb738b1
+--- /dev/null
++++ b/src/UI/EnvelopeFreeEdit.cpp
+@@ -0,0 +1,193 @@
++#include "EnvelopeFreeEdit.h"
++#include "../Misc/Util.h"
++#include <FL/Fl.H>
++#include <FL/fl_draw.H>
++#include <cstdlib>
++
++EnvelopeFreeEdit::EnvelopeFreeEdit(int x,int y, int w, int h, const char *label)
++:Fl_Box(x,y,w,h,label), Fl_Osc_Widget(this)
++{
++    pair=NULL;
++    currentpoint=-1;
++    cpx=0;
++    lastpoint=-1;
++}
++
++void EnvelopeFreeEdit::init(void)
++{
++    oscRegister("Penvpoints");
++    oscRegister("Penvdt");
++    oscRegister("Penvval");
++    oscRegister("Penvsustain");
++}
++
++void EnvelopeFreeEdit::OSC_raw(const char *msg) const
++{}
++
++void EnvelopeFreeEdit::setpair(Fl_Box *pair_)
++{
++    pair=pair_;
++}
++
++int EnvelopeFreeEdit::getpointx(int n) const
++{
++    const int lx=w()-10;
++    int npoints=Penvpoints;
++
++    float  sum=0;
++    for(int i=1; i<npoints; ++i)
++        sum+=getdt(i)+1;
++
++    float sumbefore=0;//the sum of all points before the computed point
++    for(int i=1; i<=n; ++i)
++        sumbefore+=getdt(i)+1;
++
++    return (int) (sumbefore/(float) sum*lx);
++}
++
++int EnvelopeFreeEdit::getpointy(int n) const
++{
++    const int ly=h()-10;
++
++    return (1.0-Penvval[n]/127.0)*ly;
++}
++
++int EnvelopeFreeEdit::getnearest(int x,int y) const
++{
++    x-=5;y-=5;
++
++    int nearestpoint=0;
++    int nearestval=1000000;//a big value
++    for(int i=0; i<Penvpoints; ++i){
++        int distance=abs(x-getpointx(i))+abs(y-getpointy(i));
++        if (distance<nearestval) {
++            nearestpoint=i;
++            nearestval=distance;  
++        }
++    }
++
++    return nearestpoint;
++}
++
++float EnvelopeFreeEdit::getdt(int i) const
++{
++    return EnvelopeParams::dt(Penvdt[i]);
++}
++
++void EnvelopeFreeEdit::draw(void)
++{
++    int ox=x(),oy=y(),lx=w(),ly=h();
++    //if (env->Pfreemode==0)
++    //    env->converttofree();
++    const int npoints=Penvpoints;
++
++    if (active_r()) fl_color(FL_BLACK);
++    else fl_color(90,90,90);
++    if (!active_r()) currentpoint=-1;
++
++    fl_rectf(ox,oy,lx,ly);
++
++    //Margins
++    ox+=5;oy+=5;lx-=10;ly-=10;
++
++    //draw the lines
++    fl_color(FL_GRAY);
++
++    fl_line_style(FL_SOLID);
++    fl_line(ox+2,oy+ly/2,ox+lx-2,oy+ly/2);
++
++    //draws the evelope points and lines
++    Fl_Color alb=FL_WHITE;
++    if (!active_r()) alb=fl_rgb_color(180,180,180);
++    fl_color(alb);
++    int oldxx=0,xx=0,oldyy=0,yy=getpointy(0);
++    fl_rectf(ox-3,oy+yy-3,6,6);
++    for (int i=1; i<npoints; ++i){
++        oldxx=xx;oldyy=yy;
++        xx=getpointx(i);yy=getpointy(i);
++        if (i==currentpoint) fl_color(FL_RED);
++        else fl_color(alb);
++        fl_line(ox+oldxx,oy+oldyy,ox+xx,oy+yy);
++        fl_rectf(ox+xx-3,oy+yy-3,6,6);
++    }
++
++    //draw the last moved point point (if exists)
++    if (lastpoint>=0){
++        fl_color(FL_CYAN);
++        fl_rectf(ox+getpointx(lastpoint)-5,oy+getpointy(lastpoint)-5,10,10);
++    }
++
++    //draw the sustain position
++    if(Penvsustain>0){
++        fl_color(FL_YELLOW);
++        xx=getpointx(Penvsustain);
++        fl_line(ox+xx,oy+0,ox+xx,oy+ly);
++    }
++
++    //Show the envelope duration and the current line duration
++    fl_font(FL_HELVETICA|FL_BOLD,10);
++    float time=0.0;
++    if (currentpoint<=0){
++        fl_color(alb);
++        for(int i=1; i<npoints; ++i)
++            time+=getdt(i);
++    } else {
++        fl_color(255,0,0);
++        time=getdt(currentpoint);
++    }
++    char tmpstr[20];
++    if (time<1000.0)
++        snprintf((char *)&tmpstr,20,"%.1fms",time);
++    else
++        snprintf((char *)&tmpstr,20,"%.2fs",time/1000.0);
++    fl_draw(tmpstr,ox+lx-20,oy+ly-10,20,10,FL_ALIGN_RIGHT,NULL,0);
++}
++
++int EnvelopeFreeEdit::handle(int event)
++{
++    const int x_=Fl::event_x()-x();
++    const int y_=Fl::event_y()-y();
++
++    if (event==FL_PUSH) {
++        currentpoint=getnearest(x_,y_);
++        cpx=x_;
++        cpdt=Penvdt[currentpoint];
++        lastpoint=currentpoint;
++        redraw();
++        if (pair)
++            pair->redraw();
++    }
++
++    if (event==FL_RELEASE){
++        currentpoint=-1;
++        redraw();
++        if (pair)
++            pair->redraw();
++    }
++
++    if (event==FL_DRAG && currentpoint>=0){
++        int ny=limit(127-(int) (y_*127.0/h()), 0, 127);
++        
++        Penvval[currentpoint]=ny;
++
++        const int dx=(int)((x_-cpx)*0.1);
++        const int newdt=limit(cpdt+dx,0,127);
++        
++        if(currentpoint!=0)
++            Penvdt[currentpoint]=newdt;
++        else
++            Penvdt[currentpoint]=0;
++
++        redraw();
++
++        if(pair)
++            pair->redraw();
++    }
++
++
++    return 1;
++}
++
++void EnvelopeFreeEdit::update(void)
++{
++}
+diff --git a/src/UI/EnvelopeFreeEdit.h b/src/UI/EnvelopeFreeEdit.h
+new file mode 100644
+index 00000000..7e8f7c80
+--- /dev/null
++++ b/src/UI/EnvelopeFreeEdit.h
+@@ -0,0 +1,47 @@
++#include <FL/Fl_Box.H>
++#include "../Params/EnvelopeParams.h"
++#include "Fl_Osc_Widget.H"
++
++
++//Define the types of envelope (TODO a properly located enum)
++//TODO check if ASR should be ASR  *OR* ADR
++
++#define ENV_ADSR 1
++//#define ENV_ADSR 2
++#define ENV_ASR 3
++#define ENV_ADSR_FILTER 4
++#define ENV_ADSR_BW 5
++
++class EnvelopeFreeEdit : public Fl_Box, Fl_Osc_Widget
++{
++    public:
++        EnvelopeFreeEdit(int x,int y, int w, int h, const char *label=0);
++        void init(void);
++        void setpair(Fl_Box *pair_);
++        int handle(int event);
++
++        void draw(void);
++        void OSC_raw(const char *msg) const;
++        void update(void);
++
++
++        int lastpoint;
++    private:
++        int getpointx(int n) const;
++        int getpointy(int n) const;
++        int getnearest(int x,int y) const;
++        float getdt(int i) const;
++
++        Fl_Box *pair; //XXX what the heck is this?
++
++        //cursor state
++        int currentpoint, cpx, cpdt;
++
++        //How many points
++        char Penvpoints;
++        //The Points
++        char Penvdt[MAX_ENVELOPE_POINTS];
++        char Penvval[MAX_ENVELOPE_POINTS];
++        //The Sustain point
++        char Penvsustain;
++};
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index 34a41c67..c7c66ee3 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -1,207 +1,62 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0110 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {} 
+-
+-decl {//License: GNU GPL version 2 or later} {} 
+-
+-decl {\#include "WidgetPDial.h"} {public
++decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
+ } 
+ 
+-decl {\#include <stdio.h>} {public
++decl {//License: GNU GPL version 2 or later} {private local
+ } 
+ 
+-decl {\#include <stdlib.h>} {public
++decl {\#include "Fl_Osc_Dial.H"} {public local
+ } 
+ 
+-decl {\#include "../globals.h"} {public
++decl {\#include "Fl_Osc_Check.H"} {public local
+ } 
+ 
+-decl {\#include <FL/Fl_Group.H>} {public
++decl {\#include "Fl_Osc_Button.H"} {public local
+ } 
+ 
+-decl {\#include "../Params/EnvelopeParams.h"} {public
++decl {\#include "Fl_Osc_Counter.H"} {public local
+ } 
+ 
+-decl {\#include <FL/Fl_Box.H>} {public
++decl {\#include <stdio.h>} {public local
+ } 
+ 
+-decl {\#include <FL/fl_draw.H>} {public
++decl {\#include <stdlib.h>} {public local
+ } 
+ 
+-decl {\#include <FL/fl_ask.H>} {public
++decl {\#include "../globals.h"} {public local
+ } 
+ 
+-decl {\#include "PresetsUI.h"} {public
++decl {\#include <FL/Fl_Group.H>} {public local
+ } 
+ 
+-decl {\#include "common.H"} {public
++decl {\#include "../Params/EnvelopeParams.h"} {public local
+ } 
+ 
+-class EnvelopeFreeEdit {: {public Fl_Box}
+-} {
+-  Function {EnvelopeFreeEdit(int x,int y, int w, int h, const char *label=0):Fl_Box(x,y,w,h,label)} {} {
+-    code {env=NULL;
+-pair=NULL;} {}
+-  }
+-  Function {init(EnvelopeParams *env_)} {} {
+-    code {env=env_;
+-oldx=-1;
+-currentpoint=-1;
+-cpx=0;
+-lastpoint=-1;} {}
+-  }
+-  Function {setpair(Fl_Box *pair_)} {} {
+-    code {pair=pair_;} {}
+-  }
+-  Function {getpointx(int n)} {return_type int
+-  } {
+-    code {int lx=w()-10;
+-int npoints=env->Penvpoints;
+-
+-float  sum=0;
+-for (int i=1;i<npoints;i++) sum+=env->getdt(i)+1;
+-
+-float sumbefore=0;//the sum of all points before the computed point
+-for (int i=1;i<=n;i++) sumbefore+=env->getdt(i)+1;
+-
+-return((int) (sumbefore/(float) sum*lx));} {}
+-  }
+-  Function {getpointy(int n)} {return_type int
+-  } {
+-    code {int ly=h()-10;
+-
+-return((int) ((1.0-env->Penvval[n]/127.0)*ly));} {}
+-  }
+-  Function {getnearest(int x,int y)} {return_type int
+-  } {
+-    code {x-=5;y-=5;
+-
+-int nearestpoint=0;
+-int nearestval=1000000;//a big value
+-for (int i=0;i<env->Penvpoints;i++){
+-   int distance=abs(x-getpointx(i))+abs(y-getpointy(i));
+-   if (distance<nearestval) {
+-     nearestpoint=i;
+-     nearestval=distance;  
+-   };
+-};
+-return(nearestpoint);} {}
+-  }
+-  Function {draw()} {private
+-  } {
+-    code {int ox=x(),oy=y(),lx=w(),ly=h();
+-if (env->Pfreemode==0) env->converttofree();
+-int npoints=env->Penvpoints;
+-
+-if (active_r()) fl_color(FL_BLACK);
+-    else fl_color(90,90,90);
+-if (!active_r()) currentpoint=-1;
+-
+-fl_rectf(ox,oy,lx,ly);
+-
+-ox+=5;oy+=5;lx-=10;ly-=10;
+-
+-//draw the lines
+-fl_color(FL_GRAY);
+-
+-fl_line_style(FL_SOLID);
+-fl_line(ox+2,oy+ly/2,ox+lx-2,oy+ly/2);
+-
+-//draws the evelope points and lines
+-Fl_Color alb=FL_WHITE;
+-if (!active_r()) alb=fl_rgb_color(180,180,180);
+-fl_color(alb);
+-int oldxx=0,xx=0,oldyy=0,yy=getpointy(0);
+-fl_rectf(ox-3,oy+yy-3,6,6);
+-for (int i=1;i<npoints;i++){
+-    oldxx=xx;oldyy=yy;
+-    xx=getpointx(i);yy=getpointy(i);
+-    if (i==currentpoint) fl_color(FL_RED);
+-        else fl_color(alb);
+-    fl_line(ox+oldxx,oy+oldyy,ox+xx,oy+yy);
+-    fl_rectf(ox+xx-3,oy+yy-3,6,6);
+-};
+-
+-//draw the last moved point point (if exists)
+-if (lastpoint>=0){
+-    fl_color(FL_CYAN);
+-    fl_rectf(ox+getpointx(lastpoint)-5,oy+getpointy(lastpoint)-5,10,10);
+-};
+-
+-//draw the sustain position
+-if (env->Penvsustain>0){
+-    fl_color(FL_YELLOW);
+-    xx=getpointx(env->Penvsustain);
+-    fl_line(ox+xx,oy+0,ox+xx,oy+ly);
+-};
+-
+-//Show the envelope duration and the current line duration
+-fl_font(FL_HELVETICA|FL_BOLD,10);
+-float time=0.0;
+-if (currentpoint<=0){
+-   fl_color(alb);
+-   for (int i=1;i<npoints;i++) time+=env->getdt(i);
+-} else {
+-   fl_color(255,0,0);
+-   time=env->getdt(currentpoint);
+-};
+-char tmpstr[20];
+-if (time<1000.0) snprintf((char *)&tmpstr,20,"%.1fms",time);
+-     else snprintf((char *)&tmpstr,20,"%.2fs",time/1000.0);
+-fl_draw(tmpstr,ox+lx-20,oy+ly-10,20,10,FL_ALIGN_RIGHT,NULL,0);} {}
+-  }
+-  Function {handle(int event)} {return_type int
+-  } {
+-    code {int x_=Fl::event_x()-x();
+-int y_=Fl::event_y()-y();
+-
+-if (event==FL_PUSH) {
+-  currentpoint=getnearest(x_,y_);
+-  cpx=x_;
+-  cpdt=env->Penvdt[currentpoint];
+-  lastpoint=currentpoint;
+-  redraw();
+-  if (pair!=NULL) pair->redraw();
+-};
+-
+-if (event==FL_RELEASE){
+-  currentpoint=-1;
+-  redraw();
+-  if (pair!=NULL) pair->redraw();
+-};
++decl {\#include <FL/Fl_Box.H>} {public local
++} 
+ 
+-if ((event==FL_DRAG)&&(currentpoint>=0)){
+-  int ny=127-(int) (y_*127.0/h());
+-  if (ny<0) ny=0;if (ny>127) ny=127;
+-  env->Penvval[currentpoint]=ny;
++decl {\#include <FL/fl_draw.H>} {public local
++} 
+ 
+-  int dx=(int)((x_-cpx)*0.1);
+-  int newdt=cpdt+dx;
+-  if (newdt<0) newdt=0;if (newdt>127) newdt=127;
+-  if (currentpoint!=0) env->Penvdt[currentpoint]=newdt;
+-     else env->Penvdt[currentpoint]=0;
++decl {\#include <FL/fl_ask.H>} {public local
++} 
+ 
+-  redraw();
+-  if (pair!=NULL) pair->redraw();
+-};
++decl {\#include "PresetsUI.h"} {public local
++} 
+ 
++decl {\#include "common.H"} {public local
++} 
+ 
+-return(1);} {}
+-  }
+-  decl {Fl_Box *pair;} {}
+-  decl {EnvelopeParams *env;} {}
+-  decl {int oldx,oldy;} {}
+-  decl {int currentpoint,cpx,cpdt;} {}
+-  decl {int lastpoint;} {public
+-  }
++decl {\#include "EnvelopeFreeEdit.h"} {public local
+ } 
+ 
+ class EnvelopeUI {open : {public Fl_Group,PresetsUI_}
+ } {
+   Function {EnvelopeUI(int x,int y, int w, int h, const char *label=0):Fl_Group(x,y,w,h,label)} {} {
+-    code {env=NULL;
++    code {
+ freemodeeditwindow=NULL;
+ envADSR=NULL;
+ envASR=NULL;
+@@ -219,67 +74,55 @@ delete (freemodeeditwindow);} {}
+   } {
+     Fl_Window freemodeeditwindow {
+       label Envelope
+-      xywh {702 269 575 180} type Double visible
++      xywh {702 801 575 180} type Double visible
++      class Fl_Osc_Window
+     } {
+-      Fl_Box freeedit {
+-        label Envelope
+-        xywh {5 5 565 145} box FLAT_BOX color 0
+-        code0 {o->init(env);}
+-        class EnvelopeFreeEdit
++      Fl_Button {} {
++        label C
++        callback {/*presetsui->copy(env);*/}
++        xywh {465 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        code0 {freemodeeditwindow->osc = osc; freemodeeditwindow->pane_name = loc;}
++      }
++      Fl_Button {} {
++        label P
++        callback {/*presetsui->paste(env,this);*/}
++        xywh {482 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+       }
+       Fl_Button addpoint {
+         label {Add point}
+-        callback {int curpoint=freeedit->lastpoint;
+-if (curpoint<0) return;
+-//if (curpoint>=env->Penvpoints-1) return;
+-if (env->Penvpoints>=MAX_ENVELOPE_POINTS) return;
+-
+-for (int i=env->Penvpoints;i>=curpoint+1;i--){
+-   env->Penvdt[i]=env->Penvdt[i-1];
+-   env->Penvval[i]=env->Penvval[i-1];
+-};
+-
+-if (curpoint==0) {
+-  env->Penvdt[1]=64;
+-};
+-
+-env->Penvpoints++;
+-if (curpoint<=env->Penvsustain) env->Penvsustain++;
++        callback {
++        o->oscWrite("addPoint", "i", freeedit->lastpoint);
+ 
+ freeedit->lastpoint+=1;
+ freeedit->redraw();
+ envfree->redraw();
++sustaincounter->update();
+ 
+-sustaincounter->value(env->Penvsustain);
+-sustaincounter->maximum(env->Penvpoints-2);}
++//sustaincounter->value(Penvsustain);
++//sustaincounter->maximum(Penvpoints-2);}
+         xywh {115 155 80 20} box THIN_UP_BOX labelsize 11
+-        code0 {if (env->Pfreemode==0) o->hide();}
++        code0 {if (Pfreemode==0) o->hide();}
++        class Fl_Osc_Button
++      }
++      Fl_Box freeedit {
++        label Envelope
++        xywh {5 5 565 145} box FLAT_BOX color 0
++        code0 {o->init();}
++        class EnvelopeFreeEdit
+       }
+       Fl_Button deletepoint {
+         label {Delete point}
+-        callback {int curpoint=freeedit->lastpoint;
+-if (curpoint<1) return;
+-if (curpoint>=env->Penvpoints-1) return;
+-if (env->Penvpoints<=3) return;
+-
+-for (int i=curpoint+1;i<env->Penvpoints;i++){
+-   env->Penvdt[i-1]=env->Penvdt[i];
+-   env->Penvval[i-1]=env->Penvval[i];
+-};
+-
+-env->Penvpoints--;
+-
+-if (curpoint<=env->Penvsustain) env->Penvsustain--;
+-
+-
++        callback {
++        o->oscWrite("delPoint", "i", freeedit->lastpoint);
+ freeedit->lastpoint-=1;
+-freeedit->redraw();
++freeedit->update();
+ envfree->redraw();
+-
+-sustaincounter->value(env->Penvsustain);
+-sustaincounter->maximum(env->Penvpoints-2);}
++sustaincounter->update();
++//sustaincounter->value(Penvsustain);
++//sustaincounter->maximum(Penvpoints-2);}
+         xywh {200 155 80 20} box THIN_UP_BOX labelsize 11
+-        code0 {if (env->Pfreemode==0) o->hide();}
++        code0 {if (Pfreemode==0) o->hide();}
++        class Fl_Osc_Button
+       }
+       Fl_Light_Button freemodebutton {
+         label FreeMode
+@@ -291,18 +134,17 @@ freeedit->redraw();}
+       }
+       Fl_Check_Button forcedreleasecheck {
+         label frcR
+-        callback {env->Pforcedrelease=(int)o->value();}
+         tooltip {Forced Relase} xywh {410 165 40 15} down_box DOWN_BOX labelsize 10
+-        code0 {o->value(env->Pforcedrelease);}
+-        code1 {if (env->Pfreemode==0) o->hide();}
++        code0 {o->init("Pforcedrelease");
++        //TODO code1 {if (Pfreemode==0) o->hide();}}
++        class Fl_Osc_Check
+       }
+       Fl_Dial envstretchdial {
+         label {Str.}
+-        callback {env->Penvstretch=(int)o->value();}
+         tooltip {Envelope stretch (on lower notes make the envelope longer)} xywh {380 155 25 25} box ROUND_UP_BOX labelsize 10 align 4 maximum 127 step 1
+-        code0 {o->value(env->Penvstretch);}
+-        code1 {if (env->Pfreemode==0) o->hide();}
+-        class WidgetPDial
++        code0 {o->init("Penvstretch");}
++        code1 {//TODO if (Pfreemode==0) o->hide();}
++        class Fl_Osc_Dial
+       }
+       Fl_Button {} {
+         label Close
+@@ -311,88 +153,85 @@ freeedit->redraw();}
+       }
+       Fl_Check_Button linearenvelopecheck {
+         label L
+-        callback {env->Plinearenvelope=(int)o->value();}
+         tooltip {Linear Envelope} xywh {410 151 30 15} down_box DOWN_BOX labelsize 10
+-        code0 {o->value(env->Plinearenvelope);}
+-        code1 {if ((env->Pfreemode==0)||(env->Envmode>2)) o->hide();}
++        code0 {o->init("Plinearenvelope");}
++        code1 {//TODO if ((Pfreemode==0)||(Envmode>2)) o->hide();}
++        class Fl_Osc_Check
+       }
+       Fl_Counter sustaincounter {
+         label Sust
+-        callback {env->Penvsustain=(int) o->value();
++        callback {//Penvsustain=(int) o->value();
+ freeedit->redraw();
+ envfree->redraw();}
+         tooltip {Sustain (0 is disabled)} xywh {315 155 40 15} type Simple labelsize 11 align 4 minimum 0 maximum 127 step 1
+-        code0 {o->value(env->Penvsustain);}
+-        code1 {if (env->Pfreemode==0) o->hide();}
+-        code2 {o->maximum(env->Penvpoints-2);}
+-      }
+-      Fl_Button {} {
+-        label C
+-        callback {presetsui->copy(env);}
+-        xywh {465 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-      }
+-      Fl_Button {} {
+-        label P
+-        callback {presetsui->paste(env,this);}
+-        xywh {482 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        code0 {//o->value(Penvsustain);}
++        code1 {//if (Pfreemode==0) o->hide();}
++        code2 {//o->maximum(Penvpoints-2);}
++        class Fl_Osc_Counter
+       }
+     }
+   }
+   Function {make_ADSR_window()} {open
+   } {
+     Fl_Window envADSR {open
+-      xywh {344 788 205 70} type Double color 50 labelfont 1
+-      class Fl_Group visible
++      xywh {350 911 205 70} type Double color 50 labelfont 1
++      class Fl_Osc_Group visible
+     } {
+       Fl_Group {} {
+         label {Amplitude Envelope}
+         xywh {0 0 205 70} box UP_BOX color 223 labeltype ENGRAVED_LABEL labelsize 10 align 17
+         code0 {set_module_parameters(o);}
+       } {
++        Fl_Button {} {
++          label C
++          callback {/*presetsui->copy(env);*/}
++          xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        }
++        Fl_Button {} {
++          label P
++          callback {/*presetsui->paste(env,this);*/}
++          xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          code0 {envADSR->osc = osc; envADSR->pane_name = loc;}
++        }
+         Fl_Dial e1adt {
+           label {A.dt}
+-          callback {env->PA_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Attack time} xywh {5 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PA_dt);}
+-          class WidgetPDial
++          code0 {o->init("PA_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e1ddt {
+           label {D.dt}
+-          callback {env->PD_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Decay time} xywh {40 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PD_dt);}
+-          class WidgetPDial
++          code0 {o->init("PD_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e1rdt {
+           label {R.dt}
+-          callback {env->PR_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Release time} xywh {110 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PR_dt);}
+-          class WidgetPDial
++          code0 {o->init("PR_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e1sval {
+           label {S.val}
+-          callback {env->PS_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Sustain value} xywh {75 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PS_val);}
+-          class WidgetPDial
++          code0 {o->init("PS_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Check_Button e1forcedrelease {
+           label frcR
+-          callback {env->Pforcedrelease=(int)o->value();}
+           tooltip {Forced Relase} xywh {180 35 20 15} down_box DOWN_BOX labelsize 10 align 6
+-          code0 {o->value(env->Pforcedrelease);}
++          code0 {o->init("Pforcedrelease");}
++          class Fl_Osc_Check
+         }
+         Fl_Dial e1envstretch {
+           label Stretch
+-          callback {env->Penvstretch=(int)o->value();}
+           tooltip {Envelope stretch (on lower notes makes the envelope longer)} xywh {145 25 25 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->Penvstretch);}
+-          class WidgetPDial
++          code0 {o->init("Penvstretch");}
++          class Fl_Osc_Dial
+         }
+         Fl_Button {} {
+           label E
+@@ -401,19 +240,9 @@ freeedit->redraw();}
+         }
+         Fl_Check_Button e1linearenvelope {
+           label L
+-          callback {env->Plinearenvelope=(int)o->value();}
+           tooltip {The evelope is linear} xywh {180 20 15 15} down_box DOWN_BOX labelsize 10 align 4
+-          code0 {o->value(env->Plinearenvelope);}
+-        }
+-        Fl_Button {} {
+-          label C
+-          callback {presetsui->copy(env);}
+-          xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-        }
+-        Fl_Button {} {
+-          label P
+-          callback {presetsui->paste(env,this);}
+-          xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          code0 {o->init("Plinearenvelope");}
++          class Fl_Osc_Check
+         }
+       }
+     }
+@@ -421,68 +250,64 @@ freeedit->redraw();}
+   Function {make_ASR_window()} {open
+   } {
+     Fl_Window envASR {open
+-      xywh {648 667 210 70} type Double
+-      class Fl_Group visible
++      xywh {1067 911 210 70} type Double
++      class Fl_Osc_Group visible
+     } {
+       Fl_Group {} {
+         label {Frequency Envelope}
+         xywh {0 0 210 70} box UP_BOX color 223 labeltype ENGRAVED_LABEL labelsize 10 align 17
+         code0 {set_module_parameters(o);}
+       } {
++        Fl_Button {} {
++          label C
++          callback {/*presetsui->copy(env);*/}
++          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          code0 {envASR->osc = osc; envASR->pane_name = loc;}
++        }
++        Fl_Button {} {
++          label P
++          callback {/*presetsui->paste(env,this);*/}
++          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        }
+         Fl_Dial e2aval {
+           label {A.val}
+-          callback {env->PA_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Starting value} xywh {5 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PA_val);}
+-          class WidgetPDial
++          code0 {o->init("PA_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e2adt {
+           label {A.dt}
+-          callback {env->PA_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Attack time} xywh {40 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PA_dt);}
+-          class WidgetPDial
++          code0 {o->init("PA_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e2rval {
+           label {R.val}
+-          callback {env->PR_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Release value} xywh {110 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PR_val);}
+-          class WidgetPDial
++          code0 {o->init("PR_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e2rdt {
+           label {R.dt}
+-          callback {env->PR_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Release time} xywh {75 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PR_dt);}
+-          class WidgetPDial
++          code0 {o->init("PR_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e2envstretch {
+           label Stretch
+-          callback {env->Penvstretch=(int)o->value();}
+           tooltip {Envelope stretch (on lower notes makes the envelope longer)} xywh {145 25 25 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->Penvstretch);}
+-          class WidgetPDial
++          code0 {o->init("Penvstretch");}
++          class Fl_Osc_Dial
+         }
+         Fl_Check_Button e2forcedrelease {
+           label frcR
+-          callback {env->Pforcedrelease=(int)o->value();}
+           tooltip {Forced release} xywh {180 25 15 25} down_box DOWN_BOX labelsize 10 align 6
+-          code0 {o->value(env->Pforcedrelease);}
+-        }
+-        Fl_Button {} {
+-          label C
+-          callback {presetsui->copy(env);}
+-          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-        }
+-        Fl_Button {} {
+-          label P
+-          callback {presetsui->paste(env,this);}
+-          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          code0 {o->init("Pforcedrelease");}
++          class Fl_Osc_Check
+         }
+       }
+       Fl_Button {} {
+@@ -494,160 +319,150 @@ freeedit->redraw();}
+   }
+   Function {make_ADSRfilter_window()} {open
+   } {
+-    Fl_Window envADSRfilter {open selected
+-      xywh {627 569 275 70} type Double color 50 labelfont 1
+-      class Fl_Group visible
++    Fl_Window envADSRfilter {open
++      xywh {1002 911 275 70} type Double color 50 labelfont 1
++      class Fl_Osc_Group visible
+     } {
+       Fl_Group {} {
+         label {Filter Envelope}
+         xywh {0 0 275 70} box UP_BOX color 223 labeltype ENGRAVED_LABEL labelsize 10 align 17
+         code0 {set_module_parameters(o);}
+       } {
++        Fl_Button {} {
++          label C
++          callback {/*presetsui->copy(env);*/}
++          xywh {220 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        }
++        Fl_Button {} {
++          label P
++          callback {/*presetsui->paste(env,this);*/}
++          xywh {237 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          code0 {envADSRfilter->osc = osc; envADSRfilter->pane_name = loc;}
++        }
+         Fl_Dial e3aval {
+           label {A.val}
+-          callback {env->PA_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Starting value} xywh {5 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PA_val);}
+-          class WidgetPDial
++          code0 {o->init("PA_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e3adt {
+           label {A.dt}
+-          callback {env->PA_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Attack time} xywh {40 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PA_dt);}
+-          class WidgetPDial
++          code0 {o->init("PA_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e3dval {
+           label {D.val}
+-          callback {env->PD_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {decay value} xywh {75 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PD_val);}
+-          class WidgetPDial
++          code0 {o->init("PD_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e3ddt {
+           label {D.dt}
+-          callback {env->PD_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {decay time} xywh {110 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PD_dt);}
+-          class WidgetPDial
++          code0 {o->init("PD_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e3rdt {
+           label {R.dt}
+-          callback {env->PR_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Release time} xywh {145 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PR_dt);}
+-          class WidgetPDial
++          code0 {o->init("PR_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e3rval {
+           label {R.val}
+-          callback {env->PR_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Release value} xywh {180 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PR_val);}
+-          class WidgetPDial
++          code0 {o->init("PR_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e3envstretch {
+           label Stretch
+-          callback {env->Penvstretch=(int)o->value();}
+           tooltip {Envelope stretch (on lower notes makes the envelope longer)} xywh {215 25 25 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->Penvstretch);}
+-          class WidgetPDial
++          code0 {o->init("Penvstretch");}
++          class Fl_Osc_Dial
+         }
+         Fl_Check_Button e3forcedrelease {
+           label frcR
+-          callback {env->Pforcedrelease=(int)o->value();}
+           tooltip {Forced Relase} xywh {250 30 15 20} down_box DOWN_BOX labelsize 10 align 6
+-          code0 {o->value(env->Pforcedrelease);}
++          code0 {o->init("Pforcedrelease");}
++          class Fl_Osc_Check
+         }
+         Fl_Button {} {
+           label E
+           callback {freemodeeditwindow->show();}
+           xywh {255 5 15 15} labelfont 1 labelsize 10
+         }
+-        Fl_Button {} {
+-          label C
+-          callback {presetsui->copy(env);}
+-          xywh {220 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-        }
+-        Fl_Button {} {
+-          label P
+-          callback {presetsui->paste(env,this);}
+-          xywh {237 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-        }
+       }
+     }
+   }
+   Function {make_ASRbw_window()} {open
+   } {
+     Fl_Window envASRbw {open
+-      xywh {362 642 210 70} type Double
++      xywh {368 911 210 70} type Double
+       code0 {set_module_parameters(o);}
+-      class Fl_Group visible
++      class Fl_Osc_Group visible
+     } {
+       Fl_Group {} {
+         label {BandWidth Envelope}
+         xywh {0 0 210 70} box UP_BOX color 223 labeltype ENGRAVED_LABEL labelsize 10 align 17
+         code0 {set_module_parameters(o);}
+       } {
++        Fl_Button {} {
++          label C
++          callback {/*presetsui->copy(env);*/}
++          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          code0 {envASRbw->osc = osc; envASRbw->pane_name = loc;}
++        }
++        Fl_Button {} {
++          label P
++          callback {/*presetsui->paste(env,this);*/}
++          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        }
+         Fl_Dial e4aval {
+           label {A.val}
+-          callback {env->PA_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Starting value} xywh {5 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PA_val);}
+-          class WidgetPDial
++          code0 {o->init("PA_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e4adt {
+           label {A.dt}
+-          callback {env->PA_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Attack time} xywh {40 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PA_dt);}
+-          class WidgetPDial
++          code0 {o->init("PA_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e4rval {
+           label {R.val}
+-          callback {env->PR_val=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Release value} xywh {110 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PR_val);}
+-          class WidgetPDial
++          code0 {o->init("PR_val");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e4rdt {
+           label {R.dt}
+-          callback {env->PR_dt=(int)o->value();
+-freeedit->redraw();}
++          callback {freeedit->redraw();}
+           tooltip {Release time} xywh {75 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->PR_dt);}
+-          class WidgetPDial
++          code0 {o->init("PR_dt");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial e4envstretch {
+           label Stretch
+-          callback {env->Penvstretch=(int)o->value();}
+           tooltip {Envelope stretch (on lower notes makes the envelope longer)} xywh {145 25 25 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(env->Penvstretch);}
+-          class WidgetPDial
++          code0 {o->init("Penvstretch");}
++          class Fl_Osc_Dial
+         }
+         Fl_Check_Button e4forcedrelease {
+           label frcR
+-          callback {env->Pforcedrelease=(int)o->value();}
+           tooltip {Forced release} xywh {180 25 15 25} down_box DOWN_BOX labelsize 10 align 6
+-          code0 {o->value(env->Pforcedrelease);}
+-        }
+-        Fl_Button {} {
+-          label C
+-          callback {presetsui->copy(env);}
+-          xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-        }
+-        Fl_Button {} {
+-          label P
+-          callback {presetsui->paste(env,this);}
+-          xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          code0 {o->init("Pforcedrelease");}
++          class Fl_Osc_Check
+         }
+       }
+       Fl_Button {} {
+@@ -660,43 +475,55 @@ freeedit->redraw();}
+   Function {make_free_window()} {open
+   } {
+     Fl_Window envfree {open
+-      xywh {376 436 205 70} type Double color 50 labelfont 1 resizable
++      xywh {382 911 205 70} type Double color 50 labelfont 1 resizable
+       code0 {set_module_parameters(o);}
+-      class Fl_Group visible
++      class Fl_Osc_Group visible
+     } {
+       Fl_Group envfreegroup {
+         label {Amplitude Envelope}
+         xywh {0 0 205 70} box UP_BOX color 223 labeltype ENGRAVED_LABEL labelsize 10 align 17 resizable
+         code0 {set_module_parameters(o);}
+       } {
++        Fl_Button {} {
++          label E
++          callback {freemodeeditwindow->show();}
++          xywh {185 5 15 15} labelfont 1 labelsize 10
++          code0 {envfree->osc = osc; envfree->pane_name = loc;}
++        }
+         Fl_Box freeeditsmall {
+           label Envelope
+           callback {envfree->redraw();}
+           xywh {5 20 195 45} box FLAT_BOX color 0 resizable
+-          code0 {o->init(env);}
++          code0 {o->init();}
+           class EnvelopeFreeEdit
+         }
+-        Fl_Button {} {
+-          label E
+-          callback {freemodeeditwindow->show();}
+-          xywh {185 5 15 15} labelfont 1 labelsize 10
+-        }
+         Fl_Button {} {
+           label C
+-          callback {presetsui->copy(env);}
++          callback {/*presetsui->copy(env);*/}
+           xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Button {} {
+           label P
+-          callback {presetsui->paste(env,this);}
++          callback {/*presetsui->paste(env,this);*/}
+           xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+       }
+     }
+   }
+-  Function {init(EnvelopeParams *env_)} {open
++  Function {init(int env_type, Fl_Osc_Interface *osc_, std::string loc_)} {open selected
+   } {
+-    code {env=env_;
++    code {
++    osc = osc_;
++    loc = loc_;
++    Envmode = env_type;
++    Pfreemode = false;
++    Penvsustain = false;
++    Penvpoints  = 3;
++    Penvstretch = 0;
++    Pforcedrelease = 0;
++    Plinearenvelope = 0;
++    assert(osc);
++    assert(!loc.empty());
+ make_ADSR_window();
+ make_ASR_window();
+ make_ADSRfilter_window();
+@@ -706,9 +533,9 @@ make_free_window();
+ make_freemode_edit_window();
+ 
+ envwindow=NULL;
+-if (env->Envmode==3) envfreegroup->label("Frequency Envelope");
+-if (env->Envmode==4) envfreegroup->label("Filter Envelope");
+-if (env->Envmode==5) envfreegroup->label("Bandwidth Envelope");
++if(Envmode==3) envfreegroup->label("Frequency Envelope");
++if(Envmode==4) envfreegroup->label("Filter Envelope");
++if(Envmode==5) envfreegroup->label("Bandwidth Envelope");
+ 
+ freemodeeditwindow->label(this->label());
+ 
+@@ -719,20 +546,21 @@ freeedit->setpair(freeeditsmall);
+ 
+ refresh();} {}
+   }
+-  Function {reinit()} {} {
+-    code {if (env->Pfreemode!=0){
+-  int answer=fl_choice("Disable the free mode of the Envelope?","No","Yes",NULL);
+-  if (env->Pfreemode!=0) freemodebutton->value(1);
+-          else freemodebutton->value(0);
+-  if (answer==0) return;
++  Function {reinit()} {open
++  } {
++    code {
++if(Pfreemode){
++    int answer=fl_choice("Disable the free mode of the Envelope?","No","Yes",NULL);
++    freemodebutton->value(Pfreemode);
++    if (answer==0)
++      return;
+ };
+ 
+-if (env->Pfreemode==0) env->Pfreemode=1;
+-     else env->Pfreemode=0;
++Pfreemode = !Pfreemode;
+ 
+ hide();
+-int winx=freemodeeditwindow->x();
+-int winy=freemodeeditwindow->y();
++const int winx=freemodeeditwindow->x();
++const int winy=freemodeeditwindow->y();
+ 
+ freemodeeditwindow->hide();
+ 
+@@ -750,12 +578,12 @@ show();
+ freemodeeditwindow->position(winx,winy);
+ freemodeeditwindow->show();
+ 
+-if (env->Pfreemode!=0) {
++if (Pfreemode) {
+ 	freemodebutton->value(1);
+ 	addpoint->show();
+ 	deletepoint->show();
+ 	forcedreleasecheck->show();
+-}else{
++} else{
+ 	freemodebutton->value(0);
+ 	addpoint->hide();
+ 	deletepoint->hide();
+@@ -764,92 +592,56 @@ if (env->Pfreemode!=0) {
+   }
+   Function {refresh()} {open
+   } {
+-    code {freemodebutton->value(env->Pfreemode);
+-
+-sustaincounter->value(env->Penvsustain);
+-if (env->Pfreemode==0) sustaincounter->hide();
+-	else sustaincounter->show();
+-sustaincounter->maximum(env->Penvpoints-2);
+-
+-envstretchdial->value(env->Penvstretch);
+-if (env->Pfreemode==0) envstretchdial->hide();
+-	else envstretchdial->show();
++    code {
++    freemodebutton->value(Pfreemode);
++
++    sustaincounter->value(Penvsustain);
++    sustaincounter->maximum(Penvpoints-2);
++
++    envstretchdial->value(Penvstretch);
++
++linearenvelopecheck->value(Plinearenvelope);
++
++//Conditionally display widgets
++    if(Pfreemode) {
++        sustaincounter->hide();
++        envstretchdial->hide();
++        forcedreleasecheck->hide();
++        envfree->redraw();
++    } else {
++        sustaincounter->show();
++        envstretchdial->show();
++        forcedreleasecheck->show();
++    }
+ 
+-linearenvelopecheck->value(env->Plinearenvelope);
+-if ((env->Pfreemode==0)||(env->Envmode>2)) linearenvelopecheck->hide();
+-	else linearenvelopecheck->show();
++    if(Pfreemode || Envmode>2)
++        linearenvelopecheck->hide();
++	else
++        linearenvelopecheck->show();
+ 
+-forcedreleasecheck->value(env->Pforcedrelease);
+-if (env->Pfreemode==0) forcedreleasecheck->hide();
++    forcedreleasecheck->value(Pforcedrelease);
+ 
+ freeedit->redraw();
+ 
+-
+-if (env->Pfreemode==0){
+-   switch(env->Envmode){
+-         case(1):
+-         case(2):
+-		e1adt->value(env->PA_dt);
+-		e1ddt->value(env->PD_dt);
+-		e1sval->value(env->PS_val);
+-		e1rdt->value(env->PR_dt);
+-		e1envstretch->value(env->Penvstretch);
+-		e1linearenvelope->value(env->Plinearenvelope);
+-		e1forcedrelease->value(env->Pforcedrelease);
+-         break;
+-         case(3):
+-		e2aval->value(env->PA_val);
+-		e2adt->value(env->PA_dt);
+-		e2rdt->value(env->PR_dt);
+-		e2rval->value(env->PR_val);
+-		e2envstretch->value(env->Penvstretch);
+-		e2forcedrelease->value(env->Pforcedrelease);
+-         break; 
+-         case(4):
+-		e3aval->value(env->PA_val);
+-		e3adt->value(env->PA_dt);
+-		e3dval->value(env->PD_val);
+-		e3ddt->value(env->PD_dt);
+-		e3rdt->value(env->PR_dt);
+-		e3rval->value(env->PR_val);
+-		e3envstretch->value(env->Penvstretch);
+-		e3forcedrelease->value(env->Pforcedrelease);
+-         break; 
+-         case(5):
+-		e4aval->value(env->PA_val);
+-		e4adt->value(env->PA_dt);
+-		e4rdt->value(env->PR_dt);
+-		e4rval->value(env->PR_val);
+-		e4envstretch->value(env->Penvstretch);
+-		e4forcedrelease->value(env->Pforcedrelease);
+-         break;
+-         default:
+-         break; 
+-   };
+-}else{
+-       envfree->redraw();
+-};
+-
+-
+ envADSR->hide();
+ envASR->hide();
+ envADSRfilter->hide();
+ envASRbw->hide();
+ envfree->hide();
+ 
+-if (env->Pfreemode==0){
+-   switch(env->Envmode){
+-         case(1):
+-         case(2):
++if (Pfreemode==0){
++   switch(Envmode){
++         case 1:
++         case 2:
+            envwindow=envADSR;
+          break;
+-         case(3):
++         case 3:
+            envwindow=envASR;
+          break; 
+-         case(4):
++         case 4:
+            envwindow=envADSRfilter;
+          break; 
+-         case(5):
++         case 5:
+           envwindow=envASRbw;
+          break;
+          default:
+@@ -859,10 +651,29 @@ if (env->Pfreemode==0){
+    envwindow=envfree;
+ };
+ 
++assert(envwindow);
+ envwindow->resize(this->x(),this->y(),this->w(),this->h());
+ 
+ envwindow->show();} {}
+   }
+-  decl {EnvelopeParams *env;} {}
+-  decl {Fl_Group *envwindow;} {}
++  decl {int Envmode;}{private local
++  }
++  decl {int Pfreemode;}{private local
++  }
++  decl {int Penvsustain;}{private local
++  }
++  decl {int Penvpoints;}{private local
++  }
++  decl {int Penvstretch;}{private local
++  }
++  decl {int Pforcedrelease;}{private local
++  }
++  decl {int Plinearenvelope;}{private local
++  }
++  decl {Fl_Osc_Interface *osc;}{private local
++  }
++  decl {std::string loc;}{private local
++  }
++  decl {Fl_Group *envwindow;} {private local
++  }
+ } 
+diff --git a/src/UI/Fl_Osc_Button.cpp b/src/UI/Fl_Osc_Button.cpp
+index 7b48f86f..842a83d6 100644
+--- a/src/UI/Fl_Osc_Button.cpp
++++ b/src/UI/Fl_Osc_Button.cpp
+@@ -10,14 +10,6 @@
+ Fl_Osc_Button::Fl_Osc_Button(int X, int Y, int W, int H, const char *label)
+     :Fl_Button(X,Y,W,H,label), Fl_Osc_Widget(this)
+ {
+-    //callback(Fl_Osc_Button::_cb);
+-
+-    //Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(parent());
+-    //assert(pane);
+-    //osc = pane->osc;
+-    //assert(osc);
+-    //osc->createLink(full_path, this);
+-    //osc->requestValue(full_path);
+ }
+ 
+ Fl_Osc_Button::~Fl_Osc_Button(void)
+@@ -28,30 +20,3 @@ void Fl_Osc_Button::OSC_value(bool v)
+     Fl_Button::value(v);
+ }
+ 
+-/*
+-void Fl_Osc_Button::init(std::string path)
+-{
+-    Fl_Osc_Pane *pane = fetch_osc_pane(this);
+-    assert(pane);
+-    osc = pane->osc;
+-    init(osc,path);
+-}
+-
+-void Fl_Osc_Button::init(Fl_Osc_Interface *osc, std::string path)
+-{
+-    Fl_Osc_Pane *pane = fetch_osc_pane(this);
+-    full_path = pane->pane_name + path;
+-    osc->createLink(full_path, this);
+-    osc->requestValue(full_path);
+-}
+-
+-void Fl_Osc_Button::cb(void)
+-{
+-    osc->writeValue(full_path, (bool) value());
+-}
+-
+-void Fl_Osc_Button::_cb(Fl_Widget *w, void *)
+-{
+-    static_cast<Fl_Osc_Button*>(w)->cb();
+-}
+-*/
+diff --git a/src/UI/Fl_Osc_Counter.H b/src/UI/Fl_Osc_Counter.H
+new file mode 100644
+index 00000000..f15e7ef5
+--- /dev/null
++++ b/src/UI/Fl_Osc_Counter.H
+@@ -0,0 +1,8 @@
++#include <FL/Fl_Counter.H>
++
++class Fl_Osc_Counter: public Fl_Counter
++{
++    public:
++        Fl_Osc_Counter(int x, int y, int w, int h, const char *label=0);
++        void update(void);
++};
+diff --git a/src/UI/Fl_Osc_Counter.cpp b/src/UI/Fl_Osc_Counter.cpp
+new file mode 100644
+index 00000000..67696458
+--- /dev/null
++++ b/src/UI/Fl_Osc_Counter.cpp
+@@ -0,0 +1,10 @@
++#include "Fl_Osc_Counter.H"
++
++Fl_Osc_Counter::Fl_Osc_Counter(int x, int y, int w, int h, const char *label)
++    :Fl_Counter(x,y,w,h,label)
++{}
++
++void Fl_Osc_Counter::update(void)
++{
++}
++
+diff --git a/src/UI/Fl_Osc_Dial.cpp b/src/UI/Fl_Osc_Dial.cpp
+index 643f4fce..1325539d 100644
+--- a/src/UI/Fl_Osc_Dial.cpp
++++ b/src/UI/Fl_Osc_Dial.cpp
+@@ -47,6 +47,7 @@ void Fl_Osc_Dial::init(const char *path)
+     Fl_Osc_Pane *pane = fetch_osc_pane(this);
+     assert(pane);
+     osc = pane->osc;
++    assert(osc);
+     full_path = pane->pane_name + path;
+     osc->createLink(full_path, this);
+     osc->requestValue(full_path);
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index b436c2ec..845f5e40 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -628,7 +628,7 @@ cbwidget->do_callback();}
+             Fl_Group freqenv {
+               label {PADSynth - Frequency Envelope} open
+               xywh {10 315 205 70} box FLAT_BOX color 51 align 144
+-              code0 {o->init(pars->FreqEnvelope);}
++              code0 {o->init(ENV_ASR, osc_i, location + "FreqEnvelope/");}
+               class EnvelopeUI
+             } {}
+             Fl_Counter octave {
+@@ -752,7 +752,7 @@ if (x==0) fixedfreqetdial->deactivate();
+             Fl_Group ampenv {
+               label {PADSynth - Amplitude Envelope} open
+               xywh {10 95 205 70} box FLAT_BOX color 51 align 144
+-              code0 {o->init(pars->AmpEnvelope);}
++              code0 {o->init(ENV_ADSR, osc_i, location + "AmpEnvelope/");}
+               class EnvelopeUI
+             } {}
+             Fl_Group amplfo {
+@@ -776,7 +776,7 @@ hprofile->redraw();}
+             Fl_Group filterenv {
+               label {PADSynth - Filter Envelope} open
+               xywh {250 130 275 70} box FLAT_BOX color 51 align 144
+-              code0 {o->init(pars->FilterEnvelope);}
++              code0 {o->init(ENV_ADSR_FILTER, osc_i, location + "FilterEnvelope/");}
+               class EnvelopeUI
+             } {}
+             Fl_Group filterlfo {
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index a776595f..b940dd41 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -1092,13 +1092,14 @@ if (kititem!=lastkititem){
+     if (kititem>=NUM_KIT_ITEMS) return;//bad kit item
+     if (kititem<0) return;
+ 
+-    if (part->kit[kititem].adpars!=NULL)
++    if (part->kit[kititem].adpars)
+       adnoteui=new ADnoteUI(part->kit[kititem].adpars, loc+"kit"+to_s(kititem)+"/adpars/", osc);
+ 
+-    if (part->kit[kititem].subpars!=NULL) 
+-       subnoteui=new SUBnoteUI(part->kit[kititem].subpars);
++    if (part->kit[kititem].subpars) 
++       subnoteui=new SUBnoteUI(part->kit[kititem].subpars,
++       osc, loc+"kit"+to_s(kititem)+"/subpars/");
+ 
+-    if (part->kit[kititem].padpars!=NULL) {
++    if (part->kit[kititem].padpars) {
+       char buffer[1024];
+       snprintf(buffer, 1024, "%skit%d/padpars/", part_path.c_str(), kititem); 
+       padnoteui=new PADnoteUI(part->kit[kititem].padpars, buffer, osc);
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 245414de..6f3e395b 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -1,39 +1,41 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0110 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {} 
++decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
++} 
+ 
+-decl {//License: GNU GPL version 2 or later} {} 
++decl {//License: GNU GPL version 2 or later} {private local
++} 
+ 
+-decl {\#include <stdlib.h>} {public
++decl {\#include <stdlib.h>} {public local
+ } 
+ 
+-decl {\#include <stdio.h>} {public
++decl {\#include <stdio.h>} {public local
+ } 
+ 
+-decl {\#include <string.h>} {public
++decl {\#include <string.h>} {public local
+ } 
+ 
+-decl {\#include "../globals.h"} {public
++decl {\#include "../globals.h"} {public local
+ } 
+ 
+-decl {\#include "WidgetPDial.h"} {public
++decl {\#include "WidgetPDial.h"} {public local
+ } 
+ 
+-decl {\#include "EnvelopeUI.h"} {public
++decl {\#include "EnvelopeUI.h"} {public local
+ } 
+ 
+-decl {\#include "FilterUI.h"} {public
++decl {\#include "FilterUI.h"} {public local
+ } 
+ 
+-decl {\#include "../Misc/Util.h"} {public
++decl {\#include "../Misc/Util.h"} {public local
+ } 
+ 
+-decl {\#include "../Params/SUBnoteParameters.h"} {public
++decl {\#include "../Params/SUBnoteParameters.h"} {public local
+ } 
+ 
+-decl {\#include "PresetsUI.h"} {public
++decl {\#include "PresetsUI.h"} {public local
+ } 
+ 
+ class SUBnoteharmonic {: {public Fl_Group}
+@@ -99,8 +101,10 @@ bw->value(127-pars->Phrelbw[n]);} {}
+ hide();
+ //delete(harmonic);} {}
+   }
+-  decl {SUBnoteParameters *pars;} {}
+-  decl {int n;} {}
++  decl {SUBnoteParameters *pars;} {private local
++  }
++  decl {int n;} {private local
++  }
+ } 
+ 
+ class SUBnoteUI {open : {public PresetsUI_}
+@@ -109,7 +113,8 @@ class SUBnoteUI {open : {public PresetsUI_}
+   } {
+     Fl_Window SUBparameters {
+       label {SUBsynth Parameters} open
+-      xywh {542 489 735 390} type Double visible
++      xywh {542 512 735 390} type Double
++      class Fl_Osc_Window visible
+     } {
+       Fl_Scroll {} {
+         label scroll open
+@@ -151,7 +156,7 @@ class SUBnoteUI {open : {public PresetsUI_}
+         Fl_Group ampenv {
+           label {SUBsynth - Amplitude Envelope} open
+           xywh {10 65 205 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(pars->AmpEnvelope);}
++          code0 {o->init(ENV_ADSR, osc, loc + "AmpEnvelope/");}
+           class EnvelopeUI
+         } {}
+       }
+@@ -218,7 +223,7 @@ class SUBnoteUI {open : {public PresetsUI_}
+         Fl_Group freqenvelopegroup {
+           label {SUBsynth - Frequency Envelope} open
+           xywh {445 65 205 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(pars->FreqEnvelope);}
++          code0 {o->init(ENV_ASR, osc, loc + "FreqEnvelope/");}
+           code1 {if (pars->PFreqEnvelopeEnabled==0) o->deactivate();}
+           class EnvelopeUI
+         } {}
+@@ -293,7 +298,7 @@ detunevalueoutput->do_callback();} open
+       }
+       Fl_Check_Button stereo {
+         label Stereo
+-        callback {pars->Pstereo=(int) o->value();} selected
++        callback {pars->Pstereo=(int) o->value();}
+         xywh {440 325 55 35} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
+         code0 {o->value(pars->Pstereo);}
+       }
+@@ -315,9 +320,9 @@ SUBparameters->redraw();}
+         xywh {220 5 220 135} box UP_FRAME labeltype EMBOSSED_LABEL labelfont 1 align 17
+       } {
+         Fl_Group bandwidthenvelopegroup {
+-          label {SUBsynth - BandWidth Envelope} open
++          label {SUBsynth - BandWidth Envelope} open selected
+           xywh {225 65 205 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(pars->BandWidthEnvelope);}
++          code0 {o->init(ENV_ADSR_BW, osc, loc + "BandWidthEnvelope/");}
+           code1 {if (pars->PBandWidthEnvelopeEnabled==0) o->deactivate();}
+           class EnvelopeUI
+         } {}
+@@ -352,7 +357,7 @@ bandwidthsettingsui->redraw();}
+         Fl_Group filterenv {
+           label {SUBsynth - Filter Envelope} open
+           xywh {445 250 275 70} box FLAT_BOX color 51 align 144
+-          code0 {o->init(pars->GlobalFilterEnvelope);}
++          code0 {o->init(ENV_ADSR_FILTER, osc, loc + "GlobalFilterEnvelope/");}
+           class EnvelopeUI
+         } {}
+         Fl_Group filterui {
+@@ -436,8 +441,10 @@ freqenvelopegroup->refresh();
+ filterui->refresh();
+ filterenv->refresh();} {}
+   }
+-  Function {SUBnoteUI(SUBnoteParameters *parameters)} {} {
++  Function {SUBnoteUI(SUBnoteParameters *parameters, Fl_Osc_Interface *osc_, std::string loc_)} {} {
+     code {pars=parameters;
++    osc = osc_;
++    loc = loc_;
+ make_window();} {}
+   }
+   Function {~SUBnoteUI()} {} {
+@@ -445,6 +452,12 @@ make_window();} {}
+ SUBparameters->hide();
+ delete(SUBparameters);} {}
+   }
+-  decl {SUBnoteParameters *pars;} {}
+-  decl {SUBnoteharmonic *h[MAX_SUB_HARMONICS];} {}
++  decl {Fl_Osc_Interface *osc;} {private local
++  }
++  decl {std::string loc;} {private local
++  }
++  decl {SUBnoteParameters *pars;} {private local
++  }
++  decl {SUBnoteharmonic *h[MAX_SUB_HARMONICS];} {private local
++  }
+ } 
+-- 
+2.47.0
+

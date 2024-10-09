@@ -1,0 +1,155 @@
+From 2e248ef5cc514bd91dd453c38449b11c7be26464 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 13 Feb 2015 21:20:02 -0500
+Subject: [PATCH 0314/1936] Actually Fix No FLTK Based Compile
+
+---
+ rtosc                     |  2 +-
+ src/CMakeLists.txt        | 10 ++++++++--
+ src/Misc/MiddleWare.cpp   |  3 +++
+ src/UI/Fl_Osc_Interface.h | 38 ++++++++++++++++++++++++++++++++++++++
+ src/UI/NSM.C              |  9 ++++++---
+ 5 files changed, 56 insertions(+), 6 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 178d6159..baaeeb5e 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 178d6159d1aa1df41f9e9c141330af5dd448516e
++Subproject commit baaeeb5e06c3b31d1f6a5fd44cdb49354a399cdc
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index c4d87abf..43a7f882 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -39,7 +39,13 @@ execute_process(COMMAND echo fistpl 0
+ # NOTE: These cache variables should normally not be changed in this
+ # file, but either in in CMakeCache.txt before compile, or by passing
+ # parameters directly into cmake using the -D flag.
+-SET (GuiModule fltk CACHE STRING "GUI module, either fltk, ntk or off")
++if(NTK_FOUND)
++  SET (GuiModule ntk CACHE STRING "GUI module, either fltk, ntk or off")
++elseif(FLTK_FOUND)
++  SET (GuiModule fltk CACHE STRING "GUI module, either fltk, ntk or off")
++else()
++  SET (GuiModule off CACHE STRING "GUI module, either fltk, ntk or off")
++endif()
+ SET (CompileTests ${CXXTEST_FOUND} CACHE BOOL "whether tests should be compiled in or not")
+ SET (AlsaEnable ${ALSA_FOUND} CACHE BOOL
+     "Enable support for Advanced Linux Sound Architecture")
+@@ -188,7 +194,7 @@ endif()
+ if(LibloEnable)
+ 	include_directories(${LIBLO_INCLUDE_DIRS})
+ 	add_definitions(-DUSE_NSM=1)
+-	list(APPEND AUDIO_LIBRARIES ${LIBLO_LIBRARIES})
++        list(APPEND AUDIO_LIBRARIES ${LIBLO_LDFLAGS})
+ 	list(APPEND AUDIO_LIBRARY_DIRS ${LIBLO_LIBRARY_DIRS})
+ 	message(STATUS "Compiling with liblo")
+ endif()
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 7a22c5c7..cd41133d 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -13,7 +13,9 @@
+ #include <dirent.h>
+ 
+ #include "../UI/Fl_Osc_Interface.h"
++#ifndef NO_UI
+ #include "../UI/Fl_Osc_Widget.H"
++#endif
+ 
+ #include <map>
+ 
+@@ -29,6 +31,7 @@
+ 
+ #include <err.h>
+ 
++using std::string;
+ rtosc::ThreadLink *bToU = new rtosc::ThreadLink(4096*2,1024);
+ rtosc::ThreadLink *uToB = new rtosc::ThreadLink(4096*2,1024);
+ 
+diff --git a/src/UI/Fl_Osc_Interface.h b/src/UI/Fl_Osc_Interface.h
+index 81b400fc..e3d2870c 100644
+--- a/src/UI/Fl_Osc_Interface.h
++++ b/src/UI/Fl_Osc_Interface.h
+@@ -2,6 +2,44 @@
+ #include <stdio.h>
+ #include <string>
+ using std::string;
++#ifdef NO_UI
++class Fl_Osc_Widget
++{
++    public:
++        //Callback methods
++        virtual void OSC_value(float){};
++        virtual void OSC_value(bool){};
++        virtual void OSC_value(int){};
++        virtual void OSC_value(char){};
++        virtual void OSC_value(unsigned,void*){};
++        virtual void OSC_value(const char *){};
++
++        //labeled forwarding methods
++        virtual void OSC_value(float x, const char *){};
++        virtual void OSC_value(bool x, const char *){};
++        virtual void OSC_value(int x, const char *){};
++        virtual void OSC_value(char x, const char *){};
++        virtual void OSC_value(unsigned x, void *v, const char *){};
++        virtual void OSC_value(const char *x, const char *){};
++
++        //Raw messages
++        virtual void OSC_raw(const char *){};
++
++        //Widget methods
++        void oscWrite(std::string path, const char *args, ...){};
++        void oscWrite(std::string path){};
++        void oscRegister(const char *path){};
++
++        //Forces an update of parameters as they have become stale somehow
++        virtual void update(void){};
++
++        //Smoothly change the base path
++        virtual void rebase(std::string new_base){};
++        void oscMove(std::string new_ext){};
++        //Explict version for weirdly routed controls
++        void oscMove(std::string old_loc, std::string new_loc){};
++};
++#endif
+ 
+ class Fl_Osc_Interface
+ {
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index 35cd7434..01a2672e 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -22,8 +22,11 @@
+ 
+ #include "../Nio/Nio.h"
+ 
++#ifndef NO_UI
+ #include <FL/Fl.H>
+-#include <stdio.h>
++#endif
++#include <cstdio>
++#include <cstring>
+ #include <sys/stat.h>
+ #include <sys/types.h>
+ #include <unistd.h>
+@@ -111,13 +114,13 @@ NSM_Client::command_open(const char *name,
+     return r;
+ }
+ 
++#ifndef NO_UI
+ static void save_callback(Fl_Widget *, void *v)
+ {
+-#ifndef NO_UI
+     MasterUI *ui = static_cast<MasterUI*>(v);
+     ui->do_save_master();
+-#endif
+ }
++#endif
+ 
+ void
+ NSM_Client::command_active(bool active)
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From 84b3929dd630242bb5175cae075edb551423b344 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 21 Nov 2020 23:24:51 +0100
+Subject: [PATCH 1658/1936] Fix spelling mistake
+
+---
+ src/Params/LFOParams.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 9189a17d..7dcbc459 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -95,7 +95,7 @@ static const rtosc::Ports _ports = {
+             "Enable for global operation"),
+     rParamZyn(Pstretch, rShort("str"), rCentered, rDefault(64),
+         "Note frequency stretch"),
+-// these are currently not yet implemented at must be hidden therefore
++// these are currently not yet implemented and must be hidden therefore
+ #ifdef DEAD_PORTS
+     //Float valued aliases
+     {"delay::f", rProp(parameter) rMap(units, ms) rLog(0,4000), 0,
+-- 
+2.47.0
+

@@ -1,0 +1,220 @@
+From 02a04cd857fcab452f91b660ca2d5766a6411f75 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 2 Apr 2020 16:13:02 +0200
+Subject: [PATCH 1490/1936] Implement per-note controllers via MIDI SysEx.
+
+Can be used when implementing support for the MIDI Polyphonic Expression,
+MPE, standard in your digital audio workstation, DAW.
+
+Currently only pitch and aftertouch is controllable per note.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Misc/Master.cpp | 14 ++++++++++++++
+ src/Misc/Master.h   |  1 +
+ src/Misc/Part.cpp   | 31 +++++++++++++++++++++++++++++++
+ src/Misc/Part.h     |  2 ++
+ src/Nio/InMgr.cpp   | 11 +++++++++++
+ src/Nio/InMgr.h     |  5 +++--
+ src/Nio/MidiIn.cpp  | 27 ++++++++++++++++++++++++---
+ src/globals.h       |  1 +
+ 8 files changed, 87 insertions(+), 5 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index c2fc10fb..6837f99f 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1018,6 +1018,20 @@ void Master::setController(char chan, int type, int par)
+     }
+ }
+ 
++/*
++ * Per note controllers
++ */
++void Master::setController(char chan, int type, note_t note, float value)
++{
++    if(frozenState)
++        return;
++
++    /* Send the controller to all part assigned to the channel */
++    for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
++        if((chan == part[npart]->Prcvchn) && (part[npart]->Penabled != 0))
++            part[npart]->SetController(type, note, value, keyshift);
++}
++
+ void Master::vuUpdate(const float *outr, const float *outl)
+ {
+     //Peak computation (for vumeters)
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 348d383e..ae58365e 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -115,6 +115,7 @@ class Master
+         void noteOff(char chan, note_t note);
+         void polyphonicAftertouch(char chan, note_t note, char velocity);
+         void setController(char chan, int type, int par);
++        void setController(char chan, int type, note_t note, float value);
+         //void NRPN...
+ 
+ 
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 61cc2f1b..b158b4bc 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -712,6 +712,37 @@ void Part::SetController(unsigned int type, int par)
+             break;
+     }
+ }
++
++/*
++ * Per note controllers.
++ */
++void Part::SetController(unsigned int type, note_t note, float value,
++                         int masterkeyshift)
++{
++    if(!Pnoteon || !inRange(note, Pminkey, Pmaxkey) || Pdrummode)
++        return;
++
++    switch (type) {
++    case C_aftertouch:
++        PolyphonicAftertouch(note, floorf(value));
++        break;
++    case C_pitch: {
++        const int   partkeyshift = (int)Pkeyshift - 64;
++        const int   keyshift     = masterkeyshift + partkeyshift;
++        const float notebasefreq = getBaseFreq(value, keyshift);
++
++        for(auto &d:notePool.activeDesc()) {
++            if(d.note == note && d.playing())
++                for(auto &s:notePool.activeNotes(d))
++                    s.note->setPitch(notebasefreq, value);
++        }
++        break;
++    }
++    default:
++        break;
++    }
++}
++
+ /*
+  * Release the sustained keys
+  */
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index a24e00a0..507e4a0d 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -55,6 +55,8 @@ class Part
+                                   unsigned char velocity) REALTIME;
+         void AllNotesOff() REALTIME; //panic
+         void SetController(unsigned int type, int par) REALTIME;
++        void SetController(unsigned int type, note_t, float value,
++                           int masterkeyshift) REALTIME;
+         void ReleaseSustainedKeys() REALTIME; //this is called when the sustain pedal is released
+         void ReleaseAllKeys() REALTIME; //this is called on AllNotesOff controller
+ 
+diff --git a/src/Nio/InMgr.cpp b/src/Nio/InMgr.cpp
+index 6c8f53bb..e714f9ba 100644
+--- a/src/Nio/InMgr.cpp
++++ b/src/Nio/InMgr.cpp
+@@ -45,6 +45,13 @@ ostream &operator<<(ostream &out, const MidiEvent &ev)
+             << "         value(" << ev.value << ")";
+             break;
+ 
++        case M_FLOAT_CTRL:
++            out << "MidiNote: controller(" << ev.num << ")\n"
++            << "          channel(" << ev.channel << ")\n"
++            << "          note(" << ev.value << ")\n"
++            << "          log2_value(" << ev.log2_freq << ")";
++            break;
++
+         case M_PGMCHANGE:
+             out << "PgmChange: program(" << ev.num << ")\n"
+             << "           channel(" << ev.channel << ")";
+@@ -120,6 +127,10 @@ void InMgr::flush(unsigned frameStart, unsigned frameStop)
+                     master->setController(ev.channel, ev.num, ev.value);
+                 break;
+ 
++            case M_FLOAT_CTRL:
++                master->setController(ev.channel, ev.num, ev.value, ev.log2_freq);
++                break;
++
+             case M_PGMCHANGE:
+                 for(int i=0; i < NUM_MIDI_PARTS; ++i) {
+                     //set the program of the parts assigned to the midi channel
+diff --git a/src/Nio/InMgr.h b/src/Nio/InMgr.h
+index e74cae31..0bb4c345 100644
+--- a/src/Nio/InMgr.h
++++ b/src/Nio/InMgr.h
+@@ -23,7 +23,8 @@ enum midi_type {
+     M_CONTROLLER = 2, // for controller
+     M_PGMCHANGE  = 3, // for program change
+     M_PRESSURE   = 4, // for polyphonic aftertouch
+-    M_FLOAT_NOTE = 5  // for floating point note
++    M_FLOAT_NOTE = 5, // for floating point note
++    M_FLOAT_CTRL = 6  // for floating point controller
+ };
+ 
+ struct MidiEvent {
+@@ -33,7 +34,7 @@ struct MidiEvent {
+     int num;     //note, controller or program number
+     int value;   //velocity or controller value
+     int time;    //time offset of event (used only in jack->jack case at the moment)
+-    float log2_freq;	//type=5 for logarithmic representation of note
++    float log2_freq;   //type=5,6 for logarithmic representation of note/parameter
+ };
+ 
+ //super simple class to manage the inputs
+diff --git a/src/Nio/MidiIn.cpp b/src/Nio/MidiIn.cpp
+index 617aa30b..166b6c66 100644
+--- a/src/Nio/MidiIn.cpp
++++ b/src/Nio/MidiIn.cpp
+@@ -65,10 +65,31 @@ void MidiIn::midiProcess(unsigned char head,
+             if (sysex_offset >= 10 &&
+                 sysex_data[1] == 0x0A &&
+                 sysex_data[2] == 0x55) {
+-                ev.type = M_FLOAT_NOTE;
++                switch (sysex_data[3] >> 4) {
++                case 0: /* Note ON */
++                    ev.type = M_FLOAT_NOTE;
++                    ev.num = sysex_data[4];
++                    ev.value = sysex_data[5];
++                    break;
++                case 1: /* Pressure, Aftertouch */
++                    ev.type = M_FLOAT_CTRL;
++                    ev.num = C_aftertouch;
++                    ev.value = sysex_data[4];
++                    break;
++                case 2: /* Controller */
++                    ev.type = M_FLOAT_CTRL;
++                    ev.num = sysex_data[5];
++                    ev.value = sysex_data[4];
++                    break;
++                case 3: /* Absolute pitch */
++                    ev.type = M_FLOAT_CTRL;
++                    ev.num = C_pitch;
++                    ev.value = sysex_data[4];
++                    break;
++                default:
++                    return;
++                }
+                 ev.channel = sysex_data[3] & 0x0F;
+-                ev.num = sysex_data[4];
+-                ev.value = sysex_data[5];
+                 ev.log2_freq = (sysex_data[6] +
+                   (sysex_data[7] / (128.0f)) +
+                   (sysex_data[8] / (128.0f * 128.0f)) +
+diff --git a/src/globals.h b/src/globals.h
+index cddefe0f..363b901e 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -237,6 +237,7 @@ enum ONOFFTYPE {
+ 
+ enum MidiControllers {
+     C_bankselectmsb = 0, C_pitchwheel = 1000, C_NULL = 1001,
++    C_aftertouch = 1002, C_pitch = 1003,
+     C_expression    = 11, C_panning = 10, C_bankselectlsb = 32,
+     C_filtercutoff  = 74, C_filterq = 71, C_bandwidth = 75, C_modwheel = 1,
+     C_fmamp  = 76,
+-- 
+2.47.0
+

@@ -1,0 +1,33 @@
+From ab88ac8c8073bd0c23beffaab62a012a6ec816d7 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Tue, 24 Dec 2019 19:04:08 +0100
+Subject: [PATCH 1458/1936] Fix spelling mistakes (2)
+
+---
+ rtosc                | 2 +-
+ src/UI/EnvelopeUI.fl | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index d54496f1..604de85e 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit d54496f13c08ee511995516bdd10ce85da453f1a
++Subproject commit 604de85ec2ec18dd6e7566e123d9a677033e83ea
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index 9ca4bddb..8b557b6f 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -256,7 +256,7 @@ envfree->redraw();}
+         }
+         Fl_Check_Button e1linearenvelope {
+           label L
+-          tooltip {The evelope is linear} xywh {180 20 15 15} down_box DOWN_BOX labelsize 10 align 4
++          tooltip {The envelope is linear} xywh {180 20 15 15} down_box DOWN_BOX labelsize 10 align 4
+           code0 {o->init("Plinearenvelope");}
+           class Fl_Osc_Check
+         }
+-- 
+2.47.0
+

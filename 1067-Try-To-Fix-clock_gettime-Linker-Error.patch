@@ -1,0 +1,39 @@
+From c83d5e6435caecc2238250fb6d8c9d5a6ce3dd7b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 16 Oct 2016 09:50:50 -0400
+Subject: [PATCH 1067/1936] Try To Fix clock_gettime Linker Error
+
+---
+ src/CMakeLists.txt                    | 2 +-
+ src/Plugin/ZynAddSubFX/CMakeLists.txt | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 06e3d5f8..e5ee7962 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -447,7 +447,7 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+             "-static" iphlpapi
+             "-static" winpthread)
+ else()
+-    set(PLATFORM_LIBRARIES "")
++    set(PLATFORM_LIBRARIES rt)
+     set(PTHREAD_LIBRARY pthread)
+ endif()
+ 
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 71da39f9..180624de 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -108,7 +108,7 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+             "-static" iphlpapi
+             "-static" winpthread)
+ else()
+-    set(PLATFORM_LIBRARIES X11 GL)
++    set(PLATFORM_LIBRARIES X11 GL rt)
+ endif()
+ 
+ target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+-- 
+2.47.0
+

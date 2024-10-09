@@ -1,0 +1,287 @@
+From dced94a695741c349d4cfa660809e1c00a934e62 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 23 Mar 2014 16:38:40 -0400
+Subject: [PATCH 0163/1936] Merge Preset Fix Patch
+
+Fixes Ill behaved preset saving for several types of parameters.
+Thanks to Christopher Oliver
+---
+ AUTHORS.txt                      |  2 +-
+ src/Params/ADnoteParameters.cpp  |  2 +-
+ src/Params/PADnoteParameters.cpp |  2 +-
+ src/Params/PresetsArray.cpp      | 10 ++++
+ src/Params/PresetsArray.h        |  4 +-
+ src/Params/PresetsStore.cpp      |  4 +-
+ src/Params/SUBnoteParameters.cpp |  2 +-
+ src/UI/ADnoteUI.fl               |  4 +-
+ src/UI/FilterUI.fl               |  4 +-
+ src/UI/PresetsUI.fl              | 79 +++++++++++++++++++++++++++++---
+ 10 files changed, 95 insertions(+), 18 deletions(-)
+
+diff --git a/AUTHORS.txt b/AUTHORS.txt
+index 83b25b17..2762c931 100644
+--- a/AUTHORS.txt
++++ b/AUTHORS.txt
+@@ -25,5 +25,5 @@ Contributors:
+         Jonathan Liles (NSM & NTK support)
+         Johannes Lorenz (Effect Documentation)
+         Ilario Glasgo (Italian Doc Translation)
+-        Christopher Oliver (Unison Regrssion Find)
++        Christopher Oliver (Unison Regrssion Fix, presets fix)
+ 
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index adb937f6..9ebdcc68 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -39,7 +39,7 @@ int ADnote_unison_sizes[] =
+ ADnoteParameters::ADnoteParameters(FFTwrapper *fft_)
+     :PresetsArray()
+ {
+-    setpresettype("Padsyth");
++    setpresettype("Padsynth");
+     fft = fft_;
+ 
+ 
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index c9722330..407e0aa0 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -26,7 +26,7 @@
+ PADnoteParameters::PADnoteParameters(FFTwrapper *fft_,
+                                      pthread_mutex_t *mutex_):Presets()
+ {
+-    setpresettype("Ppadsyth");
++    setpresettype("Ppadsynth");
+ 
+     fft   = fft_;
+     mutex = mutex_;
+diff --git a/src/Params/PresetsArray.cpp b/src/Params/PresetsArray.cpp
+index 420b6818..3dcf1263 100644
+--- a/src/Params/PresetsArray.cpp
++++ b/src/Params/PresetsArray.cpp
+@@ -130,6 +130,16 @@ bool PresetsArray::checkclipboardtype()
+     return presetsstore.checkclipboardtype(type);
+ }
+ 
++void PresetsArray::rescanforpresets()
++{
++    char type[MAX_PRESETTYPE_SIZE];
++    strcpy(type, this->type);
++    if(nelement != -1)
++        strcat(type, "n");
++
++    presetsstore.rescanforpresets(type);
++}
++
+ void PresetsArray::setelement(int n)
+ {
+     nelement = n;
+diff --git a/src/Params/PresetsArray.h b/src/Params/PresetsArray.h
+index 1b17e40e..724dc0b5 100644
+--- a/src/Params/PresetsArray.h
++++ b/src/Params/PresetsArray.h
+@@ -37,9 +37,9 @@ class PresetsArray:public Presets
+         void copy(const char *name); /**<if name==NULL, the clipboard is used*/
+         void paste(int npreset); //npreset==0 for clipboard
+         bool checkclipboardtype();
+-        void deletepreset(int npreset);
++        // INHERITED - void deletepreset(int npreset);
+ 
+-        char type[MAX_PRESETTYPE_SIZE];
++        // INHERITED - char type[MAX_PRESETTYPE_SIZE];
+         void setelement(int n);
+ 
+         void rescanforpresets();
+diff --git a/src/Params/PresetsStore.cpp b/src/Params/PresetsStore.cpp
+index b37c123a..7a6366a0 100644
+--- a/src/Params/PresetsStore.cpp
++++ b/src/Params/PresetsStore.cpp
+@@ -94,7 +94,7 @@ void PresetsStore::rescanforpresets(const string &type)
+     //std::cout << "Of Type: " << type << std::endl;
+ 
+     clearpresets();
+-    string ftype = "." + type + ".xpz";
++    string ftype = "." + type.substr(1) + ".xpz";
+ 
+     for(int i = 0; i < MAX_BANK_ROOT_DIRS; ++i) {
+         if(config.cfg.presetsDirList[i].empty())
+@@ -155,7 +155,7 @@ void PresetsStore::copypreset(XMLwrapper *xml, char *type, string name)
+     else
+         tmps = "/";
+ 
+-    string filename("" + dirname + tmps + name + type);
++    string filename("" + dirname + tmps + name + "." + &type[1] + ".xpz");
+ 
+     xml->saveXMLfile(filename);
+ }
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index f4e6db99..5813b268 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -26,7 +26,7 @@
+ 
+ SUBnoteParameters::SUBnoteParameters():Presets()
+ {
+-    setpresettype("Psubsyth");
++    setpresettype("Psubsynth");
+     AmpEnvelope = new EnvelopeParams(64, 1);
+     AmpEnvelope->ADSRinit_dB(0, 40, 127, 25);
+     FreqEnvelope = new EnvelopeParams(64, 0);
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 53993eb3..cf510f40 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -1010,12 +1010,12 @@ resui->resonancewindow->show();}
+       }
+       Fl_Button {} {
+         label C
+-        callback {presetsui->copy(pars);}
++        callback {presetsui->copyArray(pars);}
+         xywh {405 405 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+       }
+       Fl_Button {} {
+         label P
+-        callback {presetsui->paste(pars,this);}
++        callback {presetsui->pasteArray(pars,this);}
+         xywh {435 405 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+       }
+     }
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index 0bae429e..5aa87167 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -332,12 +332,12 @@ pars->changed=true;} open
+       }
+       Fl_Button {} {
+         label C
+-        callback {presetsui->copy(pars);}
++        callback {presetsui->copyArray(pars);}
+         xywh {186 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+       }
+       Fl_Button {} {
+         label P
+-        callback {presetsui->paste(pars,this);}
++        callback {presetsui->pasteArray(pars,this);}
+         xywh {203 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+       }
+     }
+diff --git a/src/UI/PresetsUI.fl b/src/UI/PresetsUI.fl
+index c5aabd24..5eafc472 100644
+--- a/src/UI/PresetsUI.fl
++++ b/src/UI/PresetsUI.fl
+@@ -135,8 +135,15 @@ pui->refresh();}
+       Fl_Button deletepbutton {
+         label Delete
+         callback {int n=pastebrowse->value();
+-if (n!=0) p->deletepreset(n);
+-rescan();}
++
++if (this->p_is_PresetArray) {
++    PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
++    if (n!=0) pre->deletepreset(n);
++    rescanArray();
++} else {
++    if (n!=0) p->deletepreset(n);
++    rescan();
++}} selected
+         xywh {180 355 75 20} box THIN_UP_BOX
+       }
+     }
+@@ -173,6 +180,7 @@ if (but) {
+ 	pastetypetext->label(&p->type[1]);
+ 	if (p->checkclipboardtype()) pastebutton->activate();
+ 		else pastebutton->deactivate();
++	this->p_is_PresetArray = false;
+ 	pastewin->show();
+    };} {}
+   }
+@@ -180,13 +188,13 @@ if (but) {
+     code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+ if(pre)
+     pre->setelement(n);
+-copy(p);} {}
++copyArray(p);} {}
+   }
+   Function {paste(Presets *p,PresetsUI_ *pui,int n)} {} {
+     code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+ if(pre)
+     pre->setelement(n);
+-paste(p,pui);} {}
++pasteArray(p,pui);} {}
+   }
+   Function {rescan()} {} {
+     code {copybrowse->clear();
+@@ -201,9 +209,68 @@ for (unsigned int i=0;i<presetsstore.presets.size();i++){
+    pastebrowse->add(name.c_str());
+ };} {}
+   }
+-  decl {Presets *p;} {public
++  decl {Presets *p;} {public local
++  }
++  decl {PresetsUI_ *pui;} {public local
+   }
+-  decl {PresetsUI_ *pui;} {public
++  Function {copyArray(Presets *p)} {open
++  } {
++    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
++
++copybutton->activate();
++copypbutton->deactivate();
++
++this->p=p;
++this->pui=NULL;
++bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
++presetname->cut(0,presetname->maximum_size());
++
++if (but) pre->copy(NULL);
++   else {
++        rescanArray();
++	copytypetext->label(&pre->type[1]);
++	copywin->show();
++   };} {}
++  }
++  Function {pasteArray(Presets *p,PresetsUI_ *pui)} {open
++  } {
++    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
++
++this->p=p;
++this->pui=pui;
++bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
++pastepbutton->deactivate();
++deletepbutton->deactivate();
++
++if (but) {
++	pre->paste(0);
++	pui->refresh();
++} else {
++        rescanArray();
++	pastetypetext->label(&pre->type[1]);
++	if (pre->checkclipboardtype()) pastebutton->activate();
++		else pastebutton->deactivate();
++	this->p_is_PresetArray = true;
++	pastewin->show();
++   };} {}
++  }
++  Function {rescanArray()} {open
++  } {
++    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
++
++copybrowse->clear();
++pastebrowse->clear();
++pre->rescanforpresets();
++
++for (unsigned int i=0;i<presetsstore.presets.size();i++){
++   std::string name=presetsstore.presets[i].name;
++   if(name.empty())
++       continue;
++   copybrowse->add(name.c_str());
++   pastebrowse->add(name.c_str());
++};} {}
++   }
++  decl {bool p_is_PresetArray;} {public
+   }
+ } 
+ 
+-- 
+2.47.0
+

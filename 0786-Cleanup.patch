@@ -1,0 +1,158 @@
+From 5ec12df4ca557975194a59aba4bd4ae65a5dc80c Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 13 Dec 2015 18:21:13 +0100
+Subject: [PATCH 0786/1936] Cleanup
+
+---
+ src/Plugin/AbstractFX.hpp               | 20 +++--------------
+ src/Plugin/AlienWah/AlienWah.cpp        | 30 ++++++++-----------------
+ src/Plugin/AlienWah/DistrhoPluginInfo.h |  2 +-
+ 3 files changed, 13 insertions(+), 39 deletions(-)
+
+diff --git a/src/Plugin/AbstractFX.hpp b/src/Plugin/AbstractFX.hpp
+index 043af0cf..4d2e9af5 100644
+--- a/src/Plugin/AbstractFX.hpp
++++ b/src/Plugin/AbstractFX.hpp
+@@ -57,23 +57,9 @@ public:
+ 
+     ~AbstractPluginFX() override
+     {
+-        if (efxoutl != nullptr)
+-        {
+-            delete[] efxoutl;
+-            efxoutl = nullptr;
+-        }
+-
+-        if (efxoutr != nullptr)
+-        {
+-            delete[] efxoutr;
+-            efxoutr = nullptr;
+-        }
+-
+-        if (effect != nullptr)
+-        {
+-            delete effect;
+-            effect = nullptr;
+-        }
++        delete[] efxoutl;
++        delete[] efxoutr;
++        delete effect;
+     }
+ 
+ protected:
+diff --git a/src/Plugin/AlienWah/AlienWah.cpp b/src/Plugin/AlienWah/AlienWah.cpp
+index 51fe4011..11882984 100644
+--- a/src/Plugin/AlienWah/AlienWah.cpp
++++ b/src/Plugin/AlienWah/AlienWah.cpp
+@@ -78,7 +78,6 @@ protected:
+         parameter.hints = kParameterIsInteger;
+         parameter.name  = "";
+         parameter.unit  = "";
+-        parameter.ranges.def = 1.0f;
+         parameter.ranges.min = 0.0f;
+         parameter.ranges.max = 127.0f;
+ 
+@@ -89,58 +88,50 @@ protected:
+             parameter.name = "LFO Frequency";
+             parameter.ranges.def = 70.0f;
+             break;
+-
+         case 1:
+             parameter.hints |= kParameterIsAutomable;
+             parameter.name = "LFO Randomness";
+             parameter.ranges.def = 0.0f;
+             break;
+-
+         case 2:
+-            parameter.hints |= kParameterIsAutomable|kParameterIsBoolean;
++            parameter.hints |= kParameterIsAutomable;
+             parameter.name = "LFO Type";
+             parameter.ranges.def = 0.0f;
+             parameter.ranges.max = 1.0f;
+             /*
+             TODO: support for scalePoints in DPF
+-            scalePoints[0].label  = "Sine";
+-            scalePoints[1].label  = "Triangle";
+-            scalePoints[0].value  = 0.0f;
+-            scalePoints[1].value  = 1.0f;
++            scalePoints[0].label = "Sine";
++            scalePoints[1].label = "Triangle";
++            scalePoints[0].value = 0.0f;
++            scalePoints[1].value = 1.0f;
+             */
+             break;
+-
+         case 3:
+             parameter.hints |= kParameterIsAutomable;
+             parameter.name = "LFO Stereo";
+             parameter.ranges.def = 62.0f;
+             break;
+-
+         case 4:
+             parameter.hints |= kParameterIsAutomable;
+             parameter.name = "Depth";
+             parameter.ranges.def = 60.0f;
+             break;
+-
+         case 5:
+             parameter.hints |= kParameterIsAutomable;
+             parameter.name = "Feedback";
+             parameter.ranges.def = 105.0f;
+             break;
+-
+         case 6:
+             parameter.name = "Delay";
+             parameter.ranges.def = 25.0f;
+             parameter.ranges.min = 1.0f;
+             parameter.ranges.max = 100.0f;
+             break;
+-
+         case 7:
+             parameter.hints |= kParameterIsAutomable;
+             parameter.name = "L/R Cross";
+             parameter.ranges.def = 0.0f;
+             break;
+-
+         case 8:
+             parameter.hints |= kParameterIsAutomable;
+             parameter.name = "Phase";
+@@ -158,19 +149,16 @@ protected:
+         switch (index)
+         {
+         case 0:
+-            programName = "AlienWah1";
++            programName = "AlienWah 1";
+             break;
+         case 1:
+-            programName = "AlienWah2";
++            programName = "AlienWah 2";
+             break;
+         case 2:
+-            programName = "AlienWah3";
++            programName = "AlienWah 3";
+             break;
+         case 3:
+-            programName = "AlienWah4";
+-            break;
+-        default:
+-            programName = nullptr;
++            programName = "AlienWah 4";
+             break;
+         }
+     }
+diff --git a/src/Plugin/AlienWah/DistrhoPluginInfo.h b/src/Plugin/AlienWah/DistrhoPluginInfo.h
+index 29e7b4f5..8fce04bd 100644
+--- a/src/Plugin/AlienWah/DistrhoPluginInfo.h
++++ b/src/Plugin/AlienWah/DistrhoPluginInfo.h
+@@ -24,7 +24,7 @@
+ #define DISTRHO_PLUGIN_INFO_H_INCLUDED
+ 
+ #define DISTRHO_PLUGIN_BRAND "ZynAddSubFX"
+-#define DISTRHO_PLUGIN_NAME  "AlienWah"
++#define DISTRHO_PLUGIN_NAME  "Alien Wah"
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#AlienWah"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-- 
+2.47.0
+

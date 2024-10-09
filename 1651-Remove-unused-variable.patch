@@ -1,0 +1,26 @@
+From cd179cf215ba9b9d61847435e5a4a68890704f49 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 20 Nov 2020 13:16:47 +0100
+Subject: [PATCH 1651/1936] Remove unused variable.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/LFO.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index 725f8d8a..35e03a52 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -50,7 +50,7 @@ class LFO
+         // RND mode
+         int first_half;
+         float last_random;
+-        float z1, z2, noisy_out;
++        float z1, z2;
+ 
+         //Intensity of the wave
+         float lfointensity;
+-- 
+2.47.0
+

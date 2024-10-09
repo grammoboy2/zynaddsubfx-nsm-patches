@@ -1,0 +1,309 @@
+From 0f0a4fcc0a913bfc4480e4830eb1f57fe8028643 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 9 Apr 2015 20:17:18 -0400
+Subject: [PATCH 0408/1936] Middleware: Make uToB/bToU non-global
+
+---
+ src/Misc/Master.cpp            | 17 +++++++++------
+ src/Misc/Master.h              |  2 ++
+ src/Misc/MiddleWare.cpp        | 39 ++++++++++++++++++++++------------
+ src/Misc/MiddleWare.h          |  2 +-
+ src/Nio/InMgr.cpp              |  3 +--
+ src/Output/DSSIaudiooutput.cpp |  4 +---
+ src/globals.h                  |  6 +-----
+ 7 files changed, 42 insertions(+), 31 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 44b19e8c..3a23a681 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -107,11 +107,11 @@ Ports Master::ports = {
+     rRecur(ctl, "Controller"),
+     rParamZyn(Pkeyshift,  "Global Key Shift"),
+     rArrayI(Pinsparts, NUM_INS_EFX, "Part to insert part onto"),
+-    {"echo", rDoc("Hidden port to echo messages"), 0, [](const char *m, RtData&) {
+-       bToU->raw_write(m-1);}},
++    {"echo", rDoc("Hidden port to echo messages"), 0, [](const char *m, RtData&d) {
++       d.reply(m-1);}},
+     {"get-vu", rDoc("Grab VU Data"), 0, [](const char *, RtData &d) {
+        Master *m = (Master*)d.obj;
+-       bToU->write("/vu-meter", "bb", sizeof(m->vu), &m->vu, sizeof(float)*NUM_MIDI_PARTS, m->vuoutpeakpart);}},
++       d.reply("/vu-meter", "bb", sizeof(m->vu), &m->vu, sizeof(float)*NUM_MIDI_PARTS, m->vuoutpeakpart);}},
+     {"reset-vu", rDoc("Grab VU Data"), 0, [](const char *, RtData &d) {
+        Master *m = (Master*)d.obj;
+        m->vuresetpeaks();}},
+@@ -193,8 +193,8 @@ Ports Master::ports = {
+             Master *M =  (Master*)d.obj;
+             printf("learning '%s'\n", rtosc_argument(m,0).s);
+             M->midi.learn(rtosc_argument(m,0).s);}},
+-    {"close-ui", rDoc("Request to close any connection named \"GUI\""), 0, [](const char *, RtData &) {
+-       bToU->write("/close-ui", "");}},
++    {"close-ui", rDoc("Request to close any connection named \"GUI\""), 0, [](const char *, RtData &d) {
++       d.reply("/close-ui", "");}},
+     {"add-rt-memory:bi", rProp(internal) rDoc("Add Additional Memory To RT MemPool"), 0,
+         [](const char *msg, RtData &d)
+         {
+@@ -210,8 +210,9 @@ Ports Master::ports = {
+         {d.reply("/undo_resume", "");}},
+ };
+ 
+-
++//XXX HACKS
+ Master *the_master;
++rtosc::ThreadLink *the_bToU;
+ 
+ class DataObj:public rtosc::RtData
+ {
+@@ -266,6 +267,8 @@ vuData::vuData(void)
+ Master::Master()
+ :midi(Master::ports), frozenState(false), pendingMemory(false)
+ {
++    bToU = NULL;
++    uToB = NULL;
+     memory = new Allocator();
+     the_master = this;
+     swaplr = 0;
+@@ -299,7 +302,7 @@ Master::Master()
+     midi.event_cb = [](const char *m)
+     {
+         char loc_buf[1024];
+-        DataObj d{loc_buf, 1024, the_master, bToU};
++        DataObj d{loc_buf, 1024, the_master, the_bToU};
+         memset(loc_buf, sizeof(loc_buf), 0);
+         //printf("sending an event to the owner of '%s'\n", m);
+         Master::ports.dispatch(m+1, d);
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 21c277b8..908d15ba 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -166,6 +166,8 @@ class Master
+ 
+         bool   frozenState;//read-only parameters for threadsafe actions
+         Allocator *memory;
++        rtosc::ThreadLink *bToU;
++        rtosc::ThreadLink *uToB;
+         bool pendingMemory;
+     private:
+         float  sysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index ab078335..7ad93908 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -35,8 +35,7 @@
+ #include <err.h>
+ 
+ using std::string;
+-rtosc::ThreadLink *bToU = new rtosc::ThreadLink(4096*2,1024);
+-rtosc::ThreadLink *uToB = new rtosc::ThreadLink(4096*2,1024);
++extern rtosc::ThreadLink *the_bToU;//XXX
+ rtosc::UndoHistory undo;
+ 
+ /******************************************************************************
+@@ -116,12 +115,12 @@ static int handler_function(const char *path, const char *types, lo_arg **argv,
+     (void) types;
+     (void) argv;
+     (void) argc;
+-    (void) user_data;
++    MiddleWare *mw = (MiddleWare*)user_data;
+     lo_address addr = lo_message_get_source(msg);
+     if(addr) {
+         const char *tmp = lo_address_get_url(addr);
+         if(tmp != last_url) {
+-            uToB->write("/echo", "ss", "OSC_URL", tmp);
++            mw->transmitMsg("/echo", "ss", "OSC_URL", tmp);
+             last_url = tmp;
+         }
+ 
+@@ -134,7 +133,7 @@ static int handler_function(const char *path, const char *types, lo_arg **argv,
+     if(!strcmp(buffer, "/path-search") && !strcmp("ss", rtosc_argument_string(buffer))) {
+         path_search(buffer);
+     } else
+-        uToB->raw_write(buffer);
++        mw->transmitMsg(buffer);
+ 
+     return 0;
+ }
+@@ -163,14 +162,14 @@ void deallocate(const char *str, void *v)
+  *                    PadSynth Setup                                         *
+  *****************************************************************************/
+ 
+-void preparePadSynth(string path, PADnoteParameters *p)
++void preparePadSynth(string path, PADnoteParameters *p, rtosc::ThreadLink *uToB)
+ {
+     //printf("preparing padsynth parameters\n");
+     assert(!path.empty());
+     path += "sample";
+ 
+     unsigned max = 0;
+-    p->sampleGenerator([&max,&path]
++    p->sampleGenerator([&max,&path,uToB]
+             (unsigned N, PADnoteParameters::Sample &s)
+             {
+             max = max<N ? N : max;
+@@ -256,7 +255,7 @@ class DummyDataObj:public rtosc::RtData
+ {
+     public:
+         DummyDataObj(char *loc_, size_t loc_size_, void *obj_, cb_t cb_, void *ui_,
+-                Fl_Osc_Interface *osc_)
++                Fl_Osc_Interface *osc_, rtosc::ThreadLink *uToB_)
+         {
+             memset(loc_, 0, sizeof(loc_size_));
+             buffer = new char[4*4096];
+@@ -267,6 +266,7 @@ class DummyDataObj:public rtosc::RtData
+             cb       = cb_;
+             ui       = ui_;
+             osc      = osc_;
++            uToB     = uToB_;
+         }
+         ~DummyDataObj(void)
+         {
+@@ -308,6 +308,7 @@ class DummyDataObj:public rtosc::RtData
+         cb_t cb;
+         void *ui;
+         Fl_Osc_Interface *osc;
++        rtosc::ThreadLink *uToB;
+ };
+ 
+ 
+@@ -661,6 +662,8 @@ public:
+     void loadMaster(const char *filename)
+     {
+         Master *m = new Master();
++        m->uToB = uToB;
++        m->bToU = bToU;
+         if(filename) {
+             m->loadXML(filename);
+             m->applyparameters();
+@@ -700,7 +703,7 @@ public:
+             return true;
+         char buffer[1024];
+         memset(buffer, 0, sizeof(buffer));
+-        DummyDataObj d(buffer, 1024, v, cb, ui, osc);
++        DummyDataObj d(buffer, 1024, v, cb, ui, osc, uToB);
+         strcpy(buffer, path.c_str());
+ 
+         PADnoteParameters::ports.dispatch(msg, d);
+@@ -754,12 +757,18 @@ public:
+ 
+     std::atomic_int pending_load[NUM_MIDI_PARTS];
+     std::atomic_int actual_load[NUM_MIDI_PARTS];
++
++    //Link To the Realtime
++    rtosc::ThreadLink *bToU;
++    rtosc::ThreadLink *uToB;
+ };
+ 
+ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw)
+ {
++    bToU = new rtosc::ThreadLink(4096*2,1024);
++    uToB = new rtosc::ThreadLink(4096*2,1024);
+     server = lo_server_new_with_proto(NULL, LO_UDP, liblo_error_cb);
+-    lo_server_add_method(server, NULL, NULL, handler_function, NULL);
++    lo_server_add_method(server, NULL, NULL, handler_function, mw);
+     fprintf(stderr, "lo server running on %d\n", lo_server_get_port(server));
+ 
+     clean_up_tmp_nams();
+@@ -769,7 +778,10 @@ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw)
+     cb = [](void*, const char*){};
+     idle = 0;
+ 
++    the_bToU = bToU;
+     master = new Master();
++    master->bToU = bToU;
++    master->uToB = uToB;
+     osc    = GUI::genOscInterface(mw);
+ 
+     //Grab objects of interest from master
+@@ -931,7 +943,7 @@ bool MiddleWareImpl::handleOscil(string path, const char *msg, void *v)
+     printf("handleOscil...\n");
+     char buffer[1024];
+     memset(buffer, 0, sizeof(buffer));
+-    DummyDataObj d(buffer, 1024, v, cb, ui, osc);
++    DummyDataObj d(buffer, 1024, v, cb, ui, osc, uToB);
+     strcpy(buffer, path.c_str());
+     if(!v)
+         return true;
+@@ -1066,7 +1078,7 @@ void MiddleWareImpl::handleMsg(const char *msg)
+             //else if(strstr(obj_rl.c_str(), "kititem"))
+             //    handleKitItem(obj_rl, objmap[obj_rl],atoi(rindex(msg,'m')+1),rtosc_argument(msg,0).T);
+         } else if(strstr(msg, "padpars/prepare"))
+-            preparePadSynth(obj_rl,(PADnoteParameters *) obj_store.get(obj_rl));
++            preparePadSynth(obj_rl,(PADnoteParameters *) obj_store.get(obj_rl), uToB);
+         else if(strstr(msg, "padpars")) {
+             if(!handlePAD(obj_rl, last_path+1, obj_store.get(obj_rl)))
+                 uToB->raw_write(msg);
+@@ -1196,9 +1208,10 @@ void MiddleWare::transmitMsg(const char *path, const char *args, va_list va)
+         fprintf(stderr, "Error in transmitMsg(va)n");
+ }
+ 
+-void MiddleWare::pendingSetProgram(int part)
++void MiddleWare::pendingSetProgram(int part, int program)
+ {
+     impl->pending_load[part]++;
++    impl->bToU->write("/setprogram", "cc", part, program);
+ }
+ 
+ std::string MiddleWare::activeUrl(void)
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 74ab6b64..2393a202 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -27,7 +27,7 @@ class MiddleWare
+         //Handle a rtosc Message uToB
+         void transmitMsg(const char *, const char *args, va_list va);
+         //Indicate that a program will be loaded on a known part
+-        void pendingSetProgram(int part);
++        void pendingSetProgram(int part, int program);
+         //Get/Set the active bToU url
+         std::string activeUrl(void);
+         void activeUrl(std::string u);
+diff --git a/src/Nio/InMgr.cpp b/src/Nio/InMgr.cpp
+index df5d84b5..b0131362 100644
+--- a/src/Nio/InMgr.cpp
++++ b/src/Nio/InMgr.cpp
+@@ -98,8 +98,7 @@ void InMgr::flush(unsigned frameStart, unsigned frameStop)
+                 for(int i=0; i < NUM_MIDI_PARTS; ++i) {
+                     //set the program of the parts assigned to the midi channel
+                     if(master->part[i]->Prcvchn == ev.channel) {
+-                        bToU->write("/setprogram", "cc", i, ev.num);
+-                        middleware->pendingSetProgram(i);
++                        middleware->pendingSetProgram(i, ev.num);
+                     }
+                 }
+                 break;
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index ae8c3039..b6529e3d 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -364,9 +364,7 @@ const DSSI_Program_Descriptor *DSSIaudiooutput::getProgram(unsigned long index)
+  */
+ void DSSIaudiooutput::selectProgram(unsigned long bank, unsigned long program)
+ {
+-    middleware->pendingSetProgram(0);
+-    extern rtosc::ThreadLink *bToU;
+-    bToU->write("/setprogram", "cc", 0, program);
++    middleware->pendingSetProgram(0, program);
+ }
+ 
+ /**
+diff --git a/src/globals.h b/src/globals.h
+index 494bdaea..c2d95886 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -33,12 +33,8 @@
+ #define NONREALTIME
+ #endif
+ 
+-//Forward declarations
+-namespace rtosc{struct Ports; class ThreadLink;};
+-extern rtosc::ThreadLink *bToU;
+-extern rtosc::ThreadLink *uToB;
+-
+ //Forward Declarations
++namespace rtosc{struct Ports; class ThreadLink;};
+ class  EffectMgr;
+ class  ADnoteParameters;
+ struct ADnoteGlobalParam;
+-- 
+2.47.0
+

@@ -1,0 +1,27 @@
+From 6e80dc74dd4ca4a8e20d09ed6150d3b3f2ecd4fc Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 12 Dec 2017 18:38:42 -0500
+Subject: [PATCH 1232/1936] Change scale->sense in ADnote metadata
+
+---
+ src/Params/ADnoteParameters.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 6d0275a7..9974efd2 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -306,8 +306,8 @@ static const Ports globalPorts = {
+     rParamZyn(PPanning, rShort("pan"), rDefault(64),
+         "Panning of ADsynth (0 random, 1 left, 127 right)"),
+     rParamZyn(PVolume,  rShort("vol"), rDefault(90), "volume control"),
+-    rParamZyn(PAmpVelocityScaleFunction, rShort("scale"), rDefault(64),
+-        "Volume Velocity Control"),
++    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), rDefault(64),
++        "Volume velocity sense"),
+ 
+     rParamZyn(Fadein_adjustment, rDefault(FADEIN_ADJUSTMENT_SCALE),
+         "Adjustment for anti-pop strategy."),
+-- 
+2.47.0
+

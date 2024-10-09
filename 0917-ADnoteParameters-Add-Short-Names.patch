@@ -1,0 +1,68 @@
+From 15ffc7cca2527535ee6dde6439279c4086b09481 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 23 May 2016 15:58:45 -0400
+Subject: [PATCH 0917/1936] ADnoteParameters: Add Short Names
+
+---
+ src/Params/ADnoteParameters.cpp | 30 ++++++++++++++++--------------
+ 1 file changed, 16 insertions(+), 14 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 366daa4e..16f07e66 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -18,6 +18,7 @@
+ #include "ADnoteParameters.h"
+ #include "EnvelopeParams.h"
+ #include "LFOParams.h"
++#include "../Misc/Time.h"
+ #include "../Misc/XMLwrapper.h"
+ #include "../DSP/FFTwrapper.h"
+ #include "../Synth/OscilGen.h"
+@@ -229,28 +230,29 @@ static const Ports globalPorts = {
+     rRecurp(AmpEnvelope, "Frequency Envelope"),
+     rRecurp(FilterEnvelope, "Frequency Envelope"),
+     rRecurp(GlobalFilter, "Filter"),
+-    rToggle(PStereo, "Mono/Stereo Enable"),
++
++    rToggle(PStereo, rShort("stereo"), "Mono/Stereo Enable"),
+ 
+     //Frequency
+-    rParamI(PDetune,       "Fine Detune"),
+-    rParamI(PCoarseDetune, "Coarse Detune"),
+-    rParamZyn(PDetuneType,   "Detune Scaling Type"),
+-    rParamZyn(PBandwidth,    "Relative Fine Detune Gain"),
++    rParamI(PDetune,         rShort("fine"),   "Fine Detune"),
++    rParamI(PCoarseDetune,   rShort("coarse"), "Coarse Detune"),
++    rParamZyn(PDetuneType,   rShort("type"),   "Detune Scaling Type"),
++    rParamZyn(PBandwidth,    rShort("bw."),    "Relative Fine Detune Gain"),
+ 
+     //Amplitude
+-    rParamZyn(PPanning, "Panning of ADsynth (0 random, 1 left, 127 right)"),
+-    rParamZyn(PVolume, "volume control"),
+-    rParamZyn(PAmpVelocityScaleFunction, "Volume Velocity Control"),
++    rParamZyn(PPanning, rShort("pan"), "Panning of ADsynth (0 random, 1 left, 127 right)"),
++    rParamZyn(PVolume,  rShort("vol"), "volume control"),
++    rParamZyn(PAmpVelocityScaleFunction, rShort("scale"), "Volume Velocity Control"),
+ 
+     rParamZyn(Fadein_adjustment, "Adjustment for anti-pop strategy."),
+-    rParamZyn(PPunchStrength, "Punch Strength"),
+-    rParamZyn(PPunchTime, "UNKNOWN"),
+-    rParamZyn(PPunchStretch, "How Punch changes with note frequency"),
+-    rParamZyn(PPunchVelocitySensing, "Punch Velocity control"),
++    rParamZyn(PPunchStrength, rShort("strength"),     "Punch Strength"),
++    rParamZyn(PPunchTime,     rShort("time"),         "Length of Punch"),
++    rParamZyn(PPunchStretch,  rShort("stretch"),      "How Punch changes with note frequency"),
++    rParamZyn(PPunchVelocitySensing, rShort("v.sns"), "Punch Velocity control"),
+ 
+     //Filter
+-    rParamZyn(PFilterVelocityScale, "Filter Velocity Magnitude"),
+-    rParamZyn(PFilterVelocityScaleFunction, "Filter Velocity Function Shape"),
++    rParamZyn(PFilterVelocityScale,         rShort("scale"), "Filter Velocity Magnitude"),
++    rParamZyn(PFilterVelocityScaleFunction, rShort("sense"), "Filter Velocity Function Shape"),
+ 
+ 
+     //Resonance
+-- 
+2.47.0
+

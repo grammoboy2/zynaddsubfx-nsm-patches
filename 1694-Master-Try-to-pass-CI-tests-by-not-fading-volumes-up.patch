@@ -1,0 +1,49 @@
+From 9b381cc5ce72caaffe4b73626e2304221ea235c4 Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Tue, 8 Dec 2020 17:40:53 -0800
+Subject: [PATCH 1694/1936] Master: Try to pass CI tests by not fading volumes
+ up from 0, but rather starting at the default.
+
+Which are (curiously), when starting up a new instance of ZynAddSubFX:
+
+Part volume: L 1.000000 R 0.992126
+Master volume: 0.464159 (MIDI 58)
+---
+ src/DSP/AnalogFilter.cpp | 1 +
+ src/Misc/Master.cpp      | 4 +++-
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index bb117828..318db835 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -47,6 +47,7 @@ AnalogFilter::AnalogFilter(unsigned char Ftype,
+     coeff.d[0] = 0; //this is not used
+     outgain    = 1.0f;
+     freq_smoothing.sample_rate(samplerate_f);
++    freq_smoothing.reset( freq );
+ }
+ 
+ AnalogFilter::~AnalogFilter()
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 6b9e677f..6403cb1b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -785,11 +785,13 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+                                config->cfg.Interpolation, &microtonal, fft, &watcher,
+                                (ss+"/part"+npart+"/").c_str);
+ 	smoothing_part_l[npart].sample_rate( synth.samplerate );
++	smoothing_part_l[npart].reset( 1.0f );
+ 	smoothing_part_r[npart].sample_rate( synth.samplerate );
+-	
++	smoothing_part_r[npart].reset( 0.992126f ); /* curious default, must be a bug in panning formula. */
+     }
+ 
+     smoothing.sample_rate( synth.samplerate );
++    smoothing.reset( 0.464159f ); /* master volume has this odd default for some reason, just go with it. */
+     
+     //Insertion Effects init
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+-- 
+2.47.0
+

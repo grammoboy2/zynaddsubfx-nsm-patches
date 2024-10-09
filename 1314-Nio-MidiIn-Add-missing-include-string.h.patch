@@ -1,0 +1,24 @@
+From 4a740f070762a14ea46ce4ee85f2c90880603892 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 22 Feb 2019 21:17:10 -0500
+Subject: [PATCH 1314/1936] Nio/MidiIn: Add missing #include <string.h>
+
+---
+ src/Nio/MidiIn.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Nio/MidiIn.cpp b/src/Nio/MidiIn.cpp
+index 281677c3..617aa30b 100644
+--- a/src/Nio/MidiIn.cpp
++++ b/src/Nio/MidiIn.cpp
+@@ -14,6 +14,7 @@
+ #include "MidiIn.h"
+ #include "../globals.h"
+ #include "InMgr.h"
++#include <string.h>
+ 
+ namespace zyn {
+ 
+-- 
+2.47.0
+

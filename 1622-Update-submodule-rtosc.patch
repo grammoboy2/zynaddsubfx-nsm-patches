@@ -1,0 +1,20 @@
+From fbc5e4efa138ed8c507a7d78391c747fd7ead5c4 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 9 Oct 2020 05:53:23 +0200
+Subject: [PATCH 1622/1936] Update submodule rtosc
+
+... to fix invalid reads in port-checker
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 8dbbce49..a06b1262 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 8dbbce490985adb59c24153954316690739123ab
++Subproject commit a06b1262732da4bd32ad380c5e90660b2e0f1469
+-- 
+2.47.0
+

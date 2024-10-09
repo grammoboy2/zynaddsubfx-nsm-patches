@@ -1,0 +1,9 @@
+From f681488cd1e419751d4b21e778d30db1b3199272 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Wed, 1 Nov 2017 19:40:21 +0100
+Subject: [PATCH 1220/1936] index on default_values: cd9255e7 Implement
+ consumer location member
+
+-- 
+2.47.0
+

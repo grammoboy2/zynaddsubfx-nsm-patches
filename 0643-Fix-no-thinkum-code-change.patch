@@ -1,0 +1,25 @@
+From 515fde8af546f5d93a258a71fe04f1b8ac9ce17d Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 25 Oct 2015 13:51:39 -0400
+Subject: [PATCH 0643/1936] Fix no-thinkum code change.
+
+---
+ src/UI/BankView.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index f58df43a..d928675b 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -277,7 +277,7 @@ void BankView::react(int event, int nslot)
+     }
+ 
+     //Reads from slot
+-    if ((event==1)&&(mode==1) && isempty){
++    if ((event==1)&&(mode==1) && !isempty){
+         printf("Loading a part #%d with file '%s'\n", nslot, slot.filename());
+         osc->write("/load-part", "is", *npart, slot.filename());
+         osc->writeValue("/part"+to_s(*npart)+"/name", slot.name());
+-- 
+2.47.0
+

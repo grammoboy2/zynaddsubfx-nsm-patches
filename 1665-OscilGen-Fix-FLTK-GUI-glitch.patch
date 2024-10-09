@@ -1,0 +1,35 @@
+From 6a7b959900f02f7722b6ac09ae73600f6fa92fbd Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 8 Dec 2020 21:04:56 -0500
+Subject: [PATCH 1665/1936] OscilGen: Fix FLTK GUI glitch
+
+Sliders previously used a char type override for handling updates.
+This commit adds the int type override as the backend APIs have updated.
+---
+ src/UI/OscilGenUI.fl | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index a0cae1c7..e3c79857 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -81,7 +81,15 @@ class OGSlider {: {public Fl_Osc_TSlider}
+   } { code {phase=false; } {} }
+ 
+   Function {OSC_value(char c)} {open return_type void
+-  } { code {value(phase ? c : 127-c);
++  } { code {
++  value(phase ? c : 127-c);
++  selection_color(value() == reset_value ? 0 : 222);
++  redraw();
++  } {} }
++  
++  Function {OSC_value(int c)} {open return_type void
++  } { code {
++  value(phase ? c : 127-c);
+   selection_color(value() == reset_value ? 0 : 222);
+   redraw();
+   } {} }
+-- 
+2.47.0
+

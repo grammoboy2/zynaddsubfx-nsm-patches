@@ -1,0 +1,28 @@
+From 81ff251449b1403ed3391c9b2feb5c4de412fd01 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 2 Jan 2021 14:58:00 -0500
+Subject: [PATCH 1686/1936] Add DPF switch to opengl for zest GUI build
+
+Should resolve regression introduced in commit
+edf59cd912aa41c0c76056c72445bc6997fb8fa2
+Should resolve corresponding issue with partially defined 'fContext'
+https://github.com/zynaddsubfx/zyn-fusion-build/issues/67
+---
+ src/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index b19a9572..4c8c259a 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -497,6 +497,7 @@ if(NtkGui)
+ endif()
+ 
+ if(ZestGui)
++    add_definitions(-DDGL_OPENGL=1)
+     add_definitions(-DHAVE_DGL)
+     add_definitions(-DZEST_GUI)
+ endif()
+-- 
+2.47.0
+

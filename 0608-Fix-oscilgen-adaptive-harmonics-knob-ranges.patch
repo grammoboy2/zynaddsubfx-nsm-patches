@@ -1,0 +1,30 @@
+From 0fe01feac7b3647b48aa346ee83e97fd1755b638 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sat, 17 Oct 2015 13:14:45 -0400
+Subject: [PATCH 0608/1936] Fix oscilgen adaptive harmonics knob ranges
+
+---
+ src/Synth/OscilGen.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index e207c697..ab224783 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -125,10 +125,10 @@ const rtosc::Ports OscilGen::ports = {
+     rOption(Padaptiveharmonics,
+             rOptions(OFF, ON, Square, 2xSub, 2xAdd, 3xSub, 3xAdd, 4xSub, 4xAdd),
+             "Adaptive Harmonics Mode"),
+-    rParamZyn(Padaptiveharmonicsbasefreq,
++    rParamI(Padaptiveharmonicsbasefreq, rLinear(0,255),
+             "Base frequency of adaptive harmonic (30..3000Hz)"),
+-    rParamI(Padaptiveharmonicspower,rLinear(0,100),
+-            rMap(unit,percent), "Adaptive Harmonic Strength"),
++    rParamI(Padaptiveharmonicspower,rLinear(0,200),
++            "Adaptive Harmonic Strength"),
+     rParamZyn(Padaptiveharmonicspar,
+             "Adaptive Harmonics Postprocessing Power"),
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From e9d4ef0da3d42a1628989b3eed6d9a098bbd6b1f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 2 Oct 2016 15:53:19 -0400
+Subject: [PATCH 1038/1936] Fix PolyPhony Mode OSC Request
+
+---
+ src/Misc/Part.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 17b448cf..a8098aab 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -101,7 +101,7 @@ static const Ports partPorts = {
+                 int res = 0;
+                 if(!p->Ppolymode)
+                     res = p->Plegatomode ? 2 : 1;
+-                d.reply(d.loc, "c", res);
++                d.reply(d.loc, "i", res);
+                 return;
+             }
+ 
+-- 
+2.47.0
+

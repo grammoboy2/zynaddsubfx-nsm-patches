@@ -1,0 +1,26 @@
+From 1a7a869a13ed539b8b51de30670eda93b5ee1648 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sat, 28 Nov 2015 05:22:20 -0500
+Subject: [PATCH 0764/1936] Kill off cute sound/noise menu colors; they are
+ hard to read with FLTK.
+
+---
+ src/UI/ADnoteUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index c377885f..6ee49835 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -834,7 +834,7 @@ o->redraw();}
+           }
+           MenuItem {} {
+             label White
+-            xywh {15 15 100 20} labelfont 1 labelsize 11 labelcolor 55
++            xywh {15 15 100 20} labelfont 1 labelsize 11 labelcolor 19
+           }
+           MenuItem {} {
+             label Pink
+-- 
+2.47.0
+

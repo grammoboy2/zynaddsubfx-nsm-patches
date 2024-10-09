@@ -1,0 +1,19 @@
+From 00cae5ea0ded9bb3ecb99bc7890d6a57b3309279 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sat, 12 Mar 2016 10:00:21 +0100
+Subject: [PATCH 0883/1936] Update DPF submodule
+
+---
+ DPF | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/DPF b/DPF
+index a82e260a..fd34de63 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit a82e260a1b88b031781b05e4554cd16fc37d342c
++Subproject commit fd34de63e4781ea0660a4691f33799ac89935fd7
+-- 
+2.47.0
+

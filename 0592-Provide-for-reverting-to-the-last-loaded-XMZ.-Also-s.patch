@@ -1,0 +1,215 @@
+From face94a5f48e60dac00921054d4de3b0068c2dd7 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 11 Oct 2015 23:30:05 -0400
+Subject: [PATCH 0592/1936] Provide for reverting to the last loaded XMZ.  Also
+ sets the window title.
+
+---
+ src/Misc/Master.cpp |  3 ++-
+ src/Misc/Master.h   |  3 ++-
+ src/UI/MasterUI.fl  | 44 ++++++++++++++++++++++++++++++++++++++++++++
+ src/globals.h       |  8 ++++++++
+ src/main.cpp        |  6 +++++-
+ 5 files changed, 61 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index f713b098..eaea4a2b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -103,6 +103,7 @@ static const Ports sysefsendto =
+ };
+ 
+ static const Ports master_ports = {
++    rString(last_xmz, XMZ_PATH_MAX, "File name for last name loaded if any."),
+     rRecursp(part, 16, "Part"),//NUM_MIDI_PARTS
+     rRecursp(sysefx, 4, "System Effect"),//NUM_SYS_EFX
+     rRecursp(insefx, 8, "Insertion Effect"),//NUM_INS_EFX
+@@ -306,6 +307,7 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+     the_master = this;
+ #endif
+ 
++    last_xmz[0] = 0;
+     fft = new FFTwrapper(synth.oscilsize);
+ 
+     shutup = 0;
+@@ -1056,7 +1058,6 @@ int Master::saveXML(const char *filename)
+ }
+ 
+ 
+-
+ int Master::loadXML(const char *filename)
+ {
+     XMLwrapper *xml = new XMLwrapper();
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index cb12b40a..aa9632b4 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -54,6 +54,8 @@ class Master
+         /** Destructor*/
+         ~Master();
+ 
++        char last_xmz[XMZ_PATH_MAX];
++
+         void applyOscEvent(const char *event);
+ 
+         /**Saves all settings to a XML file
+@@ -65,7 +67,6 @@ class Master
+ 
+         void defaults();
+ 
+-
+         /**loads all settings from a XML file
+          * @return 0 for ok or -1 if there is an error*/
+         int loadXML(const char *filename);
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index a46c4cbd..65d3ba94 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -61,6 +61,9 @@ decl {\#include "VuPartMeter.h"} {public local
+ decl {\#include "Fl_Osc_Dial.H"} {private local
+ } 
+ 
++decl {\#include "Osc_DataModel.h"} {private local
++} 
++
+ decl {\#include "VuMasterMeter.h"} {public local
+ } 
+ 
+@@ -264,6 +267,11 @@ class MasterUI {open
+               callback {do_new_master();}
+               xywh {25 25 100 20}
+             }
++            MenuItem {} {
++              label {&Revert changes...}
++              callback {do_revert_changes();}
++              xywh {25 25 100 20}
++            }
+             MenuItem {} {
+               label {&Open Parameters...}
+               callback {\#if USE_NSM
+@@ -942,6 +950,11 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))
+             callback {do_new_master();}
+             xywh {30 30 100 20}
+           }
++          MenuItem {} {
++            label {&Revert changes...}
++            callback {do_revert_changes();}
++            xywh {30 30 100 20}
++          }
+           MenuItem {} {
+             label {&Open Parameters...}
+             callback {do_load_master();}
+@@ -1493,6 +1506,15 @@ osc=osc_;
+ ninseff=0;
+ nsyseff=0;
+ npart=0;
++last_xmz = new Osc_DataModel(osc);
++last_xmz->callback = [this](std::string filestr) {
++    strncpy(last_loaded, filestr.c_str(), XMZ_PATH_MAX);
++    char *label = last_loaded[0] == 0 ? NULL
++                  : ((label = strrchr(last_loaded, '/'))) ? label+1
++		  : last_loaded;
++    setfilelabel(label);
++};
++last_xmz->doUpdate("/last_xmz");
+ 
+ for (int i=0;i<NUM_SYS_EFX;i++)
+    for (int j=0;j<NUM_SYS_EFX;j++)
+@@ -1560,6 +1582,7 @@ simplelistitemgroup->redraw();} {}
+ microtonalui=new MicrotonalUI(osc, "/microtonal/");
+ 
+     osc->write("/reset_master");
++       osc->write("/last_xmz", "s", "");
+        npartcounter->value(1);
+        refresh_master_ui();
+        updatepanel();} {}
+@@ -1569,9 +1592,26 @@ microtonalui=new MicrotonalUI(osc, "/microtonal/");
+          do_new_master_unconditional();
+          }} {}
+   }
++  Function {do_revert_changes_unconditional()} {return_type int
++  } {
++    code {osc->write("/load_xmz", "s", last_loaded);
++    refresh_master_ui();
++    updatepanel();
++
++return 1;} {}
++  }
++  Function {do_revert_changes()} {} {
++    code {if (last_loaded[0] == 0)
++         do_new_master();
++         else
++         if (fl_choice("Revert *ALL* the parameters ?","No","Yes",NULL)){
++         do_revert_changes_unconditional();
++         }} {}
++  }
+   Function {do_load_master_unconditional(const char *filename, const char *display_name)} {return_type int
+   } {
+     code {osc->write("/load_xmz", "s", filename);
++    osc->write("/last_xmz", "s", filename);
+     refresh_master_ui();
+     updatepanel();
+ 
+@@ -1652,6 +1692,8 @@ simpleinseffnocounter->do_callback();
+ 
+ simplerefresh();
+ bankui->hide();} {}
++  }
++  decl {class Osc_DataModel *last_xmz;} {public local
+   }
+   decl {MicrotonalUI *microtonalui;} {private local
+   }
+@@ -1679,6 +1721,8 @@ bankui->hide();} {}
+   }
+   decl {class Fl_Osc_Interface *osc;} {public local
+   }
++  decl {char last_loaded[XMZ_PATH_MAX];} {public local
++  }
+   Function {close()} {open return_type void
+   } {
+     code {*exitprogram=1;} {}
+diff --git a/src/globals.h b/src/globals.h
+index 132ba5e9..eb93455e 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -144,6 +144,14 @@ typedef std::complex<fftw_real> fft_t;
+  */
+ #define PART_MAX_NAME_LEN 30
+ 
++/*
++ * The maximum we allow for an XMZ path
++ *
++ * Note that this is an ugly hack.  Finding a compile time path
++ * max portably is painful.
++ */
++#define XMZ_PATH_MAX 1024
++
+ /*
+  * The maximum number of bands of the equaliser
+  */
+diff --git a/src/main.cpp b/src/main.cpp
+index ce22a824..9ed366ff 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -393,13 +393,17 @@ int main(int argc, char *argv[])
+     initprogram(std::move(synth), &config, prefered_port);
+ 
+     if(!loadfile.empty()) {
+-        int tmp = master->loadXML(loadfile.c_str());
++        const char *filename = loadfile.c_str();
++        int tmp = master->loadXML(filename);
+         if(tmp < 0) {
+             cerr << "ERROR: Could not load master file " << loadfile
+                  << "." << endl;
+             exit(1);
+         }
+         else {
++            strncpy(master->last_xmz, filename, XMZ_PATH_MAX);
++            if (master->last_xmz[XMZ_PATH_MAX-1] != 0)
++                master->last_xmz[0] = 0;
+             master->applyparameters();
+             cout << "Master file loaded." << endl;
+         }
+-- 
+2.47.0
+

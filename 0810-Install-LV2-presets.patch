@@ -1,0 +1,22 @@
+From f33583f0111807f8679e6b2563bbad56ff84543e Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Tue, 5 Jan 2016 02:36:40 +0000
+Subject: [PATCH 0810/1936] Install LV2 presets
+
+---
+ CMakeLists.txt | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 7f56a1c8..3db06857 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -39,3 +39,5 @@ install(DIRECTORY instruments/banks
+     DESTINATION share/zynaddsubfx)
+ install(DIRECTORY instruments/examples
+     DESTINATION share/zynaddsubfx)
++install(DIRECTORY instruments/ZynAddSubFX.lv2presets
++    DESTINATION lib/lv2)
+-- 
+2.47.0
+

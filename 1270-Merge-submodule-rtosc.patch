@@ -1,0 +1,19 @@
+From c165dab6ba8a661183c72aacc1d77c690332c191 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Mon, 4 Jun 2018 21:27:37 +0200
+Subject: [PATCH 1270/1936] Merge submodule rtosc
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 0fef760d..3a27a305 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 0fef760d6a671b891af51122cbea02c568dbbcd5
++Subproject commit 3a27a3057d8d1e45f7c0d640ba89c3368453ab12
+-- 
+2.47.0
+

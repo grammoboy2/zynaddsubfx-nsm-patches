@@ -1,0 +1,26 @@
+From 75ae70c20ee265a4c35325f6b6c0bb440a38dd77 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <oliver@onion.private>
+Date: Thu, 26 Jun 2014 12:48:12 -0400
+Subject: [PATCH 0196/1936] Fix unintentional flip about theta = pi/4 in
+ OscilGen::spectrumadjust()
+
+---
+ src/Synth/OscilGen.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 691dfeb8..3042b068 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -516,7 +516,7 @@ void OscilGen::spectrumadjust()
+ 
+     for(int i = 0; i < synth->oscilsize / 2; ++i) {
+         float mag   = abs(oscilFFTfreqs, i);
+-        float phase = arg(oscilFFTfreqs, i);
++        float phase = M_PI_2 - arg(oscilFFTfreqs, i);
+ 
+         switch(Psatype) {
+             case 1:
+-- 
+2.47.0
+

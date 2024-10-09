@@ -1,0 +1,29 @@
+From af4bc6c7efa7e8a5d3c7f0e944c8aa9936120c52 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 4 Apr 2020 03:24:34 +0200
+Subject: [PATCH 1506/1936] Keep the monomem array up to date when setting
+ per-note pitch.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Misc/Part.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index a4e5ec56..5b2cd344 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -731,6 +731,10 @@ void Part::SetController(unsigned int type, note_t note, float value,
+         const int   keyshift     = masterkeyshift + partkeyshift;
+         const float notebasefreq = getBaseFreq(value, keyshift);
+ 
++        /* Make sure MonoMem's frequency information is kept up to date */
++        if(!Ppolymode)
++            monomem[note].note_log2_freq = value;
++
+         for(auto &d:notePool.activeDesc()) {
+             if(d.note == note && d.playing())
+                 for(auto &s:notePool.activeNotes(d))
+-- 
+2.47.0
+

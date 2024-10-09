@@ -1,0 +1,28 @@
+From 39fe23476b63769d369ea04f9d08d32caa15c658 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 4 Apr 2020 15:45:48 +0200
+Subject: [PATCH 1511/1936] Fix commented out code. The first argument of
+ getnotefreq() is now power of 2.0f. Make sure we divide the note number by
+ 12.0f.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/UI/MicrotonalUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/MicrotonalUI.fl b/src/UI/MicrotonalUI.fl
+index 1c972c96..595d467f 100644
+--- a/src/UI/MicrotonalUI.fl
++++ b/src/UI/MicrotonalUI.fl
+@@ -198,7 +198,7 @@ if (true) {
+         Fl_Counter anotecounter {
+           label {"A" Note}
+           callback {
+-          /*if (microtonal->getnotefreq(o->value(),0)<0.0) o->textcolor(FL_RED);
++          /*if (microtonal->getnotefreq(o->value() / 12.0f,0)<0.0) o->textcolor(FL_RED);
+  else o->textcolor(FL_BLACK);*/
+ 
+ o->redraw();}
+-- 
+2.47.0
+

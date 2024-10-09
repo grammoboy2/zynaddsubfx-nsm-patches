@@ -1,0 +1,28 @@
+From 73ff4b7b7d33fa481b65b368b96b6ac2ad9d96d1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 17 May 2016 12:27:59 -0400
+Subject: [PATCH 0906/1936] Nio: Fix Jack-Multi Open/Close Crash
+
+See https://sourceforge.net/p/zynaddsubfx/bugs/133/ for more info
+---
+ src/Nio/JackMultiEngine.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Nio/JackMultiEngine.cpp b/src/Nio/JackMultiEngine.cpp
+index a4fa5dc6..85ca9b7f 100644
+--- a/src/Nio/JackMultiEngine.cpp
++++ b/src/Nio/JackMultiEngine.cpp
+@@ -131,6 +131,10 @@ int JackMultiEngine::processAudio(jack_nframes_t nframes)
+     float *buffers[NUM_MIDI_PARTS * 2 + 2];
+ 
+     for(int i = 0; i < NUM_MIDI_PARTS * 2 + 2; ++i) {
++        //Abort if ports are only partially initialized
++        if(!impl->ports[i])
++            return false;
++
+         buffers[i] =
+             (float *)jack_port_get_buffer(impl->ports[i], nframes);
+         assert(buffers[i]);
+-- 
+2.47.0
+

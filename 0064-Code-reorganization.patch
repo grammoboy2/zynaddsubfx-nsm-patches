@@ -1,0 +1,2062 @@
+From 6634e39ecf07190434709db24aa83ed8761357d0 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 2 Apr 2013 11:42:20 -0400
+Subject: [PATCH 0064/1936] Code reorganization
+
+Some work on performing non-rt actions outside the rt thread are done here, but
+they are buggy and require unused objects sitting in memory for now.
+
+Next some work on getting proper allocations/deallocations to avoid uneeded
+memory sitting around.
+Perhaps Port attributes can be used to prevent the special cases that are
+defined in the middleware layer from getting any more complex.
+
+As a warning, this commit was not completely finished before other obligations
+appeared, therefore some portions may be half-baked.
+---
+ src/CMakeLists.txt              |   4 +-
+ src/Misc/CMakeLists.txt         |   2 +-
+ src/Misc/Master.cpp             |  19 --
+ src/Misc/Master.h               |   3 -
+ src/Misc/MiddleWare.cpp         | 536 ++++++++++++++++++++++++++++++--
+ src/Misc/MiddleWare.h           |  20 +-
+ src/Misc/Part.cpp               |  95 +++---
+ src/Misc/Part.h                 |   2 +-
+ src/Nio/InMgr.cpp               |  17 +-
+ src/Nio/InMgr.h                 |   4 +-
+ src/Nio/Nio.cpp                 |  11 +-
+ src/Nio/Nio.h                   |   3 +-
+ src/Nio/OutMgr.cpp              |  20 +-
+ src/Nio/OutMgr.h                |   4 +-
+ src/Params/ADnoteParameters.cpp |   4 +-
+ src/Synth/OscilGen.cpp          | 171 ++++------
+ src/Synth/OscilGen.h            |  44 ++-
+ src/UI/ADnoteUI.fl              |   4 +-
+ src/UI/Fl_Osc_Interface.h       |   5 +-
+ src/UI/Fl_Osc_Widget.H          |   1 +
+ src/UI/OscilGenUI.fl            |  47 ++-
+ src/UI/PADnoteUI.fl             |  10 +-
+ src/main.cpp                    | 193 +-----------
+ 23 files changed, 775 insertions(+), 444 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 6915862f..0c3af8b5 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -329,10 +329,12 @@ message(STATUS "using link directories: ${AUDIO_LIBRARY_DIRS} ${ZLIB_LIBRARY_DIR
+ 
+ add_executable(zynaddsubfx main.cpp)
+ 
++#Warning: the required ordering of these to get proper linking depends upon the
++#         phase of the moon
+ target_link_libraries(zynaddsubfx
++	${GUI_LIBRARIES}
+     zynaddsubfx_core
+ 	zynaddsubfx_nio
+-	${GUI_LIBRARIES}
+ 	${NIO_LIBRARIES}
+ 	${AUDIO_LIBRARIES}
+ 	)
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index c919aeb3..81dad303 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -11,8 +11,8 @@ set(zynaddsubfx_misc_SRCS
+ 	Misc/XMLwrapper.cpp
+ 	Misc/Recorder.cpp
+ 	Misc/WavFile.cpp
+-    Misc/MiddleWare.cpp
+ 	Misc/WaveShapeSmps.cpp
++    Misc/MiddleWare.cpp
+ )
+ 
+ 
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 83fb9a11..15327703 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -64,8 +64,6 @@ vuData::vuData(void)
+       rmspeakl(0.0f), rmspeakr(0.0f), clipped(0)
+ {}
+ 
+-static Master* masterInstance = NULL;
+-
+ Master::Master()
+ {
+     swaplr = 0;
+@@ -139,23 +137,6 @@ bool Master::mutexLock(lockset request)
+     return false;
+ }
+ 
+-Master &Master::getInstance()
+-{
+-    if (!masterInstance)
+-        masterInstance = new Master;
+-
+-    return *masterInstance;
+-}
+-
+-void Master::deleteInstance()
+-{
+-    if (masterInstance)
+-    {
+-        delete masterInstance;
+-        masterInstance = NULL;
+-    }
+-}
+-
+ /*
+  * Note On Messages (velocity=0 for NoteOff)
+  */
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index b5af9c17..78d32d60 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -57,9 +57,6 @@ class Master
+         /** Destructor*/
+         ~Master();
+ 
+-        static Master &getInstance();
+-        static void deleteInstance();
+-
+         /**Saves all settings to a XML file
+          * @return 0 for ok or <0 if there is an error*/
+         int saveXML(const char *filename);
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d84e88a0..427cf9f3 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1,31 +1,525 @@
+-#include "../Params/PADnoteParameters.h"
++#include "MiddleWare.h"
++
+ #include <cstring>
+ #include <cstdio>
++#include <cstdlib>
+ 
+ #include <rtosc/thread-link.h>
++#include <rtosc/ports.h>
++#include <lo/lo.h>
++
++#include "../UI/Fl_Osc_Interface.h"
++#include "../UI/Fl_Osc_Widget.H"
++
++#include <map>
++
++#include "Master.h"
++#include "Part.h"
++#include "../Params/ADnoteParameters.h"
++#include "../Params/PADnoteParameters.h"
++
++#include <string>
+ 
+-extern rtosc::ThreadLink *uToB;
+-namespace MiddleWare {
+-void preparePadSynth(const char *path, PADnoteParameters *p)
++#include <err.h>
++
++rtosc::ThreadLink *bToU = new rtosc::ThreadLink(4096*2,1024);
++rtosc::ThreadLink *uToB = new rtosc::ThreadLink(4096*2,1024);
++
++/**
++ * General local static code/data
++ */
++static lo_server server;
++static string last_url, curr_url;
++
++static void liblo_error_cb(int i, const char *m, const char *loc)
+ {
+-    char path_buffer[1024];
+-    strncpy(path_buffer, path, 1024);
+-    if(char *old_end = rindex(path_buffer, '/')) {
+-        unsigned max = 0;
+-        p->sampleGenerator([&max,&old_end,&path_buffer]
+-                (unsigned N, PADnoteParameters::Sample &s)
+-                {
+-                max = max<N ? N : max;
+-                sprintf(old_end, "/sample%d", N);
+-                uToB->write(path_buffer, "ifb",
+-                    s.size, s.basefreq, sizeof(float*), &s.smp);
+-                });
+-        //clear out unused samples
+-        for(unsigned i = max+1; i < PAD_MAX_SAMPLES; ++i) {
+-            sprintf(old_end, "/sample%d", i);
+-            uToB->write(path_buffer, "ifb",
+-                    0, 440.0f, sizeof(float*), NULL);
++    fprintf(stderr, "liblo :-( %d-%s@%s\n",i,m,loc);
++}
++
++void path_search(const char *m)
++{
++    using rtosc::Ports;
++    using rtosc::Port;
++
++    //assumed upper bound of 32 ports (may need to be resized)
++    char         types[65];
++    rtosc_arg_t  args[64];
++    size_t       pos    = 0;
++    const Ports *ports  = NULL;
++    const char  *str    = rtosc_argument(m,0).s;
++    const char  *needle = rtosc_argument(m,1).s;
++
++    //zero out data
++    memset(types, 0, sizeof(types));
++    memset(args,  0, sizeof(args));
++
++    if(!*str) {
++        ports = &Master::ports;
++    } else {
++        const Port *port = Master::ports.apropos(rtosc_argument(m,0).s);
++        if(port)
++            ports = port->ports;
++    }
++
++    if(ports) {
++        //RTness not confirmed here
++        for(const Port &p:*ports) {
++            if(strstr(p.name, needle)!=p.name)
++                continue;
++            types[pos]    = types[pos+1] = 's';
++            args[pos++].s = p.name;
++            args[pos++].s = p.metadata;
+         }
+     }
++
++    //Reply to requester
++    char buffer[1024];
++    size_t length = rtosc_amessage(buffer, 1024, "/paths", types, args);
++    if(length) {
++        lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
++        lo_address addr = lo_address_new_from_url(last_url.c_str());
++        if(addr)
++            lo_send_message(addr, buffer, msg);
++    }
+ }
++
++static int handler_function(const char *path, const char *types, lo_arg **argv,
++        int argc, lo_message msg, void *user_data)
++{
++    (void) types;
++    (void) argv;
++    (void) argc;
++    (void) user_data;
++    lo_address addr = lo_message_get_source(msg);
++    if(addr) {
++        const char *tmp = lo_address_get_url(addr);
++        if(tmp != last_url) {
++            uToB->write("/echo", "ss", "OSC_URL", tmp);
++            last_url = tmp;
++        }
++
++    }
++
++    char buffer[2048];
++    memset(buffer, 0, sizeof(buffer));
++    size_t size = 2048;
++    lo_message_serialise(msg, path, buffer, &size);
++    if(!strcmp(buffer, "/path-search") && !strcmp("ss", rtosc_argument_string(buffer))) {
++        path_search(buffer);
++    } else
++        uToB->raw_write(buffer);
++
++    return 0;
+ }
++
++typedef void(*cb_t)(void*,const char*);
++
++/**
++ * - Fetches liblo messages and forward them to the backend
++ * - Grabs backend messages and distributes them to the frontends
++ */
++void osc_check(cb_t cb, void *ui)
++{
++    lo_server_recv_noblock(server, 0);
++    while(bToU->hasNext()) {
++        const char *rtmsg = bToU->read();
++        if(!strcmp(rtmsg, "/echo")
++                && !strcmp(rtosc_argument_string(rtmsg),"ss")
++                && !strcmp(rtosc_argument(rtmsg,0).s, "OSC_URL"))
++            curr_url = rtosc_argument(rtmsg,1).s;
++        else if(curr_url == "GUI") {
++            cb(ui, bToU->read()); //GUI::raiseUi(gui, bToU->read());
++        } else{
++            lo_message msg  = lo_message_deserialise((void*)rtmsg,
++                    rtosc_message_length(rtmsg, bToU->buffer_size()), NULL);
++
++            //Send to known url
++            if(!curr_url.empty()) {
++                lo_address addr = lo_address_new_from_url(curr_url.c_str());
++                lo_send_message(addr, rtmsg, msg);
++            }
++        }
++    }
++}
++
++
++void preparePadSynth(string path, PADnoteParameters *p)
++{
++    printf("preparing padsynth parameters\n");
++    assert(!path.empty());
++    path += "sample";
++
++    unsigned max = 0;
++    p->sampleGenerator([&max,&path]
++            (unsigned N, PADnoteParameters::Sample &s)
++            {
++            max = max<N ? N : max;
++            printf("sending info to '%s'\n", (path+to_s(N)).c_str());
++            uToB->write((path+to_s(N)).c_str(), "ifb",
++                s.size, s.basefreq, sizeof(float*), &s.smp);
++            });
++    //clear out unused samples
++    for(unsigned i = max+1; i < PAD_MAX_SAMPLES; ++i) {
++        uToB->write((path+to_s(i)).c_str(), "ifb",
++                0, 440.0f, sizeof(float*), NULL);
++    }
++}
++
++//
++//static rtosc::Ports padPorts= {
++//    {"prepare:", "::Prepares the padnote instance", 0, }
++//};
++//
++//static rtosc::Ports oscilPorts = {
++//    {"prepare:", "", 0, }
++//};
++
++static rtosc::Ports oscilPorts = {
++    {"phase#128::c", "::Sets harmonic phase",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            const char *mm = m;
++            while(*mm && !isdigit(*mm)) ++mm;
++            unsigned char &phase = ((OscilGen*)d.obj)->Phphase[atoi(mm)];
++            if(!rtosc_narguments(m))
++                d.reply(d.loc, "c", phase);
++            else
++                phase = rtosc_argument(m,0).i;
++        }},
++    {"magnitude#128::c", "::Sets harmonic magnitude",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            //printf("I'm at '%s'\n", d.loc);
++            const char *mm = m;
++            while(*mm && !isdigit(*mm)) ++mm;
++            unsigned char &mag = ((OscilGen*)d.obj)->Phmag[atoi(mm)];
++            if(!rtosc_narguments(m))
++                d.reply(d.loc, "c", mag);
++            else
++                mag = rtosc_argument(m,0).i;
++        }},
++    {"base-spectrum:", "::Returns spectrum of base waveshape",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            const unsigned n = synth->oscilsize / 2;
++            float *spc = new float[n];
++            memset(spc, 0, 4*n);
++            ((OscilGen*)d.obj)->getspectrum(n,spc,1);
++            d.reply(d.loc, "b", n*sizeof(float), spc);
++            delete[] spc;
++        }},
++    {"base-waveform:", "::Returns base waveshape points",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            const unsigned n = synth->oscilsize;
++            float *smps = new float[n];
++            memset(smps, 0, 4*n);
++            ((OscilGen*)d.obj)->getcurrentbasefunction(smps);
++            d.reply(d.loc, "b", n*sizeof(float), smps);
++            delete[] smps;
++        }},
++    {"spectrum:", "::Returns spectrum of waveform",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            const unsigned n = synth->oscilsize / 2;
++            float *spc = new float[n];
++            memset(spc, 0, 4*n);
++            ((OscilGen*)d.obj)->getspectrum(n,spc,0);
++            d.reply(d.loc, "b", n*sizeof(float), spc);
++            delete[] spc;
++        }},
++    {"waveform:", "::Returns waveform points",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            const unsigned n = synth->oscilsize;
++            float *smps = new float[n];
++            memset(smps, 0, 4*n);
++            OscilGen *o = ((OscilGen*)d.obj);
++            //printf("%d\n", o->needPrepare());
++            ((OscilGen*)d.obj)->get(smps,-1.0);
++            //printf("wave: %f %f %f %f\n", smps[0], smps[1], smps[2], smps[3]);
++            d.reply(d.loc, "b", n*sizeof(float), smps);
++            delete[] smps;
++        }},
++    {"prepare:", "::Performs setup operation to oscillator",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            OscilGen &o = *(OscilGen*)d.obj;
++            fft_t *data = new fft_t[synth->oscilsize / 2];
++            o.prepare(data);
++            printf("sending '%p' of fft data\n", data);
++            uToB->write(d.loc, "b",
++                    sizeof(fft_t*), &data);
++            o.pendingfreqs = data;
++        }},
++    {"convert2sine:", "::Translates waveform into FS",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            ((OscilGen*)d.obj)->convert2sine();
++        }},
++};
++
++class DummyDataObj:public rtosc::RtData
++{
++    public:
++        DummyDataObj(char *loc_, size_t loc_size_, void *obj_, cb_t cb_, void *ui_,
++                Fl_Osc_Interface *osc_)
++        {
++            memset(loc_, 0, sizeof(loc_size_));
++            loc      = loc_;
++            loc_size = loc_size_;
++            obj      = obj_;
++            cb       = cb_;
++            ui       = ui_;
++            osc      = osc_;
++        }
++
++        virtual void reply(const char *path, const char *args, ...)
++        {
++            //printf("reply building '%s'\n", path);
++            va_list va;
++            va_start(va,args);
++            char *buffer = bToU->buffer();
++            rtosc_vmessage(buffer,bToU->buffer_size(),path,args,va);
++            reply(buffer);
++        }
++        virtual void reply(const char *msg)
++        {
++            //printf("reply used for '%s'\n", msg);
++            osc->tryLink(msg);
++            cb(ui, msg);
++        }
++        //virtual void broadcast(const char *path, const char *args, ...){(void)path;(void)args;};
++        //virtual void broadcast(const char *msg){(void)msg;};
++    private:
++        cb_t cb;
++        void *ui;
++        Fl_Osc_Interface *osc;
++};
++
++
++/**
++ * Forwarding logic
++ * if(!dispatch(msg, data))
++ *     forward(msg)
++ */
++
++
++static Fl_Osc_Interface *genOscInterface(struct MiddleWareImpl*);
++
++/* Implementation */
++struct MiddleWareImpl
++{
++    MiddleWareImpl(void)
++    {
++        server = lo_server_new_with_proto(NULL, LO_UDP, liblo_error_cb);
++        lo_server_add_method(server, NULL, NULL, handler_function, NULL);
++        fprintf(stderr, "lo server running on %d\n", lo_server_get_port(server));
++
++        //dummy callback for starters
++        cb = [](void*, const char*){};
++
++        master = new Master();
++        osc    = genOscInterface(this);
++
++        //Grab objects of interest from master
++        for(int i=0; i < NUM_MIDI_PARTS; ++i) {
++            for(int j=0; j < NUM_KIT_ITEMS; ++j) {
++                objmap["/part"+to_s(i)+"/kit"+to_s(j)+"/padpars/"] =
++                    master->part[i]->kit[j].padpars;
++                objmap["/part"+to_s(i)+"/kit"+to_s(j)+"/padpars/oscil/"] =
++                    master->part[i]->kit[j].padpars->oscilgen;
++                for(int k=0; k<NUM_VOICES; ++k) {
++                    objmap["/part"+to_s(i)+"/kit"+to_s(j)+"/adpars/voice"+to_s(k)+"/oscil/"] =
++                        master->part[i]->kit[j].adpars->VoicePar[k].OscilSmp;
++                    objmap["/part"+to_s(i)+"/kit"+to_s(j)+"/adpars/voice"+to_s(k)+"/oscil-mod/"] =
++                        master->part[i]->kit[j].adpars->VoicePar[k].FMSmp;
++                }
++            }
++        }
++    }
++
++    ~MiddleWareImpl(void)
++    {
++        delete master;
++        delete osc;
++    }
++
++    void tick(void)
++    {
++        osc_check(cb, ui);
++    }
++
++    void handleOscil(string path, const char *msg, void *v)
++    {
++        char buffer[1024];
++        DummyDataObj d(buffer, 1024, v, cb, ui, osc);
++        strcpy(buffer, path.c_str());
++        printf("location buffer contains '%s'\n", d.loc);
++        oscilPorts.dispatch(msg, d);
++    }
++
++    /* Should handle the following paths specially
++     * as they are all fundamentally non-realtime data
++     *
++     * BASE/part#/kititem#
++     * BASE/part#/kit#/adpars/voice#/oscil/\*
++     * BASE/part#/kit#/adpars/voice#/mod-oscil/\*
++     * BASE/part#/kit#/padpars/prepare
++     * BASE/part#/kit#/padpars/oscil/\*
++     */
++    void handleMsg(const char *msg)
++    {
++        const char *last_path = rindex(msg, '/');
++        if(!last_path)
++            return;
++
++        //Get the object resource locator
++        string obj_rl(msg, last_path+1);
++        if(objmap.find(obj_rl) == objmap.end()) {
++            uToB->raw_write(msg);
++            return;
++        }
++
++
++        //try some over simplified pattern matching
++        if(strstr(msg, "oscil/"))
++            handleOscil(obj_rl, last_path+1, objmap[obj_rl]);
++        //else if(strstr(obj_rl.c_str(), "kititem"))
++        //    handleKitItem(obj_rl, objmap[obj_rl],atoi(rindex(msg,'m')+1),rtosc_argument(msg,0).T);
++        else if(strstr(msg, "padpars/prepare"))
++            preparePadSynth(obj_rl,(PADnoteParameters *) objmap[obj_rl]);
++        else {//just forward the message
++            uToB->raw_write(msg);
++        }
++    }
++
++    void write(const char *path, const char *args, ...)
++    {
++        //We have a free buffer in the threadlink, so use it
++        va_list va;
++        va_start(va, args);
++        char *buffer = uToB->buffer();
++        unsigned len = uToB->buffer_size();
++        bool success = rtosc_vmessage(buffer, len, path, args, va);
++        //printf("working on '%s':'%s'\n",path, args);
++
++        if(success)
++            handleMsg(buffer);
++        else
++            warnx("Failed to write message to '%s'", path);
++    }
++
++    //Ports
++    //oscil - base path, kit, voice, name
++    //pad   - base path, kit
++
++    //Actions that may be done on these objects
++    //Oscilgen almost all parameters can be safely set
++    //Padnote can have anything set on its oscilgen and a very small set of general
++    //parameters
++
++    //Provides a mapping for non-RT objects stored inside the backend
++    /**
++     * TODO These pointers may invalidate when part/master is loaded via xml
++     */
++    std::map<std::string, void*> objmap;
++
++    //This code will own the pointer to master, be prepared for odd things if
++    //this assumption is broken
++    Master *master;
++
++    //The ONLY means that any chunk of code should have for interacting with the
++    //backend
++    Fl_Osc_Interface *osc;
++
++    cb_t cb;
++    void *ui;
++};
++
++/**
++ * Interface to the middleware layer via osc packets
++ */
++class UI_Interface:public Fl_Osc_Interface
++{
++    public:
++        UI_Interface(MiddleWareImpl *impl_)
++            :impl(impl_)
++        {}
++
++        void requestValue(string s) override
++        {
++            //Fl_Osc_Interface::requestValue(s);
++            if(last_url != "GUI") {
++                impl->write("/echo", "ss", "OSC_URL", "GUI");
++                last_url = "GUI";
++            }
++
++            impl->write(s.c_str(),"");
++        }
++
++        void writeValue(string s, char c) override
++        {
++            Fl_Osc_Interface::writeValue(s,c);
++            impl->write(s.c_str(), "c", c);
++        }
++
++        void createLink(string s, class Fl_Osc_Widget*w) override
++        {
++            Fl_Osc_Interface::createLink(s,w);
++            map.insert(std::pair<string,Fl_Osc_Widget*>(s,w));
++        }
++
++        void removeLink(string s, class Fl_Osc_Widget*w) override
++        {
++            for(auto i = map.begin(); i != map.end(); ++i) {
++                if(i->first == s && i->second == w)
++                    map.erase(i);
++            }
++            printf("[%d] removing '%s' (%p)...\n", map.size(), s.c_str(), w);
++        }
++
++        void tryLink(const char *msg) override
++        {
++            for(auto pair:map) {
++                if(pair.first == msg) {
++                    const char *arg_str = rtosc_argument_string(msg);
++                    //printf("Possible location for application of '%s' is '%p'\n", msg, pair.second);
++                    if(!strcmp(arg_str, "b"))
++                        pair.second->OSC_value(rtosc_argument(msg,0).b.len,rtosc_argument(msg,0).b.data);
++                    else if(!strcmp(arg_str, "c")) {
++                        printf("'%s' => '%d'\n", msg, rtosc_argument(msg,0).i);
++                        pair.second->OSC_value((char)rtosc_argument(msg,0).i);
++                    }
++                }
++            }
++        };
++
++    private:
++        std::multimap<string,Fl_Osc_Widget*> map;
++        MiddleWareImpl *impl;
++};
++
++Fl_Osc_Interface *genOscInterface(struct MiddleWareImpl *impl)
++{
++    return new UI_Interface(impl);
++}
++
++//stubs
++MiddleWare::MiddleWare(void)
++    :impl(new MiddleWareImpl())
++{}
++MiddleWare::~MiddleWare(void)
++{
++    delete impl;
++}
++Master *MiddleWare::spawnMaster(void)
++{
++    return impl->master;
++}
++Fl_Osc_Interface *MiddleWare::spawnUiApi(void)
++{
++    return impl->osc;
++}
++void MiddleWare::tick(void)
++{
++    impl->tick();
++}
++void MiddleWare::setUiCallback(void(*cb)(void*,const char *),void *ui)
++{
++    impl->cb = cb;
++    impl->ui = ui;
++}
++
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index d66ae4be..f3a6e285 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -1,10 +1,18 @@
+ #pragma once
+-class PADnoteParameters;
++
+ //Link between realtime and non-realtime layers
+-namespace MiddleWare
++class MiddleWare
+ {
+-static void preparePadSynth(const char *path, PADnoteParameters *p);
+-};
++    public:
++        MiddleWare(void);
++        ~MiddleWare(void);
++        //return internal master pointer
++        class Master *spawnMaster(void);
++        class Fl_Osc_Interface *spawnUiApi(void);
++        void setUiCallback(void(*cb)(void*,const char *),void *ui);
++        void tick(void);
+ 
+-//XXX Odd Odd compiler behavior has made this hack necessary (darn you linker)
+-#include "MiddleWare.cpp"
++        static void preparePadSynth(const char *, class PADnoteParameters *){};
++    private:
++        struct MiddleWareImpl *impl;
++};
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index a0a357bf..998f0025 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -35,6 +35,7 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <string.h>
++#include <cassert>
+ 
+ #include <rtosc/ports.h>
+ 
+@@ -43,12 +44,32 @@ using rtosc::RtData;
+ 
+ static Ports partPorts = {
+     RECURS(Part, Part::Kit, kit, kit, 16, "Kit"),//NUM_KIT_ITEMS
++    //{"kit#16::T:F", "::Enables or disables kit item", 0,
++    //    [](const char *m, RtData &d) {
++    //        Part *p = (Part*)d.obj;
++    //        unsigned kitid = -1;
++    //        //Note that this event will be captured before transmitted, thus
++    //        //reply/broadcast don't matter
++    //        for(int i=0; i<VOICES; ++i) {
++    //            d.reply("/middleware/oscil", "siisb", loc, kitid, i, "oscil"
++    //                    sizeof(OscilGen*),
++    //                    p->kit[kitid]->adpars->voice[i]->OscilSmp);
++    //            d.reply("/middleware/oscil", "siisb", loc, kitid, i, "oscil-mod"
++    //                    sizeof(OscilGen*),
++    //                    p->kit[kitid]->adpars->voice[i]->somethingelse);
++    //        }
++    //        d.reply("/middleware/pad", "sib", loc, kitid,
++    //                sizeof(PADnoteParameters*),
++    //                p->kit[kitid]->padpars)
++    //    }}
+ };
+ 
+ static Ports kitPorts = {
+     RECURP(Part::Kit, PADnoteParameters, padpars, padpars, "Padnote parameters"),
+     RECURP(Part::Kit, ADnoteParameters, adpars, adpars, "Adnote parameters"),
+     RECURP(Part::Kit, SUBnoteParameters, subpars, subpars, "Adnote parameters"),
++    //{"padpars:b", "::", 0
++    //    [](
+ };
+ 
+ Ports &Part::Kit::ports = kitPorts;
+@@ -65,15 +86,14 @@ Part::Part(Microtonal *microtonal_, FFTwrapper *fft_, pthread_mutex_t *mutex_)
+ 
+     for(int n = 0; n < NUM_KIT_ITEMS; ++n) {
+         kit[n].Pname   = new unsigned char [PART_MAX_NAME_LEN];
+-        kit[n].adpars  = NULL;
+-        kit[n].subpars = NULL;
+-        kit[n].padpars = NULL;
++        //XXX this is wasting memory, but making interfacing with the back
++        //layers more nice, if this seems to increase memory usage figure out a
++        //sane way of tracking the changing pointers (otherwise enjoy the bloat)
++        kit[n].adpars  = new ADnoteParameters(fft);
++        kit[n].subpars = new SUBnoteParameters();
++        kit[n].padpars = new PADnoteParameters(fft);
+     }
+ 
+-    kit[0].adpars  = new ADnoteParameters(fft);
+-    kit[0].subpars = new SUBnoteParameters();
+-    kit[0].padpars = new PADnoteParameters(fft);
+-
+     //Part's Insertion Effects init
+     for(int nefx = 0; nefx < NUM_PART_EFX; ++nefx) {
+         partefx[nefx]    = new EffectMgr(1, mutex);
+@@ -88,6 +108,7 @@ Part::Part(Microtonal *microtonal_, FFTwrapper *fft_, pthread_mutex_t *mutex_)
+     killallnotes = 0;
+     oldfreq      = -1.0f;
+ 
++
+     for(int i = 0; i < POLIPHONY; ++i) {
+         partnote[i].status = KEY_OFF;
+         partnote[i].note   = -1;
+@@ -952,14 +973,12 @@ void Part::RunNote(unsigned int k)
+ 
+         for(unsigned type = 0; type < 3; ++type) {
+             //Select a note
+-            SynthNote **note;
++            SynthNote **note = NULL;
+             if(type == 0)
+                 note = &partnote[k].kititem[item].adnote;
+-            else
+-            if(type == 1)
++            else if(type == 1)
+                 note = &partnote[k].kititem[item].subnote;
+-            else
+-            if(type == 2)
++            else if(type == 2)
+                 note = &partnote[k].kititem[item].padnote;
+ 
+             //Process if it exists
+@@ -1067,42 +1086,42 @@ void Part::setPpanning(char Ppanning_)
+         panning = 1.0f;
+ }
+ 
++template<class T>
++static inline void nullify(T &t) {delete t; t = NULL; }
++
+ /*
+  * Enable or disable a kit item
+  */
+-void Part::setkititemstatus(int kititem, int Penabled_)
++void Part::setkititemstatus(unsigned kititem, bool Penabled_)
+ {
++    //nonexistent kit item and the first kit item is always enabled
+     if((kititem == 0) || (kititem >= NUM_KIT_ITEMS))
+-        return;                                        //nonexistent kit item and the first kit item is always enabled
+-    kit[kititem].Penabled = Penabled_;
++        return;
++
++    Kit &kkit = kit[kititem];
++
++    //no need to update if
++    if(kkit.Penabled == Penabled_)
++        return;
++    kkit.Penabled = Penabled_;
+ 
+-    bool resetallnotes = false;
+     if(Penabled_ == 0) {
+-        if(kit[kititem].adpars != NULL)
+-            delete (kit[kititem].adpars);
+-        if(kit[kititem].subpars != NULL)
+-            delete (kit[kititem].subpars);
+-        if(kit[kititem].padpars != NULL) {
+-            delete (kit[kititem].padpars);
+-            resetallnotes = true;
+-        }
+-        kit[kititem].adpars   = NULL;
+-        kit[kititem].subpars  = NULL;
+-        kit[kititem].padpars  = NULL;
+-        kit[kititem].Pname[0] = '\0';
+-    }
+-    else {
+-        if(kit[kititem].adpars == NULL)
+-            kit[kititem].adpars = new ADnoteParameters(fft);
+-        if(kit[kititem].subpars == NULL)
+-            kit[kititem].subpars = new SUBnoteParameters();
+-        if(kit[kititem].padpars == NULL)
+-            kit[kititem].padpars = new PADnoteParameters(fft);
+-    }
++        //nullify(kkit.adpars);
++        //nullify(kkit.subpars);
++        //nullify(kkit.padpars);
++        kkit.Pname[0] = '\0';
+ 
+-    if(resetallnotes)
++        //Reset notes s.t. stale buffers will not get read
+         for(int k = 0; k < POLIPHONY; ++k)
+             KillNotePos(k);
++    }
++    else {
++        //All parameters must be NULL in this case
++        //assert(!(kkit.adpars || kkit.subpars || kkit.padpars));
++        //kkit.adpars  = new ADnoteParameters(fft);
++        //kkit.subpars = new SUBnoteParameters();
++        //kkit.padpars = new PADnoteParameters(fft);
++    }
+ }
+ 
+ void Part::add2XMLinstrument(XMLwrapper *xml)
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 8220f4b1..a5022305 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -105,7 +105,7 @@ class Part
+ 
+         //Part parameters
+         void setkeylimit(unsigned char Pkeylimit);
+-        void setkititemstatus(int kititem, int Penabled_);
++        void setkititemstatus(unsigned kititem, bool Penabled_);
+ 
+         unsigned char Penabled; /**<if the part is enabled*/
+         unsigned char Pvolume; /**<part volume*/
+diff --git a/src/Nio/InMgr.cpp b/src/Nio/InMgr.cpp
+index af8d63c8..d57ef363 100644
+--- a/src/Nio/InMgr.cpp
++++ b/src/Nio/InMgr.cpp
+@@ -41,7 +41,7 @@ InMgr &InMgr::getInstance()
+ }
+ 
+ InMgr::InMgr()
+-    :queue(100), master(Master::getInstance())
++    :queue(100), master(NULL)
+ {
+     current = NULL;
+     sem_init(&work, PTHREAD_PROCESS_PRIVATE, 0);
+@@ -73,21 +73,21 @@ void InMgr::flush()
+                 dump.dumpnote(ev.channel, ev.num, ev.value);
+ 
+                 if(ev.value)
+-                    master.noteOn(ev.channel, ev.num, ev.value);
++                    master->noteOn(ev.channel, ev.num, ev.value);
+                 else
+-                    master.noteOff(ev.channel, ev.num);
++                    master->noteOff(ev.channel, ev.num);
+                 break;
+ 
+             case M_CONTROLLER:
+                 dump.dumpcontroller(ev.channel, ev.num, ev.value);
+-                master.setController(ev.channel, ev.num, ev.value);
++                master->setController(ev.channel, ev.num, ev.value);
+                 break;
+ 
+             case M_PGMCHANGE:
+-                master.setProgram(ev.channel, ev.num);
++                master->setProgram(ev.channel, ev.num);
+                 break;
+             case M_PRESSURE:
+-                master.polyphonicAftertouch(ev.channel, ev.num, ev.value);
++                master->polyphonicAftertouch(ev.channel, ev.num, ev.value);
+                 break;
+         }
+     }
+@@ -127,3 +127,8 @@ MidiIn *InMgr::getIn(string name)
+     EngineMgr &eng = EngineMgr::getInstance();
+     return dynamic_cast<MidiIn *>(eng.getEng(name));
+ }
++
++void InMgr::setMaster(Master *master_)
++{
++    master = master_;
++}
+diff --git a/src/Nio/InMgr.h b/src/Nio/InMgr.h
+index 03dcad07..7367ce0c 100644
+--- a/src/Nio/InMgr.h
++++ b/src/Nio/InMgr.h
+@@ -37,6 +37,8 @@ class InMgr
+ 
+         std::string getSource() const;
+ 
++        void setMaster(class Master *master);
++
+         friend class EngineMgr;
+     private:
+         InMgr();
+@@ -46,7 +48,7 @@ class InMgr
+         class MidiIn * current;
+ 
+         /**the link to the rest of zyn*/
+-        class Master & master;
++        class Master *master;
+ };
+ 
+ #endif
+diff --git a/src/Nio/Nio.cpp b/src/Nio/Nio.cpp
+index 0026437a..78a5c029 100644
+--- a/src/Nio/Nio.cpp
++++ b/src/Nio/Nio.cpp
+@@ -21,17 +21,22 @@ bool   Nio::autoConnect   = false;
+ string Nio::defaultSource = IN_DEFAULT;
+ string Nio::defaultSink   = OUT_DEFAULT;
+ 
+-void Nio::init(void)
++void Nio::init(class Master *master)
+ {
+     in  = &InMgr::getInstance(); //Enable input wrapper
+     out = &OutMgr::getInstance(); //Initialize the Output Systems
+     eng = &EngineMgr::getInstance(); //Initialize The Engines
++
++    in->setMaster(master);
++    out->setMaster(master);
+ }
+ 
+ bool Nio::start()
+ {
+-    init();
+-    return eng->start();
++    if(eng)
++        return eng->start();
++    else
++        return false;
+ }
+ 
+ void Nio::stop()
+diff --git a/src/Nio/Nio.h b/src/Nio/Nio.h
+index ba050b8e..0092f384 100644
+--- a/src/Nio/Nio.h
++++ b/src/Nio/Nio.h
+@@ -4,13 +4,14 @@
+ #include <set>
+ 
+ class WavFile;
++class Master;
+ 
+ /**Interface to Nio Subsystem
+  *
+  * Should be only externally included header */
+ namespace Nio
+ {
+-    void init(void);
++    void init(Master *master);
+     bool start(void);
+     void stop(void);
+ 
+diff --git a/src/Nio/OutMgr.cpp b/src/Nio/OutMgr.cpp
+index ea270bff..f49e4bb6 100644
+--- a/src/Nio/OutMgr.cpp
++++ b/src/Nio/OutMgr.cpp
+@@ -22,11 +22,10 @@ OutMgr::OutMgr()
+     :wave(new WavEngine()),
+       priBuf(new float[4096],
+              new float[4096]), priBuffCurrent(priBuf),
+-      master(Master::getInstance())
++      master(NULL)
+ {
+     currentOut = NULL;
+     stales     = 0;
+-    master     = Master::getInstance();
+ 
+     //init samples
+     outr = new float[synth->buffersize];
+@@ -57,17 +56,19 @@ OutMgr::~OutMgr()
+  */
+ const Stereo<float *> OutMgr::tick(unsigned int frameSize)
+ {
+-    pthread_mutex_lock(&(master.mutex));
++    if(pthread_mutex_trylock(&(master->mutex))) {
++        puts("failed to get the mater mutex...");
++        pthread_mutex_lock(&(master->mutex));
++    }
++
+     InMgr::getInstance().flush();
+-    pthread_mutex_unlock(&(master.mutex));
+     //SysEv->execute();
+     removeStaleSmps();
+     while(frameSize > storedSmps()) {
+-        pthread_mutex_lock(&(master.mutex));
+-        master.AudioOut(outl, outr);
+-        pthread_mutex_unlock(&(master.mutex));
++        master->AudioOut(outl, outr);
+         addSmps(outl, outr);
+     }
++    pthread_mutex_unlock(&(master->mutex));
+     stales = frameSize;
+     return priBuf;
+ }
+@@ -115,6 +116,11 @@ string OutMgr::getSink() const
+     return "ERROR";
+ }
+ 
++void OutMgr::setMaster(Master *master_)
++{
++    master=master_;
++}
++
+ //perform a cheap linear interpolation for resampling
+ //This will result in some distortion at frame boundries
+ //returns number of samples produced
+diff --git a/src/Nio/OutMgr.h b/src/Nio/OutMgr.h
+index a1cdd8be..335fbec2 100644
+--- a/src/Nio/OutMgr.h
++++ b/src/Nio/OutMgr.h
+@@ -40,6 +40,8 @@ class OutMgr
+ 
+         class WavEngine * wave;     /**<The Wave Recorder*/
+         friend class EngineMgr;
++
++        void setMaster(class Master *master_);
+     private:
+         OutMgr();
+         void addSmps(float *l, float *r);
+@@ -56,7 +58,7 @@ class OutMgr
+ 
+         float *outl;
+         float *outr;
+-        class Master & master;
++        class Master *master;
+ 
+         int stales;
+ };
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index d218d75f..69feea4a 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -40,8 +40,8 @@ using rtosc::RtData;
+ #define EXPAND(x) x
+ 
+ static Ports voicePorts = {
+-    RECURP(ADnoteVoiceParam, OscilGen, oscil, OscilSmp, "Primary Oscillator"),
+-    RECURP(ADnoteVoiceParam, OscilGen, oscil-mod, FMSmp, "Modulating Oscillator"),
++    RECURP(ADnoteVoiceParam, OscilGen, oscil,     OscilSmp, "Primary Oscillator"),
++    RECURP(ADnoteVoiceParam, OscilGen, mod-oscil, FMSmp,    "Modulating Oscillator"),
+ };
+ 
+ static Ports globalPorts = {
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index fc83dfd4..12b4ed63 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -31,66 +31,12 @@
+ #include <rtosc/ports.h>
+ 
+ static rtosc::Ports localPorts = {
+-    {"prepare:", "::Ensures Output of Oscillator is in sync with parameters",
++    {"prepare:b", ":'pointer':Sets prepared fft data",
+         NULL, [](const char *m, rtosc::RtData &d) {
+-            ((OscilGen*)d.obj)->prepare();
+-        }},
+-    {"convert2sine:", "::Translates waveform into FS",
+-        NULL, [](const char *m, rtosc::RtData &d) {
+-            ((OscilGen*)d.obj)->convert2sine();
+-        }},
+-    {"phase#128::c", "::Sets harmonic phase",
+-        NULL, [](const char *m, rtosc::RtData &d) {
+-            const char *mm = m;
+-            while(*mm && !isdigit(*mm)) ++mm;
+-            unsigned char &phase = ((OscilGen*)d.obj)->Phphase[atoi(mm)];
+-            if(!rtosc_narguments(m))
+-                d.reply(d.loc, "c", phase);
+-            else
+-                phase = rtosc_argument(m,0).i;
+-        }},
+-    {"magnitude#128::c", "::Sets harmonic magnitude",
+-        NULL, [](const char *m, rtosc::RtData &d) {
+-            const char *mm = m;
+-            while(*mm && !isdigit(*mm)) ++mm;
+-            unsigned char &mag = ((OscilGen*)d.obj)->Phmag[atoi(mm)];
+-            if(!rtosc_narguments(m))
+-                d.reply(d.loc, "c", mag);
+-            else
+-                mag = rtosc_argument(m,0).i;
+-        }},
+-    {"base-spectrum:", "::Returns spectrum of base waveshape",
+-        NULL, [](const char *m, rtosc::RtData &d) {
+-            const unsigned n = synth->oscilsize / 2;
+-            float *spc = getTmpBuffer();
+-            ((OscilGen*)d.obj)->getspectrum(n,spc,1);
+-            d.reply(d.loc, "b", n*sizeof(float), spc);
+-            returnTmpBuffer(spc);
+-        }},
+-    {"base-waveform:", "::Returns base waveshape points",
+-        NULL, [](const char *m, rtosc::RtData &d) {
+-            const unsigned n = synth->oscilsize;
+-            float *smps = getTmpBuffer();
+-            ((OscilGen*)d.obj)->getcurrentbasefunction(smps);
+-            d.reply(d.loc, "b", n*sizeof(float), smps);
+-            returnTmpBuffer(smps);
+-        }},
+-    {"spectrum:", "::Returns spectrum of waveform",
+-        NULL, [](const char *m, rtosc::RtData &d) {
+-            const unsigned n = synth->oscilsize / 2;
+-            float *spc = getTmpBuffer();
+-            ((OscilGen*)d.obj)->getspectrum(n,spc,0);
+-            d.reply(d.loc, "b", n*sizeof(float), spc);
+-            returnTmpBuffer(spc);
+-        }},
+-    {"waveform:", "::Returns waveform points",
+-        NULL, [](const char *m, rtosc::RtData &d) {
+-            const unsigned n = synth->oscilsize;
+-            float *smps = getTmpBuffer();
+-            ((OscilGen*)d.obj)->get(smps,-1.0);
+-            d.reply(d.loc, "b", n*sizeof(float), smps);
+-            returnTmpBuffer(smps);
+-        }},
++            assert(rtosc_argument(m,0).b.len == sizeof(void*));
++            ((OscilGen*)d.obj)->oscilFFTfreqs =
++                *(fft_t**)rtosc_argument(m,0).b.data;
++        }},//XXX memory leak
+ };
+ 
+ rtosc::Ports &OscilGen::ports = localPorts;
+@@ -179,6 +125,7 @@ OscilGen::OscilGen(FFTwrapper *fft_, Resonance *res_):Presets()
+     outoscilFFTfreqs = new fft_t[synth->oscilsize / 2];
+     oscilFFTfreqs    = new fft_t[synth->oscilsize / 2];
+     basefuncFFTfreqs = new fft_t[synth->oscilsize / 2];
++    pendingfreqs     = oscilFFTfreqs;
+ 
+     randseed = 1;
+     ADvsPAD  = false;
+@@ -384,7 +331,7 @@ void OscilGen::getbasefunction(float *smps)
+ /*
+  * Filter the oscillator
+  */
+-void OscilGen::oscilfilter()
++void OscilGen::oscilfilter(fft_t *freqs)
+ {
+     if(Pfiltertype == 0)
+         return;
+@@ -394,16 +341,16 @@ void OscilGen::oscilfilter()
+     filter_func filter = getFilter(Pfiltertype);
+ 
+     for(int i = 1; i < synth->oscilsize / 2; ++i)
+-        oscilFFTfreqs[i] *= filter(i, par, par2);
++        freqs[i] *= filter(i, par, par2);
+ 
+-    normalize(oscilFFTfreqs);
++    normalize(freqs);
+ }
+ 
+ 
+ /*
+  * Change the base function
+  */
+-void OscilGen::changebasefunction()
++void OscilGen::changebasefunction(void)
+ {
+     if(Pcurrentbasefunc != 0) {
+         getbasefunction(tmpsmps);
+@@ -439,20 +386,20 @@ inline void normalize(float *smps, size_t N)
+ /*
+  * Waveshape
+  */
+-void OscilGen::waveshape()
++void OscilGen::waveshape(fft_t *freqs)
+ {
+     oldwaveshapingfunction = Pwaveshapingfunction;
+     oldwaveshaping = Pwaveshaping;
+     if(Pwaveshapingfunction == 0)
+         return;
+ 
+-    clearDC(oscilFFTfreqs);
++    clearDC(freqs);
+     //reduce the amplitude of the freqs near the nyquist
+     for(int i = 1; i < synth->oscilsize / 8; ++i) {
+         float gain = i / (synth->oscilsize / 8.0f);
+-        oscilFFTfreqs[synth->oscilsize / 2 - i] *= gain;
++        freqs[synth->oscilsize / 2 - i] *= gain;
+     }
+-    fft->freqs2smps(oscilFFTfreqs, tmpsmps);
++    fft->freqs2smps(freqs, tmpsmps);
+ 
+     //Normalize
+     normalize(tmpsmps, synth->oscilsize);
+@@ -460,17 +407,15 @@ void OscilGen::waveshape()
+     //Do the waveshaping
+     waveShapeSmps(synth->oscilsize, tmpsmps, Pwaveshapingfunction, Pwaveshaping);
+ 
+-    fft->smps2freqs(tmpsmps, oscilFFTfreqs); //perform FFT
++    fft->smps2freqs(tmpsmps, freqs); //perform FFT
+ }
+ 
+ 
+ /*
+  * Do the Frequency Modulation of the Oscil
+  */
+-void OscilGen::modulation()
++void OscilGen::modulation(fft_t *freqs)
+ {
+-    int i;
+-
+     oldmodulation     = Pmodulation;
+     oldmodulationpar1 = Pmodulationpar1;
+     oldmodulationpar2 = Pmodulationpar2;
+@@ -502,26 +447,26 @@ void OscilGen::modulation()
+             break;
+     }
+ 
+-    clearDC(oscilFFTfreqs); //remove the DC
++    clearDC(freqs); //remove the DC
+     //reduce the amplitude of the freqs near the nyquist
+-    for(i = 1; i < synth->oscilsize / 8; ++i) {
+-        float tmp = i / (synth->oscilsize / 8.0f);
+-        oscilFFTfreqs[synth->oscilsize / 2 - i] *= tmp;
++    for(int i = 1; i < synth->oscilsize / 8; ++i) {
++        const float tmp = i / (synth->oscilsize / 8.0f);
++        freqs[synth->oscilsize / 2 - i] *= tmp;
+     }
+-    fft->freqs2smps(oscilFFTfreqs, tmpsmps);
+-    int    extra_points = 2;
++    fft->freqs2smps(freqs, tmpsmps);
++    const int    extra_points = 2;
+     float *in = new float[synth->oscilsize + extra_points];
+ 
+     //Normalize
+     normalize(tmpsmps, synth->oscilsize);
+ 
+-    for(i = 0; i < synth->oscilsize; ++i)
++    for(int i = 0; i < synth->oscilsize; ++i)
+         in[i] = tmpsmps[i];
+-    for(i = 0; i < extra_points; ++i)
++    for(int i = 0; i < extra_points; ++i)
+         in[i + synth->oscilsize] = tmpsmps[i];
+ 
+     //Do the modulation
+-    for(i = 0; i < synth->oscilsize; ++i) {
++    for(int i = 0; i < synth->oscilsize; ++i) {
+         float t = i * 1.0f / synth->oscilsize;
+ 
+         switch(Pmodulation) {
+@@ -543,21 +488,21 @@ void OscilGen::modulation()
+ 
+         t = (t - floor(t)) * synth->oscilsize;
+ 
+-        int   poshi = (int) t;
+-        float poslo = t - floor(t);
++        const int   poshi = (int) t;
++        const float poslo = t - floor(t);
+ 
+         tmpsmps[i] = in[poshi] * (1.0f - poslo) + in[poshi + 1] * poslo;
+     }
+ 
+     delete [] in;
+-    fft->smps2freqs(tmpsmps, oscilFFTfreqs); //perform FFT
++    fft->smps2freqs(tmpsmps, freqs); //perform FFT
+ }
+ 
+ 
+ /*
+  * Adjust the spectrum
+  */
+-void OscilGen::spectrumadjust()
++void OscilGen::spectrumadjust(fft_t *freqs)
+ {
+     if(Psatype == 0)
+         return;
+@@ -579,11 +524,11 @@ void OscilGen::spectrumadjust()
+     }
+ 
+ 
+-    normalize(oscilFFTfreqs);
++    normalize(freqs);
+ 
+     for(int i = 0; i < synth->oscilsize / 2; ++i) {
+-        float mag   = abs(oscilFFTfreqs, i);
+-        float phase = arg(oscilFFTfreqs, i);
++        float mag   = abs(freqs, i);
++        float phase = arg(freqs, i);
+ 
+         switch(Psatype) {
+             case 1:
+@@ -599,11 +544,11 @@ void OscilGen::spectrumadjust()
+                     mag = 1.0f;
+                 break;
+         }
+-        oscilFFTfreqs[i] = std::polar<fftw_real>(mag, phase);
++        freqs[i] = std::polar<fftw_real>(mag, phase);
+     }
+ }
+ 
+-void OscilGen::shiftharmonics()
++void OscilGen::shiftharmonics(fft_t *freqs)
+ {
+     if(Pharmonicshift == 0)
+         return;
+@@ -617,8 +562,8 @@ void OscilGen::shiftharmonics()
+             if(oldh < 0)
+                 h = 0.0f;
+             else
+-                h = oscilFFTfreqs[oldh + 1];
+-            oscilFFTfreqs[i + 1] = h;
++                h = freqs[oldh + 1];
++            freqs[i + 1] = h;
+         }
+     else
+         for(int i = 0; i < synth->oscilsize / 2 - 1; ++i) {
+@@ -626,21 +571,26 @@ void OscilGen::shiftharmonics()
+             if(oldh >= (synth->oscilsize / 2 - 1))
+                 h = 0.0f;
+             else {
+-                h = oscilFFTfreqs[oldh + 1];
++                h = freqs[oldh + 1];
+                 if(abs(h) < 0.000001f)
+                     h = 0.0f;
+             }
+ 
+-            oscilFFTfreqs[i + 1] = h;
++            freqs[i + 1] = h;
+         }
+ 
+-    clearDC(oscilFFTfreqs);
++    clearDC(freqs);
+ }
+ 
+ /*
+  * Prepare the Oscillator
+  */
+-void OscilGen::prepare()
++void OscilGen::prepare(void)
++{
++    prepare(oscilFFTfreqs);
++}
++
++void OscilGen::prepare(fft_t *freqs)
+ {
+     if((oldbasepar != Pbasefuncpar) || (oldbasefunc != Pcurrentbasefunc)
+        || DIFF(basefuncmodulation) || DIFF(basefuncmodulationpar1)
+@@ -680,10 +630,10 @@ void OscilGen::prepare()
+             hmag[i] = 0.0f;
+ 
+ 
+-    clearAll(oscilFFTfreqs);
++    clearAll(freqs);
+     if(Pcurrentbasefunc == 0)   //the sine case
+         for(int i = 0; i < MAX_AD_HARMONICS - 1; ++i) {
+-            oscilFFTfreqs[i + 1] =
++            freqs[i + 1] =
+                 std::complex<float>(-hmag[i] * sinf(hphase[i] * (i + 1)) / 2.0f,
+                         hmag[i] * cosf(hphase[i] * (i + 1)) / 2.0f);
+         }
+@@ -695,30 +645,30 @@ void OscilGen::prepare()
+                 int k = i * (j + 1);
+                 if(k >= synth->oscilsize / 2)
+                     break;
+-                oscilFFTfreqs[k] += basefuncFFTfreqs[i] * std::polar<fftw_real>(
++                freqs[k] += basefuncFFTfreqs[i] * std::polar<fftw_real>(
+                     hmag[j],
+                     hphase[j] * k);
+             }
+         }
+ 
+     if(Pharmonicshiftfirst != 0)
+-        shiftharmonics();
++        shiftharmonics(freqs);
+ 
+     if(Pfilterbeforews == 0) {
+-        waveshape();
+-        oscilfilter();
++        waveshape(freqs);
++        oscilfilter(freqs);
+     }
+     else {
+-        oscilfilter();
+-        waveshape();
++        oscilfilter(freqs);
++        waveshape(freqs);
+     }
+ 
+-    modulation();
+-    spectrumadjust();
++    modulation(freqs);
++    spectrumadjust(freqs);
+     if(Pharmonicshiftfirst == 0)
+-        shiftharmonics();
++        shiftharmonics(freqs);
+ 
+-    clearDC(oscilFFTfreqs);
++    clearDC(freqs);
+ 
+     oldhmagtype      = Phmagtype;
+     oldharmonicshift = Pharmonicshift + Pharmonicshiftfirst * 256;
+@@ -744,7 +694,6 @@ void OscilGen::adaptiveharmonic(fft_t *f, float freq)
+     clearAll(f);
+     clearDC(inf);
+ 
+-    float hc = 0.0f, hs = 0.0f;
+     float basefreq = 30.0f * powf(10.0f, Padaptiveharmonicsbasefreq / 128.0f);
+     float power    = (Padaptiveharmonicspower + 1.0f) / 101.0f;
+ 
+@@ -869,6 +818,8 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+     if(needPrepare())
+         prepare();
+ 
++    fft_t *input = freqHz > 0.0f ? oscilFFTfreqs : pendingfreqs;
++
+     int outpos =
+         (int)((RND * 2.0f
+                - 1.0f) * synth->oscilsize_f * (Prand - 64.0f) / 64.0f);
+@@ -890,7 +841,7 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+         if(Padaptiveharmonics != 0)
+             nyquist = synth->oscilsize / 2;
+         for(int i = 1; i < nyquist - 1; ++i)
+-            outoscilFFTfreqs[i] = oscilFFTfreqs[i];
++            outoscilFFTfreqs[i] = input[i];
+ 
+         adaptiveharmonic(outoscilFFTfreqs, freqHz);
+         adaptiveharmonicpostprocess(&outoscilFFTfreqs[1],
+@@ -993,7 +944,7 @@ void OscilGen::getspectrum(int n, float *spc, int what)
+ 
+     for(int i = 1; i < n; ++i) {
+         if(what == 0)
+-            spc[i - 1] = abs(oscilFFTfreqs, i);
++            spc[i - 1] = abs(pendingfreqs, i);
+         else {
+             if(Pcurrentbasefunc == 0)
+                 spc[i - 1] = ((i == 1) ? (1.0f) : (0.0f));
+diff --git a/src/Synth/OscilGen.h b/src/Synth/OscilGen.h
+index 4d8875f0..9b8f6e93 100644
+--- a/src/Synth/OscilGen.h
++++ b/src/Synth/OscilGen.h
+@@ -38,6 +38,8 @@ class OscilGen:public Presets
+         /**computes the full spectrum of oscil from harmonics,phases and basefunc*/
+         void prepare();
+ 
++        void prepare(fft_t *data);
++
+         /**do the antialiasing(cut off higher freqs.),apply randomness and do a IFFT*/
+         //returns where should I start getting samples, used in block type randomness
+         short get(float *smps, float freqHz, int resonance = 0);
+@@ -81,27 +83,30 @@ class OscilGen:public Presets
+         unsigned char Pbasefuncmodulationpar1, Pbasefuncmodulationpar2,
+                       Pbasefuncmodulationpar3; //the parameter of the base function modulation
+ 
+-        /*the Randomness:
+-          64=no randomness
+-          63..0 - block type randomness - 0 is maximum
+-          65..127 - each harmonic randomness - 127 is maximum*/
+-        unsigned char Prand;
+         unsigned char Pwaveshaping, Pwaveshapingfunction;
+         unsigned char Pfiltertype, Pfilterpar1, Pfilterpar2;
+         unsigned char Pfilterbeforews;
+         unsigned char Psatype, Psapar; //spectrum adjust
+ 
+-        unsigned char Pamprandpower, Pamprandtype; //amplitude randomness
+         int Pharmonicshift; //how the harmonics are shifted
+         int Pharmonicshiftfirst; //if the harmonic shift is done before waveshaping and filter
+ 
++        unsigned char Pmodulation; //what modulation is applied to the oscil
++        unsigned char Pmodulationpar1, Pmodulationpar2, Pmodulationpar3; //the parameter of the parameters
++
++        /**Realtime parameters for ADnote*/
++
++        /*the Randomness:
++          64=no randomness
++          63..0 - block type randomness - 0 is maximum
++          65..127 - each harmonic randomness - 127 is maximum*/
++        unsigned char Prand;
++        unsigned char Pamprandpower, Pamprandtype; //amplitude randomness
+         unsigned char Padaptiveharmonics; //the adaptive harmonics status (off=0,on=1,etc..)
+         unsigned char Padaptiveharmonicsbasefreq; //the base frequency of the adaptive harmonic (30..3000Hz)
+         unsigned char Padaptiveharmonicspower; //the strength of the effect (0=off,100=full)
+         unsigned char Padaptiveharmonicspar; //the parameters in 2,3,4.. modes of adaptive harmonics
+ 
+-        unsigned char Pmodulation; //what modulation is applied to the oscil
+-        unsigned char Pmodulationpar1, Pmodulationpar2, Pmodulationpar3; //the parameter of the parameters
+ 
+ 
+         //makes a new random seed for Amplitude Randomness
+@@ -112,33 +117,41 @@ class OscilGen:public Presets
+ 
+         static rtosc::Ports &ports;
+ 
++        /* Oscillator Frequencies -
++         *  this is different than the hamonics set-up by the user,
++         *  it may contains time-domain data if the antialiasing is turned off*/
++        fft_t *oscilFFTfreqs;
++
++        fft_t *pendingfreqs;
+     private:
+         //This array stores some termporary data and it has OSCIL_SIZE elements
+         float *tmpsmps;
+         fft_t *outoscilFFTfreqs;
+ 
+         float hmag[MAX_AD_HARMONICS], hphase[MAX_AD_HARMONICS]; //the magnituides and the phases of the sine/nonsine harmonics
+-//    private:
++
+         FFTwrapper *fft;
+         //computes the basefunction and make the FFT; newbasefunc<0  = same basefunc
+-        void changebasefunction();
++        void changebasefunction(void);
+         //Waveshaping
+-        void waveshape();
++        void waveshape(fft_t *freqs);
+ 
+         //Filter the oscillator accotding to Pfiltertype and Pfilterpar
+-        void oscilfilter();
++        void oscilfilter(fft_t *freqs);
+ 
+         //Adjust the spectrum
+-        void spectrumadjust();
++        void spectrumadjust(fft_t *freqs);
+ 
+         //Shift the harmonics
+-        void shiftharmonics();
++        void shiftharmonics(fft_t *freqs);
+ 
+         //Do the oscil modulation stuff
+-        void modulation();
++        void modulation(fft_t *freqs);
+ 
++    public:
+         //Check system for needed updates
+         bool needPrepare(void);
++    private:
+ 
+         //Do the adaptive harmonic stuff
+         void adaptiveharmonic(fft_t *f, float freq);
+@@ -160,7 +173,6 @@ class OscilGen:public Presets
+ 
+ 
+         fft_t *basefuncFFTfreqs; //Base Function Frequencies
+-        fft_t *oscilFFTfreqs; //Oscillator Frequencies - this is different than the hamonics set-up by the user, it may contains time-domain data if the antialiasing is turned off
+         int    oscilprepared;   //1 if the oscil is prepared, 0 if it is not prepared and is need to call ::prepare() before ::get()
+ 
+         Resonance *res;
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index f430fe59..e40c6e7f 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -333,7 +333,7 @@ o->redraw();}
+                 xywh {535 440 220 140} box THIN_DOWN_BOX color 32 selection_color 71 labelcolor 179
+                 code0 {oscFM=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");}
+                 code1 {//int nv=nvoice; if (pars->VoicePar[nvoice].PextFMoscil>=0) nv=pars->VoicePar[nvoice].PextFMoscil;}
+-                code2 {fmoscil->pane_name = loc+"oscil-mod/";fmoscil->osc = osc_i;//oscFM->init(pars->VoicePar[nv].FMSmp,0,pars->VoicePar[nvoice].PFMoscilphase,master);}
++                code2 {fmoscil->pane_name = loc+"mod-oscil/";fmoscil->osc = osc_i;//oscFM->init(pars->VoicePar[nv].FMSmp,0,pars->VoicePar[nvoice].PFMoscilphase,master);}
+                 code3 {oscFM->parent(fmoscil);oscFM->init(false);oscFM->update();}
+                 class Fl_Osc_Group
+               } {}
+@@ -348,7 +348,7 @@ o->redraw();}
+ int nv=nvoice;
+ if (pars->VoicePar[nvoice].PextFMoscil>=0) nv=pars->VoicePar[nvoice].PextFMoscil;
+ 
+-oscedit=new OscilEditor(pars->VoicePar[nv].FMSmp,fmoscil,NULL,NULL,loc+"oscil-mod/", osc_i);}
++oscedit=new OscilEditor(pars->VoicePar[nv].FMSmp,fmoscil,NULL,NULL,loc+"mod-oscil/", osc_i);}
+                 xywh {700 380 55 15} box THIN_UP_BOX labelfont 1 labelsize 11
+                 code0 {if (pars->VoicePar[nvoice].PextFMoscil>=0) o->labelcolor(FL_BLUE);}
+               }
+diff --git a/src/UI/Fl_Osc_Interface.h b/src/UI/Fl_Osc_Interface.h
+index 702b6533..774805eb 100644
+--- a/src/UI/Fl_Osc_Interface.h
++++ b/src/UI/Fl_Osc_Interface.h
+@@ -6,6 +6,7 @@ using std::string;
+ class Fl_Osc_Interface
+ {
+     public:
++        virtual ~Fl_Osc_Interface(void){};
+         //It is assumed that you want to have a registry for all of these
+         //elements
+         virtual void createLink(string s, class Fl_Osc_Widget *w)
+@@ -13,7 +14,7 @@ class Fl_Osc_Interface
+         virtual void renameLink(string,string,class Fl_Osc_Widget*){};
+         virtual void removeLink(string s,class Fl_Osc_Widget*){printf("removing '%s'...\n", s.c_str());};
+         //and to be able to give them events
+-        virtual void tryLink(const char *msg){};
++        virtual void tryLink(const char *){};
+ 
+         //Communication link
+         virtual void requestValue(string s) { printf("request: '%s'...\n", s.c_str()); };
+@@ -22,5 +23,5 @@ class Fl_Osc_Interface
+         virtual void writeValue(string, int){};
+         virtual void writeValue(string, bool){};
+         virtual void writeValue(string, string){};
+-        virtual void write(string s, const char *, ...) {};//{printf("write: '%s'\n", s.c_str());};
++        virtual void write(string, const char *, ...) {};//{printf("write: '%s'\n", s.c_str());};
+ };
+diff --git a/src/UI/Fl_Osc_Widget.H b/src/UI/Fl_Osc_Widget.H
+index 9ac28eca..961847bb 100644
+--- a/src/UI/Fl_Osc_Widget.H
++++ b/src/UI/Fl_Osc_Widget.H
+@@ -13,6 +13,7 @@ class Fl_Osc_Widget
+         virtual void OSC_value(float) {}
+         virtual void OSC_value(bool) {}
+         virtual void OSC_value(int) {}
++        virtual void OSC_value(char) {}
+         virtual void OSC_value(unsigned,void*) {}
+ 
+         std::string loc;
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 0d85e796..bb1eaf3f 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -71,12 +71,13 @@ decl {\#include "PresetsUI.h"} {public local
+ decl {\#include <FL/fl_draw.H>} {public local
+ } 
+ 
+-class PSlider {open : {public Fl_Slider}
++class PSlider {open : {public Fl_Slider, public Fl_Osc_Widget}
+ } {
+-  Function {PSlider(int x,int y, int w, int h, const char *label=0):Fl_Slider(x,y,w,h,label)} {} {
+-    code {;} {}
++  Function {PSlider(int x,int y, int w, int h, const char *label=0):Fl_Slider(x,y,w,h,label)} {open
++  } {
++    code {phase=false;} {}
+   }
+-  Function {handle(int event)} {return_type int
++  Function {handle(int event)} {open return_type int
+   } {
+     code {int X=x(),Y=y(),W=w(),H=h();
+ 
+@@ -103,6 +104,15 @@ return(1);} {}
+   }
+   decl {Fl_Osc_Interface *osc} {public local
+   }
++  Function {OSC_value(char c)} {open return_type void
++  } {
++    code {if(phase)
++    value(c);
++else
++    value(127-c);} {}
++  }
++  decl {bool phase;} {selected public local
++  }
+ } 
+ 
+ class Oscilharmonic {open : {public Fl_Group}
+@@ -110,7 +120,7 @@ class Oscilharmonic {open : {public Fl_Group}
+   Function {make_window()} {open private
+   } {
+     Fl_Window harmonic {open
+-      private xywh {392 673 100 225} type Double box NO_BOX
++      private xywh {398 719 100 225} type Double box NO_BOX
+       class Fl_Osc_Group visible
+     } {
+       Fl_Slider mag {
+@@ -137,7 +147,7 @@ if (cbwidget!=NULL) {
+ 	applybutton->redraw();
+ };}
+         xywh {0 15 15 115} type {Vert Knob} box NO_BOX selection_color 222 maximum 127 step 1 value 64
+-        code0 {//o->value(127-oscil->Phmag[n]);}
++        code0 {o->phase=false;//o->value(127-oscil->Phmag[n]);}
+         code1 {//if (oscil->Phmag[n]==64) o->selection_color(0);}
+         class PSlider
+       }
+@@ -159,7 +169,7 @@ if (cbwidget!=NULL) {
+ 	applybutton->redraw();
+ };}
+         xywh {0 135 15 75} type {Vert Knob} box NO_BOX selection_color 222 maximum 127 step 1 value 64
+-        code0 {//o->value(oscil->Phphase[n]);}
++        code0 {o->phase=true;//o->value(oscil->Phphase[n]);}
+         class PSlider
+       }
+       Fl_Box {} {
+@@ -204,8 +214,10 @@ mag->loc = loc;
+ phase->osc = osc;
+ phase->loc = loc;
+ 
+-//osc->requestValue(loc+"magnitude"+to_s(n));
+-//osc->requestValue(loc+"phase"+to_s(n));
++osc->createLink(loc+"magnitude"+to_s(n), mag);
++osc->createLink(loc+"phase"+to_s(n), phase);
++osc->requestValue(loc+"magnitude"+to_s(n));
++osc->requestValue(loc+"phase"+to_s(n));
+ end();
+ harmonic->show();} {}
+   }
+@@ -219,9 +231,13 @@ if (mag->value()==64)
+ else
+     mag->selection_color(222);} {}
+   }
+-  Function {~Oscilharmonic()} {} {
+-    code {harmonic->hide();
+-//delete(harmonic);} {}
++  Function {~Oscilharmonic()} {open
++  } {
++    code {osc->removeLink(loc+"magnitude"+to_s(n), mag);
++osc->removeLink(loc+"phase"+to_s(n), phase);
++
++harmonic->hide();
++delete harmonic;} {}
+   }
+   decl {Fl_Group *display;} {private local
+   }
+@@ -241,10 +257,10 @@ class OscilEditor {open : {public PresetsUI_}
+   } {
+     Fl_Window osceditUI {
+       label {ADsynth Oscillator Editor} open
+-      xywh {341 339 735 595} type Double
++      xywh {347 385 735 595} type Double
+       code0 {if (oscil->ADvsPAD) o->label("PADsynth Harmonic Content Editor");} visible
+     } {
+-      Fl_Group dummy {open selected
++      Fl_Group dummy {open
+         xywh {25 25 15 15} color 32 selection_color 71 labelcolor 179
+         code0 {dummy->pane_name = loc;}
+         code1 {dummy->osc = osc;}
+@@ -974,7 +990,8 @@ osceditUI->show();} {}
+   Function {~OscilEditor()} {open
+   } {
+     code {osceditUI->hide();
+-//for (int i=0;i<MAX_AD_HARMONICS;i++) delete (h[i]);
++for (int i=0; i<MAX_AD_HARMONICS; ++i)
++    delete h[i];
+ 
+ delete oscilo;
+ delete oscilo_base;
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 27292a67..b7da4afe 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -253,14 +253,13 @@ master=master_;
+ oscui=NULL;
+ osc_i = osc_;
+ resui=new ResonanceUI(pars->resonance);
+-make_window();} {selected
+-    }
++make_window();} {}
+   }
+   Function {make_window()} {open
+   } {
+     Fl_Window padnotewindow {
+       label {PAD synth Parameters} open
+-      xywh {303 461 535 435} type Double visible
++      xywh {306 484 535 435} type Double visible
+     } {
+       Fl_Tabs {} {
+         callback {if (o->value()!=harmonicstructuregroup) applybutton->hide();
+@@ -980,7 +979,8 @@ hprofile->redraw();}
+       }
+       Fl_Button applybutton {
+         label {Apply Changes}
+-        callback {MiddleWare::preparePadSynth(location.c_str(), pars);
++        callback {osc_i->requestValue(location+"prepare");
++//MiddleWare::preparePadSynth(location.c_str(), pars);
+ o->color(FL_GRAY);
+ if (oscui!=NULL) {
+ 	oscui->applybutton->color(FL_GRAY);
+@@ -989,7 +989,7 @@ if (oscui!=NULL) {
+ if (resui!=NULL) {
+ 	resui->applybutton->color(FL_GRAY);
+ 	resui->applybutton->redraw();
+-};}
++};} selected
+         xywh {300 400 135 30} box THIN_UP_BOX
+         code0 {o->color(FL_RED);}
+       }
+diff --git a/src/main.cpp b/src/main.cpp
+index e8656574..e1623c68 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -49,18 +49,15 @@ extern Dump dump;
+ #include "Nio/Nio.h"
+ 
+ //GUI System
+-#include "UI/Fl_Osc_Interface.h"
+-#include "UI/Fl_Osc_Widget.H"
+ #include "UI/Connection.h"
+ GUI::ui_handle_t gui;
+ 
+-//The Glue
+-rtosc::ThreadLink *bToU = new rtosc::ThreadLink(4096*2,1024);
+-rtosc::ThreadLink *uToB = new rtosc::ThreadLink(4096*2,1024);
++//Glue Layer
++#include "Misc/MiddleWare.h"
++MiddleWare *middleware;
+ 
+ using namespace std;
+ 
+-pthread_t thr4;
+ Master   *master;
+ SYNTH_T  *synth;
+ int       swaplr = 0; //1 for left-right swapping
+@@ -88,124 +85,6 @@ void sigterm_exit(int /*sig*/)
+     Pexitprogram = 1;
+ }
+ 
+-void error_cb(int i, const char *m, const char *loc)
+-{
+-    fprintf(stderr, "liblo :-( %d-%s@%s\n",i,m,loc);
+-}
+-
+-lo_server server;
+-string last_url, curr_url;
+-
+-void path_search(const char *m)
+-{
+-    using rtosc::Ports;
+-    using rtosc::Port;
+-
+-    //assumed upper bound of 32 ports (may need to be resized)
+-    char         types[65];
+-    rtosc_arg_t  args[64];
+-    size_t       pos    = 0;
+-    const Ports *ports  = NULL;
+-    const Port  *port   = NULL;
+-    const char  *str    = rtosc_argument(m,0).s;
+-    const char  *needle = rtosc_argument(m,1).s;
+-
+-    //zero out data
+-    memset(types, 0, sizeof(types));
+-    memset(args,  0, sizeof(args));
+-
+-    if(!*str) {
+-        ports = &Master::ports;
+-    } else {
+-        const Port *port = Master::ports.apropos(rtosc_argument(m,0).s);
+-        if(port)
+-            ports = port->ports;
+-    }
+-
+-    if(ports) {
+-        //RTness not confirmed here
+-        for(const Port &p:*ports) {
+-            if(strstr(p.name, needle)!=p.name)
+-                continue;
+-            types[pos]    = types[pos+1] = 's';
+-            args[pos++].s = p.name;
+-            args[pos++].s = p.metadata;
+-        }
+-    }
+-
+-    //Reply to requester
+-    char buffer[1024];
+-    size_t length = rtosc_amessage(buffer, 1024, "/paths", types, args);
+-    if(length) {
+-        lo_message msg  = lo_message_deserialise((void*)buffer, length, NULL);
+-        lo_address addr = lo_address_new_from_url(last_url.c_str());
+-        if(addr)
+-            lo_send_message(addr, buffer, msg);
+-    }
+-}
+-
+-int handler_function(const char *path, const char *types, lo_arg **argv,
+-        int argc, lo_message msg, void *user_data)
+-{
+-    lo_address addr = lo_message_get_source(msg);
+-    if(addr) {
+-        const char *tmp = lo_address_get_url(addr);
+-        if(tmp != last_url) {
+-            uToB->write("/echo", "ss", "OSC_URL", tmp);
+-            last_url = tmp;
+-        }
+-
+-    }
+-
+-    char buffer[2048];
+-    memset(buffer, 0, sizeof(buffer));
+-    size_t size = 2048;
+-    lo_message_serialise(msg, path, buffer, &size);
+-    if(!strcmp(buffer, "/path-search") && !strcmp("ss", rtosc_argument_string(buffer))) {
+-        path_search(buffer);
+-    } else
+-        uToB->raw_write(buffer);
+-
+-    return 0;
+-}
+-
+-void osc_setup(void)
+-{
+-    server = lo_server_new_with_proto(NULL, LO_UDP, error_cb);
+-    lo_server_add_method(server, NULL, NULL, handler_function, NULL);
+-    fprintf(stderr, "lo server running on %d\n", lo_server_get_port(server));
+-}
+-
+-/**
+- * - Fetches liblo messages and forward them to the backend
+- * - Grabs backend messages and distributes them to the frontends
+- */
+-void osc_check(void)
+-{
+-    lo_server_recv_noblock(server, 0);
+-    while(bToU->hasNext()) {
+-        const char *rtmsg = bToU->read();
+-        if(!strcmp(rtmsg, "/echo")
+-                && !strcmp(rtosc_argument_string(rtmsg),"ss")
+-                && !strcmp(rtosc_argument(rtmsg,0).s, "OSC_URL"))
+-            curr_url = rtosc_argument(rtmsg,1).s;
+-        else if(curr_url == "GUI") {
+-            GUI::raiseUi(gui, bToU->read());
+-        } else{
+-            lo_message msg  = lo_message_deserialise((void*)rtmsg,
+-                    rtosc_message_length(rtmsg, bToU->buffer_size()), NULL);
+-
+-            //Send to known url
+-            if(!curr_url.empty()) {
+-                lo_address addr = lo_address_new_from_url(curr_url.c_str());
+-                lo_send_message(addr, rtmsg, msg);
+-            }
+-        }
+-    }
+-}
+-
+-
+-
+ /*
+  * Program initialisation
+  */
+@@ -220,67 +99,15 @@ void initprogram(void)
+     cerr << "ADsynth Oscil.Size = \t" << synth->oscilsize << " samples" << endl;
+ 
+ 
+-    master = &Master::getInstance();
++    middleware = new MiddleWare();
++    master = middleware->spawnMaster();
+     master->swaplr = swaplr;
+ 
+     signal(SIGINT, sigterm_exit);
+     signal(SIGTERM, sigterm_exit);
+-
+-    osc_setup();
++    Nio::init(master);
+ }
+ 
+-class UI_Interface:public Fl_Osc_Interface
+-{
+-    public:
+-        void requestValue(string s) override
+-        {
+-            //Fl_Osc_Interface::requestValue(s);
+-            if(last_url != "GUI") {
+-                uToB->write("/echo", "ss", "OSC_URL", "GUI");
+-            last_url = "GUI";
+-            }
+-
+-            uToB->write(s.c_str(),"");
+-        }
+-
+-        void writeValue(string s, char c)
+-        {
+-            Fl_Osc_Interface::writeValue(s,c);
+-            uToB->write(s.c_str(), "c", c);
+-        }
+-
+-        void createLink(string s, class Fl_Osc_Widget*w) override
+-        {
+-            Fl_Osc_Interface::createLink(s,w);
+-            map.insert(std::pair<string,Fl_Osc_Widget*>(s,w));
+-        }
+-
+-        void removeLink(string s, class Fl_Osc_Widget*w) override
+-        {
+-            for(auto i = map.begin(); i != map.end(); ++i) {
+-                if(i->first == s && i->second == w)
+-                    map.erase(i);
+-            }
+-            printf("[%d] removing '%s' (%p)...\n", map.size(), s.c_str(), w);
+-        }
+-
+-        virtual void tryLink(const char *msg) override
+-        {
+-            for(auto pair:map) {
+-                //printf("'%s' :=> '%p'\n", pair.first.c_str(), pair.second);
+-                if(pair.first == msg) {
+-                    //printf("Possible location for application of '%s' is '%p'\n", msg, pair.second);
+-                    if(!strcmp(rtosc_argument_string(msg), "b"))
+-                        pair.second->OSC_value(rtosc_argument(msg,0).b.len,rtosc_argument(msg,0).b.data);
+-                }
+-            }
+-        };
+-
+-    private:
+-        std::multimap<string,Fl_Osc_Widget*> map;
+-} ui_link;
+-
+-
+ /*
+  * Program exit
+  */
+@@ -304,7 +131,6 @@ void exitprogram()
+ 
+     delete [] denormalkillbuf;
+     FFT_cleanup();
+-    Master::deleteInstance();
+ }
+ 
+ int main(int argc, char *argv[])
+@@ -314,7 +140,7 @@ int main(int argc, char *argv[])
+     dump.startnow();
+     int noui = 0;
+     cerr
+-    << "\nZynAddSubFX - Copyright (c) 2002-2011 Nasca Octavian Paul and others"
++    << "\nZynAddSubFX - Copyright (c) 2002-2013 Nasca Octavian Paul and others"
+     << endl;
+     cerr << "Compiled: " << __DATE__ << " " << __TIME__ << endl;
+     cerr << "This program is free software (GNU GPL v.2 or later) and \n";
+@@ -571,7 +397,8 @@ int main(int argc, char *argv[])
+     }
+ 
+ 
+-    gui = GUI::createUi(&ui_link, master, &Pexitprogram);
++    gui = GUI::createUi(middleware->spawnUiApi(), master, &Pexitprogram);
++    middleware->setUiCallback(GUI::raiseUi, gui);
+ 
+     if(!noui)
+     {
+@@ -636,8 +463,8 @@ int main(int argc, char *argv[])
+ #if USE_NSM
+ done:
+ #endif
+-        osc_check();
+         GUI::tickUi(gui);
++        middleware->tick();
+     }
+ 
+     exitprogram();
+-- 
+2.47.0
+

@@ -1,0 +1,49 @@
+From cfb07ff6d0a6ddee0695e4e3e454a463b699f891 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 18 Dec 2014 23:20:03 -0500
+Subject: [PATCH 0297/1936] Test: Split Out Instrument XML Load Time
+
+---
+ src/Tests/InstrumentStats.cpp | 15 ++++++++++++---
+ 1 file changed, 12 insertions(+), 3 deletions(-)
+
+diff --git a/src/Tests/InstrumentStats.cpp b/src/Tests/InstrumentStats.cpp
+index 06535a44..8dd52c27 100644
+--- a/src/Tests/InstrumentStats.cpp
++++ b/src/Tests/InstrumentStats.cpp
+@@ -67,10 +67,18 @@ void setup() {
+     p = new Part(alloc, &microtonal, &fft);
+ }
+ 
+-void load(string s)
++void xml(string s)
+ {
+     double t_on = tic();
+     p->loadXMLinstrument(s.c_str());
++    double t_off = toc();
++    if(mode == MODE_PROFILE)
++        printf("%f, ", t_off - t_on);
++}
++
++void load()
++{
++    double t_on = tic();
+     p->applyparameters();
+     p->initialize_rt();
+     double t_off = toc();
+@@ -127,9 +135,10 @@ int main(int argc, char **argv)
+         return 1;
+     }
+ 
+-    mode = MODE_TEST;
++    mode = MODE_PROFILE;
+     setup();
+-    load(argv[1]);
++    xml(argv[1]);
++    load();
+     noteOn();
+     speed();
+     noteOff();
+-- 
+2.47.0
+

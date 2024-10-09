@@ -1,0 +1,71 @@
+From 3edc0e96a4a49548f181fe43c58545526a9aeb58 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 29 Apr 2012 17:34:07 -0400
+Subject: [PATCH 0010/1936] Nio: Added Jack Sample rate detection
+
+- If jack support is enabled and the jack server is already running, the full
+  sample rate should default to jack's sample rate
+- This avoids the currently very cheap resampling that occurs when internal and
+  external sample rates are not identical
+---
+ src/Nio/Nio.cpp | 16 ++++++++++++++++
+ src/Nio/Nio.h   |  3 +++
+ src/main.cpp    |  4 +++-
+ 3 files changed, 22 insertions(+), 1 deletion(-)
+
+diff --git a/src/Nio/Nio.cpp b/src/Nio/Nio.cpp
+index d512dfec..6539ac2d 100644
+--- a/src/Nio/Nio.cpp
++++ b/src/Nio/Nio.cpp
+@@ -94,3 +94,19 @@ string Nio::getSink()
+ {
+     return out->getSink();
+ }
++
++#if JACK
++#include <jack/jack.h>
++void Nio::preferedSampleRate(unsigned &rate)
++{
++    jack_client_t *client = jack_client_open("temp-client",
++            JackNoStartServer, 0);
++    if(client) {
++        rate = jack_get_sample_rate(client);
++        jack_client_close(client);
++    }
++}
++#else
++void Nio::preferedSampleRate(unsigned &)
++{}
++#endif
+diff --git a/src/Nio/Nio.h b/src/Nio/Nio.h
+index f8914785..3800c420 100644
+--- a/src/Nio/Nio.h
++++ b/src/Nio/Nio.h
+@@ -26,6 +26,9 @@ namespace Nio
+     std::string getSource(void);
+     std::string getSink(void);
+ 
++    //Get the prefered sample rate from jack (if running)
++    void preferedSampleRate(unsigned &rate);
++
+     extern bool autoConnect;
+     extern std::string defaultSource;
+     extern std::string defaultSink;
+diff --git a/src/main.cpp b/src/main.cpp
+index f502cba0..0ef18d39 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -194,7 +194,9 @@ int main(int argc, char *argv[])
+     synth->samplerate = config.cfg.SampleRate;
+     synth->buffersize = config.cfg.SoundBufferSize;
+     synth->oscilsize  = config.cfg.OscilSize;
+-    swaplr     = config.cfg.SwapStereo;
++    swaplr            = config.cfg.SwapStereo;
++
++    Nio::preferedSampleRate(synth->samplerate);
+ 
+     synth->alias(); //build aliases
+ 
+-- 
+2.47.0
+

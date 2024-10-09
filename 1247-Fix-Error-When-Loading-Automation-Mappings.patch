@@ -1,0 +1,24 @@
+From 730c93452eca7a78569d1909156b0fc592b1584e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 3 Feb 2018 12:31:41 -0500
+Subject: [PATCH 1247/1936] Fix Error When Loading Automation Mappings
+
+---
+ src/Misc/Master.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 508e14a3..a3bcb1c4 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -681,6 +681,7 @@ void Master::loadAutomation(XMLwrapper &xml, rtosc::AutomationMgr &midi)
+                         midi.createBinding(i, path.c_str(), false);
+                         midi.setSlotSubGain(i, j, gain);
+                         midi.setSlotSubOffset(i, j, offset);
++                        midi.updateMapping(i, j);
+                         xml.exitbranch();
+                     }
+                 }
+-- 
+2.47.0
+

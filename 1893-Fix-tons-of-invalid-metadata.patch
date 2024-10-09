@@ -1,0 +1,454 @@
+From ebc1a53eb580cbd3026c2a5be32811c8b4f69f78 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 26 Mar 2023 20:36:14 +0200
+Subject: [PATCH 1893/1936] Fix tons of invalid metadata
+
+---
+ src/Effects/Alienwah.cpp         |  5 ++++-
+ src/Effects/Chorus.cpp           | 11 ++++++-----
+ src/Effects/Distortion.cpp       |  5 ++++-
+ src/Effects/DynamicFilter.cpp    |  5 ++++-
+ src/Effects/Echo.cpp             |  5 ++++-
+ src/Effects/Effect.h             | 11 ++++++++---
+ src/Effects/Phaser.cpp           |  3 ++-
+ src/Effects/Reverb.cpp           | 17 +++++++++++------
+ src/Misc/Master.cpp              | 10 +++++-----
+ src/Misc/Microtonal.cpp          |  3 ++-
+ src/Misc/Part.cpp                |  8 ++++----
+ src/Params/ADnoteParameters.cpp  |  8 ++++----
+ src/Params/EnvelopeParams.cpp    |  7 +++++--
+ src/Params/FilterParams.cpp      |  6 +++---
+ src/Params/LFOParams.cpp         |  2 +-
+ src/Params/PADnoteParameters.cpp |  8 ++++----
+ src/Params/SUBnoteParameters.cpp |  6 +++---
+ 17 files changed, 74 insertions(+), 46 deletions(-)
+
+diff --git a/src/Effects/Alienwah.cpp b/src/Effects/Alienwah.cpp
+index dc648dea..41c25245 100644
+--- a/src/Effects/Alienwah.cpp
++++ b/src/Effects/Alienwah.cpp
+@@ -36,7 +36,10 @@ rtosc::Ports Alienwah::ports = {
+                   else
+                       d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+-    rEffParVol(rDefault(127), rPresetsAt(3, 93)),
++    rPresetForVolume,
++    rEffParVol(rDefaultDepends(presetOfVolume),
++               rDefault(63), rPresetsAt(3, 46),
++               rPresetsAt(16, 127, 127, 127, 93)),
+     rEffParPan(),
+     rEffPar(Pfreq,     2, rShort("freq") rPresets(70, 73, 63, 25),
+             "Effect Frequency"),
+diff --git a/src/Effects/Chorus.cpp b/src/Effects/Chorus.cpp
+index 02424e5b..65e8074a 100644
+--- a/src/Effects/Chorus.cpp
++++ b/src/Effects/Chorus.cpp
+@@ -52,18 +52,19 @@ rtosc::Ports Chorus::ports = {
+             rPresets(sine, sine, tri, sine, sine, sine, tri, tri, tri, sine),
+             "LFO Shape"),
+     rEffPar(PStereo,  5, rShort("stereo"),
+-            rPresets(90, 98, 42, 42, 50, 60, 40, 94, 62), "Stereo Mode"),
++            rPresets(90, 98, 42, 42, 50, 60, 40, 94, 62, 24), "Stereo Mode"),
+     rEffPar(Pdepth,   6, rShort("depth"),
+-            rPresets(40, 56, 97, 115, 115, 23, 35, 35, 12), "LFO Depth"),
++            rPresets(40, 56, 97, 115, 115, 23, 35, 35, 12, 39), "LFO Depth"),
+     rEffPar(Pdelay,   7, rShort("delay"),
+-            rPresets(85, 90, 95, 18, 9, 3, 3, 3, 19), "Delay"),
++            rPresets(85, 90, 95, 18, 9, 3, 3, 3, 19, 19), "Delay"),
+     rEffPar(Pfeedback,8, rShort("fb"),
+-            rPresets(64, 64, 90, 90, 31, 62, 109, 54, 97), "Feedback"),
++            rPresets(64, 64, 90, 90, 31, 62, 109, 54, 97, 17), "Feedback"),
+     rEffPar(Plrcross, 9, rShort("l/r"), rPresets(119, 19, 127, 127, 127),
+             rDefault(0), "Left/Right Crossover"),
+     rEffParTF(Pflangemode, 10, rShort("flange"), rDefault(false),
+               "Flange Mode"),
+-    rEffParTF(Poutsub, 11, rShort("sub"), rPreset(4, true), rPreset(7, true),
++    rEffParTF(Poutsub, 11, rShort("sub"),
++              rPreset(4, true), rPreset(7, true), rPreset(9, true),
+               rDefault(false), "Output Subtraction"),
+ };
+ #undef rBegin
+diff --git a/src/Effects/Distortion.cpp b/src/Effects/Distortion.cpp
+index ba9a07b3..51b3be9a 100644
+--- a/src/Effects/Distortion.cpp
++++ b/src/Effects/Distortion.cpp
+@@ -37,7 +37,10 @@ rtosc::Ports Distortion::ports = {
+                   else
+                       d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+-    rEffParVol(rDefault(127), rPresetsAt(2, 64, 64)),
++    rPresetForVolume,
++    rEffParVol(rDefaultDepends(presetOfVolume),
++            rPresetsAt(0,  84, 84, 42, 42,  84, 84),
++            rPresetsAt(16,127,127, 64, 64, 127,127)),
+     rEffParPan(),
+     rEffPar(Plrcross, 2, rShort("l/r"), rDefault(35), "Left/Right Crossover"),
+     rEffPar(Pdrive,   3, rShort("drive"),
+diff --git a/src/Effects/DynamicFilter.cpp b/src/Effects/DynamicFilter.cpp
+index ca0aea14..9ca53933 100644
+--- a/src/Effects/DynamicFilter.cpp
++++ b/src/Effects/DynamicFilter.cpp
+@@ -36,7 +36,10 @@ rtosc::Ports DynamicFilter::ports = {
+                   else
+                       d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+-    rEffParVol(rDefault(110), rPreset(2, 110), rPreset(4, 127)),
++    rPresetForVolume,
++    rEffParVol(rDefaultDepends(presetOfVolume),
++               rDefault(55), rPreset(2, 50), rPreset(4, 63),
++               rPresetsAt(16, 110, 110, 100, 110, 127)),
+     rEffParPan(),
+     rEffPar(Pfreq,      2, rShort("freq"),   rPresets(80, 70, 30, 80, 50),
+             "Effect Frequency"),
+diff --git a/src/Effects/Echo.cpp b/src/Effects/Echo.cpp
+index 0de27fae..4ba175bf 100644
+--- a/src/Effects/Echo.cpp
++++ b/src/Effects/Echo.cpp
+@@ -39,7 +39,10 @@ rtosc::Ports Echo::ports = {
+                   else
+                       d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+-    rEffParVol(rDefault(67), rPresetsAt(6, 81, 81, 62)),
++    rPresetForVolume,
++    rEffParVol(rDefaultDepends(presetOfVolume), rDefault(67),
++        rPresetsAt(6, 81, 81, 62),
++        rPresetsAt(16, 33, 33, 33, 33, 33, 33, 40, 40, 31)),
+     rEffParPan(rPresetsAt(2, 75, 60, 60, 64, 60, 60, 64)),
+     rEffPar(Pdelay,   2, rShort("delay"), rLinear(0, 127),
+             rPresets(35, 21, 60, 44, 102, 44, 46, 26, 28),
+diff --git a/src/Effects/Effect.h b/src/Effects/Effect.h
+index c61bab89..00903f50 100644
+--- a/src/Effects/Effect.h
++++ b/src/Effects/Effect.h
+@@ -64,15 +64,20 @@
+         if(!rtosc_narguments(msg)) \
+             d.reply(d.loc, "i", eff.getpar(idx)); \
+         else { \
+-            eff.changepar(0, rtosc_argument(msg, 0).i); \
++            eff.changepar(idx, rtosc_argument(msg, 0).i); \
+             d.broadcast(d.loc, "i", eff.getpar(idx)); \
+         } \
+     }}
+ #define rEffParVol(...) rEffParCommon(Pvolume, "amt", "amount of effect", 0, \
+     __VA_ARGS__)
+ #define rEffParPan(...) rEffParCommon(Ppanning, "pan", "panning", 1, \
+-    __VA_ARGS__)
+-
++    rDefault(64), __VA_ARGS__)
++#define rPresetForVolume \
++    {"presetOfVolume:", rProp(internal), 0, \
++     rBegin; (void)msg; \
++     rObject *o = (rObject*)d.obj; \
++     d.reply(d.loc, "i", o->Ppreset + (16 * o->insertion)); \
++     rEnd}
+ 
+ namespace zyn {
+ 
+diff --git a/src/Effects/Phaser.cpp b/src/Effects/Phaser.cpp
+index af535a0e..6ff12ae9 100644
+--- a/src/Effects/Phaser.cpp
++++ b/src/Effects/Phaser.cpp
+@@ -54,7 +54,8 @@ rtosc::Ports Phaser::ports = {
+                   else
+                       d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+-    rEffParVol(rDefault(64), rPreset(3, 39), rPreset(10, 25)),
++    rEffParVol(rDefaultDepends(preset),
++            rDefault(64), rPreset(3, 39), rPreset(10, 25)),
+     rEffParPan(),
+     rEffPar(lfo.Pfreq,       2, rShort("freq"),
+             rPresets(36, 35, 31, 22, 20, 53, 14, 14, 9, 14, 127, 1),
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index d0be3665..252ea063 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -39,8 +39,13 @@ rtosc::Ports Reverb::ports = {
+                   else
+                       d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+-    rEffParVol(rDefault(90), rPresets(80, 80, 80),
+-               rPresetsAt(5, 100, 100, 110, 85, 95)),
++    rPresetForVolume,
++    rEffParVol(rDefaultDepends(presetOfVolume),
++          rDefault(90),
++          rPresets(80, 80, 80),
++          rPresetsAt(5, 100, 100, 110, 85, 95),
++          rPresetsAt(16, 40, 40, 40, 45, 45),
++          rPresetsAt(21, 50, 50, 55, 42, 47, 45, 45, 45)),
+     rEffParPan(rPreset(8, 80)),
+     rEffPar(Ptime,    2, rShort("time"), rLinear(0, 127),
+             rPresets(63, 69, 69, 51, 53, 33, 21, 14, 84, 26, 40, 93, 111),
+@@ -51,13 +56,13 @@ rtosc::Ports Reverb::ports = {
+     rEffPar(Pidelayfb,4, rShort("i.fb"), rPresetsAt(8, 42, 71, 71), rDefault(0),
+             "Feedback for first impulse"),
+     rEffPar(Plpf,     7, rShort("lpf"),
+-            rPreset(1, 85), rPresetsAt(62, 127, 51, 114, 114, 114),
++            rPreset(0, 85), rPresetsAt(6, 62, 127, 51, 114, 114, 114, 114),
+             rDefault(127), "Low pass filter"),
+     rEffPar(Phpf,     8, rShort("hpf"),
+-            rPresets(5), rPresetsAt(2, 75, 21, 75), rPreset(7, 50),
++            rPresets(5), rPresetsAt(2, 75, 21, 75), rPreset(7, 5),
+             rPreset(12, 90), rDefault(0), "High pass filter"),
+-    rEffPar(Plohidamp,9, rShort("damp"), rDefault(0),
+-            rPresets(83, 71, 78, 78, 71, 106, 77, 71, 78, 64, 88, 77, 74)
++    rEffPar(Plohidamp,9, rShort("damp"),
++            rPresets(83, 71, 78, 78, 71, 106, 77, 71, 78, 64, 88, 77, 74),
+             "Dampening"),
+     //Todo make this a selector
+     rEffParOpt(Ptype,    10, rShort("type"),
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 63dd44e2..98618e1b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -136,7 +136,7 @@ static int get_next_int(const char *msg)
+ }
+ 
+ static const Ports mapping_ports = {
+-    {"offset::f", rProp(parameter) rDefault(0) rShort("off") rLinear(-50, 50) rMap(unit, percent), 0,
++    {"offset::f", rProp(parameter) rDefault(0.0) rShort("off") rLinear(-50, 50) rMap(unit, percent), 0,
+         rBegin;
+         int slot = d.idx[1];
+         int param = d.idx[0];
+@@ -147,7 +147,7 @@ static const Ports mapping_ports = {
+         } else
+             d.reply(d.loc, "f", a.getSlotSubOffset(slot, param));
+         rEnd},
+-    {"gain::f", rProp(parameter) rDefault(100) rShort("gain") rLinear(-200, 200) rMap(unit, percent), 0,
++    {"gain::f", rProp(parameter) rDefault(100.0) rShort("gain") rLinear(-200, 200) rMap(unit, percent), 0,
+         rBegin;
+         int slot = d.idx[1];
+         int param = d.idx[0];
+@@ -233,7 +233,7 @@ static const Ports slot_ports = {
+     //                              rtosc_argument(msg, 1).s,
+     //                              rtosc_argument(msg, 2).T);
+     //    rEnd},
+-    {"value::f", rProp(no learn) rProp(parameter) rMap(default, 0.5) rLinear(0, 1) rDoc("Access current value in slot 'i' (0..1)"), 0,
++    {"value::f", rProp(no learn) rProp(parameter) rMap(default, 0.f) rLinear(0, 1) rDoc("Access current value in slot 'i' (0..1)"), 0,
+         rBegin;
+         int num = d.idx[0];
+         if(!strcmp("f",rtosc_argument_string(msg))) {
+@@ -272,7 +272,7 @@ static const Ports slot_ports = {
+             d.reply(d.loc, "i", a.slots[slot].midi_nrpn);
+ 
+         rEnd},
+-    {"active::T:F",  rProp(parameter) rMap(default, F) rDoc("If Slot is enabled"), 0,
++    {"active::T:F",  rProp(parameter) rDefault(false) rDoc("If Slot is enabled"), 0,
+         rBegin;
+         int slot = d.idx[0];
+         if(rtosc_narguments(msg)) {
+@@ -469,7 +469,7 @@ static const Ports master_ports = {
+                master->Volume  = master->volume127ToFloat(limit<unsigned char>(rtosc_argument(m, 0).i, 0, 127));
+                d.broadcast(d.loc, "i", limit<char>(rtosc_argument(m, 0).i, 0, 127));
+            }}},
+-    rParamF(Volume, rShort("volume"), rDefault(-6.66667f), rLinear(-40.0f,13.3333f),
++    rParamF(Volume, rShort("volume"), rDefault(-6.67 (-0x1.aaaaacp+2)), rLinear(-40.0f,13.3333f),
+              rUnit(dB), "Master Volume"),
+     {"Psysefxvol#" STRINGIFY(NUM_SYS_EFX) "/::i", 0, &sysefxPort,
+         [](const char *msg, rtosc::RtData &d) {
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 4389f1b6..15b6ce80 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -66,7 +66,8 @@ const rtosc::Ports Microtonal::ports = {
+     rParamZyn(Pmapsize, rDefault(12), "Size of key map"),
+     rToggle(Pmappingenabled, rDefault(false), "Mapping Enable"),
+ 
+-    rParams(Pmapping, 128, rDefault([0 1 ...]), "Mapping of keys"),
++    //rParams(Pmapping, 128, rDefault([0 1 ... 127]), "Mapping of keys"),
++    rParams(Pmapping, 128, "Mapping of keys"),
+     rParamZyn(Pglobalfinedetune, rShort("fine"), rDefault(64),
+         "Fine detune for all notes"),
+ 
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 438bff2f..899c0b47 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -78,11 +78,11 @@ static const Ports partPorts = {
+ #undef rChangeCb
+ #define rChangeCb obj->setkeylimit(obj->Pkeylimit);
+     rParamI(Pkeylimit, rShort("limit"), rProp(parameter),
+-    rMap(min,0), rMap(max, POLYPHONY), rDefault(15), "Key limit per part"),
++            rMap(min,0), rMap(max, POLYPHONY), rDefault(15), "Key limit per part"),
+ #undef rChangeCb
+ #define rChangeCb obj->setvoicelimit(obj->Pvoicelimit);
+     rParamI(Pvoicelimit, rShort("vlimit"), rProp(parameter),
+-    rMap(min,0), rMap(max, POLYPHONY), rDefault(0), "Voice limit per part"),
++            rMap(min,0), rMap(max, POLYPHONY), rDefault(0), "Voice limit per part"),
+ #undef rChangeCb
+ #define rChangeCb
+     rParamZyn(Pminkey, rShort("min"), rDefault(0), "Min Used Key"),
+@@ -239,8 +239,8 @@ static const Ports kitPorts = {
+             rPreset(true, true), rPreset(false, false),
+             "Kit item enable"),
+     rToggle(Pmuted,  rDefault(false), "Kit item mute"),
+-    rParamZyn(Pminkey, rDefault(0),  "Kit item min key"),
+-    rParamZyn(Pmaxkey, rDefault(127)  "Kit item max key"),
++    rParamZyn(Pminkey, rDefault(0),   "Kit item min key"),
++    rParamZyn(Pmaxkey, rDefault(127), "Kit item max key"),
+     rToggle(Padenabled, rDefaultDepends(firstkit),
+             rPreset(true, true), rPreset(false, false),
+             "ADsynth enable"),
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 6d32d462..5d22cbb6 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -117,7 +117,7 @@ static const Ports voicePorts = {
+         rDefault(8192),           "Fine Detune"),
+     rParamI(PCoarseDetune,        rShort("coarse"),     rDefault(0),
+         "Coarse Detune"),
+-    rParamZyn(PDetuneType,        rShort("type"),
++    rOption(PDetuneType,        rShort("type"),
+         rOptions(L35cents, L10cents, E100cents, E1200cents), rDefault(L35cents),
+         "Magnitude of Detune"),
+     rToggle(PFreqEnvelopeEnabled, rShort("enable"),     rDefault(false),
+@@ -138,8 +138,8 @@ static const Ports voicePorts = {
+             else
+                 obj->volume = -60.0f * (1.0f - rtosc_argument(msg, 0).i / 127.0f);
+         }},
+-    {"volume::f", rShort("volume") rProp(parameter) rUnit(dB) rDefault(-12.75) rLinear(-60.0f, 0.0f)
+-        rDoc("Part Volume"), NULL,
++    {"volume::f", rShort("volume") rProp(parameter) rUnit(dB)
++        rDefault(-0x1.983064p+3) rLinear(-60.0f, 0.0f) rDoc("Part Volume"), NULL,
+         [](const char *msg, RtData &d)
+         {
+             rObject *obj = (rObject *)d.obj;
+@@ -344,7 +344,7 @@ static const Ports globalPorts = {
+     rParamI(PDetune,              rShort("fine"),
+             rLinear(0, 16383), rDefault(8192), "Fine Detune"),
+     rParamI(PCoarseDetune,   rShort("coarse"), rDefault(0), "Coarse Detune"),
+-    rParamZyn(PDetuneType,   rShort("type"),
++    rOption(PDetuneType,   rShort("type"),
+               rOptions(L35cents, L10cents, E100cents, E1200cents),
+               rDefault(L10cents),
+               "Detune Scaling Type"),
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 35d6e628..e06ceb37 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -104,12 +104,13 @@ static const rtosc::Ports localPorts = {
+     rParams(Penvval, MAX_ENVELOPE_POINTS, "Envelope Values"),
+     rParamZyn(Penvstretch,  rShort("stretch"), rDefaultDepends(loc),
+             rPresetAtMulti(0, ad_global_freq, ad_global_filter,
+-                              ad_voice_freq, ad_voice_filter, ad_voice_fm_freq),
++                              ad_voice_freq, ad_voice_filter, ad_voice_fm_freq,
++                              sub_filter),
+             rDefault(64),
+             "Stretch with respect to frequency"),
+     rToggle(Pforcedrelease, rShort("frcr"), rDefaultDepends(loc),
+             rPresetAtMulti(true, ad_global_amp, ad_global_filter, ad_voice_amp,
+-                                 ad_voice_fm_amp),
++                                 ad_voice_fm_amp, sub_filter),
+             rDefault(false),
+             "Force Envelope to fully evaluate"),
+     rToggle(Plinearenvelope, rShort("lin/log"), rDefault(false),
+@@ -122,6 +123,7 @@ static const rtosc::Ports localPorts = {
+               rPreset(ad_voice_freq, 0.127f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_freq, 3.620f), rPreset(ad_voice_fm_amp, 1.876f),
+               rPreset(sub_freq, 0.254f),         rPreset(sub_bandwidth, 0.970f),
++              rPreset(sub_filter, 0.13 (0x1.041894p-3)),
+               rDefault(0.0f),
+               "Attack Time"),
+ 
+@@ -136,6 +138,7 @@ static const rtosc::Ports localPorts = {
+               rPreset(ad_global_amp, 0.127f),    rPreset(ad_global_filter, 0.970f),
+               rPreset(ad_voice_amp, 6.978f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_amp, 3.620f),
++              rPreset(sub_filter, 0.97),
+               rDefault(0.009f),
+               "Decay Time"),
+     rParamZyn(PD_val, rShort("d.val"), rDefaultDepends(loc),
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 33ba1b30..e9af1fdf 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -86,9 +86,9 @@ const rtosc::Ports FilterParams::ports = {
+     rParamF(basefreq,           rShort("cutoff"),
+             rUnit(Hz),    rLog(31.25, 32000),
+             rDefaultDepends(loc),
+-            rPreset(ad_global_filter, 32000),
+-            rPreset(ad_voice_filter, 32000),
+-            rPreset(sub_filter, 32000),
++            rPreset(ad_global_filter, 30313.21f),
++            rPreset(ad_voice_filter, 30313.21f),
++            rPreset(sub_filter, 30313.21f),
+             rPreset(in_effect, 0x1.f3fffcp+9),
+             "Base cutoff frequency"),
+     rParamF(freqtracking,       rShort("f.track"), rUnit(%),
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index b802fd81..d3fb56b3 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -78,7 +78,7 @@ static const rtosc::Ports _ports = {
+     rParamZyn(Pfreqrand, rShort("f.r."), rSpecial(disable), rDefault(0),
+             "Frequency Randomness (calculated uniformly at each cycle)"),
+     rParamF(delay, rShort("delay"), rSpecial(disable), rUnit(S),
+-              rLinear(0.0, 4.0), rDefaultDepends(loc), rDefault(0),
++              rLinear(0.0, 4.0), rDefaultDepends(loc), rDefault(0.0),
+               rPreset(ad_voice_amp, 0.94),
+               "Delay before LFO start\n0..4 second delay"),
+     rParamF(fadein, rShort("f.in"), rSpecial(disable), rUnit(S),
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 7718d7e6..0d9e4ff9 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -199,12 +199,12 @@ static const rtosc::Ports non_realtime_ports =
+             rDefault(Off), "Type of amplitude multiplier"),
+     rParamZyn(Php.amp.par1, rShort("p1"),   rDefault(80),
+         "Amplitude multiplier parameter"),
+-    rParamZyn(Php.amp.par2, rShort("p2"),   rDefault(60),
++    rParamZyn(Php.amp.par2, rShort("p2"),   rDefault(64),
+         "Amplitude multiplier parameter"),
+     rToggle(Php.autoscale,  rShort("auto"), rDefault(true),
+         "Autoscaling Harmonics"),
+     rOption(Php.onehalf, rShort("side"),
+-            rOptions(Full, Upper Half, Lower Half), rDefault(Full)
++            rOptions(Full, Upper Half, Lower Half), rDefault(Full),
+             "Harmonic cutoff model"),
+ 
+     //Harmonic Bandwidth
+@@ -220,7 +220,7 @@ static const rtosc::Ports non_realtime_ports =
+     rOption(Phrpos.type,
+             rOptions(Harmonic, ShiftU, ShiftL, PowerU, PowerL, Sine,
+                 Power, Shift),
+-            rDefault(Harmonic)
++            rDefault(Harmonic),
+             "Harmonic Overtone shifting mode"),
+     rParamI(Phrpos.par1, rShort("p1"), rLinear(0,255), rDefault(0),
+         "Harmonic position parameter"),
+@@ -247,7 +247,7 @@ static const rtosc::Ports non_realtime_ports =
+     rParamI(Pquality.oct, rShort("octaves"), rLinear(0,7), rDefault(3),
+             "Number of octaves to sample (above the first sample"),
+ 
+-    {"Pbandwidth::i", rShort("bandwidth") rProp(parameter) rLinear(0,1000)
++    {"Pbandwidth::i", rShort("bandwidth") rProp(parameter) rProp(non-realtime) rLinear(0,1000)
+         rDefault(500) rDoc("Bandwidth Of Harmonics"), NULL,
+         [](const char *msg, rtosc::RtData &d) {
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 6144be60..7dd1b871 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -38,7 +38,7 @@ static const rtosc::Ports SUBnotePorts = {
+     rSelf(SUBnoteParameters),
+     rPasteRt,
+     rToggle(Pstereo,    rShort("stereo"), rDefault(true), "Stereo Enable"),
+-    rParamF(Volume,  rShort("volume"), rDefault(0), rUnit(dB), rLinear(-60.0f,20.0f), "Volume"),
++    rParamF(Volume,  rShort("volume"), rDefault(0.f), rUnit(dB), rLinear(-60.0f,20.0f), "Volume"),
+     rParamZyn(PPanning, rShort("panning"), rDefault(64), "Left Right Panning"),
+     rParamF(AmpVelocityScaleFunction, rShort("sense"), rDefault(70.86),
+         rLinear(0.0, 100.0), "Amplitude Velocity Sensing function"),
+@@ -85,9 +85,9 @@ static const rtosc::Ports SUBnotePorts = {
+ #undef rChangeCb
+ #define rChangeCb obj->updateFrequencyMultipliers(); if (obj->time) { \
+     obj->last_update_timestamp = obj->time->time(); }
+-    rOption(POvertoneSpread.type, rMap(min, 0), rMap(max, 7), rShort("spread type")
++    rOption(POvertoneSpread.type, rMap(min, 0), rMap(max, 7), rShort("spread type"),
+             rOptions(Harmonic, ShiftU, ShiftL, PowerU, PowerL, Sine, Power, Shift),
+-            rDefault(Harmonic)
++            rDefault(Harmonic),
+             "Spread of harmonic frequencies"),
+     rParamI(POvertoneSpread.par1, rMap(min, 0), rMap(max, 255), rShort("p1"),
+             rDefault(0), "Overtone Parameter"),
+-- 
+2.47.0
+

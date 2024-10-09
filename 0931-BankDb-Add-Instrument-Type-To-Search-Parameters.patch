@@ -1,0 +1,243 @@
+From cebb281f4b89b3159bf3ed274328d94dd11edfce Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 15 Jun 2016 15:58:39 -0400
+Subject: [PATCH 0931/1936] BankDb: Add Instrument Type To Search Parameters
+
+---
+ src/Misc/Bank.cpp       |  4 +++-
+ src/Misc/BankDb.cpp     | 38 ++++++++++++++++++++++++++++-----
+ src/Misc/BankDb.h       |  5 +++--
+ src/Misc/Master.cpp     |  3 +++
+ src/Misc/MiddleWare.cpp | 47 +++++++++++++++++++++++++++++++++++++++--
+ 5 files changed, 87 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 96030859..7e087fcf 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -463,8 +463,10 @@ std::vector<std::string> Bank::search(std::string s) const
+ {
+     std::vector<std::string> out;
+     auto vec = db->search(s);
+-    for(auto e:vec)
++    for(auto e:vec) {
++        out.push_back(e.name);
+         out.push_back(e.bank+e.file);
++    }
+     return out;
+ }
+ 
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index f77d1510..ae136bfe 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -13,6 +13,12 @@ typedef BankDb::bvec bvec;
+ BankEntry::BankEntry(void)
+     :id(0), add(false), pad(false), sub(false)
+ {}
++
++bool sfind(std::string hay, std::string needle)
++{
++    return strcasestr(hay.c_str(), needle.c_str());
++}
++
+ bool BankEntry::match(string s) const
+ {
+     if(s == "#pad")
+@@ -21,9 +27,8 @@ bool BankEntry::match(string s) const
+         return sub;
+     else if(s == "#add")
+         return add;
+-    auto end = string::npos;
+-    return file.find(s) != end || name.find(s) != end ||
+-        comments.find(s) != end || author.find(s) != end;
++    return sfind(file,s) || sfind(name,s) || sfind(bank, s) ||
++        sfind(type, s) || sfind(comments,s) || sfind(author,s);
+ }
+ 
+ static svec split(string s)
+@@ -76,7 +81,7 @@ void BankDb::addBankDir(std::string bnk)
+     bool repeat = false;
+     for(auto b:banks)
+         repeat |= b == bnk;
+-    
++
+     if(!repeat)
+         banks.push_back(bnk);
+ }
+@@ -154,6 +159,26 @@ BankEntry BankDb::processXiz(std::string filename, std::string bank) const
+     else
+         entry.name = name;
+ 
++    const char *types[] = {
++        "None",
++        "Piano",
++        "Chromatic Percussion",
++        "Organ",
++        "Guitar",
++        "Bass",
++        "Solo Strings",
++        "Ensemble",
++        "Brass",
++        "Reed",
++        "Pipe",
++        "Synth Lead",
++        "Synth Pad",
++        "Synth Effects",
++        "Ethnic",
++        "Percussive",
++        "Sound Effects",
++    };
++
+     //Try to obtain other metadata (expensive)
+     XMLwrapper xml;
+     string fname = bank+filename;
+@@ -162,10 +187,13 @@ BankEntry BankDb::processXiz(std::string filename, std::string bank) const
+         if(xml.enterbranch("INFO")) {
+             char author[1024];
+             char comments[1024];
++            int  type = 0;
+             xml.getparstr("author", author, 1024);
+             xml.getparstr("comments", comments, 1024);
++            type = xml.getpar("type", 0, 0, 16);
+             entry.author   = author;
+             entry.comments = comments;
++            entry.type     = types[type];
+             xml.exitbranch();
+         }
+         if(xml.enterbranch("INSTRUMENT_KIT")) {
+@@ -181,7 +209,7 @@ BankEntry BankDb::processXiz(std::string filename, std::string bank) const
+         }
+         xml.exitbranch();
+     }
+-  
++
+     //printf("Bank Entry:\n");
+     //printf("\tname   - %s\n", entry.name.c_str());
+     //printf("\tauthor - %s\n", line(entry.author).c_str());
+diff --git a/src/Misc/BankDb.h b/src/Misc/BankDb.h
+index bea3392f..14a0816b 100644
+--- a/src/Misc/BankDb.h
++++ b/src/Misc/BankDb.h
+@@ -9,6 +9,7 @@ struct BankEntry
+     std::string name;
+     std::string comments;
+     std::string author;
++    std::string type;
+     int         id;
+     bool        add;
+     bool        pad;
+@@ -23,7 +24,7 @@ class BankDb
+     public:
+         typedef std::vector<std::string> svec;
+         typedef std::vector<BankEntry>   bvec;
+-        
++
+         //search for banks
+         //uses a space separated list of keywords and
+         //finds something that matches ALL keywords
+@@ -31,7 +32,7 @@ class BankDb
+ 
+         //fully qualified paths only
+         void addBankDir(std::string);
+-        
++
+         //clear all known entries and banks
+         void clear(void);
+ 
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 3c2535d2..6702bb5b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -108,6 +108,7 @@ static const Ports watchPorts = {
+         rEnd},
+ };
+ 
++extern const Ports bankPorts;
+ static const Ports master_ports = {
+     rString(last_xmz, XMZ_PATH_MAX, "File name for last name loaded if any."),
+     rRecursp(part, 16, "Part"),//NUM_MIDI_PARTS
+@@ -263,6 +264,8 @@ static const Ports master_ports = {
+         SNIP;
+         watchPorts.dispatch(msg, data);
+         rBOIL_END},
++    {"bank/", rDoc("Controls for instrument banks"), &bankPorts,
++            [](const char*,RtData&) {}},
+ };
+ 
+ #undef rBegin
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 6571e936..4f406aa2 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -862,7 +862,8 @@ using rtosc::RtData;
+  * - Load Bank                                                               *
+  * - Refresh List of Banks                                                   *
+  *****************************************************************************/
+-rtosc::Ports bankPorts = {
++extern const rtosc::Ports bankPorts;
++const rtosc::Ports bankPorts = {
+     {"rescan:", 0, 0,
+         rBegin;
+         impl.rescanforbanks();
+@@ -872,6 +873,48 @@ rtosc::Ports bankPorts = {
+             d.reply("/bank/bank_select", "iss", i++, elm.name.c_str(), elm.dir.c_str());
+         d.reply("/bank/bank_select", "i", impl.bankpos);
+ 
++        rEnd},
++    {"bank_list:", 0, 0,
++        rBegin;
++#define MAX_BANKS 256
++        char        types[MAX_BANKS*2+1]={0};
++        rtosc_arg_t args[MAX_BANKS*2];
++        int i = 0;
++        for(auto &elm : impl.banks) {
++            types[i] = types [i + 1] = 's';
++            args[i++].s = elm.name.c_str();
++            args[i++].s = elm.dir.c_str();
++        }
++        d.replyArray("/bank/bank_list", types, args);
++#undef MAX_BANKS
++        rEnd},
++    {"types:", 0, 0,
++        rBegin;
++        const char *types[17];
++        types[ 0] = "None";
++        types[ 1] = "Piano";
++        types[ 2] = "Chromatic Percussion";
++        types[ 3] = "Organ";
++        types[ 4] = "Guitar";
++        types[ 5] = "Bass";
++        types[ 6] = "Solo Strings";
++        types[ 7] = "Ensemble";
++        types[ 8] = "Brass";
++        types[ 9] = "Reed";
++        types[10] = "Pipe";
++        types[11] = "Synth Lead";
++        types[12] = "Synth Pad";
++        types[13] = "Synth Effects";
++        types[14] = "Ethnic";
++        types[15] = "Percussive";
++        types[16] = "Sound Effects";
++        char        t[17+1]={0};
++        rtosc_arg_t args[17];
++        for(int i=0; i<17; ++i) {
++            t[i]      = 's';
++            args[i].s = types[i];
++        }
++        d.replyArray("/bank/types", t, args);
+         rEnd},
+     {"slot#1024:", 0, 0,
+         rBegin;
+@@ -958,7 +1001,7 @@ rtosc::Ports bankPorts = {
+             res_type[i]  = 's';
+             res_dat[i].s = res[i].c_str();
+         }
+-        d.replyArray(d.loc, res_type, res_dat);
++        d.replyArray("/bank/search_results", res_type, res_dat);
+ #undef MAX_SEARCH
+         rEnd},
+ };
+-- 
+2.47.0
+

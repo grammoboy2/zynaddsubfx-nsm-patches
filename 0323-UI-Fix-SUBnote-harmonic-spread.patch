@@ -1,0 +1,87 @@
+From a40a4a83518ccd14fde19051919e6f9ab75be827 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 18 Feb 2015 21:44:49 -0500
+Subject: [PATCH 0323/1936] UI: Fix SUBnote harmonic spread
+
+---
+ src/Params/SUBnoteParameters.cpp | 12 ++++++++++++
+ src/UI/SUBnoteUI.fl              | 23 ++++++++---------------
+ 2 files changed, 20 insertions(+), 15 deletions(-)
+
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 3174fd4e..35b5f40b 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -51,6 +51,18 @@ static rtosc::Ports localPorts = {
+     //rToggle(),//continue
+     rToggle(Pfixedfreq, "Base frequency fixed frequency enable"),
+     rParamZyn(PfixedfreqET, "Equal temeperate control for fixed frequency operation"),
++#undef rChangeCb
++#define rChangeCb obj->updateFrequencyMultipliers();
++    rParamI(POvertoneSpread.type, rMap(min, 0), rMap(max, 7),
++            "Spread of harmonic frequencies"),
++    rParamI(POvertoneSpread.par1, rMap(min, 0), rMap(max, 255),
++            "Overtone Parameter"),
++    rParamI(POvertoneSpread.par2, rMap(min, 0), rMap(max, 255),
++            "Overtone Parameter"),
++    rParamI(POvertoneSpread.par3, rMap(min, 0), rMap(max, 255),
++            "Overtone Parameter"),
++#undef rChangeCb
++#define rChangeCb
+     rParamZyn(Pnumstages, rMap(min, 1), rMap(max, 5), "Number of filter stages"),
+     rParamZyn(Pbandwidth, "Bandwidth of filters"),
+     rParamZyn(Phmagtype, "How the magnitudes are computed (0=linear,1=-60dB,2=-60dB)"),
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 6ea5b07d..22fd9e66 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -435,10 +435,9 @@ globalfiltergroup->redraw();}
+       } {
+         Fl_Choice spreadtype {
+           label OvertonesPosition
+-          callback {(void)o;/*pars->POvertoneSpread.type = (int)o->value();
+-pars->updateFrequencyMultipliers();*/} open
+           xywh {450 190 80 20} down_box BORDER_BOX labelsize 10 align 5 textsize 10
+-          code0 {(void)o;/*o->value(pars->POvertoneSpread.type);*/}
++          code0 {o->init("POvertoneSpread.type");}
++          class Fl_Osc_Choice
+         } {
+           MenuItem {} {
+             label Harmonic
+@@ -475,27 +474,21 @@ pars->updateFrequencyMultipliers();*/} open
+         }
+         Fl_Dial spreadpar1 {
+           label Par1
+-          callback {(void)o;/*pars->POvertoneSpread.par1 = o->value();
+-pars->updateFrequencyMultipliers();*/}
+           xywh {548 173 30 30} box ROUND_UP_BOX labelsize 10 maximum 255 step 1
+-          code0 {(void)o;/*o->value(pars->POvertoneSpread.par1);*/}
+-          class WidgetPDial
++          code0 {o->init("POvertoneSpread.par1");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial spreadpar2 {
+           label Par2
+-          callback {(void)o;/*pars->POvertoneSpread.par2 = o->value();
+-pars->updateFrequencyMultipliers();*/}
+           xywh {583 173 30 30} box ROUND_UP_BOX labelsize 10 maximum 255 step 1
+-          code0 {(void)o;/*o->value(pars->POvertoneSpread.par2);*/}
+-          class WidgetPDial
++          code0 {o->init("POvertoneSpread.par2");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial spreadpar3 {
+           label ForceH
+-          callback {(void)o;/*pars->POvertoneSpread.par3 = o->value();
+-pars->updateFrequencyMultipliers();*/}
+           xywh {618 173 30 30} box ROUND_UP_BOX labelsize 10 maximum 255 step 1
+-          code0 {(void)o;/*o->value(pars->POvertoneSpread.par3);*/}
+-          class WidgetPDial
++          code0 {o->init("POvertoneSpread.par3");}
++          class Fl_Osc_Dial
+         }
+       }
+     }
+-- 
+2.47.0
+

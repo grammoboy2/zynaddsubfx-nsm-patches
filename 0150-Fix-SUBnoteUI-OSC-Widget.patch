@@ -1,0 +1,33 @@
+From 086c309651dc7d4aa21ab5647e5414283041668b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Mar 2014 12:23:28 -0400
+Subject: [PATCH 0150/1936] Fix SUBnoteUI OSC Widget
+
+Assert on invalid messages is no longer triggered by moving around the root of
+the subnote UI window.
+---
+ src/UI/SUBnoteUI.fl | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 23faceaf..5e441442 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -71,6 +71,14 @@ if (!Fl::event_inside(X,Y,W,H)) {
+ 
+ return(1);} {}
+   }
++  Function {rebase(std::string new_base)} {return_type void
++  } {
++      code {} {}
++      }
++  Function {update()} {return_type void
++  } {
++      code {} {}
++      }
+   Function {OSC_value(char c)} {open return_type void
+   } {
+     code {value(127-c);} {}
+-- 
+2.47.0
+

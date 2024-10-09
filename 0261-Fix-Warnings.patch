@@ -1,0 +1,195 @@
+From e0c81dc914fa47206e04bdab29709673fe2f9977 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 23 Oct 2014 15:42:25 -0400
+Subject: [PATCH 0261/1936] Fix Warnings
+
+---
+ src/Synth/OscilGen.cpp |  4 ++--
+ src/UI/ADnoteUI.fl     | 22 +++++++++++-----------
+ src/UI/BankUI.fl       |  2 --
+ src/UI/Connection.cpp  | 14 ++++++++------
+ src/UI/EnvelopeUI.fl   |  4 ++--
+ src/UI/OscilGenUI.fl   |  6 +++---
+ 6 files changed, 26 insertions(+), 26 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index fcb1ee8d..210026e4 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -124,9 +124,9 @@ static rtosc::Ports localPorts = {
+             const unsigned n = synth->oscilsize;
+             float *smps = new float[n];
+             memset(smps, 0, 4*n);
+-            OscilGen *o = ((OscilGen*)d.obj);
++            OscilGen &o = *((OscilGen*)d.obj);
+             //printf("%d\n", o->needPrepare());
+-            ((OscilGen*)d.obj)->get(smps,-1.0);
++            o.get(smps,-1.0);
+             //printf("wave: %f %f %f %f\n", smps[0], smps[1], smps[2], smps[3]);
+             d.reply(d.loc, "b", n*sizeof(float), smps);
+             delete[] smps;
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index a1bcc620..6d3d5fed 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -118,9 +118,9 @@ class ADvoicelistitem {open : {public Fl_Osc_Group}
+           class Fl_Osc_Group
+         } {}
+         Fl_Value_Output detunevalueoutput {
+-          callback {/*o->value(getdetune((pars->VoicePar[nvoice].PDetuneType==0)?(pars->GlobalPar.PDetuneType) : (pars->VoicePar[nvoice].PDetuneType),0,pars->VoicePar[nvoice].PDetune)*pars->getBandwidthDetuneMultiplier());*/}
+           xywh {265 5 45 20} labelsize 10 align 5 minimum -5000 maximum 5000 step 0.01 textfont 1 textsize 10
+-          code0 {/*o->value(getdetune(pars->VoicePar[nvoice].PDetuneType,0,pars->VoicePar[nvoice].PDetune)*pars->getBandwidthDetuneMultiplier());*/}
++          code0 {o->init("detunevalue");}
++          class Fl_Osc_Output
+         }
+         Fl_Slider voicedetune {
+           callback {//detunevalueoutput->do_callback();}
+@@ -337,13 +337,13 @@ o->redraw();}
+                 callback {if (oscedit!=NULL)
+     delete(oscedit);
+ 
+-int nv=nvoice;
+-if (extFMoscil->value()>=0)
+-    nv=extFMoscil->value();
++//int nv=nvoice;
++//if (extFMoscil->value()>=0)
++//    nv=extFMoscil->value();
+ 
+ oscedit=new OscilEditor(true, loc+"mod-oscil/", osc_i);}
+                 xywh {700 380 55 15} box THIN_UP_BOX labelfont 1 labelsize 11
+-                code0 {/*if (extFMoscil->value()>=0) o->labelcolor(FL_BLUE);*/}
++                code0 {(void)o;/*if (extFMoscil->value()>=0) o->labelcolor(FL_BLUE);*/}
+               }
+               Fl_Slider {} {
+                 label Phase
+@@ -478,8 +478,9 @@ o->redraw();}
+             }
+             Fl_Value_Output detunevalueoutput {
+               label Detune
+-              callback {//o->value(getdetune((pars->VoicePar[nvoice].PDetuneType==0)?(pars->GlobalPar.PDetuneType) : (pars->VoicePar[nvoice].PDetuneType),0,pars->VoicePar[nvoice].PDetune)*pars->getBandwidthDetuneMultiplier());}
++              code0 {o->init("detunevalue");}
+               xywh {10 287 45 15} labelsize 10 align 5 minimum -5000 maximum 5000 step 0.01 textfont 1 textsize 10
++              class Fl_Osc_Output
+             }
+             Fl_Check_Button {} {
+               label 440Hz
+@@ -515,13 +516,12 @@ o->redraw();}
+           Fl_Button changevoiceoscilbutton {
+             label Change
+             callback {delete oscedit;
+-                int nv=nvoice;
+-                if(extoscil->value()>=0)
+-                    nv=extoscil->value();
++                //if(extoscil->value()>=0)
++                //    nv=extoscil->value();
+ 
+                 oscedit=new OscilEditor(true,loc+"oscil/", osc_i);}
+             xywh {5 490 65 20} box THIN_UP_BOX labelfont 1 labelsize 11
+-            code0 {/*if (extoscil->value()>=0) o->labelcolor(FL_BLUE);*/}
++            code0 {(void)o;/*if (extoscil->value()>=0) o->labelcolor(FL_BLUE);*/}
+           }
+           Fl_Box {} {
+             label {Voice Oscillator}
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index 44128caf..5ae73f63 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -51,8 +51,6 @@ class BankUI {open
+     Fl_Window bankuiwindow {
+       label Bank open
+       xywh {492 406 785 575} type Double
+-      code0 {/*o->label(bank->bankfiletitle.c_str());*/}
+-      code1 {/*if (bank->bankfiletitle.empty()) o->label ("Choose a bank from the bank list on the left (or go to settings if to configure the bank location) or choose 'New Bank...' to make a new bank.");*/} visible
+       class Fl_Osc_Window
+     } {
+       Fl_Box {} {
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index 8ef66219..5e29861b 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -17,7 +17,7 @@
+ #endif // NTK_GUI
+ 
+ using namespace GUI;
+-MasterUI *ui;
++class MasterUI *ui;
+ 
+ Fl_Osc_Interface *osc;//TODO: the scope of this should be narrowed
+ 
+@@ -89,10 +89,13 @@ void GUI::destroyUi(ui_handle_t ui)
+ 
+ #define BEGIN(x) {x,"",NULL,[](const char *m, rtosc::RtData d){ \
+     MasterUI *ui   = static_cast<MasterUI*>(d.obj); \
+-    rtosc_arg_t a0 = rtosc_argument(m,0);
+-    //rtosc_arg_t a1 = rtosc_argument(m,1); \
+-    //rtosc_arg_t a2 = rtosc_argument(m,2); \
+-    //rtosc_arg_t a3 = rtosc_argument(m,3);
++    rtosc_arg_t a0 = {0}, a1 = {0}; \
++    if(rtosc_narguments(m) > 0) \
++        a0 = rtosc_argument(m,0); \
++    if(rtosc_narguments(m) > 1) \
++        a1 = rtosc_argument(m,1); \
++    (void)ui;(void)a1;(void)a0;
++
+ #define END }},
+ 
+ //DSL based ports
+@@ -118,7 +121,6 @@ static rtosc::Ports ports = {
+         ui->do_load_master(a0.s);
+     } END
+     BEGIN("vu-meter:bb") {
+-        rtosc_arg_t a1 = rtosc_argument(m,1);
+         if(a0.b.len == sizeof(vuData) &&
+                 a1.b.len == sizeof(float)*NUM_MIDI_PARTS) {
+             //Refresh the primary VU meters
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index 1b02433b..afecb0c7 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -101,7 +101,7 @@ sustaincounter->update();
+ //sustaincounter->value(Penvsustain);
+ //sustaincounter->maximum(Penvpoints-2);}
+         xywh {115 155 80 20} box THIN_UP_BOX labelsize 11
+-        code0 {//if (Pfreemode==0) o->hide();}
++        code0 {(void)o;//if (Pfreemode==0) o->hide();}
+         class Fl_Osc_Button
+       }
+       Fl_Box freeedit {
+@@ -121,7 +121,7 @@ sustaincounter->update();
+ //sustaincounter->value(Penvsustain);
+ //sustaincounter->maximum(Penvpoints-2);}
+         xywh {200 155 80 20} box THIN_UP_BOX labelsize 11
+-        code0 {//if (Pfreemode==0) o->hide();}
++        code0 {(void)o;//if (Pfreemode==0) o->hide();}
+         class Fl_Osc_Button
+       }
+       Fl_Check_Button freemodebutton {
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 63abedb8..a660b4a9 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -225,7 +225,7 @@ class OscilEditor {open : {public PresetsUI_}
+     Fl_Window osceditUI {
+       label {ADsynth Oscillator Editor} open
+       xywh {52 100 735 595} type Double
+-      code0 {//if (oscil->ADvsPAD) o->label("PADsynth Harmonic Content Editor");} visible
++      code0 {(void)o;//if (oscil->ADvsPAD) o->label("PADsynth Harmonic Content Editor");} visible
+     } {
+       Fl_Group dummy {open
+         xywh {0 0 735 595} box FLAT_BOX
+@@ -259,10 +259,10 @@ class OscilEditor {open : {public PresetsUI_}
+           }
+           Fl_Value_Slider rndslider {
+             label rnd
+-            callback {//oscil->Prand=(int)o->value()+64;
++            callback {(void)o;//oscil->Prand=(int)o->value()+64;
+ oscildisplaygroup->redraw();}
+             tooltip {Oscilator Phase Randomness: smaller than 0 is "group", larger than 0 is for each harmonic} xywh {145 290 100 10} type {Horz Knob} box NO_BOX labelsize 10 align 5 minimum -64 maximum 63 step 1
+-            code0 {//if (oscil->ADvsPAD) o->hide();}
++            code0 {(void)o;//if (oscil->ADvsPAD) o->hide();}
+           }
+           Fl_Group {} {open
+             xywh {15 35 350 50} box THIN_DOWN_BOX color 32 selection_color 218 labelcolor 63
+-- 
+2.47.0
+

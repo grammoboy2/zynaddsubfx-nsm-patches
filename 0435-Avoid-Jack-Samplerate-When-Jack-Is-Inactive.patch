@@ -1,0 +1,27 @@
+From 6cea5697ff2974bb2f4e2c56398349378655700c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 4 May 2015 22:33:51 -0400
+Subject: [PATCH 0435/1936] Avoid Jack Samplerate When Jack Is Inactive
+
+---
+ src/Nio/Nio.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Nio/Nio.cpp b/src/Nio/Nio.cpp
+index 558f3c94..1bc602f7 100644
+--- a/src/Nio/Nio.cpp
++++ b/src/Nio/Nio.cpp
+@@ -118,6 +118,10 @@ string Nio::getSink()
+ #include <jack/jack.h>
+ void Nio::preferedSampleRate(unsigned &rate)
+ {
++    //XXX hello non portable code
++    if(system("ps | grep jack"))
++        return;
++
+     jack_client_t *client = jack_client_open("temp-client",
+                                              JackNoStartServer, 0);
+     if(client) {
+-- 
+2.47.0
+

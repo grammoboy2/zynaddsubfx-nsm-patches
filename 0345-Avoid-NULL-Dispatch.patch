@@ -1,0 +1,39 @@
+From 142b009a0b0aae708c33c485b19770ddaa4ccf1f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 21 Feb 2015 17:23:37 -0500
+Subject: [PATCH 0345/1936] Avoid NULL Dispatch
+
+---
+ src/Misc/MiddleWare.cpp | 2 ++
+ src/Misc/Util.h         | 2 +-
+ 2 files changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 6d3d178b..684e118f 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -692,6 +692,8 @@ public:
+ 
+     bool handlePAD(string path, const char *msg, void *v)
+     {
++        if(!v)
++            return true;
+         char buffer[1024];
+         memset(buffer, 0, sizeof(buffer));
+         DummyDataObj d(buffer, 1024, v, cb, ui, osc);
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 1819ee29..8ac90ca6 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -198,7 +198,7 @@ static inline void arrayNullify(T &t) {delete [] t; t = NULL; }
+ #define RECURP(type, cast, name, var, desc) \
+ {#name"/", ":recursion\0:documentation\0=" desc"\0", &cast::ports, [](const char *m, rtosc::RtData &d){\
+     d.obj = (((type*)d.obj)->var); \
+-    cast::ports.dispatch(message_snip(m), d);}}
++    if(d.obj) cast::ports.dispatch(message_snip(m), d);}}
+ 
+ ///Recurs - perform a ranged recursion (on pointer array member)
+ #define RECURSP(type, cast, name, var, length, desc) \
+-- 
+2.47.0
+

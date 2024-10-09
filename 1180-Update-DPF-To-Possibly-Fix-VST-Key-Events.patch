@@ -1,0 +1,19 @@
+From 231d8eadde3ccd5e3c4b5c735ca802cb3e39d245 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 25 Jul 2017 10:16:54 -0400
+Subject: [PATCH 1180/1936] Update DPF To Possibly Fix VST Key Events
+
+---
+ DPF | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/DPF b/DPF
+index e0d8e14a..fa547505 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit e0d8e14a14d407648768da7e34bcf31812245387
++Subproject commit fa54750583225c2e6aa5cda9baf9c18eb722daee
+-- 
+2.47.0
+

@@ -1,0 +1,85 @@
+From 22a5f8da76c16c47c3814eedaec8f9fe0ff4248b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 23 Jul 2020 08:51:52 -0400
+Subject: [PATCH 1560/1936] Fix gcc 10.1.0 bug in file picker
+
+gcc 10.1.0 appears to fail to maintain the semantics of
+for(...)
+   ((rtosc_arg_t*)out)[i].s = (std::string)(in[i]).c_str()
+
+under -O3 (-O0 is fine as well as other compiler versions)
+9.3.0 on slackware for instance is known not to have this bug,
+while 10.1.0 on arch was the reported system.
+
+From what I can tell gcc applies a vectorized move using xmm registers
+It's unclear which optimization flag in particular triggers the
+behavior, but the compiler bug likely relates to some bad assumption in
+the calling context i.e. a lambda function instantiated in an
+initializer list for a global object.
+
+I'm not currently planning on sending this issue upstream as turning it
+into a minimal test case looks like it would be... nontrivial...
+
+Anyone else interested in doing so is welcome to do so and such efforts
+would be appreciated.
+
+Symptoms of the failed optimization include a partial copy of values
+with some corrupted or turned into null pointers.
+---
+ src/Misc/MiddleWare.cpp | 26 ++++++++++++++++----------
+ 1 file changed, 16 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index ea7f18ca..9781a179 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1229,6 +1229,19 @@ void save_cb(const char *msg, RtData &d)
+                 file.c_str(), request_time);
+ }
+ 
++void
++gcc_10_1_0_is_dumb(const std::vector<std::string> &files,
++        const int N,
++        char *types,
++        rtosc_arg_t *args)
++{
++        types[N] = 0;
++        for(int i=0; i<N; ++i) {
++            args[i].s = files[i].c_str();
++            types[i]  = 's';
++        }
++}
++
+ /*
+  * BASE/part#/kititem#
+  * BASE/part#/kit#/adpars/voice#/oscil/\*
+@@ -1373,11 +1386,8 @@ static rtosc::Ports middwareSnoopPorts = {
+         const int N = files.size();
+         rtosc_arg_t *args  = new rtosc_arg_t[N];
+         char        *types = new char[N+1];
+-        types[N] = 0;
+-        for(int i=0; i<N; ++i) {
+-            args[i].s = files[i].c_str();
+-            types[i]  = 's';
+-        }
++        string      *data  = files.data();
++        gcc_10_1_0_is_dumb(files, N, types, args);
+ 
+         d.replyArray(d.loc, types, args);
+         delete [] types;
+@@ -1392,11 +1402,7 @@ static rtosc::Ports middwareSnoopPorts = {
+         const int N = files.size();
+         rtosc_arg_t *args  = new rtosc_arg_t[N];
+         char        *types = new char[N+1];
+-        types[N] = 0;
+-        for(int i=0; i<N; ++i) {
+-            args[i].s = files[i].c_str();
+-            types[i]  = 's';
+-        }
++        gcc_10_1_0_is_dumb(files, N, types, args);
+ 
+         d.replyArray(d.loc, types, args);
+         delete [] types;
+-- 
+2.47.0
+

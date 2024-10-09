@@ -1,0 +1,25 @@
+From 943f4fa1bdead36d2526224c43ea1426ecf9ec43 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 27 Oct 2015 16:02:45 -0400
+Subject: [PATCH 0644/1936] Fix sense of vertical sliders.
+
+---
+ src/UI/Fl_Osc_Slider.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index b3635d73..ba9bf21f 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -107,6 +107,8 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+                             step = 1;
+                 }
+                 int dy = minimum() <=  maximum() ? -Fl::e_dy : Fl::e_dy;
++                // Flip sense for vertical sliders.
++                dy = (this->type() & 1) ? dy : -dy;
+                 handle_drag(clamp(value() + step * dy));
+             }
+             return 1;
+-- 
+2.47.0
+

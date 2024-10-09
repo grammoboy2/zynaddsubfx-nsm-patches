@@ -1,0 +1,27 @@
+From b4791c96168123fc7894ea2e9768eee5627955fc Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 22 Jul 2016 12:16:53 -0400
+Subject: [PATCH 0969/1936] Disable Static Build On Linux
+
+---
+ src/CMakeLists.txt | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index b5e57491..7fa10c4b 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -102,7 +102,9 @@ SET (PluginLibDir "lib" CACHE STRING
+ 
+ # Add version information
+ add_definitions(-DVERSION="${VERSION}")
+-add_definitions(-static)
++if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
++  add_definitions(-static)
++endif()
+ 
+ if(NOT "Darwin" STREQUAL ${CMAKE_SYSTEM_NAME})
+     # Add scheduler function existance info (OSX compatiability)
+-- 
+2.47.0
+

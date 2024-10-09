@@ -1,0 +1,33 @@
+From beca8a53fb45a66446492585c2d5a63c62300250 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 15 Oct 2016 22:13:01 +0200
+Subject: [PATCH 1060/1936] Set -Wno-inconsistent-missing-override only for
+ compilers supporting it.
+
+---
+ src/CMakeLists.txt | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 2f3a8edf..06e3d5f8 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -260,8 +260,14 @@ endif()
+ add_definitions(
+ 	 -Wall
+ 	 -Wextra
+-	 -Wno-inconsistent-missing-override
+ 	 )
++
++CHECK_CXX_COMPILER_FLAG(-Wno-inconsistent-missing-override
++	COMPILER_SUPPORTS_OVERRIDE)
++if(COMPILER_SUPPORTS_OVERRIDE)
++    add_definitions(-Wno-inconsistent-missing-override)
++endif()
++
+ if(NOT AVOID_ASM)
+ 	message(STATUS "Compiling with x86 opcode support")
+     add_definitions(-DASM_F2I_YES)
+-- 
+2.47.0
+

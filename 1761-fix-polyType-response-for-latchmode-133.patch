@@ -1,0 +1,25 @@
+From 2c8937521bf8566e04b9e31e2d54a049c9722f7d Mon Sep 17 00:00:00 2001
+From: friedolino78 <34608315+friedolino78@users.noreply.github.com>
+Date: Thu, 26 Aug 2021 16:21:42 +0200
+Subject: [PATCH 1761/1936] fix polyType response for latchmode (#133)
+
+---
+ src/Misc/Part.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 3a8da432..008b49ab 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -133,6 +133,8 @@ static const Ports partPorts = {
+                 int res = 0;
+                 if(!p->Ppolymode)
+                     res = p->Plegatomode ? 2 : 1;
++                if(p->Platchmode)
++                    res = 3;
+                 return res;
+             };
+ 
+-- 
+2.47.0
+

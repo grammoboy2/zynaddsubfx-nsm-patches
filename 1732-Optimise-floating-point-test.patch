@@ -1,0 +1,30 @@
+From f129cb357f72e3884421821d580e82d67c3872f6 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sun, 30 May 2021 18:28:17 +0200
+Subject: [PATCH 1732/1936] Optimise floating point test.
+
+0.0f is equal to -0.0f.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/Compressor.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Nio/Compressor.h b/src/Nio/Compressor.h
+index f473e8a9..84163157 100644
+--- a/src/Nio/Compressor.h
++++ b/src/Nio/Compressor.h
+@@ -14,8 +14,8 @@
+ #define	_COMPRESSOR_H_
+ 
+ #define	floatIsValid(x) ({			\
+-      float __r = (x) * 0.0;			\
+-      __r == 0.0 || __r == -0.0;		\
++      const float __r = (x) * 0.0;		\
++      __r == 0.0;				\
+ })
+ 
+ #define	stereoCompressor(div,pv,l,r) do {	\
+-- 
+2.47.0
+

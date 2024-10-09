@@ -1,0 +1,24 @@
+From b87a5f9f86ccefdccafe93c93404676646740f6f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 27 May 2024 09:13:35 -0400
+Subject: [PATCH 1933/1936] Update rtosc to fix a bug in automation processing
+
+Automations will no longer go directly to the max value on log mapped
+parameters.
+
+Relevant issue tracker information:
+https://github.com/zynaddsubfx/zyn-fusion-issues/issues/399
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 1f801a87..8afe4d89 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 1f801a8703c4274b7af13222b6f9858a8d32bf59
++Subproject commit 8afe4d89b45e06971e3e52af71213e7a1dd5f983
+-- 
+2.47.0
+

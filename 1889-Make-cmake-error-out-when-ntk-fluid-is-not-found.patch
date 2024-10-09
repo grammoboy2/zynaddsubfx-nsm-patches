@@ -1,0 +1,42 @@
+From 90ca6b6fdb9a6dfa279b69a21becbc3ecb16b870 Mon Sep 17 00:00:00 2001
+From: Philippe Gervais <philippe.n.gervais@free.fr>
+Date: Mon, 1 May 2023 10:29:40 +0200
+Subject: [PATCH 1889/1936] Make cmake error out when ntk-fluid is not found
+
+This fixes several confusing issues that happen when both fltk and ntk
+are installed. The default is to compile using ntk, but the fltk
+installs somehow shadows ntk-fluid, leading to fl files not being
+converted to cxx. This only shows at compilation time, very far from the
+original issue.
+This changes does two things:
+- prevent fltk fluid from shadowing ntk-fluid
+- make the cmake invocation idempotent: when the FLTK_FLUID_EXECUTABLE
+  is not unset, the first cmake invocation fails, but the second one
+  goes through because FLKT_FLUID_EXECUTABLE is set to the default value 'fluid'.
+---
+ src/CMakeLists.txt | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 480c20db..33628a1e 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -479,9 +479,13 @@ if(FltkGui)
+ endif()
+ 
+ if(NtkGui)
++  unset (FLTK_FLUID_EXECUTABLE)
++  find_program(FLTK_FLUID_EXECUTABLE ntk-fluid)
++  if (NOT FLTK_FLUID_EXECUTABLE)
++    message(FATAL_ERROR "ntk-fluid not found. If it's not in PATH, please invoke cmake with -DCMAKE_PROGRAM_PATH=<location/of/ntk-fluid>")
++  endif()
+ 
+-    find_program(FLTK_FLUID_EXECUTABLE ntk-fluid)
+-
++  message(STATUS "NTK Fluid executable: ${FLTK_FLUID_EXECUTABLE}")
+ 	message(STATUS ${NTK_LDFLAGS} ${NTK_IMAGES_LDFLAGS})
+ 
+ 	set(GUI_LIBRARIES zynaddsubfx_gui ${NTK_IMAGES_LIBRARIES} ${NTK_LIBRARIES} ${OPENGL_LIBRARIES})
+-- 
+2.47.0
+

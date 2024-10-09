@@ -1,0 +1,63 @@
+From bc4e1cf2993b5807c539e255841ab57a3a67cb38 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 02:15:45 +0200
+Subject: [PATCH 1487/1936] Don't get oscillator samples in
+ ADnote::legatonote() because it causes waveform discontinuity when changing
+ pitch and velocity.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/ADnote.cpp | 23 ++---------------------
+ 1 file changed, 2 insertions(+), 21 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 34823109..ea8268b1 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -548,9 +548,7 @@ void ADnote::legatonote(LegatoParams lpars)
+                                      pars.GlobalPar.PDetune);
+     bandwidthDetuneMultiplier = pars.getBandwidthDetuneMultiplier();
+ 
+-    if(pars.GlobalPar.PPanning == 0) {
+-        NoteGlobalPar.Panning = getRandomFloat();
+-    } else
++    if(pars.GlobalPar.PPanning)
+         NoteGlobalPar.Panning = pars.GlobalPar.PPanning / 128.0f;
+ 
+     NoteGlobalPar.Filter->updateSense(velocity,
+@@ -597,23 +595,6 @@ void ADnote::legatonote(LegatoParams lpars)
+                 pars.VoicePar[nvoice].PFMCoarseDetune,
+                 pars.VoicePar[nvoice].PFMDetune);
+ 
+-        //Get the voice's oscil or external's voice oscil
+-        int vc = nvoice;
+-        if(pars.VoicePar[nvoice].Pextoscil != -1)
+-            vc = pars.VoicePar[nvoice].Pextoscil;
+-        if(!pars.GlobalPar.Hrandgrouping)
+-            pars.VoicePar[vc].OscilSmp->newrandseed(getRandomUint());
+-
+-        pars.VoicePar[vc].OscilSmp->get(NoteVoicePar[nvoice].OscilSmp,
+-                                         getvoicebasefreq(nvoice),
+-                                         pars.VoicePar[nvoice].Presonance); //(gf)Modif of the above line.
+-
+-        //I store the first elements to the last position for speedups
+-        for(int i = 0; i < OSCIL_SMP_EXTRA_SAMPLES; ++i)
+-            NoteVoicePar[nvoice].OscilSmp[synth.oscilsize
+-                                          + i] =
+-                NoteVoicePar[nvoice].OscilSmp[i];
+-
+         auto &voiceFilter = NoteVoicePar[nvoice].Filter;
+         if(voiceFilter) {
+             const auto  &vce     = pars.VoicePar[nvoice];
+@@ -1182,7 +1163,7 @@ void ADnote::computecurrentparameters()
+                 FMrelativepitch = NoteVoicePar[nvoice].FMDetune / 100.0f;
+                 if(NoteVoicePar[nvoice].FMFreqEnvelope)
+                     FMrelativepitch +=
+-                        NoteVoicePar[nvoice].FMFreqEnvelope->envout() / 100;
++                        NoteVoicePar[nvoice].FMFreqEnvelope->envout() / 100.0f;
+                 if (NoteVoicePar[nvoice].FMFreqFixed)
+                     FMfreq =
+                         powf(2.0f, FMrelativepitch
+-- 
+2.47.0
+

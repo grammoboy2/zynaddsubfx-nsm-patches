@@ -1,0 +1,19 @@
+From 64478fc00c8d28134c5de11a6bc6d5385e61cbd1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 9 Mar 2015 12:29:34 -0400
+Subject: [PATCH 0390/1936] Fix UI Lockup Bug (From RTOSC Message Handling)
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index cec1394d..3e4e2815 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit cec1394d045e2ba4cf6b50e52437d2af28ab9675
++Subproject commit 3e4e2815ae1e5a3ea2a01e02098ff16dd458e6c5
+-- 
+2.47.0
+

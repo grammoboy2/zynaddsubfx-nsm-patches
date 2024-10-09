@@ -1,0 +1,46 @@
+From 02726532e499ad517e1b109a55e19da5f2f69db7 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 13 Dec 2020 21:18:47 +0100
+Subject: [PATCH 1671/1936] FilterParams: Fix timestamps updating on request
+
+---
+ rtosc                       | 2 +-
+ src/Params/FilterParams.cpp | 8 ++++----
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 8a6acdc8..a99d32ad 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 8a6acdc80826a880a0276450ff4e151a460d88ee
++Subproject commit a99d32adafac16a7956e5636e5dd04b2a67ff54b
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 3fe2261f..cac633c8 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -59,8 +59,8 @@ static const rtosc::Ports subports = {
+ 
+ #define rObject FilterParams
+ #undef  rChangeCb
+-#define rChangeCb obj->changed = true; if ( obj->time) {      \
+-    obj->last_update_timestamp = obj->time->time(); }
++#define rChangeCb do { obj->changed = true; if ( obj->time) {      \
++    obj->last_update_timestamp = obj->time->time(); } } while(false)
+ const rtosc::Ports FilterParams::ports = {
+     rSelf(FilterParams),
+     rPaste,
+@@ -144,8 +144,8 @@ const rtosc::Ports FilterParams::ports = {
+         rEnabledByCondition(is_formant_filter),
+         &subports,
+         [](const char *msg, RtData &d) {
+-            const char *mm = msg; \
+-            while(*mm && !isdigit(*mm)) ++mm; \
++            const char *mm = msg;
++            while(*mm && !isdigit(*mm)) ++mm;
+             unsigned idx = atoi(mm);
+ 
+             SNIP;
+-- 
+2.47.0
+

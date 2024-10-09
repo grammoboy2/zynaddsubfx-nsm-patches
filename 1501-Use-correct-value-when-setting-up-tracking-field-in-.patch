@@ -1,0 +1,27 @@
+From c73a9b389edc899ebc1d320391a005791b914e9c Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 14:53:29 +0200
+Subject: [PATCH 1501/1936] Use correct value when setting up tracking field in
+ ModFilter::updateNoteFreq().
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/ModFilter.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Synth/ModFilter.cpp b/src/Synth/ModFilter.cpp
+index 002da31e..e3cc181e 100644
+--- a/src/Synth/ModFilter.cpp
++++ b/src/Synth/ModFilter.cpp
+@@ -98,7 +98,7 @@ void ModFilter::update(float relfreq, float relq)
+ void ModFilter::updateNoteFreq(float noteFreq_)
+ {
+     noteFreq = noteFreq_;
+-    tracking = pars.getfreqtracking(noteFreq);
++    tracking = pars.getfreqtracking(noteFreq_);
+ }
+ 
+ void ModFilter::updateSense(float velocity, uint8_t scale,
+-- 
+2.47.0
+

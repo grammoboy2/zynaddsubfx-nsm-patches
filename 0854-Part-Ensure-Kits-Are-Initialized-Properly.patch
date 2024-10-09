@@ -1,0 +1,47 @@
+From 2e07dd54b584b39f8cceb7f93720bbd3087aa76b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 13 Feb 2016 12:18:35 -0500
+Subject: [PATCH 0854/1936] Part: Ensure Kits Are Initialized Properly
+
+---
+ src/Misc/Part.cpp | 11 +++++++++++
+ src/Misc/Part.h   |  1 +
+ 2 files changed, 12 insertions(+)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index b633fea1..f1b63b5c 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -257,6 +257,17 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+     assert(partefx[0]);
+ }
+ 
++Part::Kit::Kit(void)
++    :parent(nullptr),
++     Penabled(false), Pmuted(false),
++     Pminkey(0), Pmaxkey(127),
++     Pname(nullptr),
++     Padenabled(false), Psubenabled(false),
++     Ppadenabled(false), Psendtoparteffect(0),
++     adpars(nullptr), subpars(nullptr), padpars(nullptr)
++{
++}
++
+ void Part::cloneTraits(Part &p) const
+ {
+ #define CLONE(x) p.x = this->x
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 356a4e8a..a5781d5a 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -90,6 +90,7 @@ class Part
+ 
+         //the part's kit
+         struct Kit {
++            Kit(void);
+             Part              *parent;
+             bool               Penabled, Pmuted;
+             unsigned char      Pminkey, Pmaxkey;
+-- 
+2.47.0
+

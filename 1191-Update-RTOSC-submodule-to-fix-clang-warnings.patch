@@ -1,0 +1,20 @@
+From 1b8e81cb0c33f42f47a443a68d5e18f0c36af07f Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Wed, 2 Aug 2017 19:07:23 +0200
+Subject: [PATCH 1191/1936] Update RTOSC submodule to fix clang warnings.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 167203ab..c52a3be0 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 167203ab2eaa4b3b2608f09418f3d604eeda8a54
++Subproject commit c52a3be06ae4a95ee969369b6e7b28de4b8c82b2
+-- 
+2.47.0
+

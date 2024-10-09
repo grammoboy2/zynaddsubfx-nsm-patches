@@ -1,0 +1,40 @@
+From 1471671850a8a46a5a9acc66062f1bc4ce4846a7 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 2 Jun 2012 15:32:19 -0400
+Subject: [PATCH 0015/1936] Reduces scope of overzealous test
+
+---
+ src/Tests/MicrotonalTest.h | 10 ----------
+ 1 file changed, 10 deletions(-)
+
+diff --git a/src/Tests/MicrotonalTest.h b/src/Tests/MicrotonalTest.h
+index 4a0a9724..ae0641c5 100644
+--- a/src/Tests/MicrotonalTest.h
++++ b/src/Tests/MicrotonalTest.h
+@@ -70,14 +70,6 @@ class MicrotonalTest:public CxxTest::TestSuite
+             TS_ASSERT_DELTA(testMicro->getnotefreq(19, 0), 24.4997f, 0.0001f);
+         }
+ 
+-        //performs basic sanity check with the == and != operators
+-        void testeqeq() {
+-            Microtonal other;
+-            TS_ASSERT(*testMicro == other); //both are constructed the same, so they should be equal
+-            other.PAfreq = 220.0f;
+-            TS_ASSERT(*testMicro != other); //other is now different
+-        }
+-
+         //Tests saving/loading to XML
+         void testXML() {
+             //Gah, the XMLwrapper is a twisted maze
+@@ -110,8 +102,6 @@ class MicrotonalTest:public CxxTest::TestSuite
+             TS_ASSERT(!strcmp(tmp, tmpo));
+             free(tmp);
+             free(tmpo);
+-
+-            TS_ASSERT(*testMicro == other); //cxxTest sees error here
+         }
+ 
+ #if 0
+-- 
+2.47.0
+

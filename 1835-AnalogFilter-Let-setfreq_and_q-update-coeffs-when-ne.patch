@@ -1,0 +1,40 @@
+From bf45378ec123f8f1422807b6e01adfcf402a9007 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Sun, 13 Mar 2022 23:36:04 +0100
+Subject: [PATCH 1835/1936] AnalogFilter: Let setfreq_and_q() update coeffs
+ when needed (#347)
+
+For the Analog filter (only), only the frequency was updated when
+the setfreq_and_q() method was called. The consequence of this was
+that updating the Q would only have an effect if for some reason
+the frequency was being updated at the same time, for instance
+because it was being swept by the envelope.
+
+This also fixes the problem that changing MIDI CC#71 (filter Q)
+would not have any effect until MIDI CC#74 (filter freq) was also
+changed.
+
+Fix by forcing recompute of the coefficients if Q was changed.
+---
+ src/DSP/AnalogFilter.cpp | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index ef9dbaf0..35ad9362 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -301,7 +301,10 @@ void AnalogFilter::setfreq(float frequency)
+ 
+ void AnalogFilter::setfreq_and_q(float frequency, float q_)
+ {
+-    q = q_;
++    if (q != q_) { // TODO: Compare diff or ratio to some form of epsilon ?
++        q = q_;
++        recompute = true;
++    }
+     setfreq(frequency);
+ }
+ 
+-- 
+2.47.0
+

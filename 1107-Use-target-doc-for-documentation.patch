@@ -1,0 +1,48 @@
+From 4bd3ed8182dd85bb3d2bba02f8a783b9fa87ab40 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 17 Dec 2016 22:04:05 +0100
+Subject: [PATCH 1107/1936] Use target doc for documentation.
+
+---
+ doc/CMakeLists.txt | 19 +++++++++++--------
+ rtosc              |  2 +-
+ 2 files changed, 12 insertions(+), 9 deletions(-)
+
+diff --git a/doc/CMakeLists.txt b/doc/CMakeLists.txt
+index 3f84b557..f3e342d0 100644
+--- a/doc/CMakeLists.txt
++++ b/doc/CMakeLists.txt
+@@ -1,12 +1,15 @@
+ find_package(Doxygen)
+-SET(Documentation FALSE CACHE BOOL "Enable building documentation")
+ 
+-if(DOXYGEN_FOUND AND Documentation)
++if(DOXYGEN_FOUND)
++    # configuration variables
+     set(CMAKE_DOXYGEN_INPUT_LIST ${CMAKE_SOURCE_DIR}/src/)
+-    SET(DOXYGEN_OUTPUT_DIR html)
+-    CONFIGURE_FILE(Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
+-    SET(HTML_TARGET "html" )
+-    ADD_CUSTOM_TARGET(${HTML_TARGET} ALL
+-        ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
+-        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
++    set(DOXYGEN_OUTPUT_DIR html)
++
++    configure_file(Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
++    add_custom_command(OUTPUT ${DOXYGEN_OUTPUT_DIR}
++        DEPENDS rtosc-doc zynaddsubfx ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
++        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
++        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
++        COMMENT "Generating API documentation with Doxygen" VERBATIM)
++    add_custom_target(doc DEPENDS html)
+ endif()
+diff --git a/rtosc b/rtosc
+index 9491339a..9d388756 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 9491339a45ee7429740daf4742961cd719018dfe
++Subproject commit 9d388756ecc46393fe77cfd5ff388bf234372996
+-- 
+2.47.0
+

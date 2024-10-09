@@ -1,0 +1,130 @@
+From 7ecd77d36c0c266ceae7bd47c7be57601cc96a08 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 19 Jun 2015 16:01:26 -0400
+Subject: [PATCH 0512/1936] ADnoteUI: Fix Failed Rebase In Fl_Osc_Output
+
+---
+ src/UI/ADnoteUI.fl       | 14 +++++++-------
+ src/UI/Fl_Osc_Output.H   |  3 +--
+ src/UI/Fl_Osc_Output.cpp |  6 +++---
+ 3 files changed, 11 insertions(+), 12 deletions(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 2a5343e5..79e56cdd 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -119,7 +119,7 @@ class ADvoicelistitem {open : {public Fl_Osc_Group}
+           class Fl_Osc_Output
+         }
+         Fl_Slider voicedetune {
+-          callback {//detunevalueoutput->do_callback();}
++          callback {detunevalueoutput->update();}
+           tooltip {Fine Detune (cents)} xywh {315 5 185 20} type {Horz Knob} box NO_BOX minimum -8192 maximum 8191 step 1
+           code0 {o->init("PDetune",'i');}
+           class Fl_Osc_Slider
+@@ -253,7 +253,7 @@ o->redraw();}
+                 class Fl_Osc_Counter
+               }
+               Fl_Slider {} {
+-                callback {o->oscWrite("detunevalue");}
++                callback {fmdetunevalueoutput->update();}
+                 tooltip {Fine Detune (cents)} xywh {590 245 155 15} type {Horz Knob} box NO_BOX minimum -8192 maximum 8191 step 1
+                 code0 {o->init("PFMDetune", 'i');}
+                 class Fl_Osc_Slider
+@@ -266,7 +266,7 @@ o->redraw();}
+               }
+               Fl_Choice {} {
+                 label {Detune Type}
+-                callback {fmdetunevalueoutput->do_callback();} open
++                callback {fmdetunevalueoutput->update();} open
+                 xywh {540 280 75 15} down_box BORDER_BOX labelsize 10 align 5 textfont 1 textsize 10
+                 code0 {o->add("Default");o->add("L35cents");o->add("L10cents");o->add("E100cents");o->add("E1200cents");}
+                 code1 {o->init("PFMDetuneType");}
+@@ -466,7 +466,7 @@ o->redraw();}
+               class Fl_Osc_Counter
+             }
+             Fl_Slider {} {
+-              callback {detunevalueoutput->do_callback();}
++              callback {detunevalueoutput->update();}
+               tooltip {Fine Detune (cents)} xywh {58 287 392 13} type {Horz Knob} box NO_BOX minimum -8192 maximum 8191 step 1
+               code0 {o->init("PDetune", 'i');}
+               class Fl_Osc_Slider
+@@ -493,7 +493,7 @@ o->redraw();}
+             }
+             Fl_Choice {} {
+               label {Detune Type}
+-              callback {detunevalueoutput->do_callback();} open
++              callback {detunevalueoutput->update();} open
+               xywh {455 320 70 15} down_box BORDER_BOX labelsize 10 align 5 textfont 1 textsize 10
+               code0 {o->add("Default");o->add("L35cents");o->add("L10cents");o->add("E100cents");o->add("E1200cents");}
+               code1 {o->init("PDetuneType");}
+@@ -866,7 +866,7 @@ class ADnoteUI {open : {public PresetsUI_}
+           class LFOUI
+         } {}
+         Fl_Slider detune {
+-          callback {o->oscWrite("detunevalue");}
++          callback {detunevalueoutput->update();}
+           tooltip {Fine Detune (cents)} xywh {60 300 385 15} type {Horz Knob} box NO_BOX minimum -8192 maximum 8191 step 1
+           code0 {o->init("PDetune", 'i');}
+           class Fl_Osc_Slider
+@@ -879,7 +879,7 @@ class ADnoteUI {open : {public PresetsUI_}
+         }
+         Fl_Choice detunetype {
+           label {Detune Type}
+-          callback {o->oscWrite("detunevalue");} open
++          callback {detunevalueoutput->update();} open
+           xywh {455 340 75 15} down_box BORDER_BOX labelsize 10 align 5 textfont 1 textsize 10
+           code0 {o->add("L35cents");o->add("L10cents");o->add("E100cents");o->add("E1200cents");}
+           code1 {o->init("PDetuneType",1);}
+diff --git a/src/UI/Fl_Osc_Output.H b/src/UI/Fl_Osc_Output.H
+index d2e94128..e01ef463 100644
+--- a/src/UI/Fl_Osc_Output.H
++++ b/src/UI/Fl_Osc_Output.H
+@@ -2,7 +2,7 @@
+ #include <FL/Fl_Value_Output.H>
+ #include "Fl_Osc_Widget.H"
+ 
+-class Fl_Osc_Output:public Fl_Value_Output, Fl_Osc_Widget
++class Fl_Osc_Output:public Fl_Value_Output, public Fl_Osc_Widget
+ {
+     public:
+         Fl_Osc_Output(int x, int y, int w, int h, const char *label = NULL);
+@@ -19,6 +19,5 @@ class Fl_Osc_Output:public Fl_Value_Output, Fl_Osc_Widget
+         void cb(void);
+     private:
+         float newvalue_;
+-        std::string name;
+         std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/Fl_Osc_Output.cpp b/src/UI/Fl_Osc_Output.cpp
+index 9ee7afbe..4cd0b2fa 100644
+--- a/src/UI/Fl_Osc_Output.cpp
++++ b/src/UI/Fl_Osc_Output.cpp
+@@ -19,7 +19,7 @@ Fl_Osc_Output::Fl_Osc_Output(int X, int Y, int W, int H, const char *label)
+ 
+ void Fl_Osc_Output::init(const char *path)
+ {
+-    name = path;
++    ext = path;
+     oscRegister(path);
+ };
+ 
+@@ -51,7 +51,7 @@ void Fl_Osc_Output::OSC_value(float v)
+         
+ void Fl_Osc_Output::update(void)
+ {
+-    oscWrite(name);
++    oscWrite(ext);
+ }
+ 
+ float Fl_Osc_Output::newvalue(void) const
+@@ -61,5 +61,5 @@ float Fl_Osc_Output::newvalue(void) const
+ 
+ void Fl_Osc_Output::cb(void)
+ {
+-    oscWrite(name);
++    oscWrite(ext);
+ }
+-- 
+2.47.0
+

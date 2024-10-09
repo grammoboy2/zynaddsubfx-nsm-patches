@@ -1,0 +1,25 @@
+From c6f299a37ef03a0d41556dd1858190c5e6ce0b96 Mon Sep 17 00:00:00 2001
+From: Olivier Humbert <trebmuh@users.noreply.github.com>
+Date: Sun, 17 Mar 2019 17:43:07 +0100
+Subject: [PATCH 1335/1936] Update TODO-release
+
+---
+ TODO-release | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/TODO-release b/TODO-release
+index 2a57465e..526df98f 100644
+--- a/TODO-release
++++ b/TODO-release
+@@ -5,7 +5,7 @@ This is a list of things to do when releasing a new version.
+ - Update date of the new version in HISTORY.txt
+ - Update news on sourceforge website
+ - Upload source tarball to sourceforge website
+-- Update link on http://zynaddsubfx.sourceforge.net/download.html
++- Update the "Linux/BSD/Source" link on http://zynaddsubfx.sourceforge.net/download.html
+ - Update Copyright (mainly YEAR) info in src/UI/MasterUI.fl (note this is mentionned 2 times on line 5 and line 872)
+ - Check and update (if needed) the manpage file : doc/zynaddsubfx.1.txt
+ - Issue release announcement to linux-audio-announce, zynaddsubfx-user, kvr,
+-- 
+2.47.0
+

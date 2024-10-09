@@ -1,0 +1,249 @@
+From 5a7cd1b7cba8929894c58f7ff98b06a1d763ce40 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 16 May 2016 15:57:15 -0400
+Subject: [PATCH 0905/1936] Install Watchpoints in AddSynth LFOs
+
+---
+ src/Misc/Master.cpp      | 10 ++++++++++
+ src/Misc/Part.cpp        |  3 ++-
+ src/Synth/ADnote.cpp     | 36 +++++++++++++++++++++++++-----------
+ src/Synth/ADnote.h       |  9 ++++++---
+ src/Synth/WatchPoint.cpp |  3 ++-
+ src/Synth/WatchPoint.h   |  3 ++-
+ 6 files changed, 47 insertions(+), 17 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index ebba1184..c8189b0e 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -241,6 +241,9 @@ static const Ports master_ports = {
+     {"HDDRecorder/pause:", rDoc("Pause recording"), 0, [](const char *, RtData &d) {
+        Master *m = (Master*)d.obj;
+        m->HDDRecorder.pause();}},
++    {"watch/add:s", rDoc("Add synthesis state to watch"), 0, [](const char *msg, RtData &d) {
++       Master *m = (Master*)d.obj;
++       m->watcher.add_watch(rtosc_argument(msg,0).s);}},
+ 
+ };
+ const Ports &Master::ports = master_ports;
+@@ -636,6 +639,13 @@ bool Master::AudioOut(float *outr, float *outl)
+         bToU->write("/request-memory", "");
+         pendingMemory = true;
+     }
++
++
++    //Handle watch points
++    if(bToU)
++        watcher.write_back = bToU;
++    watcher.tick();
++
+     //Handle user events TODO move me to a proper location
+     char loc_buf[1024];
+     DataObj d{loc_buf, 1024, this, bToU};
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 8d70154f..4b29f825 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -501,7 +501,8 @@ bool Part::NoteOn(unsigned char note,
+         try {
+             if(item.Padenabled)
+                 notePool.insertNote(note, sendto,
+-                        {memory.alloc<ADnote>(kit[i].adpars, pars), 0, i});
++                        {memory.alloc<ADnote>(kit[i].adpars, pars,
++                            wm, (pre+"kit"+i+"/add/").c_str), 0, i});
+             if(item.Psubenabled)
+                 notePool.insertNote(note, sendto,
+                         {memory.alloc<SUBnote>(kit[i].subpars, pars), 1, i});
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 6799a4b9..c87f071b 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -22,13 +22,16 @@
+ #include "../Misc/Util.h"
+ #include "../Misc/Allocator.h"
+ #include "../Params/ADnoteParameters.h"
++#include "../Containers/ScratchString.h"
+ #include "ModFilter.h"
+ #include "OscilGen.h"
+ #include "ADnote.h"
+ 
+-ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
++ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
++        WatchManager *wm, const char *prefix)
+     :SynthNote(spars), pars(*pars_)
+ {
++    printf("prefix = '%s'\n", prefix);
+     memory.beginTransaction();
+     tmpwavel = memory.valloc<float>(synth.buffersize);
+     tmpwaver = memory.valloc<float>(synth.buffersize);
+@@ -450,7 +453,7 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars)
+         memset(tmpwave_unison[k], 0, synth.bufferbytes);
+     }
+ 
+-    initparameters();
++    initparameters(wm, prefix);
+     memory.endTransaction();
+ }
+ 
+@@ -772,16 +775,18 @@ ADnote::~ADnote()
+ /*
+  * Init the parameters
+  */
+-void ADnote::initparameters()
++void ADnote::initparameters(WatchManager *wm, const char *prefix)
+ {
+     int tmp[NUM_VOICES];
++    ScratchString pre = prefix;
++    printf("pre = <%s>\n", pre.c_str);
+     //ADnoteParameters &pars = *partparams;
+ 
+     // Global Parameters
+     NoteGlobalPar.initparameters(pars.GlobalPar, synth,
+                                  time,
+                                  memory, basefreq, velocity,
+-                                 stereo);
++                                 stereo, wm, prefix);
+ 
+     NoteGlobalPar.AmpEnvelope->envout_dB(); //discard the first envelope output
+     globalnewamplitude = NoteGlobalPar.Volume
+@@ -822,7 +827,8 @@ void ADnote::initparameters()
+         }
+ 
+         if(param.PAmpLfoEnabled) {
+-            vce.AmpLfo = memory.alloc<LFO>(*param.AmpLfo, basefreq, time);
++            vce.AmpLfo = memory.alloc<LFO>(*param.AmpLfo, basefreq, time, wm,
++                    (pre+"VoicePar"+nvoice+"/AmpLfo/").c_str);
+             newamplitude[nvoice] *= vce.AmpLfo->amplfoout();
+         }
+ 
+@@ -831,7 +837,8 @@ void ADnote::initparameters()
+             vce.FreqEnvelope = memory.alloc<Envelope>(*param.FreqEnvelope, basefreq, synth.dt());
+ 
+         if(param.PFreqLfoEnabled)
+-            vce.FreqLfo = memory.alloc<LFO>(*param.FreqLfo, basefreq, time);
++            vce.FreqLfo = memory.alloc<LFO>(*param.FreqLfo, basefreq, time, wm,
++                    (pre+"VoicePar"+nvoice+"/FreqLfo/").c_str);
+ 
+         /* Voice Filter Parameters Init */
+         if(param.PFilterEnabled) {
+@@ -848,7 +855,8 @@ void ADnote::initparameters()
+             }
+ 
+             if(param.PFilterLfoEnabled) {
+-                vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq, time);
++                vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq, time, wm,
++                        (pre+"VoicePar"+nvoice+"/FilterLfo/").c_str);
+                 vce.Filter->addMod(*vce.FilterLfo);
+             }
+         }
+@@ -1873,13 +1881,18 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+                                     const AbsTime &time,
+                                     class Allocator &memory,
+                                     float basefreq, float velocity,
+-                                    bool stereo)
++                                    bool stereo,
++                                    WatchManager *wm,
++                                    const char *prefix)
+ {
++    ScratchString pre = prefix;
+     FreqEnvelope = memory.alloc<Envelope>(*param.FreqEnvelope, basefreq, synth.dt());
+-    FreqLfo      = memory.alloc<LFO>(*param.FreqLfo, basefreq, time);
++    FreqLfo      = memory.alloc<LFO>(*param.FreqLfo, basefreq, time, wm,
++                   (pre+"FreqLfo/").c_str);
+ 
+     AmpEnvelope = memory.alloc<Envelope>(*param.AmpEnvelope, basefreq, synth.dt());
+-    AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq, time);
++    AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq, time, wm,
++                   (pre+"AmpLfo/").c_str);
+ 
+     Volume = 4.0f * powf(0.1f, 3.0f * (1.0f - param.PVolume / 96.0f)) //-60 dB .. 0 dB
+              * VelF(velocity, param.PAmpVelocityScaleFunction);     //sensing
+@@ -1888,7 +1901,8 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+             stereo, basefreq);
+ 
+     FilterEnvelope = memory.alloc<Envelope>(*param.FilterEnvelope, basefreq, synth.dt());
+-    FilterLfo      = memory.alloc<LFO>(*param.FilterLfo, basefreq, time);
++    FilterLfo      = memory.alloc<LFO>(*param.FilterLfo, basefreq, time, wm,
++                   (pre+"FilterLfo/").c_str);
+ 
+     Filter->addMod(*FilterEnvelope);
+     Filter->addMod(*FilterLfo);
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 7335870f..71bb019f 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -34,7 +34,8 @@ class ADnote:public SynthNote
+         /**Constructor.
+          * @param pars Note Parameters
+          * @param spars Synth Engine Agnostic Parameters*/
+-        ADnote(ADnoteParameters *pars, SynthParams &spars);
++        ADnote(ADnoteParameters *pars, SynthParams &spars,
++                WatchManager *wm=0, const char *prefix=0);
+         /**Destructor*/
+         ~ADnote();
+ 
+@@ -62,7 +63,7 @@ class ADnote:public SynthNote
+         /**Compute parameters for next tick*/
+         void computecurrentparameters();
+         /**Initializes All Parameters*/
+-        void initparameters();
++        void initparameters(WatchManager *wm, const char *prefix);
+         /**Deallocate/Cleanup given voice*/
+         void KillVoice(int nvoice);
+         /**Deallocate Note resources and voice resources*/
+@@ -117,7 +118,9 @@ class ADnote:public SynthNote
+                                 const AbsTime &time,
+                                 class Allocator &memory,
+                                 float basefreq, float velocity,
+-                                bool stereo);
++                                bool stereo,
++                                WatchManager *wm,
++                                const char *prefix);
+             /******************************************
+             *     FREQUENCY GLOBAL PARAMETERS        *
+             ******************************************/
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index 53e8fe14..3f0d5ceb 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -32,7 +32,7 @@ WatchPoint::WatchPoint(WatchManager *ref, const char *prefix, const char *id)
+         strncpy(identity, prefix, 128);
+     if(id)
+         strncat(identity, id, 128);
+-    printf("new watchpoint = <%s>\n", identity);
++    printf("new watchpoint ={%s:%s} <%s>\n", prefix, id, identity);
+ }
+ 
+ bool WatchPoint::is_active(void)
+@@ -113,6 +113,7 @@ int WatchManager::samples(const char *id) const
+     
+ void WatchManager::satisfy(const char *id, float f)
+ {
++    //printf("trying to satisfy '%s'\n", id);
+     if(write_back)
+         write_back->write(id, "f", f);
+     del_watch(id);
+diff --git a/src/Synth/WatchPoint.h b/src/Synth/WatchPoint.h
+index e0cfa1ba..0c0f2bf0 100644
+--- a/src/Synth/WatchPoint.h
++++ b/src/Synth/WatchPoint.h
+@@ -54,7 +54,7 @@ struct WatchManager
+     //Watch Point Query API
+     bool active(const char *) const;
+     int  samples(const char *) const;
+-    
++
+     //Watch Point Response API
+     void satisfy(const char *, float);
+ };
+@@ -66,6 +66,7 @@ struct FloatWatchPoint:public WatchPoint
+     {
+         if(is_active() && reference) {
+             reference->satisfy(identity, f);
++            active = false;
+         }
+     }
+ };
+-- 
+2.47.0
+

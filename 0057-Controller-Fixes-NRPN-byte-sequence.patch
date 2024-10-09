@@ -1,0 +1,33 @@
+From 50ed2bdf957de8388be0cadc00daea6fa9fe13e1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 11 Feb 2013 09:53:58 -0500
+Subject: [PATCH 0057/1936] Controller: Fixes NRPN byte sequence
+
+- Two decimal numbers were mistakenly coded as hexadecimal
+- This commit fixes these constants
+
+Bug found by Volcomix, see
+https://sourceforge.net/tracker/?func=detail&aid=3601534&group_id=62934&atid=502312
+for more details
+---
+ ExternalPrograms/Controller/Controller.C | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/ExternalPrograms/Controller/Controller.C b/ExternalPrograms/Controller/Controller.C
+index ed94f252..8f2e6d94 100644
+--- a/ExternalPrograms/Controller/Controller.C
++++ b/ExternalPrograms/Controller/Controller.C
+@@ -55,8 +55,8 @@ void Controller::sendcontroller(int par, unsigned char val) {
+ void Controller::sendnrpn(int npar, unsigned char val) {
+ //    fprintf(stderr,"NRPN: %d %d %d %d\n",pars[npar].nrpn.cpar,pars[npar].nrpn.fpar,pars[npar].nrpn.cval,val);
+ 
+-    sendcontroller(0x99, pars[npar].nrpn.cpar);
+-    sendcontroller(0x98, pars[npar].nrpn.fpar);
++    sendcontroller(0x63, pars[npar].nrpn.cpar);
++    sendcontroller(0x62, pars[npar].nrpn.fpar);
+     sendcontroller(0x06, pars[npar].nrpn.cval);
+     sendcontroller(0x26, val);
+ //    fprintf(stderr,"------------\n\n");
+-- 
+2.47.0
+

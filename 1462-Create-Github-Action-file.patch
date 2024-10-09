@@ -1,0 +1,48 @@
+From 6bf4799ecbc69286b17acf8cbc5256db9620fffb Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 4 Jan 2020 11:59:53 -0500
+Subject: [PATCH 1462/1936] Create Github Action file
+
+Allows for CI on github rather than just travis in order to
+have easier access to certain VM versions.
+---
+ .github/workflows/ccpp.yml | 27 +++++++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+ create mode 100644 .github/workflows/ccpp.yml
+
+diff --git a/.github/workflows/ccpp.yml b/.github/workflows/ccpp.yml
+new file mode 100644
+index 00000000..eecd0d12
+--- /dev/null
++++ b/.github/workflows/ccpp.yml
+@@ -0,0 +1,27 @@
++name: Ubuntu Build CI
++
++on: [push]
++
++jobs:
++  build:
++
++    runs-on: ubuntu-latest
++    
++    steps:
++    - uses: actions/checkout@v1
++    - name: install_deps1
++      run:   sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev fluid libxpm-dev
++    - name: install_deps2
++      run: sudo apt-get install liblo-dev
++    - name: install_test_deps1
++      run: sudo apt-get install --force-yes cxxtest
++    - name: install_test_deps2
++      run: sudo apt-get install ruby
++    - name: submodule
++      run: git submodule update --init
++    - name: configure
++      run: mkdir build && cd build && cmake ..
++    - name: make
++      run: cd build && make
++    - name: make test
++      run: cd build && make test
+-- 
+2.47.0
+

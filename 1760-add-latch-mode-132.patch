@@ -1,0 +1,227 @@
+From 8da7b0075eeb8f3aef698db8f46e5fc1f14d4bd6 Mon Sep 17 00:00:00 2001
+From: friedolino78 <34608315+friedolino78@users.noreply.github.com>
+Date: Thu, 26 Aug 2021 00:21:04 +0200
+Subject: [PATCH 1760/1936] add latch mode (#132)
+
+* add latch mode
+
+* fix KitTest (sustain bit)
+
+Co-authored-by: Friedolino <mkirchn@freenet.de>
+---
+ src/Containers/NotePool.cpp | 29 ++++++++++++++++++++++++-----
+ src/Containers/NotePool.h   |  5 +++++
+ src/Misc/Part.cpp           | 25 +++++++++++++++++++++----
+ src/Misc/Part.h             |  1 +
+ src/Tests/KitTest.cpp       |  2 +-
+ 5 files changed, 52 insertions(+), 10 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 58c7f5a2..e971bafb 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -16,8 +16,8 @@
+ #include <cassert>
+ #include <iostream>
+ 
+-#define SUSTAIN_BIT 0x04
+-#define NOTE_MASK   0x03
++#define SUSTAIN_BIT 0x08
++#define NOTE_MASK   0x07
+ 
+ namespace zyn {
+ 
+@@ -25,7 +25,8 @@ enum NoteStatus {
+     KEY_OFF                    = 0x00,
+     KEY_PLAYING                = 0x01,
+     KEY_RELEASED_AND_SUSTAINED = 0x02,
+-    KEY_RELEASED               = 0x03
++    KEY_RELEASED               = 0x03,
++    KEY_LATCHED                = 0x04
+ };
+ 
+ 
+@@ -41,6 +42,11 @@ bool NotePool::NoteDescriptor::playing(void) const
+     return (status&NOTE_MASK) == KEY_PLAYING;
+ }
+ 
++bool NotePool::NoteDescriptor::latched(void) const
++{
++    return (status&NOTE_MASK) == KEY_LATCHED;
++}
++
+ bool NotePool::NoteDescriptor::sustained(void) const
+ {
+     return (status&NOTE_MASK) == KEY_RELEASED_AND_SUSTAINED;
+@@ -259,7 +265,7 @@ int NotePool::getRunningNotes(void) const
+     int running_count = 0;
+ 
+     for(auto &desc:activeDesc()) {
+-        if(desc.playing() == false && desc.sustained() == false)
++        if(desc.playing() == false && desc.sustained() == false && desc.latched() == false)
+             continue;
+         if(running[desc.note] != false)
+             continue;
+@@ -304,7 +310,7 @@ void NotePool::enforceKeyLimit(int limit)
+ void NotePool::releasePlayingNotes(void)
+ {
+     for(auto &d:activeDesc()) {
+-        if(d.playing() || d.sustained()) {
++        if(d.playing() || d.sustained() || d.latched()) {
+             d.setStatus(KEY_RELEASED);
+             for(auto s:activeNotes(d))
+                 s.note->releasekey();
+@@ -319,6 +325,19 @@ void NotePool::release(NoteDescriptor &d)
+         s.note->releasekey();
+ }
+ 
++void NotePool::latch(NoteDescriptor &d)
++{
++    d.setStatus(KEY_LATCHED);
++}
++
++void NotePool::releaseLatched()
++{
++    for(auto &desc:activeDesc())
++        if(desc.latched())
++            for(auto s:activeNotes(desc))
++                s.note->releasekey();
++}
++
+ void NotePool::killAllNotes(void)
+ {
+     for(auto &d:activeDesc())
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 3f03b48a..3a4cdf47 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -44,6 +44,7 @@ class NotePool
+             bool off(void) const;
+             bool sustained(void) const;
+             bool released(void) const;
++            bool latched(void) const;
+ 
+             //status transitions
+             void setStatus(uint8_t s);
+@@ -125,6 +126,8 @@ class NotePool
+         void applyLegato(note_t note, const LegatoParams &par);
+ 
+         void makeUnsustainable(note_t note);
++        
++        void releaseLatched();
+ 
+         bool full(void) const;
+         bool synthFull(int sdesc_count) const;
+@@ -137,6 +140,8 @@ class NotePool
+         void releasePlayingNotes(void);
+         void releaseNote(note_t note);
+         void release(NoteDescriptor &d);
++        void latch(NoteDescriptor &d);
++        
+ 
+         void killAllNotes(void);
+         void killNote(note_t note);
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index bd30ec7f..3a8da432 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -116,13 +116,15 @@ static const Ports partPorts = {
+     {"captureMax:", rDoc("Capture maximum valid note"), NULL,
+         [](const char *, RtData &r)
+         {Part *p = (Part*)r.obj; p->Pmaxkey = p->lastnote;}},
+-    {"polyType::c:i", rProp(parameter) rOptions(Polyphonic, Monophonic, Legato)
++    {"polyType::c:i", rProp(parameter) rOptions(Polyphonic, Monophonic, Legato, Latch)
+         rDoc("Synthesis polyphony type\n"
+                 "Polyphonic - Each note is played independently\n"
+                 "Monophonic - A single note is played at a time with"
+                 " envelopes resetting between notes\n"
+                 "Legato     - A single note is played at a time without"
+                 " envelopes resetting between notes\n"
++                "Latch     - Notes are released when a new one is hit "
++                " after key release\n"
+             ), NULL,
+         [](const char *msg, RtData &d)
+         {
+@@ -143,12 +145,19 @@ static const Ports partPorts = {
+             if(i == 0) {
+                 p->Ppolymode = 1;
+                 p->Plegatomode = 0;
++                p->Platchmode = 0;
+             } else if(i==1) {
+                 p->Ppolymode = 0;
+                 p->Plegatomode = 0;
+-            } else {
++                p->Platchmode = 0;
++            } else if(i==2) {
+                 p->Ppolymode = 0;
+                 p->Plegatomode = 1;
++                p->Platchmode = 0;
++            } else {
++                p->Ppolymode = 1;
++                p->Plegatomode = 0;
++                p->Platchmode = 1;
+             }
+             d.broadcast(d.loc, "i", get_polytype());
+         }
+@@ -550,6 +559,10 @@ bool Part::NoteOnInternal(note_t note,
+ 
+     if(Ppolymode)
+         notePool.makeUnsustainable(note);
++    
++    // in latch mode release latched notes before creating the new one
++    if(Platchmode)
++        notePool.releaseLatched();
+ 
+     //Create New Notes
+     for(uint8_t i = 0; i < NUM_KIT_ITEMS; ++i) {
+@@ -603,7 +616,10 @@ void Part::NoteOff(note_t note) //release the key
+     for(auto &desc:notePool.activeDesc()) {
+         if(desc.note != note || !desc.playing())
+             continue;
+-        if(!ctl.sustain.sustain) { //the sustain pedal is not pushed
++        // if latch is on we ignore noteoff, but set the state to lateched
++        if(Platchmode) {
++            notePool.latch(desc);
++        } else if(!ctl.sustain.sustain) { //the sustain pedal is not pushed
+             if((isMonoMode() || isLegatoMode()) && !monomemEmpty())
+                 MonoMemRenote();//Play most recent still active note
+             else
+@@ -612,8 +628,9 @@ void Part::NoteOff(note_t note) //release the key
+         else {   //the sustain pedal is pushed
+             if(desc.canSustain())
+                 desc.doSustain();
+-            else
++            else {
+                 notePool.release(desc);
++            }
+         }
+     }
+ }
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index b8ad4d05..1953a4be 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -147,6 +147,7 @@ class Part
+ 
+         bool Ppolymode; //Part mode - 0=monophonic , 1=polyphonic
+         bool Plegatomode; // 0=normal, 1=legato
++        bool Platchmode; // 0=normal, 1=latch
+         unsigned char Pkeylimit; //how many keys are allowed to be played same time (0=off), the older will be released
+ 
+         char *Pname; //name of the instrument
+diff --git a/src/Tests/KitTest.cpp b/src/Tests/KitTest.cpp
+index 9a5d7bdc..b9a203f8 100644
+--- a/src/Tests/KitTest.cpp
++++ b/src/Tests/KitTest.cpp
+@@ -30,7 +30,7 @@ using namespace zyn;
+ SYNTH_T *synth;
+ int dummy=0;
+ 
+-#define SUSTAIN_BIT 0x04
++#define SUSTAIN_BIT 0x08
+ enum PrivateNoteStatus {
+     KEY_OFF                    = 0x00,
+     KEY_PLAYING                = 0x01,
+-- 
+2.47.0
+

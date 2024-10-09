@@ -1,0 +1,26 @@
+From d8ed3ce5f67038b81bad5cabd4c1c040a025ba40 Mon Sep 17 00:00:00 2001
+From: Olivier Humbert <trebmuh@users.noreply.github.com>
+Date: Sun, 20 Nov 2016 23:05:24 +0100
+Subject: [PATCH 1094/1936] Adds --midi-learn option in the manpage
+
+Hope this is right and it helps. You might want to tweak a better definition maybe.
+---
+ doc/zynaddsubfx.1.txt | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/doc/zynaddsubfx.1.txt b/doc/zynaddsubfx.1.txt
+index 854476cf..0ca82ebb 100644
+--- a/doc/zynaddsubfx.1.txt
++++ b/doc/zynaddsubfx.1.txt
+@@ -68,6 +68,8 @@ OPTIONS
+ *-e, --exec-after-init*=command::
+     Run post-initialization script. This script will be run after midi and audio
+     drivers have been initialized.
++*--midi-learn::
++    Option for loading .xlz files.
+ 
+ BUGS
+ ----
+-- 
+2.47.0
+

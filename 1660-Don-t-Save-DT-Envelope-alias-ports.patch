@@ -1,0 +1,56 @@
+From cd8507463efcd7505e171545337e01e5353ca041 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 22 Nov 2020 12:40:24 +0100
+Subject: [PATCH 1660/1936] Don't Save DT Envelope (alias) ports
+
+---
+ rtosc                         | 2 +-
+ src/Misc/MiddleWare.cpp       | 4 ++--
+ src/Params/EnvelopeParams.cpp | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 693b308b..8a6acdc8 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 693b308ba1c5e9c492d16b616a0ee28e7cffdf4c
++Subproject commit 8a6acdc80826a880a0276450ff4e151a460d88ee
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index c73ce12b..16bd057f 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -708,7 +708,7 @@ public:
+             doReadOnlyOp([this,filename,&dispatcher,&master2,&savefile,&res]()
+             {
+                 savefile = master->saveOSC(savefile);
+-
++#if 1
+                 // load the savefile string into another master to compare the results
+                 // between the original and the savefile-loaded master
+                 // this requires a temporary master switch
+@@ -732,7 +732,7 @@ public:
+                 printf("Saved in less than %d ms.\n", 50*i);
+ 
+                 dispatcher.updateMaster(old_master);
+-
++#endif
+                 if(res < 0)
+                 {
+                     std::cerr << "invalid savefile (or a backend error)!" << std::endl;
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index d6cb49d1..e0a9ce52 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -35,7 +35,7 @@ namespace zyn {
+ #define dTREAL(var) (powf(2.0f, var / 127.0f * 12.0f) - 1.0f) / 100.0f
+ 
+ #define rParamDT(name, ...) \
+-  {"P" STRINGIFY(name) "::i",  rProp(parameter) DOC(__VA_ARGS__), NULL, rParamDTCb(name)}
++  {"P" STRINGIFY(name) "::i", rProp(alias) rProp(parameter) DOC(__VA_ARGS__), NULL, rParamDTCb(name)}
+ 
+ #define rParamDTCb(name) rBOIL_BEGIN \
+         if(!strcmp("", args)) {\
+-- 
+2.47.0
+

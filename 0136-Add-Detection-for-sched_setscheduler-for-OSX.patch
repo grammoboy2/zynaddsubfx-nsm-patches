@@ -1,0 +1,67 @@
+From e6a0e1e1f422b09a4b6042dad8f318e9937e8adf Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 15 Dec 2013 15:38:15 -0500
+Subject: [PATCH 0136/1936] Add Detection for sched_setscheduler for OSX
+
+Added in test as per diff provided by
+Zachary Richmond
+---
+ src/CMakeLists.txt | 5 +++++
+ src/Misc/Util.cpp  | 4 ++++
+ 2 files changed, 9 insertions(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index b6f543e1..ddc0fd7f 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -29,6 +29,8 @@ mark_as_advanced(DSSI_LIBRARIES)
+ pkg_search_module(LIBLO liblo>=0.26)
+ mark_as_advanced(LIBLO_LIBRARIES)
+ 
++CHECK_FUNCTION_EXISTS(sched_setscheduler HAVE_SCHEDULER)
++
+ execute_process(COMMAND echo fistpl 0
+                 COMMAND as -
+                 ERROR_VARIABLE AVOID_ASM)
+@@ -60,6 +62,9 @@ SET (LibloEnable ${LIBLO_FOUND} CACHE BOOL
+ # Add version information
+ add_definitions(-DVERSION="${VERSION}")
+ 
++# Add scheduler function existance info (OSX compatiability)
++add_definitions(-DHAVE_SCHEDULER=${HAVE_SCHEDULER})
++
+ # Give a good guess on the best Input/Output default backends
+ if (JackEnable)
+     SET (DefaultOutput jack CACHE STRING
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index d75ab2f7..87f44ff2 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -33,7 +33,9 @@
+ #include <unistd.h>
+ #include <errno.h>
+ #include <string.h>
++#ifdef HAVE_SCHEDULER
+ #include <sched.h>
++#endif
+ 
+ 
+ prng_t prng_state = 0x1234;
+@@ -119,12 +121,14 @@ bool fileexists(const char *filename)
+ 
+ void set_realtime()
+ {
++#ifdef HAVE_SCHEDULER
+     sched_param sc;
+     sc.sched_priority = 60;
+     //if you want get "sched_setscheduler undeclared" from compilation,
+     //you can safely remove the folowing line:
+     sched_setscheduler(0, SCHED_FIFO, &sc);
+     //if (err==0) printf("Real-time");
++#endif
+ }
+ 
+ void os_sleep(long length)
+-- 
+2.47.0
+

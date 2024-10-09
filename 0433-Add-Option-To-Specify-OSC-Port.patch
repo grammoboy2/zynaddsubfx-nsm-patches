@@ -1,0 +1,141 @@
+From 9d1835127a6ee1e2d4476b53d1caef60a187375f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 4 May 2015 20:55:49 -0400
+Subject: [PATCH 0433/1936] Add Option To Specify OSC Port
+
+---
+ src/Misc/MiddleWare.cpp | 13 ++++++++-----
+ src/Misc/MiddleWare.h   |  2 +-
+ src/main.cpp            | 19 +++++++++++++------
+ 3 files changed, 22 insertions(+), 12 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index f21acdc0..159e751d 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -537,7 +537,7 @@ class MiddleWareImpl
+     }
+ 
+ public:
+-    MiddleWareImpl(MiddleWare *mw);
++    MiddleWareImpl(MiddleWare *mw, int prefered_port);
+     ~MiddleWareImpl(void);
+ 
+     void warnMemoryLeaks(void);
+@@ -782,11 +782,14 @@ public:
+     string last_url, curr_url;
+ };
+ 
+-MiddleWareImpl::MiddleWareImpl(MiddleWare *mw)
++MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, int prefered_port)
+ {
+     bToU = new rtosc::ThreadLink(4096*2,1024);
+     uToB = new rtosc::ThreadLink(4096*2,1024);
+-    server = lo_server_new_with_proto(NULL, LO_UDP, liblo_error_cb);
++    if(prefered_port != -1)
++        server = lo_server_new_with_proto(to_s(prefered_port).c_str(), LO_UDP, liblo_error_cb);
++    else
++        server = lo_server_new_with_proto(NULL, LO_UDP, liblo_error_cb);
+     lo_server_add_method(server, NULL, NULL, handler_function, mw);
+     fprintf(stderr, "lo server running on %d\n", lo_server_get_port(server));
+ 
+@@ -1182,8 +1185,8 @@ void MiddleWareImpl::warnMemoryLeaks(void)
+ /******************************************************************************
+  *                         MidleWare Forwarding Stubs                         *
+  ******************************************************************************/
+-    MiddleWare::MiddleWare(void)
+-:impl(new MiddleWareImpl(this))
++MiddleWare::MiddleWare(int prefered_port)
++:impl(new MiddleWareImpl(this, prefered_port))
+ {}
+ MiddleWare::~MiddleWare(void)
+ {
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 0c69404e..69fbaec4 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -7,7 +7,7 @@
+ class MiddleWare
+ {
+     public:
+-        MiddleWare(void);
++        MiddleWare(int prefered_port = -1);
+         ~MiddleWare(void);
+         //returns internal master pointer
+         class Master *spawnMaster(void);
+diff --git a/src/main.cpp b/src/main.cpp
+index 22c9a830..1e60dc48 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -92,11 +92,9 @@ void sigterm_exit(int /*sig*/)
+ /*
+  * Program initialisation
+  */
+-void initprogram(void)
++void initprogram(int prefered_port)
+ {
+-
+-
+-    middleware = new MiddleWare();
++    middleware = new MiddleWare(prefered_port);
+     master = middleware->spawnMaster();
+     master->swaplr = swaplr;
+ 
+@@ -199,6 +197,9 @@ int main(int argc, char *argv[])
+         {
+             "pid-in-client-name", 0, NULL, 'p'
+         },
++        {
++            "prefered-port", 1, NULL, 'P',
++        },
+         {
+             "output", 1, NULL, 'O'
+         },
+@@ -217,6 +218,7 @@ int main(int argc, char *argv[])
+     };
+     opterr = 0;
+     int option_index = 0, opt, exitwithhelp = 0, exitwithversion = 0;
++    int prefered_port = -1;
+ 
+     string loadfile, loadinstrument, execAfterInit;
+ 
+@@ -226,7 +228,7 @@ int main(int argc, char *argv[])
+         /**\todo check this process for a small memory leak*/
+         opt = getopt_long(argc,
+                           argv,
+-                          "l:L:r:b:o:I:O:N:e:hvapSDUY",
++                          "l:L:r:b:o:I:O:N:e:P:hvapSDUY",
+                           opts,
+                           &option_index);
+         char *optarguments = optarg;
+@@ -313,6 +315,10 @@ int main(int argc, char *argv[])
+             case 'p':
+                 Nio::pidInClientName = true;
+                 break;
++            case 'P':
++                if(optarguments)
++                    prefered_port = atoi(optarguments);
++                break;
+             case 'e':
+                 GETOP(execAfterInit);
+                 break;
+@@ -360,6 +366,7 @@ int main(int argc, char *argv[])
+              << "  -a , --auto-connect\t\t\t AutoConnect when using JACK\n"
+              << "  -p , --pid-in-client-name\t\t Append PID to (JACK) "
+                 "client name\n"
++             << "  -P , --prefered-port\t\t\t Prefered OSC Port\n"
+              << "  -O , --output\t\t\t\t Set Output Engine\n"
+              << "  -I , --input\t\t\t\t Set Input Engine\n"
+              << "  -e , --exec-after-init\t\t Run post-initialization script\n"
+@@ -374,7 +381,7 @@ int main(int argc, char *argv[])
+     for(int i = 0; i < synth->buffersize; ++i)
+         denormalkillbuf[i] = (RND - 0.5f) * 1e-16;
+ 
+-    initprogram();
++    initprogram(prefered_port);
+ 
+     if(!loadfile.empty()) {
+         int tmp = master->loadXML(loadfile.c_str());
+-- 
+2.47.0
+

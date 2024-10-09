@@ -1,0 +1,25 @@
+From 9a097e62c4d1d8331cbdf4dc7e0798e064e82210 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 9 Aug 2016 13:10:44 -0400
+Subject: [PATCH 1001/1936] Fix Build Error In Cmake
+
+---
+ src/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 4b5ee783..a252bcdd 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -392,7 +392,7 @@ endif()
+ # of module-specific variables
+ 
+ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/zyn-version.h.in
+-    ${CMAKE_CURRENT_SOURCE_DIR}/zyn-version.h)
++    ${CMAKE_CURRENT_BINARY_DIR}/zyn-version.h)
+ 
+ link_directories(${AUDIO_LIBRARY_DIRS} ${ZLIB_LIBRARY_DIRS} ${FFTW_LIBRARY_DIRS} ${MXML_LIBRARY_DIRS} ${FLTK_LIBRARY_DIRS} ${NTK_LIBRARY_DIRS})
+ 
+-- 
+2.47.0
+

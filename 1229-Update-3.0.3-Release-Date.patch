@@ -1,0 +1,22 @@
+From 134e46f6330f86303b7e01d6f7cfb5451a545745 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 4 Dec 2017 20:10:56 -0500
+Subject: [PATCH 1229/1936] Update 3.0.3 Release Date
+
+---
+ HISTORY.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/HISTORY.txt b/HISTORY.txt
+index 038251a7..9328dedf 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,4 +1,4 @@
+-3.0.3 (Mid October 2017)
++3.0.3 (4 December 2017)
+         - Add bank search to FLTK/NTK GUI
+         - Add parallel padsynth sample generation
+         - Remove X11 dependency for non-GUI builds
+-- 
+2.47.0
+

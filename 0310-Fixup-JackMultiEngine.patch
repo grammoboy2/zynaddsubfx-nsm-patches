@@ -1,0 +1,44 @@
+From b6dd1b525709e15a7952fea191e2d3f32aa93eac Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 2 Feb 2015 19:31:45 -0500
+Subject: [PATCH 0310/1936] Fixup JackMultiEngine
+
+---
+ src/Nio/JackMultiEngine.cpp | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/Nio/JackMultiEngine.cpp b/src/Nio/JackMultiEngine.cpp
+index ae5e844a..d3f765af 100644
+--- a/src/Nio/JackMultiEngine.cpp
++++ b/src/Nio/JackMultiEngine.cpp
+@@ -30,9 +30,11 @@
+ #include "Nio.h"
+ #include "../Misc/Master.h"
+ #include "../Misc/Part.h"
++#include "../Misc/MiddleWare.h"
+ 
+ #include "JackMultiEngine.h"
+ 
++extern MiddleWare *middleware;
+ using std::string;
+ 
+ struct jack_multi
+@@ -146,13 +148,13 @@ int JackMultiEngine::processAudio(jack_nframes_t nframes)
+     memcpy(buffers[1], smp.r, synth->bufferbytes);
+ 
+     //Gather other samples from individual parts
+-    Master &master = Master::getInstance();
++    Master &master = *middleware->spawnMaster();
+     for(int i = 0; i < NUM_MIDI_PARTS; ++i) {
+         memcpy(buffers[2*i + 2], master.part[i]->partoutl, synth->bufferbytes);
+         memcpy(buffers[2*i + 3], master.part[i]->partoutr, synth->bufferbytes);
+     }
+ 
+-    return true;
++    return false;
+ }
+ 
+ void JackMultiEngine::Stop()
+-- 
+2.47.0
+

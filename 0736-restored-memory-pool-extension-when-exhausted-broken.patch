@@ -1,0 +1,26 @@
+From dd62835d6dbe8bf3d8d3e6d830aa880012203a73 Mon Sep 17 00:00:00 2001
+From: Olivier Jolly <olivier@pcedev.com>
+Date: Wed, 18 Nov 2015 13:26:28 +0100
+Subject: [PATCH 0736/1936] restored memory pool extension when exhausted
+ (broken due to a typo in middleware messages)
+
+---
+ src/Misc/MiddleWare.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 2f1d6d76..433b7847 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1076,7 +1076,7 @@ static rtosc::Ports middlewareReplyPorts = {
+         void       *ptr  = *(void**)rtosc_argument(msg, 1).b.data;
+         deallocate(type, ptr);
+         rEnd},
+-    {"request_memory:", 0, 0,
++    {"request-memory:", 0, 0,
+         rBegin;
+         //Generate out more memory for the RT memory pool
+         //5MBi chunk
+-- 
+2.47.0
+

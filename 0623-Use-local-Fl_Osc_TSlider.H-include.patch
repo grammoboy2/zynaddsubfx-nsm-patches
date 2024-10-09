@@ -1,0 +1,23 @@
+From 1f863c11907047677b3e09fe7666ddc1d2b4577c Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Thu, 22 Oct 2015 10:05:13 +0200
+Subject: [PATCH 0623/1936] Use local Fl_Osc_TSlider.H include
+
+---
+ src/UI/Fl_Osc_TSlider.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/Fl_Osc_TSlider.cpp b/src/UI/Fl_Osc_TSlider.cpp
+index 8efc57db..c238ed25 100644
+--- a/src/UI/Fl_Osc_TSlider.cpp
++++ b/src/UI/Fl_Osc_TSlider.cpp
+@@ -1,5 +1,5 @@
+ #include <cmath>
+-#include <Fl_Osc_TSlider.H>
++#include "Fl_Osc_TSlider.H"
+ //Copyright (c) 2015 Christopher Oliver
+ //License: GNU GPL version 2 or later
+ 
+-- 
+2.47.0
+

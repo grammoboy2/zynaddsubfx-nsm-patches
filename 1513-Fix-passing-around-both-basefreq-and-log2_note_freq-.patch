@@ -1,0 +1,1030 @@
+From 31bb9f61bf434dc8c3972b0e82c05424939d7352 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 4 Apr 2020 19:49:43 +0200
+Subject: [PATCH 1513/1936] Fix passing around both basefreq and log2_note_freq
+ in the same structure and class. Note frequency manipulations are frequently
+ done in logarithmic scale, so keep the log2_note_freq one, and derive the
+ basefreq when needed.
+
+This allows us to reduce the memory footprint for the monomem array and
+simplifies the implementation of legato notes.
+
+Where multiple power statements are multiplied in series, try to join these
+into fewer ones by exploiting the fact we already have a logarithmic
+power of two frequency available.
+
+No functional change intended.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Misc/Part.cpp            | 37 +++++++++-------------
+ src/Misc/Part.h              | 23 ++++++++++----
+ src/Synth/ADnote.cpp         | 49 +++++++++++++++---------------
+ src/Synth/ADnote.h           |  8 ++---
+ src/Synth/PADnote.cpp        | 49 ++++++++++++++++--------------
+ src/Synth/PADnote.h          |  8 ++---
+ src/Synth/SUBnote.cpp        | 59 ++++++++++++++++++++----------------
+ src/Synth/SUBnote.h          | 13 ++++----
+ src/Synth/SynthNote.cpp      | 28 ++++++++---------
+ src/Synth/SynthNote.h        | 14 ++++-----
+ src/Tests/AdNoteTest.h       |  7 ++---
+ src/Tests/MemoryStressTest.h |  3 +-
+ src/Tests/PadNoteTest.h      |  7 ++---
+ src/Tests/SubNoteTest.h      |  7 ++---
+ src/Tests/TriggerTest.h      |  7 ++---
+ src/Tests/UnisonTest.h       |  8 ++---
+ 16 files changed, 165 insertions(+), 162 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index a0b5f5bf..97c6e474 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -469,9 +469,8 @@ static int kit_usage(const Part::Kit *kits, int note, int mode)
+ /*
+  * Note On Messages
+  */
+-bool Part::NoteOn(note_t note,
++bool Part::NoteOnInternal(note_t note,
+                   unsigned char velocity,
+-                  int masterkeyshift,
+                   float note_log2_freq)
+ {
+     //Verify Basic Mode and sanity
+@@ -490,7 +489,6 @@ bool Part::NoteOn(note_t note,
+     if(isMonoMode() || isLegatoMode()) {
+         monomemPush(note);
+         monomem[note].velocity  = velocity;
+-        monomem[note].mkeyshift = masterkeyshift;
+         monomem[note].note_log2_freq = note_log2_freq;
+ 
+     } else if(!monomemEmpty())
+@@ -504,12 +502,7 @@ bool Part::NoteOn(note_t note,
+ 
+     //Compute Note Parameters
+     const float vel          = getVelocity(velocity, Pvelsns, Pveloffs);
+-    const int   partkeyshift = (int)Pkeyshift - 64;
+-    const int   keyshift     = masterkeyshift + partkeyshift;
+-    const float notebasefreq = getBaseFreq(note_log2_freq, keyshift);
+-
+-    if(notebasefreq < 0.0f)
+-        return false;
++    const float notebasefreq = powf(2.0f, note_log2_freq);
+ 
+     //Portamento
+     lastnote = note;
+@@ -528,7 +521,7 @@ bool Part::NoteOn(note_t note,
+ 
+     //Adjust Existing Notes
+     if(doingLegato) {
+-        LegatoParams pars = {notebasefreq, vel, portamento, note_log2_freq, true, prng()};
++        LegatoParams pars = {vel, portamento, note_log2_freq, true, prng()};
+         notePool.applyLegato(note, pars);
+         return true;
+     }
+@@ -543,7 +536,7 @@ bool Part::NoteOn(note_t note,
+         if(Pkitmode != 0 && !item.validNote(note))
+             continue;
+ 
+-        SynthParams pars{memory, ctl, synth, time, notebasefreq, vel,
++        SynthParams pars{memory, ctl, synth, time, vel,
+             portamento, note_log2_freq, false, prng()};
+         const int sendto = Pkitmode ? item.sendto() : 0;
+ 
+@@ -734,9 +727,8 @@ void Part::SetController(unsigned int type, note_t note, float value,
+         PolyphonicAftertouch(note, floorf(value));
+         break;
+     case C_pitch: {
+-        const int   partkeyshift = (int)Pkeyshift - 64;
+-        const int   keyshift     = masterkeyshift + partkeyshift;
+-        const float notebasefreq = getBaseFreq(value, keyshift);
++        if (getNoteLog2Freq(masterkeyshift, value) == false)
++	    break;
+ 
+         /* Make sure MonoMem's frequency information is kept up to date */
+         if(!Ppolymode)
+@@ -745,7 +737,7 @@ void Part::SetController(unsigned int type, note_t note, float value,
+         for(auto &d:notePool.activeDesc()) {
+             if(d.note == note && d.playing())
+                 for(auto &s:notePool.activeNotes(d))
+-                    s.note->setPitch(notebasefreq, value);
++                    s.note->setPitch(value);
+         }
+         break;
+     }
+@@ -796,18 +788,19 @@ void Part::MonoMemRenote()
+ {
+     note_t mmrtempnote = monomemBack(); // Last list element.
+     monomemPop(mmrtempnote); // We remove it, will be added again in NoteOn(...).
+-    NoteOn(mmrtempnote,
++    NoteOnInternal(mmrtempnote,
+            monomem[mmrtempnote].velocity,
+-           monomem[mmrtempnote].mkeyshift,
+            monomem[mmrtempnote].note_log2_freq);
+ }
+ 
+-float Part::getBaseFreq(float note_log2_freq, int keyshift) const
++bool Part::getNoteLog2Freq(int masterkeyshift, float &note_log2_freq)
+ {
+-    if(Pdrummode)
+-        return 440.0f * powf(2.0f, note_log2_freq - (69.0f / 12.0f));
+-    else
+-        return microtonal->getnotefreq(note_log2_freq, keyshift);
++    if(Pdrummode) {
++        note_log2_freq += log2f(440.0f) - 69.0f / 12.0f;
++        return true;
++    }
++    return microtonal->updatenotefreq_log2(note_log2_freq,
++        (int)Pkeyshift - 64 + masterkeyshift);
+ }
+ 
+ float Part::getVelocity(uint8_t velocity, uint8_t velocity_sense,
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 507e4a0d..9f80c45f 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -42,13 +42,26 @@ class Part
+ 
+         // Midi commands implemented
+ 
++        //returns true when successful
++        bool getNoteLog2Freq(int masterkeyshift, float &note_log2_freq);
++
+         //returns true when note is successfully applied
+         bool NoteOn(note_t note, uint8_t vel, int shift) REALTIME {
+-             return (NoteOn(note, vel, shift, note / 12.0f));
++            float log2_freq = note / 12.0f;
++            return (getNoteLog2Freq(shift, log2_freq) &&
++                NoteOnInternal(note, vel, log2_freq));
++        };
++
++        //returns true when note is successfully applied
++        bool NoteOn(note_t note, uint8_t vel, int shift,
++                    float log2_freq) REALTIME {
++            return (getNoteLog2Freq(shift, log2_freq) &&
++                NoteOnInternal(note, vel, log2_freq));
+         };
+-        bool NoteOn(note_t note,
++
++        //returns true when note is successfully applied
++        bool NoteOnInternal(note_t note,
+                     unsigned char velocity,
+-                    int masterkeyshift,
+                     float note_log2_freq) REALTIME;
+         void NoteOff(note_t note) REALTIME;
+         void PolyphonicAftertouch(note_t note,
+@@ -165,7 +178,6 @@ class Part
+ 
+     private:
+         void MonoMemRenote(); // MonoMem stuff.
+-        float getBaseFreq(float note_log2_freq, int keyshift) const;
+         float getVelocity(uint8_t velocity, uint8_t velocity_sense,
+                 uint8_t velocity_offset) const;
+         void verifyKeyMode(void);
+@@ -192,12 +204,11 @@ class Part
+         short monomemnotes[256]; // A list to remember held notes.
+         struct {
+             unsigned char velocity;
+-            int mkeyshift; // I'm not sure masterkeyshift should be remembered.
+             float note_log2_freq;
+         } monomem[256];
+         /* 256 is to cover all possible note values.
+            monomem[] is used in conjunction with the list to
+-           store the velocity and masterkeyshift values of a given note (the list only store note values).
++           store the velocity and logarithmic frequency values of a given note.
+            For example 'monomem[note].velocity' would be the velocity value of the note 'note'.*/
+ 
+         float oldfreq;    //this is used for portamento
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 41e597f6..60a62020 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -31,7 +31,7 @@
+ #define LENGTHOF(x) ((int)(sizeof(x)/sizeof(x[0])))
+ 
+ namespace zyn {
+-ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
++ADnote::ADnote(ADnoteParameters *pars_, const SynthParams &spars,
+         WatchManager *wm, const char *prefix)
+     :SynthNote(spars), watch_be4_add(wm, prefix, "noteout/be4_mix"), watch_after_add(wm,prefix,"noteout/after_mix"),
+     watch_punch(wm, prefix, "noteout/punch"), watch_legato(wm, prefix, "noteout/legato"), pars(*pars_)
+@@ -46,7 +46,6 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
+     portamento  = spars.portamento;
+     note_log2_freq = spars.note_log2_freq;
+     NoteEnabled = ON;
+-    basefreq    = spars.frequency;
+     velocity    = spars.velocity;
+     initial_seed = spars.seed;
+     current_prng_state = spars.seed;
+@@ -75,7 +74,7 @@ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
+                     pars.GlobalPar.PPunchVelocitySensing));
+         float time =
+             powf(10, 3.0f * pars.GlobalPar.PPunchTime / 127.0f) / 10000.0f;   //0.1f .. 100 ms
+-        float stretch = powf(440.0f / spars.frequency,
++        float stretch = powf(440.0f / powf(2.0f, spars.note_log2_freq),
+                              pars.GlobalPar.PPunchStretch / 64.0f);
+         NoteGlobalPar.Punch.dt = 1.0f / (time * synth.samplerate_f * stretch);
+     }
+@@ -519,7 +518,7 @@ void ADnote::setupVoiceMod(int nvoice, bool first_run)
+ 
+ SynthNote *ADnote::cloneLegato(void)
+ {
+-    SynthParams sp{memory, ctl, synth, time, legato.param.freq, velocity,
++    SynthParams sp{memory, ctl, synth, time, velocity,
+                 (bool)portamento, legato.param.note_log2_freq, true,
+                 initial_seed };
+     return memory.alloc<ADnote>(&pars, sp);
+@@ -529,7 +528,7 @@ SynthNote *ADnote::cloneLegato(void)
+ // initparameters() stuck together with some lines removed so that it
+ // only alter the already playing note (to perform legato). It is
+ // possible I left stuff that is not required for this.
+-void ADnote::legatonote(LegatoParams lpars)
++void ADnote::legatonote(const LegatoParams &lpars)
+ {
+     //ADnoteParameters &pars = *partparams;
+     // Manage legato stuff
+@@ -538,14 +537,15 @@ void ADnote::legatonote(LegatoParams lpars)
+ 
+     portamento = lpars.portamento;
+     note_log2_freq = lpars.note_log2_freq;
+-    basefreq = lpars.frequency;
+     initial_seed = lpars.seed;
+     current_prng_state = lpars.seed;
+ 
+     if(lpars.velocity > 1.0f)
+-        lpars.velocity = 1.0f;
++        velocity = 1.0f;
++    else
++        velocity = lpars.velocity;
+ 
+-    velocity = lpars.velocity;
++    const float basefreq = powf(2.0f, note_log2_freq);
+ 
+     NoteGlobalPar.Detune = getdetune(pars.GlobalPar.PDetuneType,
+                                      pars.GlobalPar.PCoarseDetune,
+@@ -817,7 +817,7 @@ void ADnote::initparameters(WatchManager *wm, const char *prefix)
+ {
+     int tmp[NUM_VOICES];
+     ScratchString pre = prefix;
+-    //ADnoteParameters &pars = *partparams;
++    const float basefreq = powf(2.0f, note_log2_freq);
+ 
+     // Global Parameters
+     NoteGlobalPar.initparameters(pars.GlobalPar, synth,
+@@ -1047,27 +1047,29 @@ void ADnote::setfreqFM(int nvoice, float in_freq)
+ /*
+  * Get Voice base frequency
+  */
+-float ADnote::getvoicebasefreq(int nvoice) const
++float ADnote::getvoicebasefreq(int nvoice, float adjust_log2) const
+ {
+-    float detune = NoteVoicePar[nvoice].Detune / 100.0f
++    const float detune = NoteVoicePar[nvoice].Detune / 100.0f
+                    + NoteVoicePar[nvoice].FineDetune / 100.0f
+                    * ctl.bandwidth.relbw * bandwidthDetuneMultiplier
+                    + NoteGlobalPar.Detune / 100.0f;
+ 
+-    if(NoteVoicePar[nvoice].fixedfreq == 0)
+-        return this->basefreq * powf(2, detune / 12.0f);
++    if(NoteVoicePar[nvoice].fixedfreq == 0) {
++        return powf(2.0f, note_log2_freq + detune / 12.0f + adjust_log2);
++    }
+     else { //the fixed freq is enabled
+-        float fixedfreq   = 440.0f;
+-        int   fixedfreqET = NoteVoicePar[nvoice].fixedfreqET;
++        const int fixedfreqET = NoteVoicePar[nvoice].fixedfreqET;
++        float fixedfreq_log2 = log2f(440.0f);
++
+         if(fixedfreqET != 0) { //if the frequency varies according the keyboard note
+-            float tmp = (note_log2_freq - (69.0f / 12.0f))
+-                * (powf(2.0f, (fixedfreqET - 1) / 63.0f) - 1.0f);
++            float tmp_log2 = (note_log2_freq - fixedfreq_log2) *
++                (powf(2.0f, (fixedfreqET - 1) / 63.0f) - 1.0f);
+             if(fixedfreqET <= 64)
+-                fixedfreq *= powf(2.0f, tmp);
++                fixedfreq_log2 += tmp_log2;
+             else
+-                fixedfreq *= powf(3.0f, tmp);
++                fixedfreq_log2 += tmp_log2 * log2f(3.0f);
+         }
+-        return fixedfreq * powf(2.0f, detune / 12.0f);
++        return powf(2.0f, fixedfreq_log2 + detune / 12.0f + adjust_log2);
+     }
+ }
+ 
+@@ -1076,8 +1078,7 @@ float ADnote::getvoicebasefreq(int nvoice) const
+  */
+ float ADnote::getFMvoicebasefreq(int nvoice) const
+ {
+-    float detune = NoteVoicePar[nvoice].FMDetune / 100.0f;
+-    return getvoicebasefreq(nvoice) * powf(2, detune / 12.0f);
++    return getvoicebasefreq(nvoice, NoteVoicePar[nvoice].FMDetune / 1200.0f);
+ }
+ 
+ /*
+@@ -1151,8 +1152,8 @@ void ADnote::computecurrentparameters()
+             if(NoteVoicePar[nvoice].FreqEnvelope)
+                 voicepitch += NoteVoicePar[nvoice].FreqEnvelope->envout()
+                               / 100.0f;
+-            voicefreq = getvoicebasefreq(nvoice)
+-                        * powf(2, (voicepitch + globalpitch) / 12.0f);                //Hz frequency
++            voicefreq = getvoicebasefreq(nvoice,
++                (voicepitch + globalpitch) / 12.0f); //Hz frequency
+             voicefreq *=
+                 powf(ctl.pitchwheel.relfreq, NoteVoicePar[nvoice].BendAdjust); //change the frequency by the controller
+             setfreq(nvoice, voicefreq * portamentofreqrap + NoteVoicePar[nvoice].OffsetHz);
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 40608eb3..181f1f85 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -37,13 +37,13 @@ class ADnote:public SynthNote
+         /**Constructor.
+          * @param pars Note Parameters
+          * @param spars Synth Engine Agnostic Parameters*/
+-        ADnote(ADnoteParameters *pars, SynthParams &spars,
++        ADnote(ADnoteParameters *pars, const SynthParams &spars,
+                 WatchManager *wm=0, const char *prefix=0);
+         /**Destructor*/
+         ~ADnote();
+ 
+         /**Alters the playing note for legato effect*/
+-        void legatonote(LegatoParams pars);
++        void legatonote(const LegatoParams &pars);
+ 
+         int noteout(float *outl, float *outr);
+         void releasekey();
+@@ -77,7 +77,7 @@ class ADnote:public SynthNote
+         /**Deallocate Note resources and voice resources*/
+         void KillNote();
+         /**Get the Voice's base frequency*/
+-        inline float getvoicebasefreq(int nvoice) const;
++        inline float getvoicebasefreq(int nvoice, float adjust_log2 = 0.0f) const;
+         /**Get modulator's base frequency*/
+         inline float getFMvoicebasefreq(int nvoice) const;
+         /**Compute the Oscillator's samples.
+@@ -116,7 +116,7 @@ class ADnote:public SynthNote
+         ADnoteParameters &pars;
+         unsigned char     stereo; //if the note is stereo (allows note Panning)
+         float note_log2_freq;
+-        float velocity, basefreq;
++        float velocity;
+ 
+         ONOFFTYPE   NoteEnabled;
+ 
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index e8e0e2ac..de9f6cd2 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -26,7 +26,7 @@
+ namespace zyn {
+ 
+ PADnote::PADnote(const PADnoteParameters *parameters,
+-                 SynthParams pars, const int& interpolation, WatchManager *wm,
++                 const SynthParams &pars, const int& interpolation, WatchManager *wm,
+                  const char *prefix)
+     :SynthNote(pars),
+     watch_int(wm, prefix, "noteout/after_interpolation"), watch_punch(wm, prefix, "noteout/after_punch"),
+@@ -38,13 +38,12 @@ PADnote::PADnote(const PADnoteParameters *parameters,
+     NoteGlobalPar.FilterLfo       = nullptr;
+ 
+     firsttime = true;
+-    setup(pars.frequency, pars.velocity, pars.portamento, pars.note_log2_freq, false, wm, prefix);
++    setup(pars.velocity, pars.portamento, pars.note_log2_freq, false, wm, prefix);
+ }
+ 
+-void PADnote::setup(float freq,
+-                    float velocity_,
++void PADnote::setup(float velocity_,
+                     int portamento_,
+-                    float note_log2_freq,
++                    float note_log2_freq_,
+                     bool legato,
+                     WatchManager *wm,
+                     const char *prefix)
+@@ -53,22 +52,25 @@ void PADnote::setup(float freq,
+     velocity   = velocity_;
+     finished_  = false;
+ 
++    if(pars.Pfixedfreq == 0) {
++        note_log2_freq = note_log2_freq_;
++    }
++    else { //the fixed freq is enabled
++        const int fixedfreqET = pars.PfixedfreqET;
++        float fixedfreq_log2 = log2f(440.0f);
+ 
+-    if(!pars.Pfixedfreq)
+-        basefreq = freq;
+-    else {
+-        basefreq = 440.0f;
+-        int fixedfreqET = pars.PfixedfreqET;
+         if(fixedfreqET != 0) { //if the frequency varies according the keyboard note
+-            float tmp =
+-                (note_log2_freq - (69.0f / 12.0f))
+-                * (powf(2.0f, (fixedfreqET - 1) / 63.0f) - 1.0f);
++            float tmp_log2 = (note_log2_freq_ - fixedfreq_log2) *
++                (powf(2.0f, (fixedfreqET - 1) / 63.0f) - 1.0f);
+             if(fixedfreqET <= 64)
+-                basefreq *= powf(2.0f, tmp);
++                fixedfreq_log2 += tmp_log2;
+             else
+-                basefreq *= powf(3.0f, tmp);
++                fixedfreq_log2 += tmp_log2 * log2f(3.0f);
+         }
++        note_log2_freq = fixedfreq_log2;
+     }
++    const float basefreq = powf(2.0f, note_log2_freq);
++
+     int BendAdj = pars.PBendAdjust - 64;
+     if (BendAdj % 24 == 0)
+         BendAdjust = BendAdj / 24;
+@@ -84,13 +86,13 @@ void PADnote::setup(float freq,
+ 
+ 
+     //find out the closest note
+-    float logfreq = logf(basefreq * powf(2.0f, NoteGlobalPar.Detune / 1200.0f));
+-    float mindist = fabsf(logfreq - logf(pars.sample[0].basefreq + 0.0001f));
++    const float log2freq = note_log2_freq + NoteGlobalPar.Detune / 1200.0f;
++    float mindist = fabsf(log2freq - log2f(pars.sample[0].basefreq + 0.0001f));
+     nsample = 0;
+     for(int i = 1; i < PAD_MAX_SAMPLES; ++i) {
+         if(pars.sample[i].smp == NULL)
+             break;
+-        float dist = fabsf(logfreq - logf(pars.sample[i].basefreq + 0.0001f));
++        const float dist = fabsf(log2freq - log2f(pars.sample[i].basefreq + 0.0001f));
+ 
+         if(dist < mindist) {
+             nsample = i;
+@@ -131,6 +133,7 @@ void PADnote::setup(float freq,
+                         pars.PPunchVelocitySensing));
+             const float time =
+                 powf(10, 3.0f * pars.PPunchTime / 127.0f) / 10000.0f;             //0.1f .. 100 ms
++            const float freq = powf(2.0f, note_log2_freq_);
+             const float stretch = powf(440.0f / freq, pars.PPunchStretch / 64.0f);
+             NoteGlobalPar.Punch.dt = 1.0f
+                                      / (time * synth.samplerate_f * stretch);
+@@ -199,18 +202,18 @@ void PADnote::setup(float freq,
+ 
+ SynthNote *PADnote::cloneLegato(void)
+ {
+-    SynthParams sp{memory, ctl, synth, time, legato.param.freq, velocity,
++    SynthParams sp{memory, ctl, synth, time, velocity,
+                    (bool)portamento, legato.param.note_log2_freq, true, legato.param.seed};
+     return memory.alloc<PADnote>(&pars, sp, interpolation);
+ }
+ 
+-void PADnote::legatonote(LegatoParams pars)
++void PADnote::legatonote(const LegatoParams &pars)
+ {
+     // Manage legato stuff
+     if(legato.update(pars))
+         return;
+ 
+-    setup(pars.frequency, pars.velocity, pars.portamento, pars.note_log2_freq, true);
++    setup(pars.velocity, pars.portamento, pars.note_log2_freq, true);
+ }
+ 
+ 
+@@ -270,8 +273,8 @@ void PADnote::computecurrentparameters()
+             portamento = false;  //this note is no longer "portamented"
+     }
+ 
+-    realfreq = basefreq * portamentofreqrap
+-               * powf(2.0f, globalpitch / 12.0f)
++    realfreq = portamentofreqrap
++        * powf(2.0f, note_log2_freq + globalpitch / 12.0f)
+         * powf(ctl.pitchwheel.relfreq, BendAdjust) + OffsetHz;
+ }
+ 
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index 0cc69a58..03a12b34 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -24,12 +24,12 @@ namespace zyn {
+ class PADnote:public SynthNote
+ {
+     public:
+-        PADnote(const PADnoteParameters *parameters, SynthParams pars,
++        PADnote(const PADnoteParameters *parameters, const SynthParams &pars,
+                 const int &interpolation, WatchManager *wm=0, const char *prefix=0);
+         ~PADnote();
+ 
+         SynthNote *cloneLegato(void);
+-        void legatonote(LegatoParams pars);
++        void legatonote(const LegatoParams &pars);
+ 
+         int noteout(float *outl, float *outr);
+         bool finished() const;
+@@ -39,7 +39,7 @@ class PADnote:public SynthNote
+ 
+         void releasekey();
+     private:
+-        void setup(float freq, float velocity, int portamento_,
++        void setup(float velocity, int portamento_,
+                    float note_log2_freq, bool legato = false, WatchManager *wm=0, const char *prefix=0);
+         void fadein(float *smps);
+         void computecurrentparameters();
+@@ -49,7 +49,7 @@ class PADnote:public SynthNote
+         int   poshi_l, poshi_r;
+         float poslo;
+ 
+-        float basefreq;
++        float note_log2_freq;
+         float BendAdjust;
+         float OffsetHz;
+         bool  firsttime;
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index dd1c00f3..16f404d1 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -35,7 +35,7 @@
+ 
+ namespace zyn {
+ 
+-SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars,
++SUBnote::SUBnote(const SUBnoteParameters *parameters, const SynthParams &spars,
+     WatchManager *wm, const char *prefix) :
+     SynthNote(spars),
+     watch_filter(wm, prefix, "noteout/filter"), watch_amp_int(wm,prefix,"noteout/amp_int"),
+@@ -50,10 +50,10 @@ SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars,
+     lfilter(nullptr), rfilter(nullptr),
+     filterupdate(false)
+ {
+-    setup(spars.frequency, spars.velocity, spars.portamento, spars.note_log2_freq, false, wm, prefix);
++    setup(spars.velocity, spars.portamento, spars.note_log2_freq, false, wm, prefix);
+ }
+ 
+-float SUBnote::setupFilters(int *pos, bool automation)
++float SUBnote::setupFilters(float basefreq, int *pos, bool automation)
+ {
+     //how much the amplitude is normalised (because the harmonics)
+     float reduceamp = 0.0f;
+@@ -92,10 +92,9 @@ float SUBnote::setupFilters(int *pos, bool automation)
+     return reduceamp;
+ }
+ 
+-void SUBnote::setup(float freq,
+-                    float velocity_,
++void SUBnote::setup(float velocity_,
+                     int portamento_,
+-                    float note_log2_freq,
++                    float note_log2_freq_,
+                     bool legato,
+                     WatchManager *wm,
+                     const char *prefix)
+@@ -117,32 +116,38 @@ void SUBnote::setup(float freq,
+         firsttick = 1;
+     }
+ 
+-    if(pars.Pfixedfreq == 0)
+-        basefreq = freq;
+-    else {
+-        basefreq = 440.0f;
+-        int fixedfreqET = pars.PfixedfreqET;
+-        if(fixedfreqET) { //if the frequency varies according the keyboard note
+-            float tmp = (note_log2_freq - (69.0f / 12.0f))
+-                * (powf(2.0f, (fixedfreqET - 1) / 63.0f) - 1.0f);
++    if(pars.Pfixedfreq == 0) {
++        note_log2_freq = note_log2_freq_;
++    }
++    else { //the fixed freq is enabled
++        const int fixedfreqET = pars.PfixedfreqET;
++        float fixedfreq_log2 = log2f(440.0f);
++
++        if(fixedfreqET != 0) { //if the frequency varies according the keyboard note
++            float tmp_log2 = (note_log2_freq_ - fixedfreq_log2) *
++                (powf(2.0f, (fixedfreqET - 1) / 63.0f) - 1.0f);
+             if(fixedfreqET <= 64)
+-                basefreq *= powf(2.0f, tmp);
++                fixedfreq_log2 += tmp_log2;
+             else
+-                basefreq *= powf(3.0f, tmp);
++                fixedfreq_log2 += tmp_log2 * log2f(3.0f);
+         }
++        note_log2_freq = fixedfreq_log2;
+     }
++
+     int BendAdj = pars.PBendAdjust - 64;
+     if (BendAdj % 24 == 0)
+         BendAdjust = BendAdj / 24;
+     else
+         BendAdjust = BendAdj / 24.0f;
+-    float offset_val = (pars.POffsetHz - 64)/64.0f;
++    const float offset_val = (pars.POffsetHz - 64)/64.0f;
+     OffsetHz = 15.0f*(offset_val * sqrtf(fabsf(offset_val)));
+-    float detune = getdetune(pars.PDetuneType,
++    const float detune = getdetune(pars.PDetuneType,
+                              pars.PCoarseDetune,
+                              pars.PDetune);
+-    basefreq *= powf(2.0f, detune / 1200.0f); //detune
+-//    basefreq*=ctl.pitchwheel.relfreq;//pitch wheel
++
++    note_log2_freq += detune / 1200.0f; //detune
++
++    const float basefreq = powf(2.0f, note_log2_freq);
+ 
+     int pos[MAX_SUB_HARMONICS];
+     int harmonics;
+@@ -172,12 +177,14 @@ void SUBnote::setup(float freq,
+     }
+ 
+     //how much the amplitude is normalised (because the harmonics)
+-    float reduceamp = setupFilters(pos, legato);
++    const float reduceamp = setupFilters(basefreq, pos, legato);
+     oldreduceamp    = reduceamp;
+     volume /= reduceamp;
+ 
+     oldpitchwheel = 0;
+     oldbandwidth  = 64;
++
++    const float freq = powf(2.0f, note_log2_freq_);
+     if(!legato) { //normal note
+         if(pars.Pfixedfreq == 0)
+             initparameters(basefreq, wm, prefix);
+@@ -198,20 +205,19 @@ void SUBnote::setup(float freq,
+ 
+ SynthNote *SUBnote::cloneLegato(void)
+ {
+-    SynthParams sp{memory, ctl, synth, time, legato.param.freq, velocity,
++    SynthParams sp{memory, ctl, synth, time, velocity,
+                    portamento, legato.param.note_log2_freq, true, legato.param.seed};
+     return memory.alloc<SUBnote>(&pars, sp);
+ }
+ 
+-void SUBnote::legatonote(LegatoParams pars)
++void SUBnote::legatonote(const LegatoParams &pars)
+ {
+     // Manage legato stuff
+     if(legato.update(pars))
+         return;
+ 
+     try {
+-        setup(pars.frequency, pars.velocity, pars.portamento, pars.note_log2_freq,
+-              true, wm);
++        setup(pars.velocity, pars.portamento, pars.note_log2_freq, true, wm);
+     } catch (std::bad_alloc &ba) {
+         std::cerr << "failed to set legato note parameter in SUBnote: " << ba.what() << std::endl;
+     }
+@@ -435,7 +441,8 @@ void SUBnote::computecurrentparameters()
+                 rfilter = memory.valloc<bpfilter>(numstages * numharmonics);
+         }
+ 
+-        float reduceamp = setupFilters(pos, !delta_harmonics);
++        const float basefreq = powf(2.0f, note_log2_freq);
++        const float reduceamp = setupFilters(basefreq, pos, !delta_harmonics);
+         volume = volume*oldreduceamp/reduceamp;
+         oldreduceamp = reduceamp;
+     }
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 1f871b51..1e02e78a 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -23,12 +23,12 @@ namespace zyn {
+ class SUBnote:public SynthNote
+ {
+     public:
+-        SUBnote(const SUBnoteParameters *parameters, SynthParams &pars,
++        SUBnote(const SUBnoteParameters *parameters, const SynthParams &pars,
+                 WatchManager *wm = 0, const char *prefix = 0);
+         ~SUBnote();
+ 
+         SynthNote *cloneLegato(void);
+-        void legatonote(LegatoParams pars);
++        void legatonote(const LegatoParams &pars);
+         VecWatchPoint watch_filter,watch_amp_int, watch_legato;
+         int noteout(float *outl, float *outr); //note output,return 0 if the note is finished
+         void releasekey();
+@@ -36,12 +36,11 @@ class SUBnote:public SynthNote
+         void entomb(void);
+     private:
+ 
+-        void setup(float freq,
+-                   float velocity,
++        void setup(float velocity,
+                    int portamento_,
+-                   float note_log2_freq,
++		   float note_log2_freq,
+                    bool legato = false, WatchManager *wm = 0, const char *prefix = 0);
+-        float setupFilters(int *pos, bool automation);
++	float setupFilters(float basefreq, int *pos, bool automation);
+         void computecurrentparameters();
+         /*
+          * Initialize envelopes and global filter
+@@ -58,7 +57,7 @@ class SUBnote:public SynthNote
+         int       numharmonics; //number of harmonics (after the too higher hamonics are removed)
+         int       firstnumharmonics; //To keep track of the first note's numharmonics value, useful in legato mode.
+         int       start; //how the harmonics start
+-        float     basefreq;
++	float     note_log2_freq;
+         float     BendAdjust;
+         float     OffsetHz;
+         float     panning;
+diff --git a/src/Synth/SynthNote.cpp b/src/Synth/SynthNote.cpp
+index b20f3968..b59247b6 100644
+--- a/src/Synth/SynthNote.cpp
++++ b/src/Synth/SynthNote.cpp
+@@ -19,13 +19,13 @@
+ 
+ namespace zyn {
+ 
+-SynthNote::SynthNote(SynthParams &pars)
++SynthNote::SynthNote(const SynthParams &pars)
+     :memory(pars.memory),
+-    legato(pars.synth, pars.frequency, pars.velocity, pars.portamento,
++    legato(pars.synth, pars.velocity, pars.portamento,
+             pars.note_log2_freq, pars.quiet, pars.seed), ctl(pars.ctl), synth(pars.synth), time(pars.time)
+ {}
+ 
+-SynthNote::Legato::Legato(const SYNTH_T &synth_, float freq, float vel, int port,
++SynthNote::Legato::Legato(const SYNTH_T &synth_, float vel, int port,
+                           float note_log2_freq, bool quiet, prng_t seed)
+     :synth(synth_)
+ {
+@@ -36,22 +36,20 @@ SynthNote::Legato::Legato(const SYNTH_T &synth_, float freq, float vel, int port
+         fade.length = 1;                    // (if something's fishy)
+     fade.step  = (1.0f / fade.length);
+     decounter  = -10;
+-    param.freq = freq;
+     param.vel  = vel;
+     param.portamento = port;
+     param.note_log2_freq = note_log2_freq;
+     param.seed = seed;
+-    lastfreq = 0.0f;
++    lastfreq_log2 = note_log2_freq;
+     silent   = quiet;
+ }
+ 
+-int SynthNote::Legato::update(LegatoParams pars)
++int SynthNote::Legato::update(const LegatoParams &pars)
+ {
+     if(pars.externcall)
+         msg = LM_Norm;
+     if(msg != LM_CatchUp) {
+-        lastfreq   = param.freq;
+-        param.freq = pars.frequency;
++        lastfreq_log2 = param.note_log2_freq;
+         param.vel  = pars.velocity;
+         param.portamento = pars.portamento;
+         param.note_log2_freq = pars.note_log2_freq;
+@@ -92,7 +90,7 @@ void SynthNote::Legato::apply(SynthNote &note, float *outl, float *outr)
+                         // the note to the actual parameters.
+                         decounter = -10;
+                         msg = LM_ToNorm;
+-                        LegatoParams pars{param.freq, param.vel, param.portamento,
++                        LegatoParams pars{param.vel, param.portamento,
+                                           param.note_log2_freq, false, param.seed};
+                         note.legatonote(pars);
+                         break;
+@@ -133,9 +131,9 @@ void SynthNote::Legato::apply(SynthNote &note, float *outl, float *outr)
+                         //This freq should make this now silent note to catch-up/resync
+                         //with the heard note for the same length it stayed at the
+                         //previous freq during the fadeout.
+-                        float catchupfreq = param.freq * (param.freq / lastfreq);
+-                        LegatoParams pars{catchupfreq, param.vel, param.portamento,
+-                                          param.note_log2_freq, false, param.seed};
++                        const float catchupfreq_log2 = 2.0f * param.note_log2_freq - lastfreq_log2;
++                        LegatoParams pars{param.vel, param.portamento,
++					  catchupfreq_log2, false, param.seed};
+                         note.legatonote(pars);
+                         break;
+                     }
+@@ -154,7 +152,7 @@ void SynthNote::Legato::apply(SynthNote &note, float *outl, float *outr)
+ 
+ void SynthNote::setVelocity(float velocity_) {
+     legato.setSilent(true); //Let legato.update(...) returns 0.
+-    LegatoParams pars{legato.getFreq(), velocity_,
++    LegatoParams pars{velocity_,
+                legato.getPortamento(), legato.getNoteLog2Freq(), true, legato.getSeed()};
+     try {
+         legatonote(pars);
+@@ -164,9 +162,9 @@ void SynthNote::setVelocity(float velocity_) {
+     legato.setDecounter(0); //avoid chopping sound due fade-in
+ }
+ 
+-void SynthNote::setPitch(float freq_, float log2_freq_) {
++void SynthNote::setPitch(float log2_freq_) {
+     legato.setSilent(true); //Let legato.update(...) return 0.
+-    LegatoParams pars{freq_, legato.getVelocity(),
++    LegatoParams pars{legato.getVelocity(),
+                legato.getPortamento(), log2_freq_, true, legato.getSeed()};
+     try {
+         legatonote(pars);
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index d3bec9b1..ad5668c4 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -26,7 +26,6 @@ struct SynthParams
+     const Controller &ctl;
+     const SYNTH_T    &synth;
+     const AbsTime    &time;
+-    float     frequency; //Note base frequency
+     float     velocity;  //Velocity of the Note
+     bool      portamento;//True if portamento is used for this note
+     float     note_log2_freq; //Floating point value of the note
+@@ -36,7 +35,6 @@ struct SynthParams
+ 
+ struct LegatoParams
+ {
+-    float frequency;
+     float velocity;
+     bool portamento;
+     float note_log2_freq; //Floating point value of the note
+@@ -47,7 +45,7 @@ struct LegatoParams
+ class SynthNote
+ {
+     public:
+-        SynthNote(SynthParams &pars);
++        SynthNote(const SynthParams &pars);
+         virtual ~SynthNote() {}
+ 
+         /**Compute Output Samples
+@@ -65,7 +63,7 @@ class SynthNote
+         /**Make a note die off next buffer compute*/
+         virtual void entomb(void) = 0;
+ 
+-        virtual void legatonote(LegatoParams pars) = 0;
++        virtual void legatonote(const LegatoParams &pars) = 0;
+ 
+         virtual SynthNote *cloneLegato(void) = 0;
+ 
+@@ -73,7 +71,7 @@ class SynthNote
+         void setVelocity(float velocity_);
+ 
+         /* For per-note pitch */
+-        void setPitch(float freq_, float log2_freq_);
++        void setPitch(float log2_freq_);
+ 
+         /* For per-note filter cutoff */
+         void setFilterCutoff(float);
+@@ -90,15 +88,15 @@ class SynthNote
+         class Legato
+         {
+             public:
+-                Legato(const SYNTH_T &synth_, float freq, float vel, int port,
++                Legato(const SYNTH_T &synth_, float vel, int port,
+                        float note_log2_freq, bool quiet, prng_t seed);
+ 
+                 void apply(SynthNote &note, float *outl, float *outr);
+-                int update(LegatoParams pars);
++                int update(const LegatoParams &pars);
+ 
+             private:
+                 bool      silent;
+-                float     lastfreq;
++                float     lastfreq_log2;
+                 LegatoMsg msg;
+                 int       decounter;
+                 struct { // Fade In/Out vars
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index 0c48bfe5..54c283a7 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -41,7 +41,7 @@ class AdNoteTest:public CxxTest::TestSuite
+         ADnoteParameters *defaultPreset;
+         Controller   *controller;
+         Alloc         memory;
+-        unsigned char testnote;
++        float test_freq_log2;
+         WatchManager *w;
+         float *outR, *outL;
+ 
+@@ -91,9 +91,8 @@ class AdNoteTest:public CxxTest::TestSuite
+             controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+-            testnote = 50;
+-            float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+-            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
++            test_freq_log2 = log2f(440.0f) + (50.0 - 69.0f) / 12.0f;
++            SynthParams pars{memory, *controller, *synth, *time, 120, 0, test_freq_log2, false, prng()};
+ 
+             note = new ADnote(defaultPreset, pars,w);
+ 
+diff --git a/src/Tests/MemoryStressTest.h b/src/Tests/MemoryStressTest.h
+index bcea930d..d8d86b53 100644
+--- a/src/Tests/MemoryStressTest.h
++++ b/src/Tests/MemoryStressTest.h
+@@ -85,8 +85,7 @@ class AdNoteTest:public CxxTest::TestSuite
+         void testManySimultaneousNotes() {
+ 
+             unsigned char testnote = 42;
+-            float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+-            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
++            SynthParams pars{memory, *controller, *synth, *time, 120, 0, testnote / 12.0f, false, prng()};
+ 
+             std::vector<ADnote*> notes;
+ 
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index dac40897..f8572fc7 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -48,7 +48,7 @@ class PadNoteTest:public CxxTest::TestSuite
+         FFTwrapper   *fft;
+         Controller   *controller;
+         AbsTime      *time;
+-        unsigned char testnote;
++        float test_freq_log2;
+         Alloc         memory;
+         int           interpolation;
+         rtosc::ThreadLink *tr;
+@@ -107,9 +107,8 @@ class PadNoteTest:public CxxTest::TestSuite
+             controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+-            testnote = 50;
+-            float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+-            SynthParams pars_{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
++            test_freq_log2 = log2f(440.0f) + (50.0 - 69.0f) / 12.0f;
++            SynthParams pars_{memory, *controller, *synth, *time, 120, 0, test_freq_log2, false, prng()};
+ 
+             note = new PADnote(pars, pars_, interpolation);
+         }
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index e0a4e353..43fe58ee 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -41,7 +41,7 @@ class SubNoteTest:public CxxTest::TestSuite
+         Master       *master;
+         AbsTime      *time;
+         Controller   *controller;
+-        unsigned char testnote;
++        float test_freq_log2;
+         Alloc         memory;
+         rtosc::ThreadLink *tr;
+         WatchManager *w;
+@@ -81,10 +81,9 @@ class SubNoteTest:public CxxTest::TestSuite
+             controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+-            testnote = 50;
+-            float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
++            test_freq_log2 = log2f(440.0f) + (50.0 - 69.0f) / 12.0f;
+ 
+-            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
++            SynthParams pars{memory, *controller, *synth, *time, 120, 0, test_freq_log2, false, prng()};
+             note = new SUBnote(defaultPreset, pars, w);
+             this->pars = defaultPreset;
+         }
+diff --git a/src/Tests/TriggerTest.h b/src/Tests/TriggerTest.h
+index 8cba9c3b..9c6ed03a 100644
+--- a/src/Tests/TriggerTest.h
++++ b/src/Tests/TriggerTest.h
+@@ -42,7 +42,7 @@ class TriggerTest:public CxxTest::TestSuite
+         Master       *master;
+         AbsTime      *time;
+         Controller   *controller;
+-        unsigned char testnote;
++        float test_freq_log2;
+         Alloc         memory;
+         rtosc::ThreadLink *tr;
+         WatchManager *w;
+@@ -74,10 +74,9 @@ class TriggerTest:public CxxTest::TestSuite
+             controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+-            testnote = 50;
+-            float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
++            test_freq_log2 = log2f(440.0f) + (50.0 - 69.0f) / 12.0f;
+ 
+-            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
++            SynthParams pars{memory, *controller, *synth, *time, 120, 0, test_freq_log2, false, prng()};
+             note = new SUBnote(defaultPreset, pars, w);
+             this->pars = defaultPreset;
+         }
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.h
+index 4121fe27..502699b1 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.h
+@@ -39,11 +39,10 @@ class AdNoteTest:public CxxTest::TestSuite
+         ADnote       *note;
+         FFTwrapper   *fft;
+         Controller   *controller;
+-        unsigned char testnote;
++        float test_freq_log2;
+         ADnoteParameters *params;
+         AbsTime  *time;
+         Alloc     memory;
+-        float freq;
+ 
+ 
+         float outR[BUF], outL[BUF];
+@@ -71,8 +70,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+-            testnote = 50;
+-            freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
++            test_freq_log2 = log2f(440.0f) + (50.0 - 69.0f) / 12.0f;
+         }
+ 
+         void tearDown() {
+@@ -98,7 +96,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             params->VoicePar[0].Unison_vibratto_speed   = e;
+             params->VoicePar[0].Unison_invert_phase     = f;
+ 
+-            SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
++            SynthParams pars{memory, *controller, *synth, *time, 120, 0, test_freq_log2, false, prng()};
+             note = new ADnote(params, pars);
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(outL[80], values[0], 1.9e-5);
+-- 
+2.47.0
+

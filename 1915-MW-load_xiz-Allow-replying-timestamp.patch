@@ -1,0 +1,34 @@
+From dd7e162d7c4a2600c07fa76b10edf3db52d13eac Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 28 May 2023 23:32:54 +0200
+Subject: [PATCH 1915/1936] MW: load_xiz: Allow replying timestamp
+
+---
+ src/Misc/MiddleWare.cpp | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 0ed340d2..d3cb161a 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1744,12 +1744,16 @@ static rtosc::Ports middwareSnoopPortsWithoutNonRtParams = {
+         impl.loadMaster(NULL);
+         d.broadcast("/damage", "s", "/");
+         rEnd},
+-    {"load_xiz:is", 0, 0,
++    {"load_xiz:is:ist", 0, 0,
+         rBegin;
+         const int part_id = rtosc_argument(msg,0).i;
+         const char *file  = rtosc_argument(msg,1).s;
++        uint64_t request_time = 0;
++        if(rtosc_narguments(msg) > 2)
++            request_time = rtosc_argument(msg, 2).t;
+         impl.pending_load[part_id]++;
+         impl.loadPart(part_id, file, impl.master, d);
++        d.broadcast(d.loc, "stT", file, request_time);
+         rEnd},
+     {"load-part:is", 0, 0,
+         rBegin;
+-- 
+2.47.0
+

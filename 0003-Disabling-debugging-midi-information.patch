@@ -1,0 +1,25 @@
+From 6f586c26999c9ed860bfb07bb79fff212cee4060 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 14 Apr 2012 22:01:31 -0400
+Subject: [PATCH 0003/1936] Disabling debugging midi information
+
+---
+ src/Nio/InMgr.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Nio/InMgr.cpp b/src/Nio/InMgr.cpp
+index f0ba8fb3..bc959457 100644
+--- a/src/Nio/InMgr.cpp
++++ b/src/Nio/InMgr.cpp
+@@ -66,7 +66,7 @@ void InMgr::flush()
+     MidiEvent ev;
+     while(!sem_trywait(&work)) {
+         queue.pop(ev);
+-        cout << ev << endl;
++        //cout << ev << endl;
+ 
+         switch(ev.type) {
+         case M_NOTE:
+-- 
+2.47.0
+

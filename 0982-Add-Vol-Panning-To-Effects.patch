@@ -1,0 +1,47 @@
+From 9e847ac9c0517a8d4a3207da335ab8534d764c25 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 28 Jul 2016 09:47:30 -0400
+Subject: [PATCH 0982/1936] Add Vol/Panning To Effects
+
+---
+ src/Effects/EffectMgr.cpp | 24 ++++++++++++++++++++++++
+ 1 file changed, 24 insertions(+)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 6c747f8d..36b422b5 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -45,6 +45,30 @@ static const rtosc::Ports local_ports = {
+     rSelf(EffectMgr),
+     rPaste,
+     rRecurp(filterpars, "Filter Parameter for Dynamic Filter"),
++    {"Pvolume::i", rProp(parameter) rLinear(0,127) rShort("amt") rDoc("amount of effect"),
++        0,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            EffectMgr *eff = (EffectMgr*)d.obj;
++            if(!rtosc_narguments(msg))
++                d.reply(d.loc, "i", eff->geteffectparrt(0));
++            else if(rtosc_type(msg, 0) == 'i'){
++                eff->seteffectparrt(0, rtosc_argument(msg, 0).i);
++                d.broadcast(d.loc, "i", eff->geteffectparrt(0));
++            }
++        }},
++    {"Ppanning::i", rProp(parameter) rLinear(0,127) rShort("pan") rDoc("panning"),
++        0,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            EffectMgr *eff = (EffectMgr*)d.obj;
++            if(!rtosc_narguments(msg))
++                d.reply(d.loc, "i", eff->geteffectparrt(1));
++            else if(rtosc_type(msg, 0) == 'i'){
++                eff->seteffectparrt(1, rtosc_argument(msg, 0).i);
++                d.broadcast(d.loc, "i", eff->geteffectparrt(1));
++            }
++        }},
+     {"parameter#128::i:T:F", rProp(parameter) rProp(alias) rLinear(0,127) rDoc("Parameter Accessor"),
+         NULL,
+         [](const char *msg, rtosc::RtData &d)
+-- 
+2.47.0
+

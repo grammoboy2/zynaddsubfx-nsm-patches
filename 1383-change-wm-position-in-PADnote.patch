@@ -1,0 +1,64 @@
+From da599920834cb86f77c80b26e35c71493c36d148 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Sat, 29 Jun 2019 19:21:26 +0300
+Subject: [PATCH 1383/1936] change wm position in PADnote
+
+---
+ src/Synth/PADnote.cpp    | 4 ++--
+ src/Synth/WatchPoint.cpp | 5 ++---
+ 2 files changed, 4 insertions(+), 5 deletions(-)
+
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index efdf7908..6361d1bf 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -356,8 +356,6 @@ int PADnote::Compute_Cubic(float *outl,
+ 
+ int PADnote::noteout(float *outl, float *outr)
+ {   
+-    watchOut(outr,synth.buffersize);
+-    
+     computecurrentparameters();
+     float *smps = pars.sample[nsample].smp;
+     if(smps == NULL) {
+@@ -425,6 +423,8 @@ int PADnote::noteout(float *outl, float *outr)
+     // Apply legato-specific sound signal modifications
+     legato.apply(*this, outl, outr);
+ 
++    watchOut(outr,synth.buffersize);
++
+     // Check if the global amplitude is finished.
+     // If it does, disable the note
+     if(NoteGlobalPar.AmpEnvelope->finished()) {
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index f023e46c..fbc06693 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -122,7 +122,7 @@ void WatchManager::tick(void)
+     for(int i=0; i<MAX_WATCH; ++i) {
+         if(deactivate[i]) {
+             memset(active_list[i], 0, 128);
+-            memset(data_list[i], 0, sizeof(float)*128);
++            memset(data_list[i], 0, sizeof(float)*MAX_SAMPLE);
+             sample_list[i] = 0;
+             deactivate[i]  = false;
+             trigger[i] = false;
+@@ -177,14 +177,13 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+     //FIXME buffer overflow
+     if(space){
+         for(int i=0; i<space; ++i){
+-
+             if(strstr(active_list[i], "noteout") == NULL)
+                 {   
+                     data_list[selected][sample_list[selected]] = f[i];
+                     sample_list[selected]++;
+                 }
+             else{
+-                 if(trigger[selected] || f[i] > 0){
++                 if(trigger[selected] || f[i] >= 0.03){
+                     data_list[selected][sample_list[selected]] = f[i];
+                     sample_list[selected]++;
+                     trigger[selected] = true;
+-- 
+2.47.0
+

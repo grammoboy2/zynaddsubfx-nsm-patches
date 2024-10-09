@@ -1,0 +1,84 @@
+From 59dc5bc089dcb6f97c76d7c3ffd7ecf2ba42e0be Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 14 Jun 2012 13:59:04 -0400
+Subject: [PATCH 0022/1936] Updates version information to 2.4.3
+
+It is almost time for another release, and this commits changes all of the
+version numbers I see. Only last minute commits should appear after this commit
+and before the 2.4.3 version tag.
+---
+ CMakeLists.txt          |  2 +-
+ ChangeLog               | 15 +++++++++++++++
+ HISTORY.txt             |  9 ++++++++-
+ src/Misc/XMLwrapper.cpp |  2 +-
+ 4 files changed, 25 insertions(+), 3 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index c5ee162c..edc7d27e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,7 +1,7 @@
+ cmake_minimum_required(VERSION 2.8)
+ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+-set(VERSION "2.4.2")
++set(VERSION "2.4.3")
+ 
+ enable_testing()
+ include(CTestConfig.cmake)
+diff --git a/ChangeLog b/ChangeLog
+index 19a8496b..113447e9 100644
+--- a/ChangeLog
++++ b/ChangeLog
+@@ -1019,3 +1019,18 @@
+ 
+ 22 Feb 2012 (Liven Moors)
+ 	  - Added circle waveform to oscilator options
++
++26 Mar 2012 (Mark McCurry)
++	  - Fixed Segfault in Oscillgen
++
++27 Mar 2012 (Mark McCurry)
++	  - Fixed chorus noise bug
++
++14 Apr 2012 (Mark McCurry)
++	  - Removed Nio debugging code
++
++18 Apr 2012 (Jonathan Liles)
++	  - Added Non-session-manager support
++
++31 Mar 2012 (Olaf Schulz)
++	  - Added Midi aftertouch support
+diff --git a/HISTORY.txt b/HISTORY.txt
+index 1750b31d..22f691f4 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,4 +1,11 @@
+-2.4.2 (26 Feb 2011)
++2.4.3 (15 Jun 2012)
++        - Non-session manager support
++        - Midi aftertouch support
++        - Documentation additions
++        - Somewhat more sane Nio defaults
++        - Misc bug fixes
++
++2.4.2 (26 Feb 2012)
+         - New IO backend support
+         - MIDI bank select
+         - Spike/Circle waveform
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index aa4ab031..0fd40f35 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -98,7 +98,7 @@ XMLwrapper::XMLwrapper()
+ {
+     version.Major    = 2;
+     version.Minor    = 4;
+-    version.Revision = 2;
++    version.Revision = 3;
+ 
+     minimal = true;
+ 
+-- 
+2.47.0
+

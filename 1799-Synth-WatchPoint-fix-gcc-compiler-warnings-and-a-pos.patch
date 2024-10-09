@@ -1,0 +1,43 @@
+From ccea566a91c55d437b1475363b9cf5ab83a93536 Mon Sep 17 00:00:00 2001
+From: Julien Olivain <ju.o@free.fr>
+Date: Fri, 31 Dec 2021 13:08:43 +0100
+Subject: [PATCH 1799/1936] Synth/WatchPoint: fix gcc compiler warnings and a
+ possible string overflow
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+strncat() is used passing the destination length without substracting one byte
+for the terminating null byte.
+
+This commit fixes the warning:
+
+    src/Synth/WatchPoint.cpp: In constructor ‘zyn::WatchPoint::WatchPoint(zyn::WatchManager*, const char*, const char*)’:
+    src/Synth/WatchPoint.cpp:36:16: warning: ‘char* strncat(char*, const char*, size_t)’ specified bound 128 equals destination size [-Wstringop-truncation]
+       36 |         strncat(identity, id, sizeof(identity));
+          |         ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    src/Synth/WatchPoint.cpp:36:16: warning: ‘char* strncat(char*, const char*, size_t)’ specified bound 128 equals destination size [-Wstringop-overflow=]
+
+Note: this warning is reported by gcc 11.2.1, on Fedora 35.
+
+Signed-off-by: Julien Olivain <ju.o@free.fr>
+---
+ src/Synth/WatchPoint.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index 570c5cbb..bf95de99 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -33,7 +33,7 @@ WatchPoint::WatchPoint(WatchManager *ref, const char *prefix, const char *id)
+     if(prefix)
+         fast_strcpy(identity, prefix, sizeof(identity));
+     if(id)
+-        strncat(identity, id, sizeof(identity));
++        strncat(identity, id, sizeof(identity)-1);
+ }
+ 
+ bool WatchPoint::is_active(void)
+-- 
+2.47.0
+

@@ -1,0 +1,82 @@
+From 4e201442373e191de93c179f6d400aa49f66ba3b Mon Sep 17 00:00:00 2001
+From: David Runge <dave@sleepmap.de>
+Date: Sat, 22 Jan 2022 21:52:11 +0100
+Subject: [PATCH 1816/1936] Allow linking against system rtosc and rtosc-cpp
+
+CMakeLists.txt:
+Also check for librtosc-cpp when `ZYN_SYSTEM_RTOSC=ON`.
+
+src/CMakeLists.txt:
+When `ZYN_SYSTEM_RTOSC=ON`, link against system provided librtosc and
+librtosc-cpp, else link against the local targets (exposed via the rtosc
+submodule).
+---
+ CMakeLists.txt     |  7 ++++---
+ src/CMakeLists.txt | 28 +++++++++++++++++++++-------
+ 2 files changed, 25 insertions(+), 10 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 22cadafa..ef17dbd3 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -10,14 +10,15 @@ if(DEFINED ZYN_DATADIR)
+ add_definitions(-DZYN_DATADIR="${ZYN_DATADIR}")
+ endif()
+ 
+-option(ZYN_SYSTEM_RTOSC "Use a system provided librtosc" OFF)
++option(ZYN_SYSTEM_RTOSC "Use system provided librtosc and librtosc-cpp" OFF)
+ 
+ #Include RTOSC
+ if(ZYN_SYSTEM_RTOSC)
+     include(FindPkgConfig)
+     pkg_check_modules(RTOSC REQUIRED librtosc)
+-    include_directories($RTOSC_INCLUDE_DIR)
+-    message(STATUS "Found system provided librtosc...")
++    pkg_check_modules(RTOSC_CPP REQUIRED librtosc-cpp)
++    include_directories(${RTOSC_INCLUDE_DIR})
++    message(STATUS "Found system provided librtosc and librtosc-cpp...")
+ else()
+     if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/rtosc/CMakeLists.txt")
+         message(STATUS "RTOSC NOT FOUND")
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 2900f4b7..8348df70 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -575,13 +575,27 @@ else()
+     set(PTHREAD_LIBRARY pthread)
+ endif()
+ 
+-target_link_libraries(zynaddsubfx_core
+-	${ZLIB_LIBRARIES}
+-	${FFTW3F_LIBRARIES}
+-	${MXML_LIBRARIES}
+-	${OS_LIBRARIES}
+-    ${PTHREAD_LIBRARY}
+-    rtosc rtosc-cpp)
++if(ZYN_SYSTEM_RTOSC)
++    target_link_libraries(zynaddsubfx_core
++        ${ZLIB_LIBRARIES}
++        ${FFTW3F_LIBRARIES}
++        ${MXML_LIBRARIES}
++        ${OS_LIBRARIES}
++        ${PTHREAD_LIBRARY}
++        ${RTOSC_LIBRARIES}
++        ${RTOSC_CPP_LIBRARIES}
++    )
++else()
++    target_link_libraries(zynaddsubfx_core
++        ${ZLIB_LIBRARIES}
++        ${FFTW3F_LIBRARIES}
++        ${MXML_LIBRARIES}
++        ${OS_LIBRARIES}
++        ${PTHREAD_LIBRARY}
++        rtosc
++        rtosc-cpp
++    )
++endif()
+ 
+ if(IwyuErr)
+     message (STATUS "Include what you use: ${IwyuErr}")
+-- 
+2.47.0
+

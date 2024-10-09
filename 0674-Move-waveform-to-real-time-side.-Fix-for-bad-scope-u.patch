@@ -1,0 +1,64 @@
+From 917072301a1d8a19b78526c9817903adb4e9a613 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 3 Nov 2015 21:43:24 -0500
+Subject: [PATCH 0674/1936] Move waveform: to real time side.  Fix for bad
+ scope update.
+
+---
+ src/Synth/OscilGen.cpp | 26 +++++++++++++-------------
+ 1 file changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 9bcc9e67..b7b2fa27 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -115,7 +115,7 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+                 d.reply(d.loc, "c", mag);
+             else {
+                 mag = rtosc_argument(m,0).i;
+-                printf("setting magnitude\n\n");
++                //printf("setting magnitude\n\n");
+                 //XXX hack hack
+                 char *repath = strdup(d.loc);
+                 char *edit   = rindex(repath, '/')+1;
+@@ -158,18 +158,6 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+             d.reply(d.loc, "b", n*sizeof(float), spc);
+             delete[] spc;
+         }},
+-    {"waveform:", rProp(non-realtime) rDoc("Returns waveform points"),
+-        NULL, [](const char *, rtosc::RtData &d) {
+-            OscilGen &o = *((OscilGen*)d.obj);
+-            const unsigned n = o.synth.oscilsize;
+-            float *smps = new float[n];
+-            memset(smps, 0, 4*n);
+-            //printf("%d\n", o->needPrepare());
+-            o.get(smps,-1.0);
+-            //printf("wave: %f %f %f %f\n", smps[0], smps[1], smps[2], smps[3]);
+-            d.reply(d.loc, "b", n*sizeof(float), smps);
+-            delete[] smps;
+-        }},
+     {"prepare:", rProp(non-realtime) rDoc("Performs setup operation to oscillator"),
+         NULL, [](const char *, rtosc::RtData &d) {
+             //fprintf(stderr, "prepare: got a message from '%s'\n", m);
+@@ -208,6 +196,18 @@ const rtosc::Ports OscilGen::realtime_ports{
+             "Adaptive Harmonic Strength"),
+     rParamZyn(Padaptiveharmonicspar,
+             "Adaptive Harmonics Postprocessing Power"),
++    {"waveform:", rDoc("Returns waveform points"),
++        NULL, [](const char *, rtosc::RtData &d) {
++            OscilGen &o = *((OscilGen*)d.obj);
++            const unsigned n = o.synth.oscilsize;
++            float *smps = new float[n];
++            memset(smps, 0, 4*n);
++            //printf("%d\n", o->needPrepare());
++            o.get(smps,-1.0);
++            //printf("wave: %f %f %f %f\n", smps[0], smps[1], smps[2], smps[3]);
++            d.reply(d.loc, "b", n*sizeof(float), smps);
++            delete[] smps;
++        }},
+     {"prepare:b", rProp(internal) rProp(realtime) rProp(pointer) rDoc("Sets prepared fft data"),
+         NULL, [](const char *m, rtosc::RtData &d) {
+             // fprintf(stderr, "prepare:b got a message from '%s'\n", m);
+-- 
+2.47.0
+

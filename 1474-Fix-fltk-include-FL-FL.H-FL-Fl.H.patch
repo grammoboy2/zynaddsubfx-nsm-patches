@@ -1,0 +1,25 @@
+From f64d285e594095052c01d192186c7f874a5fedc6 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 25 Feb 2020 21:41:15 -0500
+Subject: [PATCH 1474/1936] Fix fltk include FL/FL.H -> FL/Fl.H
+
+---
+ src/UI/MasterUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index f1761f4a..e090014c 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -88,7 +88,7 @@ decl {\#if !defined(PLUGINVERSION) && HAS_X11
+ } 
+ 
+ decl {\#if !defined(PLUGINVERSION) && HAS_X11
+-\#include <FL/FL.H>
++\#include <FL/Fl.H>
+ \#endif} {private local
+ } 
+ 
+-- 
+2.47.0
+

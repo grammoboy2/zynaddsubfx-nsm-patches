@@ -1,0 +1,24 @@
+From e591ea9023c8627328974dd7a6f94be704695cb1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 23 Feb 2015 16:38:30 -0500
+Subject: [PATCH 0355/1936] CMake: Add Include For CheckFunctionExists
+
+---
+ src/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 43a7f882..9ecd1c70 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -3,6 +3,7 @@ message(STATUS "Checking Include Path" $ENV{CMAKE_INCLUDE_PATH} ${CMAKE_INCLUDE_
+ message(STATUS "Checking Library Path" $ENV{CMAKE_LIBRARY_PATH} ${CMAKE_LIBRARY_PATH})
+ 
+ #Dependency check
++include(CheckFunctionExists)
+ find_package(PkgConfig REQUIRED)
+ find_package(zlib REQUIRED)
+ pkg_check_modules(FFTW REQUIRED fftw3)
+-- 
+2.47.0
+

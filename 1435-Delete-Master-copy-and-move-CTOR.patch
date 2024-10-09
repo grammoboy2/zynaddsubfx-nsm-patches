@@ -1,0 +1,26 @@
+From 433538fae86cce6dcb0f98b9fd438c574f8e1a0c Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 18 Oct 2019 16:17:32 +0200
+Subject: [PATCH 1435/1936] Delete Master copy and move CTOR
+
+---
+ src/Misc/Master.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index b46c7fe9..9940774c 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -44,6 +44,9 @@ struct vuData {
+ class Master
+ {
+     public:
++        Master(const Master& other) = delete;
++        Master(Master&& other) = delete;
++
+         /** Constructor TODO make private*/
+         Master(const SYNTH_T &synth, class Config *config);
+         /** Destructor*/
+-- 
+2.47.0
+

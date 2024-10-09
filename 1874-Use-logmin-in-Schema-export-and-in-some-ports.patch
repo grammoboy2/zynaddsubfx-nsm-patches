@@ -1,0 +1,109 @@
+From e9d9fa696d8e928914fd0b83bb29dfab355d5312 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Tue, 13 Dec 2022 19:43:26 +0100
+Subject: [PATCH 1874/1936] Use logmin in Schema export and in some ports
+
+This commit exports the "logmin" value in the Schema and uses
+the new `rLogWithLogmin` for some ports.
+
+This also fixes default values which were originally below the
+`[min, max]` range. Before this commit, you could not set these
+values using the OSC ports, because of `rLimit`.
+---
+ rtosc                         |  2 +-
+ src/Misc/Schema.cpp           | 12 ++++++++++--
+ src/Params/EnvelopeParams.cpp |  6 +++---
+ src/Params/LFOParams.cpp      |  2 +-
+ 4 files changed, 15 insertions(+), 7 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 885fc96e..f3c08354 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 885fc96e784fb82700b06c978a3e057465f12166
++Subproject commit f3c08354a2cd05fef6f194b3db53a5ccbf79d9fa
+diff --git a/src/Misc/Schema.cpp b/src/Misc/Schema.cpp
+index 885a9a57..dbebdeaf 100644
+--- a/src/Misc/Schema.cpp
++++ b/src/Misc/Schema.cpp
+@@ -105,7 +105,8 @@ static ostream &add_options(ostream &o, Port::MetaContainer meta)
+         if(strcmp(m.title, "documentation") &&
+                 strcmp(m.title, "parameter") &&
+                 strcmp(m.title, "max") &&
+-                strcmp(m.title, "min"))
++                strcmp(m.title, "min") &&
++                strcmp(m.title, "logmin"))
+         printf("m.title = <%s>\n", m.title);
+ 
+     if(!has_options)
+@@ -201,6 +202,7 @@ static bool do_dump(const rtosc::Port *p, const char *full_name, void *v)
+ 
+     const char *min = meta["min"];
+     const char *max = meta["max"];
++    const char *logmin = meta["logmin"];
+     const char *def = meta["default"];
+     def = escape_string(def);
+ 
+@@ -229,7 +231,13 @@ static bool do_dump(const rtosc::Port *p, const char *full_name, void *v)
+         o << "        \"scale\"    : \"" << scale.value << "\",\n";
+     o << "        \"type\"     : \"" << type  << "\"";
+     if(min && max)
+-        o << ",\n        \"range\"    : [" << min << "," << max << "]";
++    {
++        o << ",\n        \"range\"    : [" << min << "," << max;
++        if(logmin)
++            o << "," << logmin << "]";
++        else
++            o << "]";
++    }
+     if(def)
+         o << ",\n        \"default\"  : \"" << def << "\"\n";
+     if(!options.empty()) {
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 999edb0b..35d6e628 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -117,7 +117,7 @@ static const rtosc::Ports localPorts = {
+     rToggle(Prepeating, rShort("repeat"), rDefault(false),
+             "Repeat the Envelope"),
+     rParamDT(A_dt ,  rShort("a.dt"), rLinear(0,127), "Attack Time"),
+-    rParamF(A_dt,  rShort("a.dt"), rLog(0.0001f,41.0f), rDefaultDepends(loc),
++    rParamF(A_dt,  rShort("a.dt"), rLogWithLogmin(0.f,41.0f, 0.0001f), rDefaultDepends(loc),
+               rPreset(ad_global_freq, 0.254f),   rPreset(ad_global_filter, 0.127f),
+               rPreset(ad_voice_freq, 0.127f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_freq, 3.620f), rPreset(ad_voice_fm_amp, 1.876f),
+@@ -132,7 +132,7 @@ static const rtosc::Ports localPorts = {
+               rDefault(64),
+               "Attack Value"),
+     rParamDT(D_dt, rShort("d.dt"), rLinear(0,127), "Decay Time"),
+-    rParamF(D_dt,  rShort("d.dt"), rLog(0.0001f,41.0f),  rDefaultDepends(loc),
++    rParamF(D_dt,  rShort("d.dt"), rLogWithLogmin(0.f, 41.0f, 0.0001f),  rDefaultDepends(loc),
+               rPreset(ad_global_amp, 0.127f),    rPreset(ad_global_filter, 0.970f),
+               rPreset(ad_voice_amp, 6.978f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_amp, 3.620f),
+@@ -146,7 +146,7 @@ static const rtosc::Ports localPorts = {
+               rPresetAtMulti(127, ad_global_amp, ad_voice_amp, ad_voice_fm_amp),
+               "Sustain Value"),
+     rParamDT(R_dt, rShort("r.dt"), rLinear(0,127), "Release Time"),
+-    rParamF(R_dt,  rShort("r.dt"), rLog(0.009f,41.0f),  rDefaultDepends(loc),
++    rParamF(R_dt,  rShort("r.dt"), rLogWithLogmin(0.f,41.0f,0.009f),  rDefaultDepends(loc),
+               rPreset(ad_global_amp, 0.041f),
+               rPreset(ad_voice_amp, 6.978f),    rPreset(ad_voice_filter, 0.009f),
+               rPreset(ad_voice_fm_freq, 1.876f), rPreset(ad_voice_fm_amp, 6.978f),
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 532c9e58..b802fd81 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -38,7 +38,7 @@ static const rtosc::Ports _ports = {
+             rOptions(ad_global_amp, ad_global_freq, ad_global_filter,
+                      ad_voice_amp, ad_voice_freq, ad_voice_filter, unspecified),
+             "location of the filter"),
+-    rParamF(freq, rShort("freq"), rUnit(HZ), rLog(0.0775679,85.25),
++    rParamF(freq, rShort("freq"), rUnit(HZ), rLogWithLogmin(0.0,85.25,0.0775679),
+             rDefaultDepends(loc),
+             rPreset(ad_global_amp, 6.49), // 80
+             rPreset(ad_global_freq, 3.71), // 70
+-- 
+2.47.0
+

@@ -1,0 +1,50 @@
+From 950ba89e94a6d1b3fdccf0ff14a49a2f3310b353 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 5 Jan 2014 13:08:22 -0500
+Subject: [PATCH 0137/1936] Fix Segfault on Aftertouch Events
+
+- Add null check to prevent updating non-existant instrument parts.
+
+It might make more sense to update parts iff they exist, but that is not
+consistent with the rest of Part.cpp at the moment...
+---
+ src/Misc/Part.cpp | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 4054a8e7..81ff2ba1 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -672,11 +672,11 @@ void Part::PolyphonicAftertouch(unsigned char note,
+             vel = (vel > 1.0f) ? 1.0f : vel;
+ 
+             if(!Pkitmode) { // "normal mode"
+-                if(kit[0].Padenabled)
++                if(kit[0].Padenabled && partnote[i].kititem[0].adnote)
+                     partnote[i].kititem[0].adnote->setVelocity(vel);
+-                if(kit[0].Psubenabled)
++                if(kit[0].Psubenabled && partnote[i].kititem[0].subnote)
+                     partnote[i].kititem[0].subnote->setVelocity(vel);
+-                if(kit[0].Ppadenabled)
++                if(kit[0].Ppadenabled && partnote[i].kititem[0].padnote)
+                     partnote[i].kititem[0].padnote->setVelocity(vel);
+             }
+             else     // "kit mode"
+@@ -687,11 +687,11 @@ void Part::PolyphonicAftertouch(unsigned char note,
+                        || (note > kit[item].Pmaxkey))
+                         continue;
+ 
+-                    if(kit[item].Padenabled)
++                    if(kit[item].Padenabled && partnote[i].kititem[item].adnote)
+                         partnote[i].kititem[item].adnote->setVelocity(vel);
+-                    if(kit[item].Psubenabled)
++                    if(kit[item].Psubenabled && partnote[i].kititem[item].subnote)
+                         partnote[i].kititem[item].subnote->setVelocity(vel);
+-                    if(kit[item].Ppadenabled)
++                    if(kit[item].Ppadenabled && partnote[i].kititem[item].padnote)
+                         partnote[i].kititem[item].padnote->setVelocity(vel);
+                 }
+         }
+-- 
+2.47.0
+

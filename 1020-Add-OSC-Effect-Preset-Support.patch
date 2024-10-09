@@ -1,0 +1,213 @@
+From 0776bad2080e0a860913f5d50b26f72c6fb820b1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 8 Sep 2016 10:26:45 -0400
+Subject: [PATCH 1020/1936] Add OSC Effect Preset Support
+
+---
+ src/Effects/Alienwah.cpp      | 10 ++++++++--
+ src/Effects/Chorus.cpp        | 12 ++++++++++--
+ src/Effects/Distorsion.cpp    | 14 ++++++++++----
+ src/Effects/DynamicFilter.cpp |  7 ++++++-
+ src/Effects/Echo.cpp          | 10 ++++++++--
+ src/Effects/Phaser.cpp        | 13 +++++++++++--
+ src/Effects/Reverb.cpp        |  7 ++++++-
+ 7 files changed, 59 insertions(+), 14 deletions(-)
+
+diff --git a/src/Effects/Alienwah.cpp b/src/Effects/Alienwah.cpp
+index fe3b8f0c..0eb54a9b 100644
+--- a/src/Effects/Alienwah.cpp
++++ b/src/Effects/Alienwah.cpp
+@@ -20,13 +20,19 @@
+ using std::complex;
+ 
+ #define rObject Alienwah
+-#define rBegin [](const char *, rtosc::RtData &) {
++#define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+ rtosc::Ports Alienwah::ports = {
+-    {"preset::i", rOptions(Alienwah 1, Alienwah 2, Alienwah 3, Alienwah 4)
++    {"preset::i", rProp(parameter)
++                  rOptions(wah 1, wah 2, wah 3, wah 4)
+                   rDoc("Instrument Presets"), 0,
+                   rBegin;
++                  rObject *o = (rObject*)d.obj;
++                  if(rtosc_narguments(msg))
++                      o->setpreset(rtosc_argument(msg, 0).i);
++                  else
++                      d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+     //Pvolume/Ppanning are common
+     rEffPar(Pfreq,     2, rShort("freq"), "Effect Frequency"),
+diff --git a/src/Effects/Chorus.cpp b/src/Effects/Chorus.cpp
+index 3b86f030..b568d7eb 100644
+--- a/src/Effects/Chorus.cpp
++++ b/src/Effects/Chorus.cpp
+@@ -21,13 +21,21 @@
+ using namespace std;
+ 
+ #define rObject Chorus
+-#define rBegin [](const char *, rtosc::RtData &) {
++#define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+ rtosc::Ports Chorus::ports = {
+-    {"preset::i", rOptions(Alienwah 1, Alienwah 2, Alienwah 3, Alienwah 4)
++    {"preset::i", rProp(parameter)
++                  rOptions(Chorus1, Chorus2, Chorus3, Celeste1, Celeste2,
++                           Flange1, Flange2, Flange3, Flange4, Flange5)
+                   rDoc("Instrument Presets"), 0,
+                   rBegin;
++                  rObject *o = (rObject*)d.obj;
++                  if(rtosc_narguments(msg))
++                      o->setpreset(rtosc_argument(msg, 0).i);
++                  else
++                      d.reply(d.loc, "i", o->Ppreset);
++
+                   rEnd},
+     //Pvolume/Ppanning are common
+     rEffPar(Pfreq,    2, rShort("freq"), "Effect Frequency"),
+diff --git a/src/Effects/Distorsion.cpp b/src/Effects/Distorsion.cpp
+index a9041727..2475ce16 100644
+--- a/src/Effects/Distorsion.cpp
++++ b/src/Effects/Distorsion.cpp
+@@ -20,21 +20,27 @@
+ #include <rtosc/port-sugar.h>
+ 
+ #define rObject Distorsion
+-#define rBegin [](const char *, rtosc::RtData &) {
++#define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+ rtosc::Ports Distorsion::ports = {
+-    {"preset::i", rOptions(Alienwah 1, Alienwah 2, Alienwah 3, Alienwah 4)
++    {"preset::i", rProp(parameter)
++                  rOptions(Overdrive 1, Overdrive 2, A. Exciter 1, A. Exciter 2, Guitar Amp,
++                    Quantisize)
+                   rDoc("Instrument Presets"), 0,
+                   rBegin;
++                  rObject *o = (rObject*)d.obj;
++                  if(rtosc_narguments(msg))
++                      o->setpreset(rtosc_argument(msg, 0).i);
++                  else
++                      d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+     //Pvolume/Ppanning are common
+     rEffPar(Plrcross, 2, rShort("l/r"), "Left/Right Crossover"),
+     rEffPar(Pdrive,   3, rShort("drive"), "Input amplification"),
+     rEffPar(Plevel,   4, rShort("output"), "Output amplification"),
+     rEffPar(Ptype,    5, rShort("type"),
+-            rOptions(Undistorted,
+-                Arctangent, Asymmetric, Pow, Sine, Quantisize,
++            rOptions(Arctangent, Asymmetric, Pow, Sine, Quantisize,
+                 Zigzag, Limiter, Upper Limiter, Lower Limiter,
+                 Inverse Limiter, Clip, Asym2, Pow2, sigmoid),
+             "Distortion Shape"),
+diff --git a/src/Effects/DynamicFilter.cpp b/src/Effects/DynamicFilter.cpp
+index 007fe53b..78165add 100644
+--- a/src/Effects/DynamicFilter.cpp
++++ b/src/Effects/DynamicFilter.cpp
+@@ -20,13 +20,18 @@
+ #include <rtosc/port-sugar.h>
+ 
+ #define rObject DynamicFilter
+-#define rBegin [](const char *, rtosc::RtData &) {
++#define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+ rtosc::Ports DynamicFilter::ports = {
+     {"preset::i", rOptions(WahWah, AutoWah, Sweep, VocalMorph1, VocalMorph1)
+                   rDoc("Instrument Presets"), 0,
+                   rBegin;
++                  rObject *o = (rObject*)d.obj;
++                  if(rtosc_narguments(msg))
++                      o->setpreset(rtosc_argument(msg, 0).i);
++                  else
++                      d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+     //Pvolume/Ppanning are common
+     rEffPar(Pfreq,      2, rShort("freq"),      "Effect Frequency"),
+diff --git a/src/Effects/Echo.cpp b/src/Effects/Echo.cpp
+index 9858f31e..ba7171be 100644
+--- a/src/Effects/Echo.cpp
++++ b/src/Effects/Echo.cpp
+@@ -22,14 +22,20 @@
+ #define MAX_DELAY 2
+ 
+ #define rObject Echo
+-#define rBegin [](const char *, rtosc::RtData &) {
++#define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+ rtosc::Ports Echo::ports = {
+-    {"preset::i", rOptions(Echo 1, Echo 2, Echo 3, Simple Echo, Canyon, Panning Echo 1, Panning Echo 2, Panning Echo 3, Feedback Echo)
++    {"preset::i", rOptions(Echo 1, Echo 2, Echo 3, Simple Echo, Canyon, Panning Echo 1,
++            Panning Echo 2, Panning Echo 3, Feedback Echo)
+                   rProp(parameter)
+                   rDoc("Instrument Presets"), 0,
+                   rBegin;
++                  rObject *o = (rObject*)d.obj;
++                  if(rtosc_narguments(msg))
++                      o->setpreset(rtosc_argument(msg, 0).i);
++                  else
++                      d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+     //Pvolume/Ppanning are common
+     rEffPar(Pdelay,   2, rShort("delay"),    "Length of Echo"),
+diff --git a/src/Effects/Phaser.cpp b/src/Effects/Phaser.cpp
+index ae1e1e5a..697fa5ad 100644
+--- a/src/Effects/Phaser.cpp
++++ b/src/Effects/Phaser.cpp
+@@ -25,13 +25,22 @@
+ using namespace std;
+ 
+ #define rObject Phaser
+-#define rBegin [](const char *, rtosc::RtData &) {
++#define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+ rtosc::Ports Phaser::ports = {
+-    {"preset::i", rOptions(Alienwah 1, Alienwah 2, Alienwah 3, Alienwah 4)
++    {"preset::i", rProp(parameter)
++                  rOptions(Phaser 1, Phaser 2, Phaser 3, Phaser 4,
++                           Phaser 5, Phaser 6,
++                           APhaser 1, APhaser 2, APhaser 3, APhaser 4,
++                           APhaser 5, APhaser 6)
+                   rDoc("Instrument Presets"), 0,
+                   rBegin;
++                  rObject *o = (rObject*)d.obj;
++                  if(rtosc_narguments(msg))
++                      o->setpreset(rtosc_argument(msg, 0).i);
++                  else
++                      d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+     //Pvolume/Ppanning are common
+     rEffPar(lfo.Pfreq,       2, rShort("freq"),     ""),
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index 2df7dde5..049fb70f 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -21,7 +21,7 @@
+ #include <rtosc/port-sugar.h>
+ 
+ #define rObject Reverb
+-#define rBegin [](const char *, rtosc::RtData &) {
++#define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
+ 
+ rtosc::Ports Reverb::ports = {
+@@ -31,6 +31,11 @@ rtosc::Ports Reverb::ports = {
+                   rProp(parameter)
+                   rDoc("Instrument Presets"), 0,
+                   rBegin;
++                  rObject *o = (rObject*)d.obj;
++                  if(rtosc_narguments(msg))
++                      o->setpreset(rtosc_argument(msg, 0).i);
++                  else
++                      d.reply(d.loc, "i", o->Ppreset);
+                   rEnd},
+     //Pvolume/Ppanning are common
+     rEffPar(Ptime,    2, rShort("time"),     "Length of Reverb"),
+-- 
+2.47.0
+

@@ -1,0 +1,43 @@
+From 48e2e851a4c3fd54f52817ffe936583f0a4518df Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Apr 2015 12:09:42 -0400
+Subject: [PATCH 0415/1936] Update Rtosc
+
+---
+ .travis.yml | 4 ++++
+ rtosc       | 2 +-
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index 31e6c6a1..85d5b1c2 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -4,14 +4,18 @@ compiler:
+     - gcc
+ 
+ before_install:
++    - sudo apt-get --purge remove gcc
+     - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+     - sudo apt-get -qq update
+     - sudo apt-get -qq install g++-4.8
++    - sudo apt-get -qq install gcc-4.8
+     - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
++    - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 90
+     - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev
+     - wget http://downloads.sourceforge.net/liblo/liblo-0.28.tar.gz
+     - tar xvf liblo-0.28.tar.gz && cd liblo-0.28
+     - ./configure && make && sudo make install
++    - sudo ldconfig
+     - cd ..
+ 
+ 
+diff --git a/rtosc b/rtosc
+index cbd559f1..65d4fdb9 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit cbd559f15b485dbbfa4d970792cb36a1d6ff83cf
++Subproject commit 65d4fdb9f04f7b293872268e9457ee7109136027
+-- 
+2.47.0
+

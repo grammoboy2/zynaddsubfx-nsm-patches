@@ -1,0 +1,49 @@
+From 1853f69fb2e42ca0b0172f79786e72fc250f6c42 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Sat, 16 Oct 2021 02:09:48 +0200
+Subject: [PATCH 1785/1936] NotePool: Fix obscure legato pitch bug
+
+Fix obscure bug where the pitch of a previously played and currently
+releasing legato note (i.e. a note formed by playing one note, and
+holding it while playing another) will jump to the pitch of a newly
+played legato note (i.e., again, not a single note, but a first
+note played and helt while playing a second), instead of releasing at
+its original pitch.
+
+This is due to applyLegato() setting all note descriptors to the same
+note number, including those releasing. Although setting previous
+notes to the same pitch as new ones will give the impression of a
+single voice being played, this did not happen for the first note
+played, and furthermore, gathering all released voices at the new
+pitch means there will be an unintended plurality of voices at that
+pitch.
+---
+ src/Containers/NotePool.cpp | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 309d1b95..9cf69b10 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -236,10 +236,17 @@ void NotePool::insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor des
+     }
+ };
+ 
+-//There should only be one pair of notes which are still playing
++//There should only be one pair of notes which are still playing.
++//Note however that there can be releasing legato notes already in the
++//list when we get called, so need to handle that.
+ void NotePool::applyLegato(note_t note, const LegatoParams &par)
+ {
+     for(auto &desc:activeDesc()) {
++        //Currently, there can actually be more than one legato pair, while a
++        //previous legato pair is releasing and a new one is started, and we
++        //don't want to change anything about notes which are releasing.
++        if (desc.dying())
++            continue;
+         desc.note = note;
+         for(auto &synth:activeNotes(desc))
+             try {
+-- 
+2.47.0
+

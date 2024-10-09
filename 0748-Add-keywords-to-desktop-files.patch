@@ -1,0 +1,37 @@
+From b89644a9f322d8523d8c1789b62c2074618584c8 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jarom=C3=ADr=20Mike=C5=A1?= <mira.mikes@seznam.cz>
+Date: Sun, 22 Nov 2015 10:31:34 -0500
+Subject: [PATCH 0748/1936] Add keywords to desktop files
+
+---
+ zynaddsubfx-alsa.desktop | 1 +
+ zynaddsubfx-jack.desktop | 1 +
+ 2 files changed, 2 insertions(+)
+
+diff --git a/zynaddsubfx-alsa.desktop b/zynaddsubfx-alsa.desktop
+index 9265dc25..8f7b5230 100644
+--- a/zynaddsubfx-alsa.desktop
++++ b/zynaddsubfx-alsa.desktop
+@@ -2,6 +2,7 @@
+ Name=ZynAddSubFX - Alsa
+ Comment=A powerful realtime software synthesizer
+ Comment[fr]=Un synthétiseur logiciel temps-réel puissant
++Keywords=audio;sound;alsa;midi;synth;synthesizer
+ Exec=zynaddsubfx -I alsa -O alsa
+ Icon=zynaddsubfx
+ Terminal=false
+diff --git a/zynaddsubfx-jack.desktop b/zynaddsubfx-jack.desktop
+index 2697dad6..7b35db86 100644
+--- a/zynaddsubfx-jack.desktop
++++ b/zynaddsubfx-jack.desktop
+@@ -2,6 +2,7 @@
+ Name=ZynAddSubFX - Jack
+ Comment=A powerful realtime software synthesizer
+ Comment[fr]=Un synthétiseur logiciel temps-réel puissant
++Keywords=audio;sound;jack;midi;synth;synthesizer
+ Exec=zynaddsubfx -I jack -O jack
+ Icon=zynaddsubfx
+ Terminal=false
+-- 
+2.47.0
+

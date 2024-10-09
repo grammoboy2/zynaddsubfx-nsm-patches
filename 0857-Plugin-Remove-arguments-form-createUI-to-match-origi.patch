@@ -1,0 +1,122 @@
+From 40c19f0ee346a5aace0a4da4f7c1492025db5c6e Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 14 Feb 2016 18:24:27 +0100
+Subject: [PATCH 0857/1936] Plugin: Remove arguments form 'createUI()' to match
+ original DPF
+
+---
+ src/Plugin/ZynAddSubFX/DistrhoUI.cpp         |  8 +++++++-
+ src/Plugin/ZynAddSubFX/DistrhoUI.hpp         |  9 ++++++++-
+ src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp | 13 +++++++++++--
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp    |  4 ++--
+ 4 files changed, 28 insertions(+), 6 deletions(-)
+
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUI.cpp b/src/Plugin/ZynAddSubFX/DistrhoUI.cpp
+index 4d78c6de..2061f8b5 100644
+--- a/src/Plugin/ZynAddSubFX/DistrhoUI.cpp
++++ b/src/Plugin/ZynAddSubFX/DistrhoUI.cpp
+@@ -21,7 +21,8 @@ START_NAMESPACE_DISTRHO
+ /* ------------------------------------------------------------------------------------------------------------
+  * Static data, see DistrhoUIInternal.hpp */
+ 
+-double d_lastUiSampleRate = 0.0;
++double    d_lastUiSampleRate = 0.0;
++uintptr_t g_nextWindowId     = 0;
+ 
+ /* ------------------------------------------------------------------------------------------------------------
+  * UI */
+@@ -36,6 +37,11 @@ UI::~UI()
+     delete pData;
+ }
+ 
++uintptr_t UI::getNextWindowId() noexcept
++{
++    return g_nextWindowId;
++}
++
+ /* ------------------------------------------------------------------------------------------------------------
+  * Host state */
+ 
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUI.hpp b/src/Plugin/ZynAddSubFX/DistrhoUI.hpp
+index ec1fcd56..72769cc9 100644
+--- a/src/Plugin/ZynAddSubFX/DistrhoUI.hpp
++++ b/src/Plugin/ZynAddSubFX/DistrhoUI.hpp
+@@ -64,6 +64,13 @@ public:
+     */
+     void sendNote(uint8_t channel, uint8_t note, uint8_t velocity);
+ 
++   /**
++      Get the Window Id that will be used for the next created window.
++      @note: This function is only valid during createUI(),
++             it will return 0 when called from anywhere else.
++    */
++    static uintptr_t getNextWindowId() noexcept;
++
+ protected:
+    /* --------------------------------------------------------------------------------------------------------
+     * DSP/Plugin Callbacks */
+@@ -102,7 +109,7 @@ private:
+ /**
+    createUI.
+  */
+-extern UI* createUI(const intptr_t winId);
++extern UI* createUI();
+ 
+ // -----------------------------------------------------------------------------------------------------------
+ 
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp b/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
+index 9952f0e3..1a5cc84b 100644
+--- a/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
++++ b/src/Plugin/ZynAddSubFX/DistrhoUIInternal.hpp
+@@ -24,7 +24,8 @@ START_NAMESPACE_DISTRHO
+ // -----------------------------------------------------------------------
+ // Static data, see DistrhoUI.cpp
+ 
+-extern double d_lastUiSampleRate;
++extern double    d_lastUiSampleRate;
++extern uintptr_t g_nextWindowId;
+ 
+ // -----------------------------------------------------------------------
+ // UI callbacks
+@@ -99,13 +100,21 @@ struct UI::PrivateData {
+ // -----------------------------------------------------------------------
+ // UI exporter class
+ 
++static UI* createWindowIdUI(const intptr_t winId)
++{
++    g_nextWindowId = winId;
++    UI* const ui(createUI());
++    g_nextWindowId = 0;
++    return ui;
++}
++
+ class UIExporter
+ {
+ public:
+     UIExporter(void* const ptr, const intptr_t winId,
+                const editParamFunc editParamCall, const setParamFunc setParamCall, const setStateFunc setStateCall, const sendNoteFunc sendNoteCall, const setSizeFunc setSizeCall,
+                void* const dspPtr = nullptr)
+-        : fUI(createUI(winId)),
++        : fUI(createWindowIdUI(winId)),
+           fData((fUI != nullptr) ? fUI->pData : nullptr)
+     {
+         DISTRHO_SAFE_ASSERT_RETURN(fUI != nullptr,);
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+index 103c42c8..48b60dae 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI.cpp
+@@ -203,9 +203,9 @@ private:
+ 
+ START_NAMESPACE_DISTRHO
+ 
+-UI* createUI(const intptr_t winId)
++UI* createUI()
+ {
+-    return new ZynAddSubFXUI(winId);
++    return new ZynAddSubFXUI(UI::getNextWindowId());
+ }
+ 
+ END_NAMESPACE_DISTRHO
+-- 
+2.47.0
+

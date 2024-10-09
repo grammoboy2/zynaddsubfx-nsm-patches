@@ -1,0 +1,46 @@
+From 39f039295adc128bfd416e0f4e194dceac35bc4d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 25 Feb 2015 18:57:35 -0500
+Subject: [PATCH 0375/1936] Avoid Installing Rtosc Libs
+
+---
+ CMakeLists.txt      | 1 +
+ rtosc               | 2 +-
+ src/Misc/Master.cpp | 2 +-
+ 3 files changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 97b3cc61..1aa20a83 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -18,6 +18,7 @@ else()
+     message(STATUS "Found Rtosc Submodule...")
+ endif()
+ 
++set(RTOSC_NO_INSTALL TRUE)
+ add_subdirectory(rtosc)
+ include_directories(rtosc/include)
+ 
+diff --git a/rtosc b/rtosc
+index 340efbdd..fe415f21 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 340efbddf6e9d1c609ebcf82032cbbc7b5e70793
++Subproject commit fe415f211c5c058bc28724304e2b62afe688e91d
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 8001f440..89ad05a2 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -301,7 +301,7 @@ Master::Master()
+         char loc_buf[1024];
+         DataObj d{loc_buf, 1024, the_master, bToU};
+         memset(loc_buf, sizeof(loc_buf), 0);
+-        printf("sending an event to the owner of '%s'\n", m);
++        //printf("sending an event to the owner of '%s'\n", m);
+         Master::ports.dispatch(m+1, d);
+     };
+ 
+-- 
+2.47.0
+

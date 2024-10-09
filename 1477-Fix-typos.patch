@@ -1,0 +1,945 @@
+From 8efc533b8a0c8e4c5b5fc9833ae2e360e39dbe8e Mon Sep 17 00:00:00 2001
+From: "luz.paz" <luzpaz@users.noreply.github.com>
+Date: Tue, 10 Mar 2020 14:37:43 -0400
+Subject: [PATCH 1477/1936] Fix typos
+
+Found via:
+```
+codespell -q 3 -L ba,continous,hist,nd,uint -S ./ExternalPrograms,./rtosc,./DPF,./instruments,./NEWS.txt
+```
+---
+ TODO-release.md                     |  2 +-
+ cmake/BashCompletion.cmake          |  2 +-
+ cmake/FindCxxTest.cmake             |  2 +-
+ doc/effects.txt                     |  4 ++--
+ src/CMakeLists.txt                  |  6 +++---
+ src/Containers/NotePool.cpp         |  2 +-
+ src/Containers/NotePool.h           |  2 +-
+ src/DSP/AnalogFilter.cpp            |  4 ++--
+ src/DSP/AnalogFilter.h              |  2 +-
+ src/Effects/Chorus.h                |  2 +-
+ src/Effects/Effect.h                |  2 +-
+ src/Effects/EffectMgr.cpp           |  4 ++--
+ src/Effects/EffectMgr.h             |  2 +-
+ src/Misc/Allocator.h                |  2 +-
+ src/Misc/Master.h                   |  6 +++---
+ src/Misc/Microtonal.cpp             |  2 +-
+ src/Misc/Microtonal.h               |  2 +-
+ src/Misc/MiddleWare.cpp             |  6 +++---
+ src/Misc/Part.h                     |  2 +-
+ src/Misc/Util.cpp                   |  6 +++---
+ src/Misc/Util.h                     |  2 +-
+ src/Misc/WavFile.cpp                |  2 +-
+ src/Misc/WaveShapeSmps.cpp          |  8 ++++----
+ src/Misc/XMLwrapper.cpp             |  4 ++--
+ src/Misc/XMLwrapper.h               |  2 +-
+ src/Nio/AudioOut.h                  |  2 +-
+ src/Nio/OutMgr.cpp                  |  2 +-
+ src/Nio/ZynSema.h                   |  2 +-
+ src/Output/DSSIControlDescription.h |  2 +-
+ src/Output/DSSIaudiooutput.cpp      |  2 +-
+ src/Params/EnvelopeParams.cpp       |  4 ++--
+ src/Params/PADnoteParameters.cpp    |  6 +++---
+ src/Params/PADnoteParameters.h      |  2 +-
+ src/Synth/ADnote.cpp                | 14 +++++++-------
+ src/Synth/OscilGen.cpp              |  6 +++---
+ src/Synth/PADnote.cpp               |  2 +-
+ src/Tests/KitTest.h                 |  2 +-
+ src/UI/BankView.cpp                 |  2 +-
+ src/UI/EnvelopeFreeEdit.cpp         |  4 ++--
+ src/UI/Fl_Osc_Interface.h           |  2 +-
+ src/UI/Fl_Osc_Widget.H              |  2 +-
+ src/UI/Fl_Osc_Widget.cpp            |  2 +-
+ src/UI/MasterUI.fl                  |  2 +-
+ src/UI/VuMasterMeter.h              |  2 +-
+ src/globals.h                       |  2 +-
+ src/main.cpp                        |  2 +-
+ style.cfg                           | 18 +++++++++---------
+ 47 files changed, 82 insertions(+), 82 deletions(-)
+
+diff --git a/TODO-release.md b/TODO-release.md
+index 3bb2f6ae..7312276c 100644
+--- a/TODO-release.md
++++ b/TODO-release.md
+@@ -5,7 +5,7 @@
+ - Update news on sourceforge website
+ - Upload source tarball to sourceforge website
+ - Update the "Linux/BSD/Source" link on http://zynaddsubfx.sourceforge.net/download.html (do that here : https://github.com/zynaddsubfx/zyn-website/blob/master/download.html )
+-- Update Copyright (mainly YEAR) info in src/UI/MasterUI.fl (note this is mentionned 2 times on line 5 and line 872)
++- Update Copyright (mainly YEAR) info in src/UI/MasterUI.fl (note this is mentioned 2 times on line 5 and line 872)
+ - Check and update (if needed) the manpage file : doc/zynaddsubfx.1.txt
+ - Issue release announcement to linux-audio-announce, zynaddsubfx-user, kvr,
+   linux-musicians
+diff --git a/cmake/BashCompletion.cmake b/cmake/BashCompletion.cmake
+index 0eb16fff..a04ec42c 100644
+--- a/cmake/BashCompletion.cmake
++++ b/cmake/BashCompletion.cmake
+@@ -24,7 +24,7 @@
+ # - Windows does not support bash completion
+ # - macOS support should eventually be added for Homebrew (TODO)
+ IF(WIN32)
+-	MESSAGE(STATUS "Bash competion is not supported on this platform.")
++	MESSAGE(STATUS "Bash completion is not supported on this platform.")
+ ELSEIF(APPLE)
+ 	MESSAGE(STATUS "Bash completion is not yet implemented for this platform.")
+ ELSE()
+diff --git a/cmake/FindCxxTest.cmake b/cmake/FindCxxTest.cmake
+index 937142b5..1b9f52cc 100644
+--- a/cmake/FindCxxTest.cmake
++++ b/cmake/FindCxxTest.cmake
+@@ -105,7 +105,7 @@
+ #
+ # Version 1.3 (8/19/10) (CMake 2.8.3)
+ #     Included patch by Simone Rossetto to check if either Python or Perl
+-#     are present in the system.  Whichever intepreter that is detected
++#     are present in the system.  Whichever interpreter that is detected
+ #     is now used to run the test generator program.  If both interpreters
+ #     are detected, the CXXTEST_USE_PYTHON variable is obeyed.
+ #
+diff --git a/doc/effects.txt b/doc/effects.txt
+index 4964830d..fff0abae 100644
+--- a/doc/effects.txt
++++ b/doc/effects.txt
+@@ -150,7 +150,7 @@ the delay also depends on the current pitch.
+ * After the correct element of the sound buffer is found using the LFO, the
+ *Fb* knob lets you set how loud it shall be played. This is mostly redundant to
+ the *D/W* knob, but we have not applied panning and subtraction yet. 
+-* Next, the signal can be negated. If the *Substract* checkbox is activated,
++* Next, the signal can be negated. If the *Subtract* checkbox is activated,
+ the amplitude is multiplied by -1.
+ * Finally, *Pan* lets you apply panning.
+ 
+@@ -486,7 +486,7 @@ filter, the value is added before, for analog after the first phasing stage.
+ * Now, *Stages* phasing stages are being applied. *dist* sets the distortion 
+ for when applying the phasing stages. This has only effect for analog phasers.
+ * The feedback is taken now.
+-* In the end, *Substract* inverts the signal, multiplying it by -1.
++* In the end, *Subtract* inverts the signal, multiplying it by -1.
+ 
+ Alienwah
+ ~~~~~~~~
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index e7065c98..ad0b290c 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -109,7 +109,7 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+ endif()
+ 
+ if(NOT "Darwin" STREQUAL ${CMAKE_SYSTEM_NAME})
+-    # Add scheduler function existance info (OSX compatiability)
++    # Add scheduler function existence info (OSX compatibility)
+     add_definitions(-DHAVE_SCHEDULER=${HAVE_SCHEDULER})
+ endif()
+ 
+@@ -209,7 +209,7 @@ set (BuildOptions_SSE
+ 
+ set (BuildOptionsBasic
+     "-std=c++11 -Wno-unused-parameter -O3 -ffast-math -fomit-frame-pointer"
+-    CACHE STRING "basic X86 complier options"
++    CACHE STRING "basic X86 compiler options"
+ )
+ 
+ set (BuildOptionsDebug
+@@ -228,7 +228,7 @@ else()
+     endif()
+ endif()
+ 
+-########### Settings dependant code ###########
++########### Settings dependent code ###########
+ # From here on, the setting variables have  been prepared so concentrate
+ # on the actual compiling.
+ 
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 1c7b9545..a9cc3f09 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -249,7 +249,7 @@ bool NotePool::synthFull(int sdesc_count) const
+ //Note that isn't KEY_PLAYING or KEY_RELEASED_AND_SUSTAINING
+ bool NotePool::existsRunningNote(void) const
+ {
+-    //printf("runing note # =%d\n", getRunningNotes());
++    //printf("running note # =%d\n", getRunningNotes());
+     return getRunningNotes();
+ }
+ 
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 6617b9ca..efcdac10 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -25,7 +25,7 @@ struct LegatoParams;
+ class NotePool
+ {
+     public:
+-        //Currently this wastes a ton of bits due ot the legatoMirror flag
++        //Currently this wastes a ton of bits due to the legatoMirror flag
+         struct NoteDescriptor {
+             //acceptable overlap after 2 minutes
+             //run time at 48kHz 8 samples per buffer
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index 5b0f654b..81adee76 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -105,7 +105,7 @@ AnalogFilter::Coeff AnalogFilter::computeCoeff(int type, float cutoff, float q,
+     const float sn    = sinf(omega), cs = cosf(omega);
+     float       alpha, beta;
+ 
+-    //most of theese are implementations of
++    //most of these are implementations of
+     //the "Cookbook formulae for audio EQ" by Robert Bristow-Johnson
+     //The original location of the Cookbook is:
+     //http://www.harmony-central.com/Computer/Programming/Audio-EQ-Cookbook.txt
+@@ -282,7 +282,7 @@ void AnalogFilter::setfreq(float frequency)
+ 
+ 
+     //if the frequency is changed fast, it needs interpolation
+-    if((rap > 3.0f) || nyquistthresh) { //(now, filter and coeficients backup)
++    if((rap > 3.0f) || nyquistthresh) { //(now, filter and coefficients backup)
+         oldCoeff = coeff;
+         for(int i = 0; i < MAX_FILTER_STAGES + 1; ++i)
+             oldHistory[i] = history[i];
+diff --git a/src/DSP/AnalogFilter.h b/src/DSP/AnalogFilter.h
+index 3b85c57e..73e5f44a 100644
+--- a/src/DSP/AnalogFilter.h
++++ b/src/DSP/AnalogFilter.h
+@@ -57,7 +57,7 @@ class AnalogFilter:public Filter
+             float y1, y2; //Output History
+         } history[MAX_FILTER_STAGES + 1], oldHistory[MAX_FILTER_STAGES + 1];
+ 
+-        //old coeffs are used for interpolation when paremeters change quickly
++        //old coeffs are used for interpolation when parameters change quickly
+ 
+         //Apply IIR filter to Samples, with coefficients, and past history
+         void singlefilterout(float *smp, fstage &hist, const Coeff &coeff);
+diff --git a/src/Effects/Chorus.h b/src/Effects/Chorus.h
+index a6b168ab..b854355d 100644
+--- a/src/Effects/Chorus.h
++++ b/src/Effects/Chorus.h
+@@ -79,7 +79,7 @@ class Chorus:public Effect
+         unsigned char Pdelay;      //the delay (ms)
+         unsigned char Pfb;         //feedback
+         unsigned char Pflangemode; //how the LFO is scaled, to result chorus or flange
+-        unsigned char Poutsub;     //if I wish to substract the output instead of the adding it
++        unsigned char Poutsub;     //if I wish to subtract the output instead of the adding it
+         EffectLFO     lfo;         //lfo-ul chorus
+ 
+ 
+diff --git a/src/Effects/Effect.h b/src/Effects/Effect.h
+index 880adcbb..e890422a 100644
+--- a/src/Effects/Effect.h
++++ b/src/Effects/Effect.h
+@@ -136,7 +136,7 @@ class Effect
+          *
+          * This method should result in the effect generating its results
+          * and placing them into the efxoutl and efxoutr buffers.
+-         * Every Effect should overide this method.
++         * Every Effect should override this method.
+          *
+          * @param smpsl Input buffer for the Left channel
+          * @param smpsr Input buffer for the Right channel
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 0fb140cc..280c8749 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -1,7 +1,7 @@
+ /*
+   ZynAddSubFX - a software synthesizer
+ 
+-  EffectMgr.cpp - Effect manager, an interface betwen the program and effects
++  EffectMgr.cpp - Effect manager, an interface between the program and effects
+   Copyright (C) 2002-2005 Nasca Octavian Paul
+   Author: Nasca Octavian Paul
+ 
+@@ -149,7 +149,7 @@ static const rtosc::Ports local_ports = {
+             std::swap(eff->efxoutl, eff_->efxoutl);
+             std::swap(eff->efxoutr, eff_->efxoutr);
+ 
+-            //Return the old data for distruction
++            //Return the old data for destruction
+             d.reply("/free", "sb", "EffectMgr", sizeof(EffectMgr*), &eff_);
+         }},
+     rSubtype(Alienwah),
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index 015e5509..86b68a91 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -1,7 +1,7 @@
+ /*
+   ZynAddSubFX - a software synthesizer
+ 
+-  EffectMgr.h - Effect manager, an interface betwen the program and effects
++  EffectMgr.h - Effect manager, an interface between the program and effects
+   Copyright (C) 2002-2005 Nasca Octavian Paul
+   Author: Nasca Octavian Paul
+ 
+diff --git a/src/Misc/Allocator.h b/src/Misc/Allocator.h
+index 8274f2e3..48b74301 100644
+--- a/src/Misc/Allocator.h
++++ b/src/Misc/Allocator.h
+@@ -194,7 +194,7 @@ extern DummyAllocator DummyAlloc;
+  *     * When a new Part instance is provided it may or may not come with some
+  *       instrument effects
+  *     * Merging blocks is an option, but one that is not going to likely be
+- *       implmented too soon, thus all effects need to be reallocated when the
++ *       implemented too soon, thus all effects need to be reallocated when the
+  *       pointer swap occurs
+  *     * The old effect is extracted from the manager
+  *     * A new one is constructed with a deep copy
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 9a27c8cc..348d383e 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -77,7 +77,7 @@ class Master
+ 
+         /**Save all settings to an OSC file (as specified by RT OSC)
+          * When the function returned, the OSC file has been either saved or
+-         * an error occured.
++         * an error occurred.
+          * @param filename File to save to or NULL (useful for testing)
+          * @param dispatcher Message dispatcher and modifier
+          * @param master2 An empty master dummy where the savefile will be
+@@ -130,7 +130,7 @@ class Master
+         /**Audio Output*/
+         bool AudioOut(float *outl, float *outr) REALTIME;
+         /**Audio Output (for callback mode).
+-         * This allows the program to be controled by an external program*/
++         * This allows the program to be controlled by an external program*/
+         void GetAudioOutSamples(size_t nsamples,
+                                 unsigned samplerate,
+                                 float *outl,
+@@ -232,7 +232,7 @@ class Master
+         float  sysefxsend[NUM_SYS_EFX][NUM_SYS_EFX];
+         int    keyshift;
+ 
+-        //information relevent to generating plugin audio samples
++        //information relevant to generating plugin audio samples
+         float *bufl;
+         float *bufr;
+         off_t  off;
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 91685804..dab9b26d 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -659,7 +659,7 @@ int Microtonal::loadkbm(KbmInfo &kbm, const char *filename)
+         return 2;
+     kbm.Plastkey = limit(x, 0, 127);
+ 
+-    //loads last the middle note where scale fro scale degree=0
++    //loads last the middle note where scale from scale degree=0
+     if(loadline(file, tmp) != 0 || sscanf(tmp, "%d", &x) == 0)
+         return 2;
+     kbm.Pmiddlenote = limit(x, 0, 127);
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index be4f4085..5288fec2 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -148,7 +148,7 @@ class Microtonal
+         unsigned char octavesize;
+         OctaveTuning octave[MAX_OCTAVE_SIZE];
+     private:
+-        //loads a line from the text file, while ignoring the lines beggining with "!"
++        //loads a line from the text file, while ignoring the lines beginning with "!"
+         static int loadline(FILE *file, char *line);
+         //Grab a 0..127 integer from the provided descriptor
+ 
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 61b62d69..12e3ad34 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1701,8 +1701,8 @@ void zyn::MiddleWareImpl::recreateMinimalMaster()
+  *   1) Middleware sends /freeze_state to backend
+  *   2) Middleware waits on /state_frozen from backend
+  *      All intervening commands are held for out of order execution
+- *   3) Aquire memory
+- *      At this time by the memory barrier we are guarenteed that all old
++ *   3) Acquire memory
++ *      At this time by the memory barrier we are guaranteed that all old
+  *      writes are done and assuming the freezing logic is sound, then it is
+  *      impossible for any other parameter to change at this time
+  *   3) Middleware performs saving operation
+@@ -1930,7 +1930,7 @@ void MiddleWareImpl::bToUhandle(const char *rtmsg)
+     assert(strcmp(rtmsg, "/part0/kit0/Ppadenableda"));
+     assert(strcmp(rtmsg, "/ze_state"));
+ 
+-    //Dump Incomming Events For Debugging
++    //Dump Incoming Events For Debugging
+     if(strcmp(rtmsg, "/vu-meter") && false) {
+         fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 1 + 30, 0 + 40);
+         fprintf(stdout, "frontend[%c]: '%s'<%s>\n", forward?'f':broadcast?'b':'N',
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index aa5df984..722b3bdb 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -132,7 +132,7 @@ class Part
+ 
+         bool Ppolymode; //Part mode - 0=monophonic , 1=polyphonic
+         bool Plegatomode; // 0=normal, 1=legato
+-        unsigned char Pkeylimit; //how many keys are alowed to be played same time (0=off), the older will be released
++        unsigned char Pkeylimit; //how many keys are allowed to be played same time (0=off), the older will be released
+ 
+         char *Pname; //name of the instrument
+         struct { //instrument additional information
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index dd5caa65..24934458 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -129,7 +129,7 @@ void set_realtime()
+     sched_param sc;
+     sc.sched_priority = 60;
+     //if you want get "sched_setscheduler undeclared" from compilation,
+-    //you can safely remove the folowing line:
++    //you can safely remove the following line:
+     sched_setscheduler(0, SCHED_FIFO, &sc);
+     //if (err==0) printf("Real-time");
+ #endif
+@@ -161,11 +161,11 @@ void os_usleep(long length)
+ }
+ #endif
+ 
+-//!< maximum lenght a pid has on any POSIX system
++//!< maximum length a pid has on any POSIX system
+ //!< this is an estimation, but more than 12 looks insane
+ constexpr std::size_t max_pid_len = 12;
+ 
+-//!< safe pid lenght guess, posix conform
++//!< safe pid length guess, posix conform
+ std::size_t os_guess_pid_length()
+ {
+     const char* pid_max_file = "/proc/sys/kernel/pid_max";
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 7488973f..9ba7e820 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -61,7 +61,7 @@ void set_realtime();
+ /**Os independent sleep in microsecond*/
+ void os_usleep(long length);
+ 
+-//! returns pid padded to maximum pid lenght, posix conform
++//! returns pid padded to maximum pid length, posix conform
+ std::string os_pid_as_padded_string();
+ 
+ std::string legalizeFilename(std::string filename);
+diff --git a/src/Misc/WavFile.cpp b/src/Misc/WavFile.cpp
+index ddbcb813..642e2f03 100644
+--- a/src/Misc/WavFile.cpp
++++ b/src/Misc/WavFile.cpp
+@@ -50,7 +50,7 @@ WavFile::~WavFile()
+         fwrite("WAVEfmt ", 8, 1, file);
+         chunksize = 16;
+         fwrite(&chunksize, 4, 1, file);
+-        unsigned short int formattag = 1;     //uncompresed wave
++        unsigned short int formattag = 1;     //uncompressed wave
+         fwrite(&formattag, 2, 1, file);
+         unsigned short int nchannels = channels;     //stereo
+         fwrite(&nchannels, 2, 1, file);
+diff --git a/src/Misc/WaveShapeSmps.cpp b/src/Misc/WaveShapeSmps.cpp
+index 0301dbb9..87847065 100644
+--- a/src/Misc/WaveShapeSmps.cpp
++++ b/src/Misc/WaveShapeSmps.cpp
+@@ -144,7 +144,7 @@ void waveShapeSmps(int n,
+                     smps[i] = ( smps[i] > ws ? ws-res : smps[i]-res );
+                 else
+                     smps[i] = ( smps[i] < -ws ? -ws+res : smps[i]+res );
+-                // and substract the polyblamp-limited offset again: smps[i] = y - f(offs)
++                // and subtract the polyblamp-limited offset again: smps[i] = y - f(offs)
+                 res = polyblampres(offs, ws, par);
+                 if (offs>=0)
+                     smps[i] -= ( offs >= ws ? ws-res : offs-res );
+@@ -250,7 +250,7 @@ void waveShapeSmps(int n,
+                 tmpo     = 0.5f - 1.0f / (expf(tmpo) + 1.0f);
+                 
+                 smps[i] = tmp / tmpv;
+-                smps[i] -= tmpo / tmpv; // substract offset
++                smps[i] -= tmpo / tmpv; // subtract offset
+             }
+             break;
+         case 15:
+@@ -277,7 +277,7 @@ void waveShapeSmps(int n,
+                     smps[i] = 1.5 * (smps[i] - (powf(smps[i], 3.0) / 3.0) );
+                 else
+                     smps[i] = (smps[i] > 0 ? 1.0f : -1.0f);
+-                //substract offset with distorsion function applied
++                //subtract offset with distorsion function applied
+                 smps[i] -= 1.5 * (offs - (powf(offs, 3.0) / 3.0)); 
+             }
+             break;
+@@ -292,7 +292,7 @@ void waveShapeSmps(int n,
+                     smps[i] = smps[i]*(2-fabsf(smps[i]));
+                 else
+                     smps[i] = (smps[i] > 0 ? 1.0f : -1.0f);
+-                //substract offset with distorsion function applied
++                //subtract offset with distorsion function applied
+                 smps[i] -= offs*(2-fabsf(offs));
+             }
+             break;
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index b4bd2325..6dc57486 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -171,7 +171,7 @@ bool XMLwrapper::hasPadSynth() const
+                                              "name",
+                                              "PADsynth_used",
+                                              MXML_DESCEND_FIRST);
+-    if(parameter == NULL) //no information availiable
++    if(parameter == NULL) //no information available
+         return false;
+ 
+     const char *strval = mxmlElementGetAttr(parameter, "value");
+@@ -331,7 +331,7 @@ int XMLwrapper::loadXMLfile(const string &filename)
+                                   NULL,
+                                   MXML_DESCEND);
+     if(root == NULL)
+-        return -3;  //the XML doesnt embbed zynaddsubfx data
++        return -3;  //the XML doesn't embbed zynaddsubfx data
+ 
+     //fetch version information
+     _fileversion.set_major(stringTo<int>(mxmlElementGetAttr(root, "version-major")));
+diff --git a/src/Misc/XMLwrapper.h b/src/Misc/XMLwrapper.h
+index 00f2b8ac..5a433e40 100644
+--- a/src/Misc/XMLwrapper.h
++++ b/src/Misc/XMLwrapper.h
+@@ -158,7 +158,7 @@ class XMLwrapper
+         /**Get the the branch_id and limits it between the min and max.
+          * if min==max==0, it will not limit it
+          * if there isn't any id, will return min
+-         * this must be called only imediately after enterbranch()
++         * this must be called only immediately after enterbranch()
+          */
+         int getbranchid(int min, int max) const;
+ 
+diff --git a/src/Nio/AudioOut.h b/src/Nio/AudioOut.h
+index fab91b30..a9730b09 100644
+--- a/src/Nio/AudioOut.h
++++ b/src/Nio/AudioOut.h
+@@ -31,7 +31,7 @@ class AudioOut:public virtual Engine
+         void setSamplerate(int _samplerate);
+ 
+         /**Sets the Samples required per Out of this driver
+-         * not a realtime opperation */
++         * not a realtime operation */
+         int getSampleRate();
+         void setBufferSize(int _bufferSize);
+ 
+diff --git a/src/Nio/OutMgr.cpp b/src/Nio/OutMgr.cpp
+index 090dc943..30d05041 100644
+--- a/src/Nio/OutMgr.cpp
++++ b/src/Nio/OutMgr.cpp
+@@ -136,7 +136,7 @@ void OutMgr::applyOscEventRt(const char *msg)
+ }
+ 
+ //perform a cheap linear interpolation for resampling
+-//This will result in some distortion at frame boundries
++//This will result in some distortion at frame boundaries
+ //returns number of samples produced
+ static size_t resample(float *dest,
+                        const float *src,
+diff --git a/src/Nio/ZynSema.h b/src/Nio/ZynSema.h
+index eaf10d4b..3690daab 100644
+--- a/src/Nio/ZynSema.h
++++ b/src/Nio/ZynSema.h
+@@ -81,7 +81,7 @@ private:
+ 
+ }
+ 
+-#else // POSIX sempahore
++#else // POSIX semaphore
+ 
+ #include <semaphore.h>
+ 
+diff --git a/src/Output/DSSIControlDescription.h b/src/Output/DSSIControlDescription.h
+index f19f95ec..f9304c1a 100644
+--- a/src/Output/DSSIControlDescription.h
++++ b/src/Output/DSSIControlDescription.h
+@@ -26,7 +26,7 @@ struct DSSIControlDescription {
+ 
+     const static int MAX_DSSI_CONTROLS = 12;
+ 
+-    const zyn::MidiControllers controller_code; /// controler code, as accepted by the Controller class
++    const zyn::MidiControllers controller_code; /// controller code, as accepted by the Controller class
+     const char *name; /// human readable name of this control
+ 
+     /** hint about usable range of value for this control, defaulting to 0-128, initially at 64 */
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index 6e2f8f28..75bb56ab 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -12,7 +12,7 @@
+ */
+ 
+ /*
+- * Inital working DSSI output code contributed by Stephen G. Parry
++ * Initial working DSSI output code contributed by Stephen G. Parry
+  */
+ 
+ //this file contains code used from trivial_synth.c from
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 64b61df7..8a826dbf 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -166,7 +166,7 @@ static const rtosc::Ports localPorts = {
+             rtosc_arg_t args[N];
+             char arg_types[N+1] = {0};
+             for(int i=0; i<N; ++i) {
+-                args[i].f    = env->getdt(i)*1000; //answer miliseconds to old gui
++                args[i].f    = env->getdt(i)*1000; //answer milliseconds to old gui
+                 arg_types[i] = 'f';
+             }
+             d.replyArray(d.loc, arg_types, args);
+@@ -510,7 +510,7 @@ public:
+     int operator()(int input) const
+     {
+         return (mismatch)
+-            // The errors occured when calling env_dB2rap. Let f be the
++            // The errors occurred when calling env_dB2rap. Let f be the
+             // conversion function for mode 2 (see Envelope.cpp), then we
+             // load values with (let "o" be the function composition symbol):
+             //   f^{-1} o (env_dB2rap^{-1}) o dB2rap o f
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 2d035c82..dfdee77c 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -95,7 +95,7 @@ static const rtosc::Ports realtime_ports =
+             p->sample[n].basefreq = rtosc_argument(m,1).f;
+             p->sample[n].smp      = *(float**)rtosc_argument(m,2).b.data;
+ 
+-            //XXX TODO memory managment (deallocation of smp buffer)
++            //XXX TODO memory management (deallocation of smp buffer)
+         }},
+     //weird stuff for PCoarseDetune
+     {"detunevalue:", rMap(unit,cents) rDoc("Get detune value"), NULL,
+@@ -232,7 +232,7 @@ static const rtosc::Ports non_realtime_ports =
+             "Number of octaves to sample (above the first sample"),
+ 
+     {"Pbandwidth::i", rShort("bandwidth") rProp(parameter) rLinear(0,1000)
+-        rDefault(500) rDoc("Bandwith Of Harmonics"), NULL,
++        rDefault(500) rDoc("Bandwidth Of Harmonics"), NULL,
+         [](const char *msg, rtosc::RtData &d) {
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+             if(rtosc_narguments(msg)) {
+@@ -697,7 +697,7 @@ static float Pbwscale_translate(char Pbwscale)
+ //Requires
+ // - bandwidth scaling power
+ // - bandwidth
+-// - oscilator harmonics at various frequences (oodles of data)
++// - oscilator harmonics at various frequencies (oodles of data)
+ // - sampled resonance
+ void PADnoteParameters::generatespectrum_bandwidthMode(float *spectrum,
+                                                        int size,
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index 356fef28..7bfeb7ec 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -74,7 +74,7 @@ class PADnoteParameters:public Presets
+                 unsigned char par1;
+                 unsigned char par2;
+             } amp;
+-            bool autoscale; //if the scale of the harmonic profile is computed automaticaly
++            bool autoscale; //if the scale of the harmonic profile is computed automatically
+             unsigned char onehalf; //what part of the base function is used to make the distribution
+         } Php;
+ 
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 4a8989d7..34823109 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -194,7 +194,7 @@ void ADnote::setupVoice(int nvoice)
+     // NoteVoicePar[nvoice].OscilSmpMin = min;
+     // NoteVoicePar[nvoice].OscilSmpMax = max;
+ 
+-    //I store the first elments to the last position for speedups
++    //I store the first elements to the last position for speedups
+     for(int i = 0; i < OSCIL_SMP_EXTRA_SAMPLES; ++i)
+         voice.OscilSmp[synth.oscilsize + i] = voice.OscilSmp[i];
+ 
+@@ -608,7 +608,7 @@ void ADnote::legatonote(LegatoParams lpars)
+                                          getvoicebasefreq(nvoice),
+                                          pars.VoicePar[nvoice].Presonance); //(gf)Modif of the above line.
+ 
+-        //I store the first elments to the last position for speedups
++        //I store the first elements to the last position for speedups
+         for(int i = 0; i < OSCIL_SMP_EXTRA_SAMPLES; ++i)
+             NoteVoicePar[nvoice].OscilSmp[synth.oscilsize
+                                           + i] =
+@@ -1213,7 +1213,7 @@ inline void ADnote::fadein(float *smps) const
+     int zerocrossings = 0;
+     for(int i = 1; i < synth.buffersize; ++i)
+         if((smps[i - 1] < 0.0f) && (smps[i] > 0.0f))
+-            zerocrossings++;  //this is only the possitive crossings
++            zerocrossings++;  //this is only the positive crossings
+ 
+     float tmp = (synth.buffersize_f - 1.0f) / (zerocrossings + 1) / 3.0f;
+     if(tmp < 8.0f)
+@@ -1235,7 +1235,7 @@ inline void ADnote::fadein(float *smps) const
+  */
+ 
+ /* As the code here is a bit odd due to optimization, here is what happens
+- * First the current possition and frequency are retrieved from the running
++ * First the current position and frequency are retrieved from the running
+  * state. These are broken up into high and low portions to indicate how many
+  * samples are skipped in one step and how many fractional samples are skipped.
+  * Outside of this method the fractional samples are just handled with floating
+@@ -1275,7 +1275,7 @@ inline void ADnote::ComputeVoiceOscillator_LinearInterpolation(int nvoice)
+  */
+ 
+ /* As the code here is a bit odd due to optimization, here is what happens
+- * First the current possition and frequency are retrieved from the running
++ * First the current position and frequency are retrieved from the running
+  * state. These are broken up into high and low portions to indicate how many
+  * samples are skipped in one step and how many fractional samples are skipped.
+  * Outside of this method the fractional samples are just handled with floating
+@@ -1836,7 +1836,7 @@ int ADnote::noteout(float *outl, float *outr)
+         //the voice is killed later
+ 
+ 
+-        // Put the ADnote samples in VoiceOut (without appling Global volume, because I wish to use this voice as a modullator)
++        // Put the ADnote samples in VoiceOut (without applying Global volume, because I wish to use this voice as a modullator)
+         if(NoteVoicePar[nvoice].VoiceOut) {
+             if(stereo)
+                 for(int i = 0; i < synth.buffersize; ++i)
+@@ -1874,7 +1874,7 @@ int ADnote::noteout(float *outl, float *outr)
+                 for(int i = 0; i < synth.buffersize; ++i) //mono
+                     bypassl[i] += tmpwavel[i] * NoteVoicePar[nvoice].Volume;
+         }
+-        // chech if there is necesary to proces the voice longer (if the Amplitude envelope isn't finished)
++        // check if there is necessary to process the voice longer (if the Amplitude envelope isn't finished)
+         if(NoteVoicePar[nvoice].AmpEnvelope)
+             if(NoteVoicePar[nvoice].AmpEnvelope->finished())
+                 KillVoice(nvoice);
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 44c00725..f82822de 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -201,7 +201,7 @@ const rtosc::Ports OscilGen::non_realtime_ports = {
+         }}};
+ 
+ #define rForwardCb [](const char *msg, rtosc::RtData &d) {\
+-    printf("fowarding...\n"); d.forward();}
++    printf("forwarding...\n"); d.forward();}
+ const rtosc::Ports OscilGen::realtime_ports{
+     rSelf(OscilGen),
+     rPresetType,
+@@ -398,7 +398,7 @@ void OscilGen::defaults()
+     Phmag[0]  = 127;
+     Phmagtype = 0;
+     if(ADvsPAD)
+-        Prand = 127;       //max phase randomness (usefull if the oscil will be imported to a ADsynth from a PADsynth
++        Prand = 127;       //max phase randomness (useful if the oscil will be imported to a ADsynth from a PADsynth
+     else
+         Prand = 64;  //no randomness
+ 
+@@ -949,7 +949,7 @@ void OscilGen::adaptiveharmonic(fft_t *f, float freq)
+             f[i] = (1.0f - low) * inf[high] + low * inf[high + 1];
+         }
+     }
+-    if(!down)//corect the aplitude of the first harmonic
++    if(!down)//correct the amplitude of the first harmonic
+         f[0] *= rap;
+ 
+     f[1] += f[0];
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 81fd3763..5c996408 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -231,7 +231,7 @@ inline void PADnote::fadein(float *smps)
+     int zerocrossings = 0;
+     for(int i = 1; i < synth.buffersize; ++i)
+         if((smps[i - 1] < 0.0f) && (smps[i] > 0.0f))
+-            zerocrossings++;                                  //this is only the possitive crossings
++            zerocrossings++;                                  //this is only the positive crossings
+ 
+     float tmp = (synth.buffersize_f - 1.0f) / (zerocrossings + 1) / 3.0f;
+     if(tmp < 8.0f)
+diff --git a/src/Tests/KitTest.h b/src/Tests/KitTest.h
+index c1f8192c..084fc55f 100644
+--- a/src/Tests/KitTest.h
++++ b/src/Tests/KitTest.h
+@@ -187,7 +187,7 @@ class KitTest:public CxxTest::TestSuite
+ 
+         //Enumerate cases of:
+         //Legato = {disabled,enabled}
+-        //Mono   = {diabled, enabled}
++        //Mono   = {disabled, enabled}
+         //Kit    = {off, normal, single}
+         //ignore legato=enabled, mono=enabled
+ 
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index f6dcc6d6..10c7b232 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -285,7 +285,7 @@ void BankView::init(Fl_Osc_Interface *osc_, BankViewControls *bvc_, int *npart_)
+  * - Read From Slot
+  * - Write To Slot
+  * - Swap Slot First Selection
+- * - Swap Slot Second Selction
++ * - Swap Slot Second Selection
+  *
+  *   TODO restore autoclose functionality
+  */
+diff --git a/src/UI/EnvelopeFreeEdit.cpp b/src/UI/EnvelopeFreeEdit.cpp
+index 14336b96..e3e4737d 100644
+--- a/src/UI/EnvelopeFreeEdit.cpp
++++ b/src/UI/EnvelopeFreeEdit.cpp
+@@ -123,7 +123,7 @@ int EnvelopeFreeEdit::getnearest(int x,int y) const
+ 
+ static float dt(char val)
+ {
+-    return (powf(2.0f, val / 127.0f * 12.0f) - 1.0f) * 10.0f; //miliseconds
++    return (powf(2.0f, val / 127.0f * 12.0f) - 1.0f) * 10.0f; //milliseconds
+ }
+ 
+ float EnvelopeFreeEdit::getdt(int i) const
+@@ -156,7 +156,7 @@ void EnvelopeFreeEdit::draw(void)
+     fl_line_style(FL_SOLID);
+     fl_line(ox+2,midline,ox+lx-2,midline);
+ 
+-    //draws the evelope points and lines
++    //draws the envelope points and lines
+     Fl_Color alb=FL_WHITE;
+     if (!active_r()) alb=fl_rgb_color(180,180,180);
+     fl_color(alb);
+diff --git a/src/UI/Fl_Osc_Interface.h b/src/UI/Fl_Osc_Interface.h
+index e6735533..c3949754 100644
+--- a/src/UI/Fl_Osc_Interface.h
++++ b/src/UI/Fl_Osc_Interface.h
+@@ -47,7 +47,7 @@ class Fl_Osc_Widget
+         //Smoothly change the base path
+         virtual void rebase(std::string new_base){(void)new_base;};
+         void oscMove(std::string new_ext){(void)new_ext;};
+-        //Explict version for weirdly routed controls
++        //Explicit version for weirdly routed controls
+         void oscMove(std::string old_loc, std::string new_loc){(void)old_loc;(void)new_loc;};
+ };
+ #endif
+diff --git a/src/UI/Fl_Osc_Widget.H b/src/UI/Fl_Osc_Widget.H
+index 4e769639..657f08ea 100644
+--- a/src/UI/Fl_Osc_Widget.H
++++ b/src/UI/Fl_Osc_Widget.H
+@@ -55,7 +55,7 @@ class Fl_Osc_Widget
+         //Smoothly change the base path
+         virtual void rebase(std::string new_base);
+         void oscMove(std::string new_ext);
+-        //Explict version for weirdly routed controls
++        //Explicit version for weirdly routed controls
+         void oscMove(std::string old_loc, std::string new_loc);
+ 
+         //Base path
+diff --git a/src/UI/Fl_Osc_Widget.cpp b/src/UI/Fl_Osc_Widget.cpp
+index bad037cf..bf2fcf3e 100644
+--- a/src/UI/Fl_Osc_Widget.cpp
++++ b/src/UI/Fl_Osc_Widget.cpp
+@@ -69,7 +69,7 @@ void Fl_Osc_Widget::oscWrite(std::string path, const char *args, ...)
+     if(rtosc_vmessage(buffer, 1024, (loc+path).c_str(), args, va))
+         osc->writeRaw(buffer);
+     else
+-        puts("Dangerous Event ommision");
++        puts("Dangerous Event omission");
+ 
+     va_end(va);
+     ////Try to pretty print basic events
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index e090014c..8475bdb6 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -889,7 +889,7 @@ panelwindow->show();}
+       }
+       Fl_Box {} {
+         label {This is free software; you may redistribute it and/or modify it under the terms of the 
+-version 2 (or any later version) of the GNU General Public License as published by the Free Software Fundation.
++version 2 (or any later version) of the GNU General Public License as published by the Free Software Foundation.
+   This program comes with
+  ABSOLUTELY NO WARRANTY. 
+  See the version 2 (or any later version) of the 
+diff --git a/src/UI/VuMasterMeter.h b/src/UI/VuMasterMeter.h
+index 9527c249..1a0e76ff 100644
+--- a/src/UI/VuMasterMeter.h
++++ b/src/UI/VuMasterMeter.h
+@@ -88,7 +88,7 @@ class VuMasterMeter: public VuMeter
+             if (irmsdbl>2) fl_rectf(X+irmsdbl-1,Y+H/2,3,VULENY,255,255,0);
+ 
+ 
+-            //draw the red box if clipping has occured
++            //draw the red box if clipping has occurred
+             if (clipped==0) fl_rectf(X+VULENX+2,Y+1,W-VULENX-3,H-4,0,0,10);
+             else fl_rectf(X+VULENX+2,Y+1,W-VULENX-3,H-4,250,10,10);
+ 
+diff --git a/src/globals.h b/src/globals.h
+index 79361704..cddefe0f 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -99,7 +99,7 @@ typedef std::complex<fftw_real> fft_t;
+ #define NUM_MIDI_PARTS 16
+ 
+ /*
+- * Number of Midi channes
++ * Number of Midi channels
+  */
+ #define NUM_MIDI_CHANNELS 16
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index 5bdb46dd..c0ea35af 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -248,7 +248,7 @@ int main(int argc, char *argv[])
+ 
+     sprng(time(NULL));
+ 
+-    // for option entrys with the 3rd member (flag) pointing here,
++    // for option entries with the 3rd member (flag) pointing here,
+     // getopt_long*() will return 0 and set this flag to the 4th member (val)
+     int getopt_flag;
+ 
+diff --git a/style.cfg b/style.cfg
+index ba66d990..d203b3d4 100644
+--- a/style.cfg
++++ b/style.cfg
+@@ -299,10 +299,10 @@ sp_before_semi                           = remove   # ignore/add/remove/force
+ # Add or remove space before ';' in non-empty 'for' statements
+ sp_before_semi_for                       = remove   # ignore/add/remove/force
+ 
+-# Add or remove space before a semicolon of an empty part of a for statment.
++# Add or remove space before a semicolon of an empty part of a for statement.
+ sp_before_semi_for_empty                 = remove   # ignore/add/remove/force
+ 
+-# Add or remove space after the final semicolon of an empty part of a for statment: for ( ; ; <here> ).
++# Add or remove space after the final semicolon of an empty part of a for statement: for ( ; ; <here> ).
+ sp_after_semi_for_empty                  = remove   # ignore/add/remove/force
+ 
+ # Add or remove space before '[' (except '[]')
+@@ -1022,7 +1022,7 @@ mod_full_brace_do                        = ignore   # ignore/add/remove/force
+ # Add or remove braces on single-line 'for' statement
+ mod_full_brace_for                       = remove   # ignore/add/remove/force
+ 
+-# Add or remove braces on single-line function defintions. (Pawn)
++# Add or remove braces on single-line function definitions. (Pawn)
+ mod_full_brace_function                  = ignore   # ignore/add/remove/force
+ 
+ # Add or remove braces on single-line 'if' statement. Will not remove the braces if they contain an 'else'.
+@@ -1124,20 +1124,20 @@ cmt_sp_after_star_cont                   = 1        # number
+ cmt_multi_check_last                     = true     # false/true
+ 
+ # The filename that contains text to insert at the head of a file if the file doesn't start with a C/C++ comment.
+-# Will substitue $(filename) with the current file's name.
++# Will substitute $(filename) with the current file's name.
+ cmt_insert_file_header                   = ""         # string
+ 
+ # The filename that contains text to insert at the end of a file if the file doesn't end with a C/C++ comment.
+-# Will substitue $(filename) with the current file's name.
++# Will substitute $(filename) with the current file's name.
+ cmt_insert_file_footer                   = ""         # string
+ 
+-# The filename that contains text to insert before a function implementation if the function isn't preceeded with a C/C++ comment.
+-# Will substitue $(function) with the function name and $(javaparam) with the javadoc @param and @return stuff.
++# The filename that contains text to insert before a function implementation if the function isn't preceded with a C/C++ comment.
++# Will substitute $(function) with the function name and $(javaparam) with the javadoc @param and @return stuff.
+ # Will also substitute $(fclass) with the class name: void CFoo::Bar() { ... }
+ cmt_insert_func_header                   = ""         # string
+ 
+-# The filename that contains text to insert before a class if the class isn't preceeded with a C/C++ comment.
+-# Will substitue $(class) with the class name.
++# The filename that contains text to insert before a class if the class isn't preceded with a C/C++ comment.
++# Will substitute $(class) with the class name.
+ cmt_insert_class_header                  = ""         # string
+ 
+ # If a preprocessor is encountered when stepping backwards from a function name, then
+-- 
+2.47.0
+

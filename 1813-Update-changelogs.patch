@@ -1,0 +1,74 @@
+From a327b23147f3b878e7bec467f303d6f97145b830 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 19 Jan 2022 21:36:59 -0500
+Subject: [PATCH 1813/1936] Update changelogs
+
+---
+ AUTHORS.txt | 13 +++++++++++--
+ NEWS.txt    | 10 ++++++++++
+ 2 files changed, 21 insertions(+), 2 deletions(-)
+
+diff --git a/AUTHORS.txt b/AUTHORS.txt
+index dcd9a6c2..01fc07b6 100644
+--- a/AUTHORS.txt
++++ b/AUTHORS.txt
+@@ -5,7 +5,7 @@ Active Developers:
+                             SUBnote overtones, unison enhancements, ...)
+         Johannes Lorenz (Effect Documentation, PID Files, parameter metadata)
+         Friedolino (14 bit unison, anti-aliased oscillators, floating point
+-        params, repeatable envs, ...)
++        params, repeatable envs, moog filter, new waveshapers, BPM sync...)
+         Daniel Sheeler
+ 
+ Original author (inactive):
+@@ -28,7 +28,7 @@ Contributors:
+         Damien Goutte-Gattat (Bank select midi support)
+         Lieven Moors (Spike/Circle waveform)
+         Olaf Schulz (MIDI Aftertouch support)
+-        Jonathan Liles (NSM & NTK support)
++        Jonathan Liles (NSM & NTK support & Filter smoothing)
+         Ilario Glasgo (Italian Doc Translation)
+         Filipe Coelho (Globals Cleanup)
+         Andre Sklenar (UI Pixmaps)
+@@ -47,3 +47,12 @@ Contributors:
+         Kinichiro Inoguchi (Added Sndio input&output engine, build/cmake fixes)
+         Carlo Bramini (Fixed several cygwin build issues)
+         Simon van der Veldt (fixed missing cmake dependency)
++        Philippe Gervais (Documentation Fixes)
++        Carlo Bramini (Windows config fix)
++        AnClark (Zest fixes)
++        Grahm Breed (Fix MIDI note 0 not turning on)
++        Luz Paz (Typo fixes)
++        Ricard Wanderlof/polluxsynth (Latched keymode, notepool refactor,
++                                      legato fixes, portamento upgrades)
++        Plagiat Gang of Bros (Fixed NSM JACK-MULTI client naming)
++        Julien Olivain (Fixed gcc warnings)
+diff --git a/NEWS.txt b/NEWS.txt
+index 8ad357fb..8847f9ed 100644
+--- a/NEWS.txt
++++ b/NEWS.txt
+@@ -7,11 +7,21 @@
+         - Add filter parameter smoothing
+         - Add filter optional LPF to LFO
+         - Add repeatable envelopes
++        - Add LFO fade in
++        - Add moog ladder filter
++        - Add comb filter
++        - Add BPM sync
++        - Add latched key mode
++        - Re-enable classic MIDI learn
+         - Increase envelope time parameter resolution
+         - Fix excessively loud volume bug in Part XML loader
+         - Fix crash with gcc 10.x.x within file manager
+         - Fix crash in erroneous patch load
+         - Fix OSS/etc detection under cygwin
++        - Fix padsynth memory leak
++        - Fix weird note-to-note portamento switches
++        - Reduce fftw resolution from 64bit to 32bit
++        - Remove Cxxtest dependency
+         - Fix other bugs
+ 
+ 3.0.5 (15 April 2019)
+-- 
+2.47.0
+

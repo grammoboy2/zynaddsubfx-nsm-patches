@@ -1,0 +1,26 @@
+From cf479ca65c4b09306e57e67611eef57400d806a8 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 14 Jun 2012 10:49:16 -0400
+Subject: [PATCH 0021/1936] Fixes Logic Error In Part.cpp
+
+Error pointed out by bitwise on KVR forums
+---
+ src/Misc/Part.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 4e444a04..4054a8e7 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -1054,7 +1054,7 @@ void Part::setPpanning(char Ppanning_)
+  */
+ void Part::setkititemstatus(int kititem, int Penabled_)
+ {
+-    if((kititem == 0) && (kititem >= NUM_KIT_ITEMS))
++    if((kititem == 0) || (kititem >= NUM_KIT_ITEMS))
+         return;                                        //nonexistent kit item and the first kit item is always enabled
+     kit[kititem].Penabled = Penabled_;
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,35 @@
+From 08b9e806b521e11609e5716e5f4be3fc00e804d4 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Fri, 29 Jan 2016 19:49:06 +0100
+Subject: [PATCH 0836/1936] Prevent assertion under Part::setkititemstatus
+
+---
+ src/Misc/Part.cpp | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 6e7f4c29..bf79e08c 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -312,7 +312,7 @@ void Part::defaultsinstrument()
+     Pdrummode = 0;
+ 
+     for(int n = 0; n < NUM_KIT_ITEMS; ++n) {
+-        kit[n].Penabled    = false;
++        //kit[n].Penabled    = false;
+         kit[n].Pmuted      = false;
+         kit[n].Pminkey     = 0;
+         kit[n].Pmaxkey     = 127;
+@@ -847,6 +847,9 @@ void Part::setkititemstatus(unsigned kititem, bool Penabled_)
+         delete kkit.adpars;
+         delete kkit.subpars;
+         delete kkit.padpars;
++        kkit.adpars  = nullptr;
++        kkit.subpars = nullptr;
++        kkit.padpars = nullptr;
+         kkit.Pname[0] = '\0';
+ 
+         notePool.killAllNotes();
+-- 
+2.47.0
+

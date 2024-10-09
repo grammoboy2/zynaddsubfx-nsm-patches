@@ -1,0 +1,939 @@
+From 9f174377663d712409953aaf6651f9f7a64eea46 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 19 Dec 2014 01:31:11 -0500
+Subject: [PATCH 0299/1936] Initial Work To Restore Presets
+
+---
+ src/Misc/CMakeLists.txt       |   1 +
+ src/Misc/MiddleWare.cpp       |  10 +
+ src/Misc/MiddleWare.h         |   5 +
+ src/Misc/PresetExtractor.cpp  | 189 +++++++++++++++
+ src/Misc/PresetExtractor.h    |  18 ++
+ src/Misc/Util.h               |  13 +
+ src/Params/EnvelopeParams.cpp |  10 +
+ src/Params/EnvelopeParams.h   |   5 +-
+ src/UI/EnvelopeUI.fl          |  24 +-
+ src/UI/PresetsUI.fl           | 430 ++++++++++++++--------------------
+ src/main.cpp                  |   2 +
+ 11 files changed, 443 insertions(+), 264 deletions(-)
+ create mode 100644 src/Misc/PresetExtractor.cpp
+ create mode 100644 src/Misc/PresetExtractor.h
+
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index 11d2ae0f..9e1a8fd5 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -13,6 +13,7 @@ set(zynaddsubfx_misc_SRCS
+ 	Misc/WavFile.cpp
+ 	Misc/WaveShapeSmps.cpp
+     Misc/MiddleWare.cpp
++    Misc/PresetExtractor.cpp
+     Misc/Allocator.cpp
+ )
+ 
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 82e344af..6ea1feb3 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1248,6 +1248,11 @@ void MiddleWare::tick(void)
+     impl->tick();
+ }
+ 
++void MiddleWare::doReadOnlyOp(std::function<void()> fn)
++{
++    impl->doReadOnlyOp(fn);
++}
++
+ void MiddleWare::setUiCallback(void(*cb)(void*,const char *),void *ui)
+ {
+     impl->cb = cb;
+@@ -1258,6 +1263,11 @@ void MiddleWare::setIdleCallback(void(*cb)(void))
+ {
+     impl->idle = cb;
+ }
++        
++void MiddleWare::transmitMsg(const char *msg)
++{
++    impl->handleMsg(msg);
++}
+ 
+ void MiddleWare::pendingSetProgram(int part)
+ {
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index a6e31ce6..2f1f6d20 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -1,4 +1,5 @@
+ #pragma once
++#include <functional>
+ 
+ //Link between realtime and non-realtime layers
+ class MiddleWare
+@@ -16,6 +17,10 @@ class MiddleWare
+         void setIdleCallback(void(*cb)(void));
+         //Handle events
+         void tick(void);
++        //Do A Readonly Operation (For Parameter Copy)
++        void doReadOnlyOp(std::function<void()>);
++        //Handle a rtosc Message
++        void transmitMsg(const char *);
+         //Indicate that a program will be loaded on a known part
+         void pendingSetProgram(int part);
+     private:
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+new file mode 100644
+index 00000000..f00512a1
+--- /dev/null
++++ b/src/Misc/PresetExtractor.cpp
+@@ -0,0 +1,189 @@
++/**
++ * Extract Presets from realtime data
++ */
++
++#include "../Params/PresetsStore.h"
++
++#include "../Misc/Master.h"
++#include "../Misc/Util.h"
++#include "../Params/ADnoteParameters.h"
++#include "../Params/EnvelopeParams.h"
++#include "../Params/FilterParams.h"
++#include "../Params/LFOParams.h"
++#include "../Params/PADnoteParameters.h"
++#include "../Params/Presets.h"
++#include "../Params/PresetsArray.h"
++#include "../Params/PresetsStore.h"
++#include "../Params/SUBnoteParameters.h"
++#include "../Misc/MiddleWare.h"
++#include "PresetExtractor.h"
++#include <string>
++using std::string;
++
++
++/*****************************************************************************
++ *                     Implementation Methods                                *
++ *****************************************************************************/
++static string clip;
++
++class Capture:public rtosc::RtData
++{
++    public:
++        Capture(void *obj_)
++        {
++            matches = 0;
++            memset(locbuf, 0, sizeof(locbuf));
++            loc      = locbuf;
++            loc_size = sizeof(locbuf);
++            obj      = obj_;
++        }
++
++        virtual void reply(const char *path, const char *args, ...)
++        {
++            printf("reply(%p)(%s)(%s)...\n", msgbuf, path, args);
++            printf("size is %d\n", sizeof(msgbuf));
++            va_list va;
++            va_start(va,args);
++            char *buffer = msgbuf;
++            rtosc_vmessage(buffer,sizeof(msgbuf),path,args,va);
++        }
++        char msgbuf[1024];
++        char locbuf[1024];
++};
++
++template <class T>
++T capture(Master *m, std::string url);
++
++template <>
++void *capture(Master *m, std::string url)
++{
++    Capture c(m);
++    char query[1024];
++    rtosc_message(query, 1024, url.c_str(), "");
++    Master::ports.dispatch(query+1,c);
++    if(rtosc_message_length(c.msgbuf, sizeof(c.msgbuf))) {
++        if(rtosc_type(c.msgbuf, 0) == 'b' &&
++                rtosc_argument(c.msgbuf, 0).b.len == sizeof(void*))
++            return *(void**)rtosc_argument(c.msgbuf,0).b.data;
++    }
++
++    return NULL;
++}
++
++template<class T>
++std::string doCopy(MiddleWare &mw, string url)
++{
++    XMLwrapper xml;
++    mw.doReadOnlyOp([&xml, url,&mw](){
++        Master *m = mw.spawnMaster();
++        //Get the pointer
++        T *t = (T*)capture<void*>(m, url+"self");
++        //Extract Via mxml
++        t->add2XML(&xml);
++    });
++
++    return xml.getXMLdata();
++}
++
++template<class T>
++void doPaste(MiddleWare &mw, string url, string data)
++{
++    if(clip.length() < 20)
++        return;
++
++    //Generate a new object
++    T *t = new T();
++    XMLwrapper xml;
++    xml.putXMLdata(clip.data());
++    t->getfromXML(&xml);
++
++    //Send the pointer
++    char buffer[1024];
++    rtosc_message(buffer, 1024, (url+"paste").c_str(), "b", sizeof(void*), &t);
++    printf("Sending info to '%s'\n", buffer);
++    mw.transmitMsg(buffer);
++
++    //Let the pointer be reclaimed later
++}
++
++void doClassPaste(std::string type, MiddleWare &mw, string url, string data)
++{
++    if(type == "EnvelopeParams")
++        doPaste<EnvelopeParams>(mw, url, data);
++}
++
++std::string doClassCopy(std::string type, MiddleWare &mw, string url)
++{
++    if(type == "EnvelopeParams")
++        return doCopy<EnvelopeParams>(mw, url);
++    return "UNDEF";
++}
++
++std::string getUrlType(std::string url)
++{
++    printf("Searching for '%s'\n", (url+"self").c_str());
++    auto self = Master::ports.apropos((url+"self").c_str());
++    if(self)
++        return self->meta()["class"];
++    else
++        return "";
++}
++
++
++
++/*****************************************************************************
++ *                            API Stubs                                      *
++ *****************************************************************************/
++
++Clipboard clipboardCopy(MiddleWare &mw, string url)
++{
++    //Identify The Self Type of the Object
++    string type = getUrlType(url);
++    printf("Copying a '%s' object", type.c_str());
++
++    //Copy The Object
++    string data = doClassCopy(type, mw, url);
++    printf("Object Information '%s'\n", data.c_str());
++
++    return {type, data};
++}
++
++void clipBoardPaste(const char *url, Clipboard clip)
++{
++}
++
++MiddleWare *middlewarepointer;
++void presetCopy(std::string url, std::string name)
++{
++    clip = doClassCopy(getUrlType(url), *middlewarepointer, url);
++    printf("PresetCopy()\n");
++    printf("clip = ``%s''\n", clip.c_str());
++}
++void presetPaste(std::string url, std::string name)
++{
++    doClassPaste(getUrlType(url), *middlewarepointer, url, clip);
++    printf("PresetPaste()\n");
++}
++void presetPaste(std::string url, int)
++{
++    doClassPaste(getUrlType(url), *middlewarepointer, url, clip);
++    printf("PresetPaste()\n");
++}
++void presetDelete(int)
++{
++    printf("PresetDelete()\n");
++}
++void presetRescan()
++{
++    printf("PresetRescan()\n");
++}
++std::string presetClipboardType()
++{
++    printf("PresetClipboardType()\n");
++    return "dummy";
++}
++bool presetCheckClipboardType()
++{
++    printf("PresetCheckClipboardType()\n");
++    return true;
++}
+diff --git a/src/Misc/PresetExtractor.h b/src/Misc/PresetExtractor.h
+new file mode 100644
+index 00000000..6aa2c180
+--- /dev/null
++++ b/src/Misc/PresetExtractor.h
+@@ -0,0 +1,18 @@
++#include <string>
++
++struct Clipboard {
++    std::string data;
++    std::string type;
++};
++
++Clipboard clipboardCopy(class MiddleWare &mw, std::string url);
++
++void presetCopy(std::string url, std::string name);
++void presetPaste(std::string url, std::string name);
++void presetPaste(std::string url, int);
++void presetDelete(int);
++void presetRescan();
++std::string presetClipboardType();
++bool presetCheckClipboardType();
++
++extern MiddleWare *middlewarepointer;
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 7ca67222..7f7d22d0 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -201,4 +201,17 @@ const char *message_snip(const char *m);
+         d.obj = (((type*)d.obj)->var)[atoi(mm)]; \
+         cast::ports.dispatch(message_snip(m), d);}}
+ 
++#define rSelf(type) \
++{"self", rProp(internal) rMap(class, type) rDoc("port metadata"), 0, \
++    [](const char *, rtosc::RtData &d){ \
++        d.reply(d.loc, "b", sizeof(d.obj), &d.obj);}}\
++
++#define rPaste(type) \
++{"paste:b", rProp(internal) rDoc("paste port"), 0, \
++    [](const char *m, rtosc::RtData &d){ \
++        printf("rPaste...\n"); \
++        rObject &paste = **(rObject **)rtosc_argument(m,0).b.data; \
++        rObject &o = *(rObject*)d.obj;\
++        o.paste(paste);}}
++
+ #endif
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 24f39351..fc2d0543 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -32,6 +32,8 @@
+ using namespace rtosc;
+ 
+ static rtosc::Ports localPorts = {
++    rSelf(EnvelopeParams),
++    rPaste(),
+     rToggle(Pfreemode, "Complex Envelope Definitions"),
+     rParamZyn(Penvpoints, rProp(internal), "Number of points in complex definition"),
+     rParamZyn(Penvsustain, rProp(internal), "Location of the sustain point"),
+@@ -120,6 +122,14 @@ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+ EnvelopeParams::~EnvelopeParams()
+ {}
+ 
++void EnvelopeParams::paste(const EnvelopeParams &ep)
++{
++    //Avoid undefined behavior
++    if(&ep == this)
++        return;
++    memcpy((char*)this, (const char*)&ep, sizeof(*this));
++}
++
+ float EnvelopeParams::getdt(char i) const
+ {
+     return EnvelopeParams::dt(Penvdt[(int)i]);
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index b74ec848..9162e280 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -33,9 +33,10 @@
+ class EnvelopeParams:public Presets
+ {
+     public:
+-        EnvelopeParams(unsigned char Penvstretch_,
+-                       unsigned char Pforcedrelease_);
++        EnvelopeParams(unsigned char Penvstretch_=64,
++                       unsigned char Pforcedrelease_=0);
+         ~EnvelopeParams();
++        void paste(const EnvelopeParams &ep);
+         void ADSRinit(char A_dt, char D_dt, char S_val, char R_dt);
+         void ADSRinit_dB(char A_dt, char D_dt, char S_val, char R_dt);
+         void ASRinit(char A_val, char A_dt, char R_val, char R_dt);
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index afecb0c7..ce868fbe 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -78,13 +78,13 @@ delete (freemodeeditwindow);} {}
+     } {
+       Fl_Button {} {
+         label C
+-        callback {/*presetsui->copy(env);*/}
++        callback {presetsui->copy(freemodeeditwindow->loc());}
+         xywh {465 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         code0 {freemodeeditwindow->osc = osc; freemodeeditwindow->base = loc();}
+       }
+       Fl_Button {} {
+         label P
+-        callback {/*presetsui->paste(env,this);*/}
++        callback {presetsui->paste(freemodeeditwindow->loc(),this);}
+         xywh {482 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+       }
+       Fl_Button addpoint {
+@@ -184,12 +184,12 @@ envfree->redraw();}
+       } {
+         Fl_Button {} {
+           label C
+-          callback {/*presetsui->copy(env);*/}
++          callback {presetsui->copy(envADSR->loc());}
+           xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Button {} {
+           label P
+-          callback {/*presetsui->paste(env,this);*/}
++          callback {presetsui->paste(envADSR->loc(),this);}
+           xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Dial e1adt {
+@@ -258,12 +258,12 @@ envfree->redraw();}
+       } {
+         Fl_Button {} {
+           label C
+-          callback {/*presetsui->copy(env);*/}
++          callback {presetsui->copy(envASR->loc());}
+           xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Button {} {
+           label P
+-          callback {/*presetsui->paste(env,this);*/}
++          callback {presetsui->paste(envASR->loc(),this);}
+           xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Dial e2aval {
+@@ -326,12 +326,12 @@ envfree->redraw();}
+       } {
+         Fl_Button {} {
+           label C
+-          callback {/*presetsui->copy(env);*/}
++          callback {presetsui->copy(envADSRfilter->loc());}
+           xywh {220 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Button {} {
+           label P
+-          callback {/*presetsui->paste(env,this);*/}
++          callback {presetsui->paste(envADSRfilter->loc(),this);}
+           xywh {237 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Dial e3aval {
+@@ -409,12 +409,12 @@ envfree->redraw();}
+       } {
+         Fl_Button {} {
+           label C
+-          callback {/*presetsui->copy(env);*/}
++          callback {presetsui->copy(envASRbw->loc());}
+           xywh {155 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Button {} {
+           label P
+-          callback {/*presetsui->paste(env,this);*/}
++          callback {presetsui->paste(envASRbw->loc(),this);}
+           xywh {172 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+         }
+         Fl_Dial e4aval {
+@@ -490,12 +490,12 @@ envfree->redraw();}
+         }
+         Fl_Button {} {
+           label C
+-          callback {/*presetsui->copy(env);*/}
++          callback {presetsui->copy(envfree->loc());}
+           xywh {150 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+         Fl_Button {} {
+           label P
+-          callback {/*presetsui->paste(env,this);*/}
++          callback {presetsui->paste(envfree->loc(),this);}
+           xywh {167 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 55
+         }
+       }
+diff --git a/src/UI/PresetsUI.fl b/src/UI/PresetsUI.fl
+index 5eafc472..32843826 100644
+--- a/src/UI/PresetsUI.fl
++++ b/src/UI/PresetsUI.fl
+@@ -11,268 +11,198 @@ decl {\#include <stdio.h>} {public
+ decl {\#include <stdlib.h>} {public
+ } 
+ 
++decl {\#include <string>} {public
++} 
++
+ decl {\#include "../Params/PresetsArray.h"} {} 
+ 
+ decl {\#include "../Params/Presets.h"} {public
+ } 
+ 
+-class PresetsUI_ {} {
+-  Function {refresh()} {open return_type {virtual void}
+-  } {
+-    code {;} {}
+-  }
+-  Function {~PresetsUI_()} {open return_type virtual
+-  } {
+-    code {;} {}
+-  }
++decl {\#include "../Misc/PresetExtractor.h"} {public
+ } 
+ 
+-class PresetsUI {} {
+-  Function {PresetsUI()} {} {
+-    code {p=NULL;
+-make_window();} {}
+-  }
+-  Function {~PresetsUI()} {} {
+-    code {copywin->hide();delete(copywin);
+-pastewin->hide();delete(pastewin);} {}
+-  }
+-  Function {make_window()} {} {
+-    Fl_Window copywin {
+-      label {Copy to Clipboard/Preset}
+-      xywh {190 173 265 430} type Double box THIN_UP_BOX color 238 hide modal
++class PresetsUI_ {} {
++    Function {refresh()} {open return_type {virtual void}
+     } {
+-      Fl_Browser copybrowse {
+-        callback {int val=o->value();
+-if (val!=0){
+-   presetname->cut(0,presetname->maximum_size());
+-   presetname->insert(o->text(val));
+-};}
+-        xywh {10 25 245 320} type Select
+-      }
+-      Fl_Button copypbutton {
+-        label {Copy to Preset}
+-        callback {const char *tmp=presetname->value();
+-if (tmp!=NULL) {
+-        if (strlen(tmp)>0){
+-           p->copy(tmp);
+-	   copywin->hide();
+-        };
+-};}
+-        xywh {145 355 110 20} box THIN_UP_BOX
+-      }
+-      Fl_Button copybutton {
+-        label {Copy to Clipboard}
+-        callback {p->copy(NULL);
+-copywin->hide();}
+-        xywh {25 385 90 35} box THIN_UP_BOX align 192
+-      }
+-      Fl_Button {} {
+-        label Cancel
+-        callback {copywin->hide();}
+-        xywh {160 385 80 35} box THIN_UP_BOX align 192
+-      }
+-      Fl_Box {} {
+-        label {Type:}
+-        xywh {10 5 40 15} labelsize 11 align 20
+-      }
+-      Fl_Box copytypetext {
+-        xywh {50 5 205 15} box FLAT_BOX color 238 labelfont 1 labelsize 11 align 20
+-      }
+-      Fl_Input presetname {
+-        callback {const char *tmp=o->value();
+-if (tmp==NULL) tmp="";
+-if (strlen(tmp)>0) {
+-	copybutton->deactivate();
+-	copypbutton->activate();
+-} else {
+-	copybutton->activate();
+-	copypbutton->deactivate();
+-};}
+-        xywh {10 355 130 20} when 1
+-      }
++        code {;} {}
+     }
+-    Fl_Window pastewin {
+-      label {Paste from Clipboard/Preset}
+-      xywh {463 173 265 430} type Double box THIN_UP_BOX color 238 hide modal
++    Function {~PresetsUI_()} {open return_type virtual
+     } {
+-      Fl_Browser pastebrowse {
+-        callback {if (o->value()==0) {
+-	pastepbutton->deactivate();
+-	deletepbutton->deactivate();
+-}else{
+-	pastepbutton->activate();
+-	deletepbutton->activate();
+-};}
+-        xywh {10 25 245 320} type Hold
+-      }
+-      Fl_Button pastepbutton {
+-        label {Paste from Preset}
+-        callback {int n=pastebrowse->value();
+-if (n!=0) p->paste(n);
+-pastewin->hide();
+-pui->refresh();}
+-        xywh {10 355 160 20} box THIN_UP_BOX
+-      }
+-      Fl_Button pastebutton {
+-        label {Paste from Clipboard}
+-        callback {p->paste(0);
+-pastewin->hide();
+-pui->refresh();}
+-        xywh {25 385 90 35} box THIN_UP_BOX align 192
+-      }
+-      Fl_Button {} {
+-        label Cancel
+-        callback {pastewin->hide();}
+-        xywh {160 385 80 35} box THIN_UP_BOX align 192
+-      }
+-      Fl_Box pastetypetext {
+-        xywh {55 5 200 15} box FLAT_BOX color 238 labelfont 1 labelsize 11 align 20
+-      }
+-      Fl_Box {} {
+-        label {Type:}
+-        xywh {15 5 40 15} labelsize 11 align 20
+-      }
+-      Fl_Button deletepbutton {
+-        label Delete
+-        callback {int n=pastebrowse->value();
+-
+-if (this->p_is_PresetArray) {
+-    PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+-    if (n!=0) pre->deletepreset(n);
+-    rescanArray();
+-} else {
+-    if (n!=0) p->deletepreset(n);
+-    rescan();
+-}} selected
+-        xywh {180 355 75 20} box THIN_UP_BOX
+-      }
++        code {;} {}
+     }
+-  }
+-  Function {copy(Presets *p)} {} {
+-    code {copybutton->activate();
+-copypbutton->deactivate();
+-
+-
+-this->p=p;
+-this->pui=NULL;
+-bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
+-presetname->cut(0,presetname->maximum_size());
+-
+-if (but) p->copy(NULL);
+-   else {
+-        rescan();
+-	copytypetext->label(&p->type[1]);
+-	copywin->show();
+-   };} {}
+-  }
+-  Function {paste(Presets *p,PresetsUI_ *pui)} {} {
+-    code {this->p=p;
+-this->pui=pui;
+-bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
+-pastepbutton->deactivate();
+-deletepbutton->deactivate();
+-
+-if (but) {
+-	p->paste(0);
+-	pui->refresh();
+-} else {
+-        rescan();
+-	pastetypetext->label(&p->type[1]);
+-	if (p->checkclipboardtype()) pastebutton->activate();
+-		else pastebutton->deactivate();
+-	this->p_is_PresetArray = false;
+-	pastewin->show();
+-   };} {}
+-  }
+-  Function {copy(Presets *p,int n)} {} {
+-    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+-if(pre)
+-    pre->setelement(n);
+-copyArray(p);} {}
+-  }
+-  Function {paste(Presets *p,PresetsUI_ *pui,int n)} {} {
+-    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+-if(pre)
+-    pre->setelement(n);
+-pasteArray(p,pui);} {}
+-  }
+-  Function {rescan()} {} {
+-    code {copybrowse->clear();
+-pastebrowse->clear();
+-p->rescanforpresets();
+-
+-for (unsigned int i=0;i<presetsstore.presets.size();i++){
+-   std::string name=presetsstore.presets[i].name;
+-   if(name.empty())
+-       continue;
+-   copybrowse->add(name.c_str());
+-   pastebrowse->add(name.c_str());
+-};} {}
+-  }
+-  decl {Presets *p;} {public local
+-  }
+-  decl {PresetsUI_ *pui;} {public local
+-  }
+-  Function {copyArray(Presets *p)} {open
+-  } {
+-    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+-
+-copybutton->activate();
+-copypbutton->deactivate();
+-
+-this->p=p;
+-this->pui=NULL;
+-bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
+-presetname->cut(0,presetname->maximum_size());
+-
+-if (but) pre->copy(NULL);
+-   else {
+-        rescanArray();
+-	copytypetext->label(&pre->type[1]);
+-	copywin->show();
+-   };} {}
+-  }
+-  Function {pasteArray(Presets *p,PresetsUI_ *pui)} {open
+-  } {
+-    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+-
+-this->p=p;
+-this->pui=pui;
+-bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
+-pastepbutton->deactivate();
+-deletepbutton->deactivate();
+-
+-if (but) {
+-	pre->paste(0);
+-	pui->refresh();
+-} else {
+-        rescanArray();
+-	pastetypetext->label(&pre->type[1]);
+-	if (pre->checkclipboardtype()) pastebutton->activate();
+-		else pastebutton->deactivate();
+-	this->p_is_PresetArray = true;
+-	pastewin->show();
+-   };} {}
+-  }
+-  Function {rescanArray()} {open
+-  } {
+-    code {PresetsArray *pre = dynamic_cast<PresetsArray *>(p);
+-
+-copybrowse->clear();
+-pastebrowse->clear();
+-pre->rescanforpresets();
++} 
+ 
+-for (unsigned int i=0;i<presetsstore.presets.size();i++){
+-   std::string name=presetsstore.presets[i].name;
+-   if(name.empty())
+-       continue;
+-   copybrowse->add(name.c_str());
+-   pastebrowse->add(name.c_str());
+-};} {}
+-   }
+-  decl {bool p_is_PresetArray;} {public
+-  }
++class PresetsUI {} {
++    Function {PresetsUI()} {} {
++        code {make_window();} {}
++    }
++    Function {~PresetsUI()} {} {
++        code {copywin->hide();delete(copywin);
++            pastewin->hide();delete(pastewin);} {}
++    }
++    Function {make_window()} {} {
++        Fl_Window copywin {
++            label {Copy to Clipboard/Preset}
++            xywh {190 173 265 430} type Double box THIN_UP_BOX color 238 hide modal
++        } {
++            Fl_Browser copybrowse {
++                callback {int val=o->value();
++                    if (val!=0){
++                        presetname->cut(0,presetname->maximum_size());
++                        presetname->insert(o->text(val));
++                    };}
++                xywh {10 25 245 320} type Select
++            }
++            Fl_Button copypbutton {
++                label {Copy to Preset}
++                callback {const char *tmp=presetname->value();
++                    if (tmp!=NULL) {
++                        if (strlen(tmp)>0){
++                            presetCopy(url, tmp);
++                            copywin->hide();
++                        };
++                    };}
++                xywh {145 355 110 20} box THIN_UP_BOX
++            }
++            Fl_Button copybutton {
++                label {Copy to Clipboard}
++                callback {
++                    presetCopy(url, "");
++                    copywin->hide();}
++                xywh {25 385 90 35} box THIN_UP_BOX align 192
++            }
++            Fl_Button {} {
++                label Cancel
++                    callback {copywin->hide();}
++                xywh {160 385 80 35} box THIN_UP_BOX align 192
++            }
++            Fl_Box {} {
++                label {Type:}
++                xywh {10 5 40 15} labelsize 11 align 20
++            }
++            Fl_Box copytypetext {
++                xywh {50 5 205 15} box FLAT_BOX color 238 labelfont 1 labelsize 11 align 20
++            }
++            Fl_Input presetname {
++                callback {const char *tmp=o->value();
++                    if (tmp==NULL) tmp="";
++                    if (strlen(tmp)>0) {
++                        copybutton->deactivate();
++                        copypbutton->activate();
++                    } else {
++                        copybutton->activate();
++                        copypbutton->deactivate();
++                    };}
++                xywh {10 355 130 20} when 1
++            }
++        }
++        Fl_Window pastewin {
++            label {Paste from Clipboard/Preset}
++            xywh {463 173 265 430} type Double box THIN_UP_BOX color 238 hide modal
++        } {
++            Fl_Browser pastebrowse {
++                callback {if (o->value()==0) {
++                    pastepbutton->deactivate();
++                    deletepbutton->deactivate();
++                }else{
++                    pastepbutton->activate();
++                    deletepbutton->activate();
++                };}
++                xywh {10 25 245 320} type Hold
++            }
++            Fl_Button pastepbutton {
++                label {Paste from Preset}
++                callback {int n=pastebrowse->value();
++                    if (n!=0) presetPaste(url, n);
++                    pastewin->hide();
++                    pui->refresh();}
++                xywh {10 355 160 20} box THIN_UP_BOX
++            }
++            Fl_Button pastebutton {
++                label {Paste from Clipboard}
++                callback {presetPaste(url, 0);
++                    pastewin->hide();
++                    pui->refresh();}
++                xywh {25 385 90 35} box THIN_UP_BOX align 192
++            }
++            Fl_Button {} {
++                label Cancel
++                    callback {pastewin->hide();}
++                xywh {160 385 80 35} box THIN_UP_BOX align 192
++            }
++            Fl_Box pastetypetext {
++                xywh {55 5 200 15} box FLAT_BOX color 238 labelfont 1 labelsize 11 align 20
++            }
++            Fl_Box {} {
++                label {Type:}
++                xywh {15 5 40 15} labelsize 11 align 20
++            }
++            Fl_Button deletepbutton {
++                label Delete
++                    callback {int n=pastebrowse->value();
++
++                        if (n!=0)
++                            presetDelete(n);
++                        rescan();
++                    } selected
++                xywh {180 355 75 20} box THIN_UP_BOX
++            }
++        }
++    }
++    Function {copy(std::string url_)} {} {
++        code {copybutton->activate();
++            copypbutton->deactivate();
++
++            this->pui=NULL;
++            bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
++            presetname->cut(0,presetname->maximum_size());
++
++            if(but) {
++                presetCopy(url, "");
++            } else {
++                rescan();
++                copytypetext->label(presetClipboardType().c_str());
++                copywin->show();
++            };} {}
++    }
++    Function {paste(std::string url_, PresetsUI_ *pui)} {} {
++        code {
++            url = url_;
++            this->pui=pui;
++            bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
++            pastepbutton->deactivate();
++            deletepbutton->deactivate();
++
++            if(but) {
++                presetPaste(url, 0);
++                pui->refresh();
++            } else {
++                rescan();
++                pastetypetext->label(presetClipboardType().c_str());
++                if (presetCheckClipboardType()) pastebutton->activate();
++                else pastebutton->deactivate();
++                pastewin->show();
++            };} {}
++    }
++    Function {rescan()} {} {
++        code {copybrowse->clear();
++            pastebrowse->clear();
++            presetRescan();
++
++            for (unsigned int i=0;i<presetsstore.presets.size();i++){
++                std::string name=presetsstore.presets[i].name;
++                if(name.empty())
++                    continue;
++                copybrowse->add(name.c_str());
++                pastebrowse->add(name.c_str());
++            };} {}
++    }
++    decl {std::string url;} {public local
++    }
++    decl {PresetsUI_ *pui;} {public local
++    }
+ } 
+ 
+ decl {PresetsUI *presetsui;} {public
+-} 
++}
+diff --git a/src/main.cpp b/src/main.cpp
+index cdee7850..7218b254 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -40,6 +40,7 @@
+ #include "Params/PADnoteParameters.h"
+ 
+ #include "DSP/FFTwrapper.h"
++#include "Misc/PresetExtractor.h"
+ #include "Misc/Master.h"
+ #include "Misc/Part.h"
+ #include "Misc/Util.h"
+@@ -424,6 +425,7 @@ int main(int argc, char *argv[])
+     gui = GUI::createUi(middleware->spawnUiApi(), &Pexitprogram);
+     middleware->setUiCallback(GUI::raiseUi, gui);
+     middleware->setIdleCallback([](){GUI::tickUi(gui);});
++    middlewarepointer = middleware;
+ 
+     if(!noui)
+     {
+-- 
+2.47.0
+

@@ -1,0 +1,39 @@
+From 6be43e6c01aa7ae01075048fa45e242bcb8f6358 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 13:37:35 +0200
+Subject: [PATCH 1496/1936] Give proper name to function argument.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/SUBnote.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 252a5a68..e7e4c036 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -92,18 +92,18 @@ float SUBnote::setupFilters(int *pos, bool automation)
+ }
+ 
+ void SUBnote::setup(float freq,
+-                    float velocity,
++                    float velocity_,
+                     int portamento_,
+                     float note_log2_freq,
+                     bool legato,
+                     WatchManager *wm,
+                     const char *prefix)
+ {
+-    this->velocity = velocity;
++    velocity    = velocity_;
+     portamento  = portamento_;
+     NoteEnabled = ON;
+     volume      = powf(10.0,  pars.Volume / 20.0f);
+-    volume     *= VelF(velocity, pars.AmpVelocityScaleFunction);
++    volume     *= VelF(velocity_, pars.AmpVelocityScaleFunction);
+     if(pars.PPanning != 0)
+         panning = pars.PPanning / 127.0f;
+     else if (!legato)
+-- 
+2.47.0
+

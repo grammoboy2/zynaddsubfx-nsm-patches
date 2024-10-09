@@ -1,0 +1,29 @@
+From 29a7b2298efe9851aa4edaa018257fff0e1b226b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 27 Apr 2017 10:28:05 -0400
+Subject: [PATCH 1136/1936] LV2/VST: Fix Linking/Namespace Bug
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index c4ca27c0..459338ef 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -570,6 +570,7 @@ END_NAMESPACE_DISTRHO
+ /* ------------------------------------------------------------------------------------------------------------
+  * Dummy variables and functions for linking purposes */
+ 
++namespace zyn {
+ class WavFile;
+ namespace Nio {
+    void masterSwap(zyn::Master*){}
+@@ -583,3 +584,4 @@ namespace Nio {
+    void waveStart(){}
+    void waveStop(){}
+ }
++}
+-- 
+2.47.0
+

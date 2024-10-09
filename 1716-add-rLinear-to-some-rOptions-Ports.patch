@@ -1,0 +1,63 @@
+From ab12bc45263bdfbe65b99f139cd7964fe68a7f3d Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Fri, 5 Mar 2021 01:06:20 +0100
+Subject: [PATCH 1716/1936] add rLinear to some rOptions Ports to make them
+ accessible via midi CC
+
+---
+ src/Effects/Distorsion.cpp      | 2 +-
+ src/Params/ADnoteParameters.cpp | 4 ++--
+ src/Params/LFOParams.cpp        | 2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/Effects/Distorsion.cpp b/src/Effects/Distorsion.cpp
+index e635a9c3..c710679a 100644
+--- a/src/Effects/Distorsion.cpp
++++ b/src/Effects/Distorsion.cpp
+@@ -49,7 +49,7 @@ rtosc::Ports Distorsion::ports = {
+             rOptions(Arctangent, Asymmetric, Pow, Sine, Quantisize,
+                      Zigzag, Limiter, Upper Limiter, Lower Limiter,
+                      Inverse Limiter, Clip, Asym2, Pow2, Sigmoid, Tanh,
+-                     Cubic, Square),
++                     Cubic, Square), rLinear(0,127), 
+             rPresets(Arctangent, Asymmetric, Zigzag,
+                      Asymmetric, Pow, Quantisize),
+             "Distortion Shape"),
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index b606c546..d601af36 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -86,7 +86,7 @@ static const Ports voicePorts = {
+             rOptions(none, random, 50%, 33%, 25%), rDefault(none),
+             "Subvoice Phases"),
+     rOption(Type,            rShort("type"), rOptions(Sound,White,Pink,DC),
+-        rDefault(Sound), "Type of Sound"),
++        rLinear(0,127), rDefault(Sound), "Type of Sound"),
+     rParamZyn(PDelay,        rShort("delay"), rDefault(0),
+         "Voice Startup Delay"),
+     rToggle(Presonance,      rShort("enable"), rDefault(true),
+@@ -175,7 +175,7 @@ static const Ports voicePorts = {
+ 
+     //Modulator Stuff
+     rOption(PFMEnabled, rShort("mode"), rOptions(none, mix, ring, phase,
+-                frequency, pulse), rDefault(none), "Modulator mode"),
++                frequency, pulse), rLinear(0,127), rDefault(none), "Modulator mode"),
+     rParamI(PFMVoice,                   rShort("voice"), rDefault(-1),
+         "Modulator Oscillator Selection"),
+     rParamF(FMvolume,                   rShort("vol."),  rLinear(0.0, 100.0),
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 11945d3e..59bc8a30 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -71,7 +71,7 @@ static const rtosc::Ports _ports = {
+     rParamZyn(Pcutoff, rShort("lp"), rDefault(127),
+             "RND/SQR lp-filter freq"),
+     rOption(PLFOtype, rShort("type"), rOptions(sine, triangle, square, up, down,
+-                exp1, exp2, random), rDefault(sine), "Shape of LFO"),
++                exp1, exp2, random), rLinear(0,127), rDefault(sine), "Shape of LFO"),
+     rParamZyn(Prandomness, rShort("a.r."), rSpecial(disable), rDefault(0),
+             "Amplitude Randomness (calculated uniformly at each cycle)"),
+     rParamZyn(Pfreqrand, rShort("f.r."), rSpecial(disable), rDefault(0),
+-- 
+2.47.0
+

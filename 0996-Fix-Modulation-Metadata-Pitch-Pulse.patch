@@ -1,0 +1,25 @@
+From e72828dba246fa5344dcf12d43901278d70e163a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 2 Aug 2016 16:35:25 -0400
+Subject: [PATCH 0996/1936] Fix Modulation Metadata (Pitch->Pulse)
+
+---
+ src/Params/ADnoteParameters.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index b59ad48e..067c3723 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -122,7 +122,7 @@ static const Ports voicePorts = {
+ 
+     //Modulator Stuff
+     rOption(PFMEnabled, rShort("mode"), rOptions(none, morph, ring, phase,
+-                frequency, pitch), "Modulator mode"),
++                frequency, pulse), "Modulator mode"),
+     rParamI(PFMVoice,                   rShort("voice"),  "Modulator Oscillator Selection"),
+     rParamZyn(PFMVolume,                rShort("vol."),   "Modulator Magnitude"),
+     rParamZyn(PFMVolumeDamp,            rShort("damp."),  "Modulator HF dampening"),
+-- 
+2.47.0
+

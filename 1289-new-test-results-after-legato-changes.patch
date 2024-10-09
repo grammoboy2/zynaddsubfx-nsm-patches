@@ -1,0 +1,238 @@
+From 42d9769e30deaa684dcc4737648910a8ae5948cd Mon Sep 17 00:00:00 2001
+From: Daniel Sheeler <dsheeler@pobox.com>
+Date: Sat, 29 Sep 2018 15:34:38 -0500
+Subject: [PATCH 1289/1936] new test results after legato changes.
+
+---
+ src/Tests/AdNoteTest.h   | 10 ++++-----
+ src/Tests/OscilGenTest.h |  8 +++----
+ src/Tests/PadNoteTest.h  | 48 ++++++++++++++++++++--------------------
+ src/Tests/SubNoteTest.h  |  8 +++----
+ src/Tests/UnisonTest.h   | 36 +++++++++++++++---------------
+ 5 files changed, 55 insertions(+), 55 deletions(-)
+
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index dd83873d..78514585 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -124,26 +124,26 @@ class AdNoteTest:public CxxTest::TestSuite
+ #endif
+             sampleCount += synth->buffersize;
+ 
+-            TS_ASSERT_DELTA(outL[255], 0.254609f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.2555f, 0.0001f);
+ 
+             note->releasekey();
+ 
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.102197f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.4688f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.111261f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.0613f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.021375f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.0971f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.149149f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.0901f, 0.0001f);
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+diff --git a/src/Tests/OscilGenTest.h b/src/Tests/OscilGenTest.h
+index 496f2f05..c54bee59 100644
+--- a/src/Tests/OscilGenTest.h
++++ b/src/Tests/OscilGenTest.h
+@@ -86,10 +86,10 @@ class OscilGenTest:public CxxTest::TestSuite
+         void testOutput(void)
+         {
+             oscil->get(outL, freq);
+-            TS_ASSERT_DELTA(outL[23], -0.044547f, 0.0001f);
+-            TS_ASSERT_DELTA(outL[129], -0.018169f, 0.0001f);
+-            TS_ASSERT_DELTA(outL[586], 0.045647f, 0.0001f);
+-            TS_ASSERT_DELTA(outL[1023], -0.038334f, 0.0001f);
++            TS_ASSERT_DELTA(outL[23], -0.5371f, 0.0001f);
++            TS_ASSERT_DELTA(outL[129], 0.3613f, 0.0001f);
++            TS_ASSERT_DELTA(outL[586], 0.1118f, 0.0001f);
++            TS_ASSERT_DELTA(outL[1023], -0.6889f, 0.0001f);
+         }
+ 
+         void testSpectrum(void)
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index 5d25206b..861e8727 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -147,7 +147,7 @@ class PadNoteTest:public CxxTest::TestSuite
+ #endif
+             sampleCount += synth->buffersize;
+ 
+-            TS_ASSERT_DELTA(outL[255], 0.0660f, 0.0005f);
++            TS_ASSERT_DELTA(outL[255], -0.0554, 0.0005f);
+ 
+ 
+             note->releasekey();
+@@ -159,15 +159,15 @@ class PadNoteTest:public CxxTest::TestSuite
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.060818f, 0.0005f);
++            TS_ASSERT_DELTA(outL[255], -0.0331f, 0.0005f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.036895f, 0.0005f);
++            TS_ASSERT_DELTA(outL[255], 0.0219f, 0.0005f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.006623f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.0137f, 0.0001f);
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+@@ -202,26 +202,26 @@ class PadNoteTest:public CxxTest::TestSuite
+             for(int i=8; i<PAD_MAX_SAMPLES; ++i)
+                 TS_ASSERT(!pars->sample[i].smp);
+ 
+-            TS_ASSERT_DELTA(pars->sample[0].smp[0],  -0.057407f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[1],  -0.050704f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[2],  -0.076559f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[3],  -0.069974f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[4],  -0.053268f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[5],  -0.025702f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[6],  -0.021064f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[7],   0.002593f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[8],   0.049286f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[9],   0.031929f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[10],  0.044527f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[11],  0.040447f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[12],  0.022108f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[13],  0.005787f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[14], -0.008430f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[15], -0.009642f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[16], -0.018427f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[17], -0.052831f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[18], -0.058690f, 0.0005f);
+-            TS_ASSERT_DELTA(pars->sample[0].smp[19], -0.090954f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[0],   0.0516f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[1],   0.0845f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[2],   0.1021f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[3],   0.0919f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[4],   0.0708f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[5],   0.0414f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[6],   0.0318f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[7],   0.0217f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[8],   0.0309f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[9],   0.0584f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[10],  0.0266f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[11],  0.0436f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[12],  0.0199f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[13],  0.0505f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[14],  0.0438f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[15],  0.0024f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[16],  0.0052f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[17], -0.0180f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[18],  0.0342f, 0.0005f);
++            TS_ASSERT_DELTA(pars->sample[0].smp[19],  0.0051f, 0.0005f);
+ 
+ 
+             //Verify Harmonic Input
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index 819ffb93..0f5d8d31 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -119,19 +119,19 @@ class SubNoteTest:public CxxTest::TestSuite
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], 0.0016f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], 0.0029f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0000f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.0011f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0013f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.0017f, 0.0001f);
+ 
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            TS_ASSERT_DELTA(outL[255], -0.0002f, 0.0001f);
++            TS_ASSERT_DELTA(outL[255], -0.0005f, 0.0001f);
+ 
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.h
+index 21acc8ae..855febb4 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.h
+@@ -98,16 +98,16 @@ class AdNoteTest:public CxxTest::TestSuite
+             note = new ADnote(params, pars);
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(outL[80], values[0], 1e-5);
+-            //printf("{%f,", outL[80]);
++            printf("\n{%f,", outL[80]);
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(outR[90], values[1], 1e-5);
+-            //printf("%f,", outR[90]);
++            printf("\n%f,", outR[90]);
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(outL[20], values[2], 1e-5);
+-            //printf("%f,", outL[20]);
++            printf("\n%f,", outL[20]);
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(outR[200], values[3], 1e-5);
+-            //printf("%f},\n", outR[200]);
++            printf("\n%f},\n", outR[200]);
+         }
+ 
+         void testUnison() {
+@@ -115,20 +115,20 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             float data[][4] = {
+                 {-0.034547,0.034349,-0.000000,0.138284},
+-                {0.023612,-0.093842,0.000000,-0.040384},
+-                {-0.015980,0.001871,-0.014463,-0.000726},
+-                {-0.040970,-0.000275,0.000000,-0.121016},
+-                {0.019250,-0.045252,0.000270,0.105372},
+-                {-0.086575,0.001130,-0.018921,0.001329},
+-                {0.009203,-0.006176,0.017344,-0.003316},
+-                {0.029411,-0.000248,-0.112797,-0.012883},
+-                {0.043657,-0.014062,-0.003374,-0.071821},
+-                {0.007973,0.068019,-0.038900,0.047639},
+-                {-0.002055,0.011170,-0.058152,-0.043493},
+-                {-0.005298,0.000605,-0.070932,-0.005678},
+-                {0.025028,-0.027742,0.020985,-0.015417},
+-                {0.074349,0.000640,0.080613,0.066636},
+-                {-0.045721,0.000279,0.009819,0.032202},
++                {0.016801,-0.084991,0.000000,0.009240},
++                {0.020383,-0.002424,-0.012952,-0.014037},
++                {-0.041653,0.002287,0.000000,-0.098181},
++                {-0.009189,-0.049860,0.000268,-0.084961},
++                {0.056999,-0.084627,-0.018144,0.000666},
++                {-0.015588,0.003690,0.003994,0.002435},
++                {0.023178,-0.024961,0.004433,-0.015144},
++                {0.042007,-0.006559,-0.005887,0.083685},
++                {0.007638,0.057870,-0.014244,0.041457},
++                {-0.018006,-0.017846,-0.063624,-0.016378},
++                {0.004914,-0.001756,-0.046715,0.015975},
++                {0.004341,-0.014575,0.000560,0.050902},
++                {0.000470,-0.036961,0.038622,0.031383},
++                {-0.045796,0.000262,0.009858,0.031958},
+             };
+ 
+             int freq_spread[15];
+-- 
+2.47.0
+

@@ -1,0 +1,184 @@
+From 56b2662d777e18eb0ef7612d2a0ab84f9db9fb38 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Oct 2014 12:06:52 -0400
+Subject: [PATCH 0250/1936] Fix Misc Build Warnings/PortAudio/Bankload
+
+Patch By Hans Petter Selasky
+---
+ instruments             |  2 +-
+ rtosc                   |  2 +-
+ src/CMakeLists.txt      | 25 ++++++++++++++-----------
+ src/Misc/Master.cpp     |  2 +-
+ src/Misc/MiddleWare.cpp |  6 +++---
+ src/Misc/MiddleWare.h   |  2 +-
+ src/Nio/CMakeLists.txt  |  4 ++--
+ src/Nio/JackEngine.cpp  |  2 +-
+ 8 files changed, 24 insertions(+), 21 deletions(-)
+
+diff --git a/instruments b/instruments
+index a06fadb9..7e14a008 160000
+--- a/instruments
++++ b/instruments
+@@ -1 +1 @@
+-Subproject commit a06fadb98d2d9937a2e0127f1a9f7e5f0237c29b
++Subproject commit 7e14a008bdc671341843ea720ed265edaa917e40
+diff --git a/rtosc b/rtosc
+index 2be2f15e..67cae152 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 2be2f15e7378f8f3cfb69fcc6512b47de16140e6
++Subproject commit 67cae15254bc2b56271573ec830aeb07a1d2430d
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 6405f69b..b49fc15c 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -127,27 +127,37 @@ option (BuildForDebug "Include gdb debugging support" OFF)
+ set(CMAKE_BUILD_TYPE "Release")
+ 
+ set (BuildOptions_x86_64AMD
+-    "-std=c++0x -O3 -march=athlon64 -m64 -Wall -ffast-math -fno-finite-math-only -fomit-frame-pointer"
++    "-std=c++11 -O3 -march=athlon64 -m64 -Wall -Wno-unused-parameter -ffast-math -fno-finite-math-only -fomit-frame-pointer"
+   CACHE STRING "X86_64 compiler options"
+ )
+ 
+ set (BuildOptions_X86_64Core2
+-    "-std=c++0x -O3 -march=core2 -m64 -Wall -ffast-math -fno-finite-math-only -fomit-frame-pointer"
++    "-std=c++11 -O3 -march=core2 -m64 -Wall -Wno-unused-parameter -ffast-math -fno-finite-math-only -fomit-frame-pointer"
+   CACHE STRING "X86_64 compiler options"
+ )
+ 
+ set (BuildOptionsBasic
+-    "-std=c++0x -O3 -msse -msse2 -mfpmath=sse -ffast-math -fomit-frame-pointer"
++    "-std=c++11 -Wno-unused-parameter -O3 -msse -msse2 -mfpmath=sse -ffast-math -fomit-frame-pointer"
+     CACHE STRING "basic X86 complier options"
+ )
+ 
+ set (BuildOptionsDebug
+-    "-std=c++0x -O0 -g3 -ggdb -Wall -Wpointer-arith" CACHE STRING "Debug build flags")
++    "-std=c++11 -O0 -g3 -ggdb -Wall -Wno-unused-parameter -Wpointer-arith" CACHE STRING "Debug build flags")
+ 
+ ########### Settings dependant code ###########
+ # From here on, the setting variables have  been prepared so concentrate
+ # on the actual compiling.
+ 
++# To avoid a conflict if PortAudio v1 is installed, the linker directory
++# of portaudio must be specified first, so that xxx/lib/portaudio2 is
++# searched before xxx/lib where PortAudio v1 gets installed.
++if(PaEnable)
++	include_directories(${PORTAUDIO_INCLUDE_DIRS})
++	add_definitions(-DPORTAUDIO=1)
++	list(APPEND AUDIO_LIBRARIES ${PORTAUDIO_LIBRARIES})
++	list(APPEND AUDIO_LIBRARY_DIRS ${PORTAUDIO_LIBRARY_DIRS})
++endif()
++
+ if(AlsaEnable)
+ 	list(APPEND AUDIO_LIBRARIES ${ASOUND_LIBRARY})
+ 	list(APPEND AUDIO_LIBRARY_DIRS ${ASOUND_LIBRARY_DIRS})
+@@ -164,13 +174,6 @@ if(OssEnable)
+ 	add_definitions(-DOSS=1)
+ endif(OssEnable)
+ 
+-if(PaEnable)
+-	include_directories(${PORTAUDIO_INCLUDEDIR} /usr/lib/blam/bax)
+-	add_definitions(-DPORTAUDIO=1)
+-	list(APPEND AUDIO_LIBRARIES ${PORTAUDIO_LIBRARIES})
+-	list(APPEND AUDIO_LIBRARY_DIRS ${PORTAUDIO_LIBRARY_DIRS})
+-endif()
+-
+ if (CompileTests)
+ 	ENABLE_TESTING()
+ endif()
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 3adcee49..9839c672 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -440,7 +440,7 @@ struct str_skip
+ 	static void skip(const char*& argptr) { while(argptr++); /*TODO: 4 padding */ }
+ };
+ 
+-template<class T, class Display = T, class SkipsizeFunc = def_skip>
++template<class T, class Display = T, template<class TMP> class SkipsizeFunc = def_skip>
+ void _dump_prim_arg(const char*& argptr, std::ostream& os)
+ {
+ 	os << ' ' << (Display)*(const T*)argptr;
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index fc4b0c5b..9af33f6f 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -343,7 +343,7 @@ struct ParamStore
+     PADnoteParameters *pad[NUM_MIDI_PARTS][NUM_KIT_ITEMS];
+ };
+ 
+-static Fl_Osc_Interface *genOscInterface(struct MiddleWareImpl*);
++static Fl_Osc_Interface *genOscInterface(class MiddleWareImpl*);
+ 
+ /* Implementation */
+ class MiddleWareImpl
+@@ -667,7 +667,7 @@ public:
+             bankList(master->bank, osc);
+         } else if(!strcmp(msg, "/rescanforbanks") && !strcmp(rtosc_argument_string(msg), "")) {
+             rescanForBanks(master->bank, osc);
+-        } else if(!strcmp(msg, "/loadbank") && !strcmp(rtosc_argument_string(msg), "c")) {
++        } else if(!strcmp(msg, "/loadbank") && !strcmp(rtosc_argument_string(msg), "i")) {
+             loadBank(master->bank, rtosc_argument(msg, 0).i, osc);
+         } else if(!strcmp(msg, "/loadbank") && !strcmp(rtosc_argument_string(msg), "")) {
+             bankPos(master->bank, osc);
+@@ -962,7 +962,7 @@ void MiddleWareImpl::warnMemoryLeaks(void)
+     o->dumpLookupTable();
+ }
+ 
+-Fl_Osc_Interface *genOscInterface(struct MiddleWareImpl *impl)
++Fl_Osc_Interface *genOscInterface(class MiddleWareImpl *impl)
+ {
+     return new UI_Interface(impl);
+ }
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 10dae4b4..77e174f0 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -16,5 +16,5 @@ class MiddleWare
+ 
+         static void preparePadSynth(const char *, class PADnoteParameters *){};
+     private:
+-        struct MiddleWareImpl *impl;
++        class MiddleWareImpl *impl;
+ };
+diff --git a/src/Nio/CMakeLists.txt b/src/Nio/CMakeLists.txt
+index 64071b61..6d2ae0d5 100644
+--- a/src/Nio/CMakeLists.txt
++++ b/src/Nio/CMakeLists.txt
+@@ -15,7 +15,7 @@ set(zynaddsubfx_nio_SRCS
+     Nio.cpp
+     )
+ 
+-set(zynaddsubfx_nio_lib )
++set(zynaddsubfx_nio_lib)
+ 
+ add_definitions(-DOUT_DEFAULT="${DefaultOutput}")
+ add_definitions(-DIN_DEFAULT="${DefaultInput}")
+@@ -32,7 +32,7 @@ if(JackEnable)
+ endif(JackEnable)
+ 
+ if(PaEnable)
+-    include_directories(${PORTAUDIO_INCLUDE_DIR})
++    include_directories(${PORTAUDIO_INCLUDE_DIRS})
+     list(APPEND zynaddsubfx_nio_SRCS PaEngine.cpp)
+     list(APPEND zynaddsubfx_nio_lib ${PORTAUDIO_LIBRARIES})
+ endif(PaEnable)
+diff --git a/src/Nio/JackEngine.cpp b/src/Nio/JackEngine.cpp
+index 52fec4ea..f67f6037 100644
+--- a/src/Nio/JackEngine.cpp
++++ b/src/Nio/JackEngine.cpp
+@@ -318,7 +318,7 @@ bool JackEngine::processAudio(jack_nframes_t nframes)
+     void   *oscport    = jack_port_get_buffer(osc.oscport, nframes);
+     size_t osc_packets = jack_osc_get_event_count(oscport);
+ 
+-    for(int i = 0; i < osc_packets; ++i) {
++    for(size_t i = 0; i < osc_packets; ++i) {
+         jack_osc_event_t event;
+         if(jack_osc_event_get(&event, oscport, i))
+             continue;
+-- 
+2.47.0
+

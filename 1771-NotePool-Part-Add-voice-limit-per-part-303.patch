@@ -1,0 +1,264 @@
+From 06f935af078f791cb1e0444325a08dfec745d1a9 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Sat, 18 Sep 2021 10:34:32 +0200
+Subject: [PATCH 1771/1936] NotePool, Part: Add voice limit per part (#303)
+
+Add functionality to limit number of simultaneous voices playing per part.
+
+New part parameter: Pvoicelimit. Default 0, meaning no limit is enforced.
+When limit is enforced, check before each new note is triggered that the
+number of playing notes (except entombed ones, which are only alive for a
+short while) will not go over the limit.
+---
+ src/Containers/NotePool.cpp | 67 +++++++++++++++++++++++++++++++++++++
+ src/Containers/NotePool.h   |  2 ++
+ src/Misc/Part.cpp           | 41 +++++++++++++++++++++++
+ src/Misc/Part.h             |  4 +++
+ src/Tests/guitar-adnote.xmz |  3 ++
+ 5 files changed, 117 insertions(+)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 423a5a70..7e38642b 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -335,6 +335,73 @@ void NotePool::enforceKeyLimit(int limit)
+     }
+ }
+ 
++int NotePool::getRunningVoices(void) const
++{
++    int running_count = 0;
++
++    for(auto &desc:activeDesc()) {
++        // We don't count entombed voices as they will soon be dropped
++        if (desc.entombed())
++            continue;
++        running_count++;
++    }
++
++    return running_count;
++}
++
++void NotePool::enforceVoiceLimit(int limit)
++{
++    int notes_to_kill = getRunningVoices() - limit;
++    if(notes_to_kill <= 0)
++        return;
++
++    // TODO: Loop the rest of the function once for each notes_to_kill.
++    // However, normally we are called once per new note played, so
++    // notes_to_kill will be at most one.
++
++    NoteDescriptor *oldest_released = NULL;
++    NoteDescriptor *oldest_sustained = NULL;
++    NoteDescriptor *oldest_latched = NULL;
++    NoteDescriptor *oldest_playing = NULL;
++    for(auto &nd : activeDesc()) {
++        // printf("Scanning %d (%s (%d), age %u)\n", nd.note, getStatus(nd.status), nd.status, nd.age);
++        if (nd.released()) {
++            if (!oldest_released || nd.age > oldest_released->age)
++                oldest_released = &nd;
++        } else if (nd.sustained()) {
++            if (!oldest_sustained || nd.age > oldest_sustained->age)
++                oldest_sustained = &nd;
++        } else if (nd.latched()) {
++            if (!oldest_latched || nd.age > oldest_latched->age)
++                oldest_latched = &nd;
++        } else if (nd.playing()) {
++            if (!oldest_playing || nd.age > oldest_playing->age)
++                oldest_playing = &nd;
++        }
++    }
++
++    // Prioritize which note to kill: if a released note exists, take that,
++    // otherwise sustained, latched or playing, in that order.
++    // If we don't have anything to kill, there's a logical error somewhere,
++    // but we can't do anything about it here so just silently return.
++
++    NoteDescriptor *to_kill = NULL;
++
++    if (oldest_released)
++        to_kill = oldest_released;
++    else if (oldest_sustained)
++        to_kill = oldest_sustained;
++    else if (oldest_latched)
++        to_kill = oldest_latched;
++    else if (oldest_playing)
++        to_kill = oldest_playing;
++
++    if (to_kill) {
++        // printf("Will kill %d (age %d)\n", to_kill->note, to_kill->age);
++        entomb(*to_kill);
++    }
++}
++
+ void NotePool::releasePlayingNotes(void)
+ {
+     for(auto &d:activeDesc()) {
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 658b8f52..1b30281a 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -138,6 +138,8 @@ class NotePool
+         bool existsRunningNote(void) const;
+         int getRunningNotes(void) const;
+         void enforceKeyLimit(int limit);
++        int getRunningVoices(void) const;
++        void enforceVoiceLimit(int limit);
+ 
+         void releasePlayingNotes(void);
+         void releaseNote(note_t note);
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 6f22e9bc..e1d57817 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -79,6 +79,10 @@ static const Ports partPorts = {
+     rParamI(Pkeylimit, rShort("limit"), rProp(parameter),
+     rMap(min,0), rMap(max, POLYPHONY), rDefault(15), "Key limit per part"),
+ #undef rChangeCb
++#define rChangeCb obj->setvoicelimit(obj->Pvoicelimit);
++    rParamI(Pvoicelimit, rShort("vlimit"), rProp(parameter),
++    rMap(min,0), rMap(max, POLYPHONY), rDefault(0), "Voice limit per part"),
++#undef rChangeCb
+ #define rChangeCb
+     rParamZyn(Pminkey, rShort("min"), rDefault(0), "Min Used Key"),
+     rParamZyn(Pmaxkey, rShort("max"), rDefault(127), "Max Used Key"),
+@@ -363,6 +367,7 @@ void Part::cloneTraits(Part &p) const
+     CLONE(Ppolymode);
+     CLONE(Plegatomode);
+     CLONE(Pkeylimit);
++    CLONE(Pvoicelimit);
+ 
+     // Controller has a reference, so it can not be re-assigned
+     // So, destroy and reconstruct it.
+@@ -384,6 +389,7 @@ void Part::defaults()
+     Pvelsns   = 64;
+     Pveloffs  = 64;
+     Pkeylimit = 15;
++    Pvoicelimit = 0;
+     defaultsinstrument();
+     ctl.defaults();
+ }
+@@ -578,6 +584,9 @@ bool Part::NoteOnInternal(note_t note,
+             portamento, note_log2_freq, false, prng()};
+         const int sendto = Pkitmode ? item.sendto() : 0;
+ 
++        // Enforce voice limit, before we trigger new note
++        limit_voices(true);
++
+         try {
+             if(item.Padenabled)
+                 notePool.insertNote(note, sendto,
+@@ -881,6 +890,36 @@ void Part::setkeylimit(unsigned char Pkeylimit_)
+         notePool.enforceKeyLimit(keylimit);
+ }
+ 
++/*
++ * Enforce voice limit
++ */
++void Part::limit_voices(bool account_for_new_note)
++{
++    int voicelimit = Pvoicelimit;
++    if(voicelimit == 0) /* voice limit disabled */
++        return;
++
++    /* If we're called because a new note is imminent, we need to enforce
++     * one less note than the limit, so we don't go above the limit when the
++     * new note is triggered.
++     */
++    if (account_for_new_note)
++        voicelimit--;
++
++    int running_voices = notePool.getRunningVoices();
++    if(running_voices >= voicelimit)
++        notePool.enforceVoiceLimit(voicelimit);
++}
++
++/*
++ * Set Part's voice limit
++ */
++void Part::setvoicelimit(unsigned char Pvoicelimit_)
++{
++    Pvoicelimit = Pvoicelimit_;
++
++    limit_voices(false);
++}
+ 
+ /*
+  * Prepare all notes to be turned off
+@@ -1115,6 +1154,7 @@ void Part::add2XML(XMLwrapper& xml)
+     xml.addparbool("poly_mode", Ppolymode);
+     xml.addpar("legato_mode", Plegatomode);
+     xml.addpar("key_limit", Pkeylimit);
++    xml.addpar("voice_limit", Pvoicelimit);
+ 
+     xml.beginbranch("INSTRUMENT");
+     add2XMLinstrument(xml);
+@@ -1338,6 +1378,7 @@ void Part::getfromXML(XMLwrapper& xml)
+     if(!Plegatomode)
+         Plegatomode = xml.getpar127("legato_mode", Plegatomode);
+     Pkeylimit = xml.getpar127("key_limit", Pkeylimit);
++    Pvoicelimit = xml.getpar127("voice_limit", Pvoicelimit);
+ 
+ 
+     if(xml.enterbranch("INSTRUMENT")) {
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 1953a4be..2714fc5c 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -123,6 +123,7 @@ class Part
+ 
+         //Part parameters
+         void setkeylimit(unsigned char Pkeylimit);
++        void setvoicelimit(unsigned char Pvoicelimit);
+         void setkititemstatus(unsigned kititem, bool Penabled_);
+ 
+         unsigned char partno; /**<if it's the Master's first part*/
+@@ -149,6 +150,7 @@ class Part
+         bool Plegatomode; // 0=normal, 1=legato
+         bool Platchmode; // 0=normal, 1=latch
+         unsigned char Pkeylimit; //how many keys are allowed to be played same time (0=off), the older will be released
++        unsigned char Pvoicelimit; //how many voices are allowed to be played same time (0=off), the older will be entombed
+ 
+         char *Pname; //name of the instrument
+         struct { //instrument additional information
+@@ -195,6 +197,8 @@ class Part
+ 
+         NotePool notePool;
+ 
++        void limit_voices(bool account_for_new_note);
++
+         bool lastlegatomodevalid; // To keep track of previous legatomodevalid.
+ 
+         // MonoMem stuff
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 0277e72e..74996a13 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -45,6 +45,7 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_bool name="poly_mode" value="yes" />
+ <par name="legato_mode" value="0" />
+ <par name="key_limit" value="15" />
++<par name="voice_limit" value="0" />
+ <INSTRUMENT>
+ <INFO>
+ <string name="name">Dist Guitar 2</string>
+@@ -1301,6 +1302,7 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_bool name="poly_mode" value="yes" />
+ <par name="legato_mode" value="0" />
+ <par name="key_limit" value="15" />
++<par name="voice_limit" value="0" />
+ <INSTRUMENT>
+ <INFO>
+ <string name="name"></string>
+@@ -1573,6 +1575,7 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_bool name="poly_mode" value="yes" />
+ <par name="legato_mode" value="0" />
+ <par name="key_limit" value="15" />
++<par name="voice_limit" value="0" />
+ <INSTRUMENT>
+ <INFO>
+ <string name="name"></string>
+-- 
+2.47.0
+

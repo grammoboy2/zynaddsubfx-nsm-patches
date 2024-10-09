@@ -1,0 +1,25 @@
+From 2361a297c1c86f136c5dd8bfd6462604c2329f9c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 31 Mar 2015 17:09:37 -0400
+Subject: [PATCH 0404/1936] Adding liblo-dev to travis config
+
+---
+ .travis.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index b3c24f19..b36a2f33 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -5,7 +5,7 @@ compiler:
+     - clang
+ 
+ before_install:
+-    - sudo apt-get update && sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev
++    - sudo apt-get update && sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev liblo-dev
+ 
+ script:
+     - mkdir build && cd build
+-- 
+2.47.0
+

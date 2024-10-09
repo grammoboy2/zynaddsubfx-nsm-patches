@@ -1,0 +1,64 @@
+From 0a4e5a4de8c7502062ba143474d9f29e31650f5c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 6 Oct 2019 21:55:07 -0400
+Subject: [PATCH 1432/1936] Apply fix to pad synth prepare() data race
+
+Prepares the shared oscillator before using multiple threads to
+generate pad synth wavetables.
+
+Patch by friedolino
+---
+ src/Params/PADnoteParameters.cpp | 3 +++
+ src/Synth/ADnote.cpp             | 4 ++--
+ src/Synth/PADnote.cpp            | 5 +++--
+ 3 files changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 1b39987d..8a555d4c 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -971,6 +971,9 @@ int PADnoteParameters::sampleGenerator(PADnoteParameters::callback cb,
+         delete[] spectrum;
+     };
+ 
++    if(oscilgen->needPrepare())
++        oscilgen->prepare();
++
+ #ifdef WIN32
+     //Temporarily disable multi-threading here as C++11 threads are broken on
+     //mingw cross compilation
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index eb526245..ec612527 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -32,8 +32,8 @@ namespace zyn {
+ 
+ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
+         WatchManager *wm, const char *prefix)
+-    :SynthNote(spars), pars(*pars_), watch_be4_add(wm, prefix, "noteout/be4_mix"), watch_after_add(wm,prefix,"noteout/after_mix"),
+-    watch_punch(wm, prefix, "noteout/punch"), watch_legato(wm, prefix, "noteout/legato")
++    :SynthNote(spars), watch_be4_add(wm, prefix, "noteout/be4_mix"), watch_after_add(wm,prefix,"noteout/after_mix"),
++    watch_punch(wm, prefix, "noteout/punch"), watch_legato(wm, prefix, "noteout/legato"), pars(*pars_)
+ {
+     memory.beginTransaction();
+     tmpwavel = memory.valloc<float>(synth.buffersize);
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 3af623e2..928fb5f0 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -28,9 +28,10 @@ namespace zyn {
+ PADnote::PADnote(const PADnoteParameters *parameters,
+                  SynthParams pars, const int& interpolation, WatchManager *wm,
+                  const char *prefix)
+-    :SynthNote(pars), pars(*parameters), interpolation(interpolation),
++    :SynthNote(pars),
+     watch_int(wm, prefix, "noteout/after_interpolation"), watch_punch(wm, prefix, "noteout/after_punch"),
+-    watch_amp_int(wm, prefix, "noteout/after_amp_interpolation"), watch_legato(wm, prefix, "noteout/after_legato")
++    watch_amp_int(wm, prefix, "noteout/after_amp_interpolation"), watch_legato(wm, prefix, "noteout/after_legato"),
++     pars(*parameters),interpolation(interpolation)
+ {
+     NoteGlobalPar.GlobalFilter    = nullptr;
+     NoteGlobalPar.FilterEnvelope  = nullptr;
+-- 
+2.47.0
+

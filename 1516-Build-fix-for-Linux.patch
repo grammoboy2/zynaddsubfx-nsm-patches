@@ -1,0 +1,57 @@
+From 4237d18d735eb0176d71ae50cc3bf697290ad861 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sun, 5 Apr 2020 01:50:55 +0200
+Subject: [PATCH 1516/1936] Build fix for Linux.
+
+Move function depending on powf() to C++ file,
+which include "cmath" which in turn should define powf().
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Misc/Microtonal.cpp | 11 +++++++++++
+ src/Misc/Microtonal.h   |  7 +------
+ 2 files changed, 12 insertions(+), 6 deletions(-)
+
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 6f098e4b..4658d7af 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -383,6 +383,17 @@ failure:
+     return false;
+ }
+ 
++/*
++ * Get the note frequency in Hz, -1.0f if invalid.
++ */
++float Microtonal::getnotefreq(float note_log2_freq, int keyshift) const
++{
++    if (updatenotefreq_log2(note_log2_freq, keyshift))
++        return powf(2.0f, note_log2_freq);
++    else
++        return -1.0f;
++}
++
+ bool Microtonal::operator==(const Microtonal &micro) const
+ {
+     return !(*this != micro);
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index b8717a55..dbe9e012 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -74,12 +74,7 @@ class Microtonal
+         bool updatenotefreq_log2(float &note_log2_freq, int keyshift) const;
+         /**Calculates the frequency for a given note
+          */
+-        float getnotefreq(float note_log2_freq, int keyshift) const {
+-            if (updatenotefreq_log2(note_log2_freq, keyshift))
+-                return powf(2.0f, note_log2_freq);
+-            else
+-                return -1.0f;
+-        };
++        float getnotefreq(float note_log2_freq, int keyshift) const;
+ 
+         //Parameters
+         /**if the keys are inversed (the pitch is lower to keys from the right direction)*/
+-- 
+2.47.0
+

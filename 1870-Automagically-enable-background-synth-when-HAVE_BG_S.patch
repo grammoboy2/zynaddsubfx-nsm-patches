@@ -1,0 +1,30 @@
+From b2165b52c3d5fadbcd9669ec500b615bbdc636b5 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 19 Nov 2022 15:39:22 +0100
+Subject: [PATCH 1870/1936] Automagically enable background synth when
+ HAVE_BG_SYNTH_THREAD is set.
+
+Fix #216
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/AudioOut.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/Nio/AudioOut.cpp b/src/Nio/AudioOut.cpp
+index c7d1be6c..f889c136 100644
+--- a/src/Nio/AudioOut.cpp
++++ b/src/Nio/AudioOut.cpp
+@@ -43,6 +43,9 @@ int AudioOut::getSampleRate()
+ void AudioOut::setBufferSize(int _bufferSize)
+ {
+     bufferSize = _bufferSize;
++#if HAVE_BG_SYNTH_THREAD
++    OutMgr::getInstance().setBackgroundSynth(_bufferSize < synth.buffersize);
++#endif
+ }
+ 
+ const Stereo<float *> AudioOut::getNext()
+-- 
+2.47.0
+

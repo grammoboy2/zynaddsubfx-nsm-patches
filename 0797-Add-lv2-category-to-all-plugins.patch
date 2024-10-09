@@ -1,0 +1,95 @@
+From bdaf3b03a971e108a213e846b4507d977fa592b2 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Mon, 14 Dec 2015 23:24:22 +0100
+Subject: [PATCH 0797/1936] Add lv2 category to all plugins
+
+---
+ src/Plugin/AlienWah/DistrhoPluginInfo.h      | 1 +
+ src/Plugin/Chorus/DistrhoPluginInfo.h        | 1 +
+ src/Plugin/Distortion/DistrhoPluginInfo.h    | 1 +
+ src/Plugin/DynamicFilter/DistrhoPluginInfo.h | 1 +
+ src/Plugin/Echo/DistrhoPluginInfo.h          | 1 +
+ src/Plugin/Phaser/DistrhoPluginInfo.h        | 1 +
+ src/Plugin/Reverb/DistrhoPluginInfo.h        | 1 +
+ 7 files changed, 7 insertions(+)
+
+diff --git a/src/Plugin/AlienWah/DistrhoPluginInfo.h b/src/Plugin/AlienWah/DistrhoPluginInfo.h
+index d66ab8ad..fc427ab9 100644
+--- a/src/Plugin/AlienWah/DistrhoPluginInfo.h
++++ b/src/Plugin/AlienWah/DistrhoPluginInfo.h
+@@ -33,5 +33,6 @@
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+ #define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:PhaserPlugin"
+ 
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Chorus/DistrhoPluginInfo.h b/src/Plugin/Chorus/DistrhoPluginInfo.h
+index 53a74dd9..2df177ad 100644
+--- a/src/Plugin/Chorus/DistrhoPluginInfo.h
++++ b/src/Plugin/Chorus/DistrhoPluginInfo.h
+@@ -33,5 +33,6 @@
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+ #define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:ChorusPlugin"
+ 
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Distortion/DistrhoPluginInfo.h b/src/Plugin/Distortion/DistrhoPluginInfo.h
+index b08c288c..c33314f1 100644
+--- a/src/Plugin/Distortion/DistrhoPluginInfo.h
++++ b/src/Plugin/Distortion/DistrhoPluginInfo.h
+@@ -33,5 +33,6 @@
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+ #define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:DistortionPlugin"
+ 
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/DynamicFilter/DistrhoPluginInfo.h b/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
+index acecbced..ecc191fa 100644
+--- a/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
++++ b/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
+@@ -33,5 +33,6 @@
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+ #define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:FilterPlugin"
+ 
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Echo/DistrhoPluginInfo.h b/src/Plugin/Echo/DistrhoPluginInfo.h
+index 151a6d9d..0a429971 100644
+--- a/src/Plugin/Echo/DistrhoPluginInfo.h
++++ b/src/Plugin/Echo/DistrhoPluginInfo.h
+@@ -33,5 +33,6 @@
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+ #define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:DelayPlugin"
+ 
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Phaser/DistrhoPluginInfo.h b/src/Plugin/Phaser/DistrhoPluginInfo.h
+index 6a5c28bc..b6e12529 100644
+--- a/src/Plugin/Phaser/DistrhoPluginInfo.h
++++ b/src/Plugin/Phaser/DistrhoPluginInfo.h
+@@ -33,5 +33,6 @@
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+ #define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:PhaserPlugin"
+ 
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+diff --git a/src/Plugin/Reverb/DistrhoPluginInfo.h b/src/Plugin/Reverb/DistrhoPluginInfo.h
+index 50e5cee4..884d605a 100644
+--- a/src/Plugin/Reverb/DistrhoPluginInfo.h
++++ b/src/Plugin/Reverb/DistrhoPluginInfo.h
+@@ -33,5 +33,6 @@
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+ #define DISTRHO_PLUGIN_WANT_PROGRAMS 1
++#define DISTRHO_PLUGIN_LV2_CATEGORY  "lv2:ReverbPlugin"
+ 
+ #endif // DISTRHO_PLUGIN_INFO_H_INCLUDED
+-- 
+2.47.0
+

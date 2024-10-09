@@ -1,0 +1,127 @@
+From f5ea06b9467bc266cba38a20ba677805d1dbc523 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 21 Nov 2020 22:09:30 +0100
+Subject: [PATCH 1654/1936] Satisfy port-checker for PAD/SUBnote
+
+Pendant of the c40d5014c75be85e562392ee0565e723c490a3cd ADnote fixes.
+---
+ src/Params/PADnoteParameters.cpp | 17 +++++++++---
+ src/Params/SUBnoteParameters.cpp | 44 +++++++++++++++++++-------------
+ 2 files changed, 39 insertions(+), 22 deletions(-)
+
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index cdfc9220..1c96b021 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -110,14 +110,18 @@ static const rtosc::Ports realtime_ports =
+         [](const char *msg, RtData &d)
+         {
+             PADnoteParameters *obj = (PADnoteParameters *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_octave = [&obj](){
+                 int k=obj->PCoarseDetune/1024;
+                 if (k>=8) k-=16;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_octave());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=16;
+                 obj->PCoarseDetune = k*1024 + obj->PCoarseDetune%1024;
++                d.broadcast(d.loc, "i", get_octave());
+             }
+         }},
+     {"coarsedetune::c:i", rProp(parameter) rShort("coarse") rLinear(-64, 63)
+@@ -125,14 +129,18 @@ static const rtosc::Ports realtime_ports =
+         [](const char *msg, RtData &d)
+         {
+             PADnoteParameters *obj = (PADnoteParameters *)d.obj;
+-            if(!rtosc_narguments(msg)) {
++            auto get_coarse = [&obj](){
+                 int k=obj->PCoarseDetune%1024;
+                 if (k>=512) k-=1024;
+-                d.reply(d.loc, "i", k);
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_coarse());
+             } else {
+                 int k=(int) rtosc_argument(msg, 0).i;
+                 if (k<0) k+=1024;
+                 obj->PCoarseDetune = k + (obj->PCoarseDetune/1024)*1024;
++                d.broadcast(d.loc, "i", get_coarse());
+             }
+         }},
+     {"paste:b", rProp(internal) rDoc("paste port"), 0,
+@@ -238,6 +246,7 @@ static const rtosc::Ports non_realtime_ports =
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+             if(rtosc_narguments(msg)) {
+                 p->setPbandwidth(rtosc_argument(msg, 0).i);
++                d.broadcast(d.loc, "i", p->Pbandwidth);
+             } else {
+                 d.reply(d.loc, "i", p->Pbandwidth);
+             }}},
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 3f71ce2f..128f935d 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -146,28 +146,36 @@ static const rtosc::Ports SUBnotePorts = {
+     {"octave::c:i", rProp(parameter) rShort("octave") rLinear(-8,7)
+         rDoc("Note octave shift"), NULL,
+         rBegin;
+-        if(!rtosc_narguments(msg)) {
+-            int k=obj->PCoarseDetune/1024;
+-            if (k>=8) k-=16;
+-            d.reply(d.loc, "i", k);
+-        } else {
+-            int k=(int) rtosc_argument(msg, 0).i;
+-            if (k<0) k+=16;
+-            obj->PCoarseDetune = k*1024 + obj->PCoarseDetune%1024;
+-        }
++            auto get_octave = [&obj](){
++                int k=obj->PCoarseDetune/1024;
++                if (k>=8) k-=16;
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_octave());
++            } else {
++                int k=(int) rtosc_argument(msg, 0).i;
++                if (k<0) k+=16;
++                obj->PCoarseDetune = k*1024 + obj->PCoarseDetune%1024;
++                d.broadcast(d.loc, "i", get_octave());
++            }
+         rEnd},
+     {"coarsedetune::c:i", rProp(parameter) rShort("coarse") rLinear(-64, 63)
+         rDoc("Note coarse detune"), NULL,
+         rBegin;
+-        if(!rtosc_narguments(msg)) {
+-            int k=obj->PCoarseDetune%1024;
+-            if (k>=512) k-=1024;
+-            d.reply(d.loc, "i", k);
+-        } else {
+-            int k=(int) rtosc_argument(msg, 0).i;
+-            if (k<0) k+=1024;
+-            obj->PCoarseDetune = k + (obj->PCoarseDetune/1024)*1024;
+-        }
++            auto get_coarse = [&obj](){
++                int k=obj->PCoarseDetune%1024;
++                if (k>=512) k-=1024;
++                return k;
++            };
++            if(!rtosc_narguments(msg)) {
++                d.reply(d.loc, "i", get_coarse());
++            } else {
++                int k=(int) rtosc_argument(msg, 0).i;
++                if (k<0) k+=1024;
++                obj->PCoarseDetune = k + (obj->PCoarseDetune/1024)*1024;
++                d.broadcast(d.loc, "i", get_coarse());
++            }
+         rEnd},
+     {"response:", rDoc("Filter response at 440Hz. with 48kHz sample rate\n\n"
+             "Format: stages, filter*active_filters\n"
+-- 
+2.47.0
+

@@ -1,0 +1,33 @@
+From 8f070f1e15b6e24a97a75cb5c7e85b729dcbed54 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 7 May 2015 18:01:06 -0400
+Subject: [PATCH 0447/1936] PADsynth: Fix Bandwidth Dial
+
+---
+ src/Params/PADnoteParameters.cpp | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index fb32f37c..5eb07008 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -76,7 +76,6 @@ static const rtosc::Ports localPorts =
+     rToggle(Php.autoscale, "Autoscaling Harmonics"),
+     PC(hp.onehalf),
+ 
+-    PC(bandwidth),
+     PC(bwscale),
+ 
+     PC(hrpos.type),
+@@ -107,7 +106,7 @@ static const rtosc::Ports localPorts =
+     rParamI(PCoarseDetune,  "Coarse Detune"),
+     rParamZyn(PDetuneType,  "Magnitude of Detune"),
+ 
+-    {"Pbandwidth::i:c", NULL, NULL,
++    {"Pbandwidth::i", rProp(parameter) rDoc("Bandwith Of Harmonics"), NULL,
+         [](const char *msg, rtosc::RtData &d) {
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+             if(rtosc_narguments(msg)) {
+-- 
+2.47.0
+

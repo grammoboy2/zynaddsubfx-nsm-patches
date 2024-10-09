@@ -1,0 +1,25 @@
+From 17837a2eaf4e36387d2652b8a156329b5197bcc5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 23 Jul 2017 11:08:20 -0400
+Subject: [PATCH 1170/1936] Fix WIN32 #ifdef
+
+---
+ src/Misc/Bank.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 22a28d0c..e3409041 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -30,7 +30,7 @@
+ #include "Util.h"
+ #include "Part.h"
+ #include "BankDb.h"
+-#ifndef WIN32
++#ifdef WIN32
+ #include <windows.h>
+ #endif
+ 
+-- 
+2.47.0
+

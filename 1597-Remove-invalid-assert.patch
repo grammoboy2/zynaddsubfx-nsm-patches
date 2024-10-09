@@ -1,0 +1,25 @@
+From 61aa05eab6063f482dcbd648f080296fe699494d Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 4 Oct 2020 09:49:05 +0200
+Subject: [PATCH 1597/1936] Remove invalid assert
+
+---
+ src/Misc/MiddleWare.cpp | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index ba4eb4ca..3ada826f 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -2050,8 +2050,6 @@ void MiddleWareImpl::kitEnable(int part, int kit, int type)
+  */
+ void MiddleWareImpl::handleMsg(const char *msg)
+ {
+-    assert(msgsToHandle.empty());
+-
+     //Check for known bugs
+     assert(msg && *msg && strrchr(msg, '/')[1]);
+     assert(strstr(msg,"free") == NULL || strstr(rtosc_argument_string(msg), "b") == NULL);
+-- 
+2.47.0
+

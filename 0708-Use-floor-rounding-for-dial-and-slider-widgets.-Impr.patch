@@ -1,0 +1,178 @@
+From 01667c7d6de5d861b6befe4b71f0cf9c08605477 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 8 Nov 2015 02:04:06 -0500
+Subject: [PATCH 0708/1936] Use floor rounding for dial and slider widgets. 
+ Improve fine slider code.
+
+---
+ src/UI/Fl_Osc_Dial.cpp   |  9 +++---
+ src/UI/Fl_Osc_Slider.H   |  5 +++
+ src/UI/Fl_Osc_Slider.cpp | 68 ++++++++++++++++++++++------------------
+ src/UI/WidgetPDial.cpp   |  2 +-
+ 4 files changed, 48 insertions(+), 36 deletions(-)
+
+diff --git a/src/UI/Fl_Osc_Dial.cpp b/src/UI/Fl_Osc_Dial.cpp
+index e4040d39..929d9be9 100644
+--- a/src/UI/Fl_Osc_Dial.cpp
++++ b/src/UI/Fl_Osc_Dial.cpp
+@@ -78,15 +78,14 @@ int Fl_Osc_Dial::handle(int ev)
+ 
+ void Fl_Osc_Dial::OSC_value(int v)
+ {
+-    if(64 != (int)minimum())
+-        value(v+minimum()+fmodf(value(), 1));
+-    else
+-        value(v+fmodf(value(), 1));
++    value(v + value() - floorf(value()) +
++          (minimum() == 64 ? 0 : minimum()));
+ }
+ 
+ void Fl_Osc_Dial::OSC_value(char v)
+ {
+-    value(v+minimum()+fmodf(value(), 1));
++    value(v + value() - floorf(value()) +
++          minimum());
+ }
+ 
+ void Fl_Osc_Dial::update(void)
+diff --git a/src/UI/Fl_Osc_Slider.H b/src/UI/Fl_Osc_Slider.H
+index d5e7f972..7bc66cb2 100644
+--- a/src/UI/Fl_Osc_Slider.H
++++ b/src/UI/Fl_Osc_Slider.H
+@@ -30,4 +30,9 @@ class Fl_Osc_Slider:public Fl_Slider, public Fl_Osc_Widget
+     protected:
+         char osc_type;
+         std::pair<Fl_Callback*, void*> cb_data;
++
++    private:
++        float old_value;
++        int start_pos;
++    float denominator;
+ };
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index ba9bf21f..d3c3e9b0 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -35,7 +35,7 @@ Fl_Osc_Slider::~Fl_Osc_Slider(void)
+ void Fl_Osc_Slider::OSC_value(int v)
+ {
+     const float min_ = min__(minimum(), maximum());//flipped sliders
+-    Fl_Slider::value(v+min_+fmodf(value(),1.0));
++    Fl_Slider::value(v+min_+value()-floorf(value()));
+ }
+ 
+ void Fl_Osc_Slider::OSC_value(float v)
+@@ -47,7 +47,7 @@ void Fl_Osc_Slider::OSC_value(float v)
+ void Fl_Osc_Slider::OSC_value(char v)
+ {
+     const float min_ = min__(minimum(), maximum());//flipped sliders
+-    Fl_Slider::value(v+min_+fmodf(value(),1.0));
++    Fl_Slider::value(v+min_+value()-floorf(value()));
+ }
+ 
+ void Fl_Osc_Slider::cb(void)
+@@ -88,9 +88,27 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+         return 1;
+     }
+ 
+-    int handled, rounded;
+-    bool reset_requested = false;
++    int handled;
++    float rounded;
++
++    if (ev != FL_MOUSEWHEEL)
++        handled = Fl_Slider::handle(ev, X, Y, W, H);
++
+     switch (ev) {
++        case FL_PUSH:
++            denominator = 2.0;
++            old_value = value();
++            start_pos = horizontal() ? Fl::event_x() : Fl::event_y();
++            {
++                float range = maximum() - minimum();
++                float absrng = range > 0 ? range : -range;
++
++                if (absrng / W / step() > 32 && Fl::event_button1())
++                    denominator = 0.25;
++                if (range < 0)
++                    denominator *= -1;
++            }
++            break;
+         case FL_MOUSEWHEEL:
+             if (this == Fl::belowmouse() && Fl::e_dy != 0) {
+                 int step = 1, divisor = 16;
+@@ -108,42 +126,32 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+                 }
+                 int dy = minimum() <=  maximum() ? -Fl::e_dy : Fl::e_dy;
+                 // Flip sense for vertical sliders.
+-                dy = (this->type() & 1) ? dy : -dy;
++                dy = this->horizontal() ? dy : -dy;
+                 handle_drag(clamp(value() + step * dy));
+             }
+             return 1;
+         case FL_RELEASE:
+-            rounded = value() + 0.5;
+-            value(clamp((double)rounded));
+             if (Fl::event_clicks() == 1) {
+                 Fl::event_clicks(0);
+-                reset_requested = true;
++                value(reset_value);
++            } else {
++                rounded = floorf(value() + 0.5);
++                value(clamp(rounded));
+             }
+-    }
+-    
+-    if (!Fl::event_shift()) {
+-        handled = Fl_Slider::handle(ev, X, Y, W, H);
+-        if (reset_requested) {
+-            value(reset_value);
+             value_damage();
+-            if (this->when() != 0)
++            do_callback();
++            break;
++        case FL_DRAG:
++            if (Fl::event_shift()) {
++                int delta = (horizontal() ? Fl::event_x() : Fl::event_y()) -
++                    start_pos;
++                rounded = floor(clamp(old_value + delta/denominator) + 0.5);
++                value(rounded);
++                value_damage();
+                 do_callback();
+-        }
+-        return handled;
+-    }
+-
+-    // Slow down the drag.
+-    // Handy if the slider has a large delta bigger than a mouse quantum.
+-    // Somewhat tricky to use with OSC feedback.
+-    // To change direction of movement, one must reclick the handle.
+-    int old_value = value();
+-    handled = Fl_Slider::handle(ev, X, Y, W, H);
+-    int delta = value() - old_value;
+-    if (ev == FL_DRAG && (delta < -1 || delta > 1)) {
+-        value(clamp((old_value + (delta > 0 ? 1 : -1))));
+-        value_damage();
+-        do_callback();
++            }
+     }
++    
+     return handled;
+ }
+ 
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index d88de128..522be743 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -113,7 +113,7 @@ int WidgetPDial::handle(int event)
+             break;
+         case FL_RELEASE:
+             if (integer_step) {
+-                int rounded = value() + 0.5;
++                float rounded = floorf(value() + 0.5);
+                 value(clamp(rounded));
+             }
+             tipwin->hide();
+-- 
+2.47.0
+

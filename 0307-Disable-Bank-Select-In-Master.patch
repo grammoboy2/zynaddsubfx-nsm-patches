@@ -1,0 +1,31 @@
+From 0e393ef2c262248844e49b3fd568a9a6536ce88b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 11 Jan 2015 22:30:19 -0500
+Subject: [PATCH 0307/1936] Disable Bank Select In Master
+
+This codepath should be dead as all bank select messages
+should be caught by the Nio subsystem and forwarded to middleware
+---
+ src/Misc/Master.cpp | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index c03d89ad..7d8f75cc 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -392,9 +392,9 @@ void Master::setController(char chan, int type, int par)
+     }
+     else
+     if(type == C_bankselectmsb) {      // Change current bank
+-        if(((unsigned int)par < bank.banks.size())
+-           && (bank.banks[par].dir != bank.bankfiletitle))
+-            bank.loadbank(bank.banks[par].dir);
++        //if(((unsigned int)par < bank.banks.size())
++        //   && (bank.banks[par].dir != bank.bankfiletitle))
++        //    bank.loadbank(bank.banks[par].dir);
+     }
+     else {  //other controllers
+         for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart) //Send the controller to all part assigned to the channel
+-- 
+2.47.0
+

@@ -1,0 +1,57 @@
+From cd69c43d482554ec32960fc8cea45736b981ff1b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 6 Jun 2016 10:59:09 -0400
+Subject: [PATCH 0921/1936] Middleware: Track All OSC Remote UIs
+
+---
+ src/Misc/MiddleWare.cpp | 13 ++++++++++---
+ 1 file changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 283c2f25..aba19fb8 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -665,6 +665,11 @@ public:
+     void write(const char *path, const char *args, ...);
+     void write(const char *path, const char *args, va_list va);
+ 
++    void currentUrl(string addr)
++    {
++        curr_url = addr;
++        known_remotes.insert(addr);
++    }
+ 
+     // Send a message to a remote client
+     void sendToRemote(const char *msg, std::string dest);
+@@ -723,6 +728,7 @@ public:
+     //LIBLO
+     lo_server server;
+     string last_url, curr_url;
++    std::set<string> known_remotes;
+ 
+     //Synthesis Rate Parameters
+     const SYNTH_T synth;
+@@ -1170,7 +1176,7 @@ static rtosc::Ports middlewareReplyPorts = {
+         const char *type = rtosc_argument(msg, 0).s;
+         const char *url  = rtosc_argument(msg, 1).s;
+         if(!strcmp(type, "OSC_URL"))
+-            impl.curr_url = url;
++            impl.currentUrl(url);
+         rEnd},
+     {"free:sb", 0, 0,
+         rBegin;
+@@ -1357,8 +1363,9 @@ void MiddleWareImpl::broadcastToRemote(const char *rtmsg)
+     sendToRemote(rtmsg, "GUI");
+ 
+     //Send to remote UI if there's one listening
+-    if(curr_url != "GUI")
+-        sendToRemote(rtmsg, curr_url);
++    for(auto rem:known_remotes)
++        if(rem != "GUI")
++            sendToRemote(rtmsg, rem);
+ 
+     broadcast = false;
+ }
+-- 
+2.47.0
+

@@ -1,0 +1,298 @@
+From bbf3baf70ce366a0edb9ccf5d05d08a73783813f Mon Sep 17 00:00:00 2001
+From: Daniel Sheeler <dsheeler@pobox.com>
+Date: Sun, 31 Mar 2019 12:47:17 -0500
+Subject: [PATCH 1352/1936] LFO delay to float seconds
+
+---
+ src/Misc/Part.cpp           |  1 -
+ src/Params/LFOParams.cpp    | 39 ++++++++++++++++++++++++++-----------
+ src/Params/LFOParams.h      | 10 +++++-----
+ src/Synth/LFO.cpp           |  2 +-
+ src/Tests/guitar-adnote.xmz | 22 ++++++++++-----------
+ 5 files changed, 45 insertions(+), 29 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 72dcd874..d3a6e17a 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -1208,7 +1208,6 @@ void Part::getfromXML(XMLwrapper& xml)
+     if (xml.hasparreal("volume")) {
+         setVolume(xml.getparreal("volume", Volume));
+     } else {
+-        unsigned char c = xml.getpar127("volume", 0);
+         setVolume(volume127ToFloat(xml.getpar127("volume", -40.0f)));
+     }
+     setPpanning(xml.getpar127("panning", Ppanning));
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 1bebd95b..39d90ace 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -74,9 +74,21 @@ static const rtosc::Ports _ports = {
+             "Amplitude Randomness (calculated uniformly at each cycle)"),
+     rParamZyn(Pfreqrand, rShort("f.r."), rSpecial(disable), rDefault(0),
+             "Frequency Randomness (calculated uniformly at each cycle)"),
+-    rParamZyn(Pdelay, rShort("delay"), rSpecial(disable),
+-              rDefaultDepends(loc), rDefault(0), rPreset(ad_voice_amp, 30),
++    rParamF(delay, rShort("delay"), rSpecial(disable), rUnit(S),
++              rLinear(0.0, 4.0), rDefaultDepends(loc), rDefault(0),
++              rPreset(ad_voice_amp, 0.94),
+               "Delay before LFO start\n0..4 second delay"),
++    {"Pdelay::i", rShort("delay") rLinear(0,127)
++     rDoc("Delay before LFO start\n0..4 second delay"), NULL,
++    [](const char *msg, RtData &d)
++     {
++         rObject *obj = (rObject *)d.obj;
++         if (!rtosc_narguments(msg)) {
++             d.reply(d.loc, "i", (int)roundf(127.0f * obj->delay / 4.0f));
++         } else {
++             obj->delay = 4.0f * rtosc_argument(msg, 0).i / 127.0f;
++         }
++     }},
+     rToggle(Pcontinous, rShort("c"), rDefault(false),
+             "Enable for global operation"),
+     rParamZyn(Pstretch, rShort("str"), rCentered, rDefault(64),
+@@ -140,7 +152,7 @@ LFOParams::LFOParams(float freq_,
+                      char Pstartphase_,
+                      char PLFOtype_,
+                      char Prandomness_,
+-                     char Pdelay_,
++                     float Pdelay_,
+                      char Pcontinous_,
+                      consumer_location_t loc,
+                      const AbsTime *time_) : loc(loc),
+@@ -164,14 +176,14 @@ LFOParams::LFOParams(consumer_location_t loc,
+ 
+     auto init =
+         [&](float freq_, char Pintensity_, char Pstartphase_, char PLFOtype_,
+-            char Prandomness_, char Pdelay_, char Pcontinous_)
++            char Prandomness_, float delay_, char Pcontinous_)
+     {
+         Dfreq       = freq_;
+         Dintensity  = Pintensity_;
+         Dstartphase = Pstartphase_;
+         DLFOtype    = PLFOtype_;
+         Drandomness = Prandomness_;
+-        Ddelay      = Pdelay_;
++        Ddelay      = delay_;
+         Dcontinous  = Pcontinous_;
+     };
+ 
+@@ -180,7 +192,7 @@ LFOParams::LFOParams(consumer_location_t loc,
+         case ad_global_amp:    init(6.49, 0, 64, 0, 0, 0, 0); break;
+         case ad_global_freq:   init(3.71, 0, 64, 0, 0, 0, 0); break;
+         case ad_global_filter: init(6.49, 0, 64, 0, 0, 0, 0); break;
+-        case ad_voice_amp:     init(11.25, 32, 64, 0, 0, 30, 0); break;
++        case ad_voice_amp:     init(11.25, 32, 64, 0, 0, 0.94, 0); break;
+         case ad_voice_freq:    init(1.19, 40,  0, 0, 0,  0, 0); break;
+         case ad_voice_filter:  init(1.19, 20, 64, 0, 0,  0, 0); break;
+         default: throw std::logic_error("Invalid LFO consumer location");
+@@ -194,12 +206,12 @@ LFOParams::~LFOParams()
+ 
+ void LFOParams::defaults()
+ {
+-    freq       = Dfreq;
++    freq        = Dfreq;
+     Pintensity  = Dintensity;
+     Pstartphase = Dstartphase;
+     PLFOtype    = DLFOtype;
+     Prandomness = Drandomness;
+-    Pdelay      = Ddelay;
++    delay       = Ddelay;
+     Pcontinous  = Dcontinous;
+     Pfreqrand   = 0;
+     Pstretch    = 64;
+@@ -214,7 +226,7 @@ void LFOParams::add2XML(XMLwrapper& xml)
+     xml.addpar("lfo_type", PLFOtype);
+     xml.addpar("randomness_amplitude", Prandomness);
+     xml.addpar("randomness_frequency", Pfreqrand);
+-    xml.addpar("delay", Pdelay);
++    xml.addparreal("delay", delay);
+     xml.addpar("stretch", Pstretch);
+     xml.addparbool("continous", Pcontinous);
+ }
+@@ -231,7 +243,12 @@ void LFOParams::getfromXML(XMLwrapper& xml)
+     PLFOtype    = xml.getpar127("lfo_type", PLFOtype);
+     Prandomness = xml.getpar127("randomness_amplitude", Prandomness);
+     Pfreqrand   = xml.getpar127("randomness_frequency", Pfreqrand);
+-    Pdelay      = xml.getpar127("delay", Pdelay);
++    if (xml.hasparreal("delay")) {
++        delay      = xml.getparreal("delay", delay);
++    } else {
++        delay      = 4.0f * xml.getpar127("delay", (int)delay *127.0f/4.0f)
++                     / 127.0f;
++    }
+     Pstretch    = xml.getpar127("stretch", Pstretch);
+     Pcontinous  = xml.getparbool("continous", Pcontinous);
+ }
+@@ -245,7 +262,7 @@ void LFOParams::paste(LFOParams &x)
+     COPY(PLFOtype);
+     COPY(Prandomness);
+     COPY(Pfreqrand);
+-    COPY(Pdelay);
++    COPY(delay);
+     COPY(Pcontinous);
+     COPY(Pstretch);
+ 
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index e816985c..56972ba7 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -42,7 +42,7 @@ class LFOParams:public Presets
+                   char Pstartphase_,
+                   char PLFOtype_,
+                   char Prandomness_,
+-                  char Pdelay_,
++                  float delay_,
+                   char Pcontinous,
+                   consumer_location_t loc,
+                   const AbsTime* time_ = nullptr);
+@@ -55,13 +55,13 @@ class LFOParams:public Presets
+         void paste(LFOParams &);
+ 
+         /*  MIDI Parameters*/
+-        float freq;      /**<frequency*/
++        float         freq;      /**<frequency*/
+         unsigned char Pintensity; /**<intensity*/
+         unsigned char Pstartphase; /**<start phase (0=random)*/
+         unsigned char PLFOtype; /**<LFO type (sin,triangle,square,ramp,...)*/
+         unsigned char Prandomness; /**<randomness (0=off)*/
+         unsigned char Pfreqrand; /**<frequency randomness (0=off)*/
+-        unsigned char Pdelay; /**<delay (0=off)*/
++        float         delay; /**<delay (0=off)*/
+         unsigned char Pcontinous; /**<1 if LFO is continous*/
+         unsigned char Pstretch; /**<how the LFO is "stretched" according the note frequency (64=no stretch)*/
+ 
+@@ -78,12 +78,12 @@ class LFOParams:public Presets
+         void setup();
+ 
+         /* Default parameters */
+-        float Dfreq;
++        float         Dfreq;
+         unsigned char Dintensity;
+         unsigned char Dstartphase;
+         unsigned char DLFOtype;
+         unsigned char Drandomness;
+-        unsigned char Ddelay;
++        float         Ddelay;
+         unsigned char Dcontinous;
+ };
+ 
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index 29f45ed4..768f6fb4 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -24,7 +24,7 @@ namespace zyn {
+ LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManager *m,
+         const char *watch_prefix)
+     :first_half(-1),
+-    delayTime(t, lfopars.Pdelay / 127.0f * 4.0f), //0..4 sec
++    delayTime(t, lfopars.delay), //0..4 sec
+     waveShape(lfopars.PLFOtype),
+     deterministic(!lfopars.Pfreqrand),
+     dt_(t.dt()),
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 319fed14..7f886cfe 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -97,7 +97,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </AMPLITUDE_LFO>
+@@ -129,7 +129,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="19" />
++<par_real name="delay" value="0.598425" exact_value="0x3F193265" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </FREQUENCY_LFO>
+@@ -168,7 +168,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </FILTER_LFO>
+@@ -264,7 +264,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="30" />
++<par_real name="delay" value="0.944882" exact_value="0x3F71E3C8" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </AMPLITUDE_LFO>
+@@ -301,7 +301,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="yes" />
+ </FREQUENCY_LFO>
+@@ -342,7 +342,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </FILTER_LFO>
+@@ -508,7 +508,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="yes" />
+ </FREQUENCY_LFO>
+@@ -594,7 +594,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="yes" />
+ </FREQUENCY_LFO>
+@@ -3368,7 +3368,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </AMPLITUDE_LFO>
+@@ -3403,7 +3403,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </FREQUENCY_LFO>
+@@ -3442,7 +3442,7 @@ version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="lfo_type" value="0" />
+ <par name="randomness_amplitude" value="0" />
+ <par name="randomness_frequency" value="0" />
+-<par name="delay" value="0" />
++<par_real name="delay" value="0" exact_value="0x00000000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
+ </FILTER_LFO>
+-- 
+2.47.0
+

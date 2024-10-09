@@ -1,0 +1,95 @@
+From 1b09602d3eed0cbdfa820d6b4f23855d850247ea Mon Sep 17 00:00:00 2001
+From: Philippe Gervais <philippe.n.gervais@free.fr>
+Date: Tue, 1 Jun 2021 13:21:13 +0200
+Subject: [PATCH 1734/1936] Fixed the documentation for a few OSC endpoints.
+
+---
+ doc/README.txt               |  4 +++-
+ src/Misc/MiddleWare.cpp      | 12 +++++++-----
+ src/Misc/PresetExtractor.cpp |  2 +-
+ 3 files changed, 11 insertions(+), 7 deletions(-)
+
+diff --git a/doc/README.txt b/doc/README.txt
+index 89004e40..b7d49876 100644
+--- a/doc/README.txt
++++ b/doc/README.txt
+@@ -5,4 +5,6 @@ Requirements for this directory:
+  * pst-sigsys (latex module)
+  * auto-pst-pdf (latex module)
+  * pst-tools (latex module)
+- * gnuplot
+\ No newline at end of file
++ * pstricks (latex module)
++ * gnuplot
++ * asciidoctor-pdf (ruby module)
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 71755389..11c5af7a 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -23,6 +23,7 @@
+ #include <rtosc/undo-history.h>
+ #include <rtosc/thread-link.h>
+ #include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
+ #include <lo/lo.h>
+ 
+ #include <unistd.h>
+@@ -1546,20 +1547,20 @@ static rtosc::Ports middwareSnoopPortsWithoutNonRtParams = {
+         rBegin;
+         impl.midi_mapper.clear();
+         rEnd},
+-    {"midi-map-cc:is", "bind a midi CC on CH to an OSC path", 0,
++    {"midi-map-cc:is", rDoc("bind a midi CC on CH to an OSC path"), 0,
+         rBegin;
+         const int par = rtosc_argument(msg, 0).i;
+         const string path = rtosc_argument(msg, 1).s;
+         connectMidiLearn(par, 1, false, path, impl.midi_mapper);
+         rEnd},
+-    {"midi-map-cc:iis", "bind a midi CC on CH to an OSC path", 0,
++    {"midi-map-cc:iis", rDoc("bind a midi CC on CH to an OSC path"), 0,
+         rBegin;
+         const int par = rtosc_argument(msg, 0).i;
+         const int ch = rtosc_argument(msg, 1).i;
+         const string path = rtosc_argument(msg, 2).s;
+         connectMidiLearn(par, ch, false, path, impl.midi_mapper);
+         rEnd},
+-    {"midi-map-nrpn:iis", "bind nrpn on channel to an OSC path", 0,
++    {"midi-map-nrpn:iis", rDoc("bind nrpn on channel to an OSC path"), 0,
+         rBegin;
+         const int par = rtosc_argument(msg, 0).i;
+         const int ch = rtosc_argument(msg, 1).i;
+@@ -1600,7 +1601,7 @@ static rtosc::Ports middwareSnoopPortsWithoutNonRtParams = {
+         const char *file = rtosc_argument(msg, 0).s;
+         impl.saveXsz(file, d);
+         rEnd},
+-    {"load_scl:s", 0, 0,
++    {"load_scl:s", rDoc("Load a scale from a file"), 0,
+         rBegin;
+         const char *file = rtosc_argument(msg, 0).s;
+         impl.loadScl(file, d);
+@@ -1790,7 +1791,8 @@ static rtosc::Ports middwareSnoopPortsWithoutNonRtParams = {
+         rEnd},
+     //drop this message into the abyss
+     {"ui/title:", 0, 0, [](const char *, RtData &) {}},
+-    {"quit:", 0, 0, [](const char *, RtData&) {Pexitprogram = 1;}},
++    {"quit:", rDoc("Stops the Zynaddsubfx process"),
++     0, [](const char *, RtData&) {Pexitprogram = 1;}},
+     // may only be called when Master is not being run
+     {"change-synth:iiit", 0, 0,
+         rBegin
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index eae57637..d509425d 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -109,7 +109,7 @@ const rtosc::Ports real_preset_ports =
+ 
+ };
+ 
+-
++// Documentation for real_preset_ports above.
+ const rtosc::Ports preset_ports
+ {
+     {"scan-for-presets:", rDoc("Scan For Presets"), 0, dummy},
+-- 
+2.47.0
+

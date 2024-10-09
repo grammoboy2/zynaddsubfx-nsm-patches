@@ -1,0 +1,25 @@
+From b4bb7ddb95daa3e43854c6fcb97dcf7e110d23ef Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 21 Jul 2016 12:56:23 -0400
+Subject: [PATCH 0963/1936] Envelope: Fix Version Header Include
+
+---
+ src/Params/EnvelopeParams.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index d9212c8e..1a4e4cad 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -17,7 +17,7 @@
+ #include <rtosc/ports.h>
+ #include <rtosc/port-sugar.h>
+ 
+-#include "version.h"
++#include "zyn-version.h"
+ #include "EnvelopeParams.h"
+ #include "../Misc/Util.h"
+ #include "../Misc/Time.h"
+-- 
+2.47.0
+

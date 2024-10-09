@@ -1,0 +1,25 @@
+From b65e33d74259dd4ec080d3deee0795f882044177 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Tue, 20 Dec 2016 15:26:25 +0000
+Subject: [PATCH 1109/1936] Fix a very minor compiler warning
+
+---
+ src/Misc/Master.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 1d6e90b5..b0ea444e 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1028,7 +1028,7 @@ void Master::ShutUp()
+         insefx[nefx]->cleanup();
+     for(int nefx = 0; nefx < NUM_SYS_EFX; ++nefx)
+         sysefx[nefx]->cleanup();
+-    for(int i = 0; i < sizeof(activeNotes)/sizeof(activeNotes[0]); ++i)
++    for(int i = 0; i < int(sizeof(activeNotes)/sizeof(activeNotes[0])); ++i)
+         activeNotes[i] = 0;
+     vuresetpeaks();
+     shutup = 0;
+-- 
+2.47.0
+

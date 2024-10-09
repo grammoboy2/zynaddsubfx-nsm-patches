@@ -1,0 +1,50 @@
+From b0f329220947a70a14081820e4308b6d8dec80f1 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Nov 2014 11:01:04 -0500
+Subject: [PATCH 0290/1936] Fix Thread ID Syscall On 64 bit Linux
+
+---
+ src/Synth/OscilGen.cpp | 4 ++--
+ src/main.cpp           | 3 ++-
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index c70e26e7..48f33788 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -152,9 +152,9 @@ static rtosc::Ports localPorts = {
+             assert(rtosc_argument(m,0).b.len == sizeof(void*));
+             d.reply("/free", "sb", "fft_t", sizeof(void*), &o.oscilFFTfreqs);
+             //fprintf(stderr, "\n\n");
+-            //fprintf(stderr, "The ID of this of this thread is: %ld\n", (long int)syscall(224));
++            //fprintf(stderr, "The ID of this of this thread is: %ld\n", (long int)syscall(SYS_gettid));
+             //fprintf(stderr, "o.oscilFFTfreqs = %p\n", o.oscilFFTfreqs);
+-            assert(main_thread != syscall(224));
++            assert(main_thread != syscall(SYS_gettid));
+             assert(o.oscilFFTfreqs !=*(fft_t**)rtosc_argument(m,0).b.data);
+             o.oscilFFTfreqs = *(fft_t**)rtosc_argument(m,0).b.data;
+         }},
+diff --git a/src/main.cpp b/src/main.cpp
+index fd402620..b6c17390 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -31,6 +31,7 @@
+ 
+ #include <unistd.h>
+ #include <pthread.h>
++#include <sys/syscall.h>
+ 
+ #include <getopt.h>
+ 
+@@ -137,7 +138,7 @@ void exitprogram()
+ 
+ int main(int argc, char *argv[])
+ {
+-    main_thread =  (long int)syscall(224);
++    main_thread =  (long int)syscall(SYS_gettid);
+     synth = new SYNTH_T;
+     config.init();
+     dump.startnow();
+-- 
+2.47.0
+

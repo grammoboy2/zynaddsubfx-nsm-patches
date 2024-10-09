@@ -1,0 +1,34 @@
+From 9885997aca2b4ec134ff4479f3c9929d90f587c1 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sun, 24 Apr 2022 16:29:55 +0200
+Subject: [PATCH 1850/1936] fix error description in LFOParams
+
+---
+ src/Params/LFOParams.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 433ffba1..532c9e58 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -100,7 +100,7 @@ static const rtosc::Ports _ports = {
+              obj->delay = 4.0f * rtosc_argument(msg, 0).i / 127.0f;
+          }
+      }},
+-     
++
+     rToggle(Pcontinous, rShort("c"), rDefault(false),
+             "Enable for global operation"),
+     rParamZyn(Pstretch, rShort("str"), rCentered, rDefault(64),
+@@ -151,7 +151,7 @@ void LFOParams::setup()
+             setpresettype("Plfofilter");
+             break;
+         default:
+-            throw std::logic_error("Invalid envelope consumer location");
++            throw std::logic_error("Invalid lfo consumer location");
+     }
+ 
+     defaults();
+-- 
+2.47.0
+

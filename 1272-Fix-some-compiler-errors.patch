@@ -1,0 +1,172 @@
+From b373b2ff392f70db80bf1b3d0aaf4ae73a82f1ff Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 19 Jun 2018 20:45:25 -0400
+Subject: [PATCH 1272/1936] Fix some compiler errors
+
+---
+ src/Misc/Master.cpp              |  5 ++++-
+ src/Misc/PresetExtractor.cpp     | 12 ++++--------
+ src/Params/PADnoteParameters.cpp |  2 +-
+ src/Params/SUBnoteParameters.cpp |  3 +++
+ src/UI/Fl_Osc_Interface.h        | 24 ++++++++++++------------
+ 5 files changed, 24 insertions(+), 22 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index a3bcb1c4..acf8b35b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -114,7 +114,9 @@ static const Ports sysefsendto =
+         }}
+ };
+ 
+-#define rBegin [](const char *msg, RtData &d) { rtosc::AutomationMgr &a = *(AutomationMgr*)d.obj
++#define rBegin [](const char *msg, RtData &d) { \
++    (void) msg; \
++    rtosc::AutomationMgr &a = *(AutomationMgr*)d.obj
+ #define rEnd }
+ 
+ static int extract_num(const char *&msg)
+@@ -605,6 +607,7 @@ class DataObj:public rtosc::RtData
+         virtual void forward(const char *reason) override
+         {
+             assert(message);
++            (void) reason;
+             reply("/forward", "");
+             printf("forwarding '%s'\n", message);
+             forwarded = true;
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index 3df49f06..d34f4b7e 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -204,19 +204,16 @@ void *capture(Master *m, std::string url)
+ template<class T>
+ std::string doCopy(MiddleWare &mw, string url, string name)
+ {
+-    XMLwrapper xml;
+-    mw.doReadOnlyOp([&xml, url, name, &mw](){
++    mw.doReadOnlyOp([url, name, &mw](){
+         Master *m = mw.spawnMaster();
+         //Get the pointer
+-        //printf("capture at <%s>\n", (url+"self").c_str());
+         T *t = (T*)capture<void*>(m, url+"self");
+         assert(t);
+         //Extract Via mxml
+-        //t->add2XML(&xml);
+         t->copy(mw.getPresetsStore(), name.empty()? NULL:name.c_str());
+     });
+ 
+-    return "";//xml.getXMLdata();
++    return "";
+ }
+ 
+ template<class T, typename... Ts>
+@@ -249,9 +246,8 @@ void doPaste(MiddleWare &mw, string url, string type, XMLwrapper &xml, Ts&&... a
+ template<class T>
+ std::string doArrayCopy(MiddleWare &mw, int field, string url, string name)
+ {
+-    XMLwrapper xml;
+     //printf("Getting info from '%s'<%d>\n", url.c_str(), field);
+-    mw.doReadOnlyOp([&xml, url, field, name, &mw](){
++    mw.doReadOnlyOp([url, field, name, &mw](){
+         Master *m = mw.spawnMaster();
+         //Get the pointer
+         T *t = (T*)capture<void*>(m, url+"self");
+@@ -259,7 +255,7 @@ std::string doArrayCopy(MiddleWare &mw, int field, string url, string name)
+         t->copy(mw.getPresetsStore(), field, name.empty()?NULL:name.c_str());
+     });
+ 
+-    return "";//xml.getXMLdata();
++    return "";
+ }
+ 
+ template<class T, typename... Ts>
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index c55b4df1..78ddc96d 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -270,7 +270,7 @@ static const rtosc::Ports non_realtime_ports =
+             d.reply(d.loc, "i", (int)realbw);
+             delete[] tmp;}},
+     {"harmonic_profile:", rProp(non-realtime) rDoc("UI display of the harmonic profile"),
+-        NULL, [](const char *m, rtosc::RtData &d) {
++        NULL, [](const char *, rtosc::RtData &d) {
+             PADnoteParameters *p = ((PADnoteParameters*)d.obj);
+ #define RES 512
+             char        types[RES+2] = {0};
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 7c225df7..6479e879 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -108,6 +108,7 @@ static const rtosc::Ports SUBnotePorts = {
+ 
+     {"clear:", rDoc("Reset all harmonics to equal bandwidth/zero amplitude"), NULL,
+         rBegin;
++        (void) msg;
+         for(int i=0; i<MAX_SUB_HARMONICS; ++i) {
+             obj->Phmag[i]   = 0;
+             obj->Phrelbw[i] = 64;
+@@ -116,6 +117,7 @@ static const rtosc::Ports SUBnotePorts = {
+         rEnd},
+     {"detunevalue:", rDoc("Get note detune value"), NULL,
+         rBegin;
++        (void) msg;
+         d.reply(d.loc, "f", getdetune(obj->PDetuneType, 0, obj->PDetune));
+         rEnd},
+     //weird stuff for PCoarseDetune
+@@ -150,6 +152,7 @@ static const rtosc::Ports SUBnotePorts = {
+             "        filter = [frequency, bandwidth, amplitude]"),
+     NULL,
+     rBegin;
++    (void) msg;
+ 
+     //Identify the active harmonics
+     int pos[MAX_SUB_HARMONICS];
+diff --git a/src/UI/Fl_Osc_Interface.h b/src/UI/Fl_Osc_Interface.h
+index adca4447..e6735533 100644
+--- a/src/UI/Fl_Osc_Interface.h
++++ b/src/UI/Fl_Osc_Interface.h
+@@ -26,29 +26,29 @@ class Fl_Osc_Widget
+         virtual void OSC_value(const char *){};
+ 
+         //labeled forwarding methods
+-        virtual void OSC_value(float x, const char *){};
+-        virtual void OSC_value(bool x, const char *){};
+-        virtual void OSC_value(int x, const char *){};
+-        virtual void OSC_value(char x, const char *){};
+-        virtual void OSC_value(unsigned x, void *v, const char *){};
+-        virtual void OSC_value(const char *x, const char *){};
++        virtual void OSC_value(float x, const char *){(void)x;};
++        virtual void OSC_value(bool  x, const char *){(void)x;};
++        virtual void OSC_value(int   x, const char *){(void)x;};
++        virtual void OSC_value(char  x, const char *){(void)x;};
++        virtual void OSC_value(unsigned x, void *, const char *){(void)x;};
++        virtual void OSC_value(const char *x, const char *){(void)x;};
+ 
+         //Raw messages
+         virtual void OSC_raw(const char *){};
+ 
+         //Widget methods
+-        void oscWrite(std::string path, const char *args, ...){};
+-        void oscWrite(std::string path){};
+-        void oscRegister(const char *path){};
++        void oscWrite(std::string path, const char *args, ...){(void)path;(void)args;};
++        void oscWrite(std::string path){(void)path;};
++        void oscRegister(const char *path){(void)path;};
+ 
+         //Forces an update of parameters as they have become stale somehow
+         virtual void update(void){};
+ 
+         //Smoothly change the base path
+-        virtual void rebase(std::string new_base){};
+-        void oscMove(std::string new_ext){};
++        virtual void rebase(std::string new_base){(void)new_base;};
++        void oscMove(std::string new_ext){(void)new_ext;};
+         //Explict version for weirdly routed controls
+-        void oscMove(std::string old_loc, std::string new_loc){};
++        void oscMove(std::string old_loc, std::string new_loc){(void)old_loc;(void)new_loc;};
+ };
+ #endif
+ 
+-- 
+2.47.0
+

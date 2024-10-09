@@ -1,0 +1,439 @@
+From d17705c7a36c409c1b5036533d3090428571b902 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 30 Sep 2015 21:14:20 -0400
+Subject: [PATCH 0543/1936] UI: Permit Window Title Extensions
+
+---
+ src/UI/ADnoteUI.fl         |  8 +++-----
+ src/UI/BankUI.fl           |  6 ++++--
+ src/UI/ConfigUI.fl         |  6 ++++--
+ src/UI/EffUI.fl            |  3 +++
+ src/UI/EnvelopeUI.fl       |  5 ++++-
+ src/UI/FilterUI.fl         |  3 +++
+ src/UI/Fl_Osc_ListView.cpp |  1 +
+ src/UI/Fl_Osc_Pane.H       |  5 +++++
+ src/UI/Fl_Osc_Pane.cpp     | 15 ++++++++++++++-
+ src/UI/Fl_Osc_Widget.H     |  3 +--
+ src/UI/Fl_Osc_Widget.cpp   |  1 +
+ src/UI/LFOUI.fl            |  3 +++
+ src/UI/MasterUI.fl         | 16 ++++++++++------
+ src/UI/MicrotonalUI.fl     |  3 +--
+ src/UI/NioUI.cpp           |  1 +
+ src/UI/PADnoteUI.fl        |  3 +--
+ src/UI/PartUI.fl           | 12 ++++--------
+ src/UI/SUBnoteUI.fl        |  2 +-
+ src/UI/guimain.cpp         |  1 +
+ 19 files changed, 65 insertions(+), 32 deletions(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 79e56cdd..cab22ee3 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -834,7 +834,7 @@ class ADnoteUI {open : {public PresetsUI_}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {ADnoteGlobalParameters->base = loc + "GlobalPar/"; ADnoteGlobalParameters->osc = osc;}
++        code0 {ADnoteGlobalParameters->init(osc, loc + "GlobalPar/");}
+       }
+       Fl_Group {} {
+         label FREQUENCY open
+@@ -1032,8 +1032,7 @@ resui->resonancewindow->show();}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {ADnoteVoice->base = loc;}
+-        code1 {ADnoteVoice->osc       = osc;}
++        code0 {ADnoteVoice->init(osc,loc);}
+       }
+       Fl_Group advoice {open
+         xywh {0 0 765 595}
+@@ -1071,8 +1070,7 @@ advoice->change_voice(nvoice);}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {ADnoteVoiceList->base = loc;}
+-        code1 {ADnoteVoiceList->osc  = osc;}
++        code0 {ADnoteVoiceList->init(osc, loc);}
+       }
+       Fl_Text_Display {} {
+         label {No.}
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index 6d401369..76b825e7 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -29,6 +29,9 @@ decl {\#include "Fl_Osc_Interface.h"} {public local
+ decl {\#include "Fl_Osc_Check.H"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Pane.H"} {public local
++}
++
+ decl {\#include "../Misc/Util.h"} {public local
+ } 
+ 
+@@ -46,8 +49,7 @@ class BankUI {open
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {bankuiwindow->osc = osc;}
+-        code1 {bankuiwindow->base = "/";}
++        code0 {bankuiwindow->init(osc, "/");}
+       }
+       Fl_Button {} {
+         label Close
+diff --git a/src/UI/ConfigUI.fl b/src/UI/ConfigUI.fl
+index 83272e6d..b9b15d28 100644
+--- a/src/UI/ConfigUI.fl
++++ b/src/UI/ConfigUI.fl
+@@ -44,6 +44,9 @@ decl {\#include "Fl_Osc_Numeric_Input.H"} {public local
+ decl {\#include "Fl_Osc_ListView.H"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Pane.H"} {public local
++}
++
+ decl {\#include "../globals.h"} {public local
+ } 
+ 
+@@ -60,8 +63,7 @@ class ConfigUI {} {
+     } {
+       Fl_Box dummy {
+         xywh {25 25 25 25}
+-        code0 {configwindow->osc = osc;}
+-        code1 {configwindow->base = "/config/";}
++        code0 {configwindow->init(osc, "/config/");}
+       }
+       Fl_Tabs {} {
+         xywh {5 5 500 330}
+diff --git a/src/UI/EffUI.fl b/src/UI/EffUI.fl
+index 2839815c..4e8d7972 100644
+--- a/src/UI/EffUI.fl
++++ b/src/UI/EffUI.fl
+@@ -29,6 +29,9 @@ decl {\#include "Fl_Osc_Check.H"} {public local
+ decl {\#include "Fl_EQGraph.H"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Pane.H"} {public local
++}
++
+ decl {\#include "EnvelopeUI.h"} {public local
+ } 
+ 
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index 713a34bf..5008d32e 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -20,6 +20,9 @@ decl {\#include "Fl_Osc_Button.H"} {public local
+ decl {\#include "Fl_Osc_Counter.H"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Pane.H"} {public local
++}
++
+ decl {\#include <stdio.h>} {public local
+ } 
+ 
+@@ -80,7 +83,7 @@ delete (freemodeeditwindow);} {}
+         label C
+         callback {presetsui->copy(freemodeeditwindow->loc());}
+         xywh {465 160 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-        code0 {freemodeeditwindow->osc = osc; freemodeeditwindow->base = loc();}
++        code0 {freemodeeditwindow->init(osc, loc());}
+       }
+       Fl_Button {} {
+         label P
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index d4c66fe7..e2ad38f0 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -26,6 +26,9 @@ decl {\#include "Fl_Osc_Output.H"} {public local
+ decl {\#include "Fl_Osc_Slider.H"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Pane.H"} {public local
++}
++
+ decl {\#include <cmath>} {private local
+ } 
+ 
+diff --git a/src/UI/Fl_Osc_ListView.cpp b/src/UI/Fl_Osc_ListView.cpp
+index d2ca916a..4d6293e1 100644
+--- a/src/UI/Fl_Osc_ListView.cpp
++++ b/src/UI/Fl_Osc_ListView.cpp
+@@ -1,4 +1,5 @@
+ #include "Fl_Osc_ListView.H"
++#include "Fl_Osc_Pane.H"
+ #include <cstdio>
+ #include <rtosc/rtosc.h>
+ 
+diff --git a/src/UI/Fl_Osc_Pane.H b/src/UI/Fl_Osc_Pane.H
+index 14bcf190..9d9e9b80 100644
+--- a/src/UI/Fl_Osc_Pane.H
++++ b/src/UI/Fl_Osc_Pane.H
+@@ -3,6 +3,7 @@
+ #include <FL/Fl_Group.H>
+ #include <FL/Fl_Double_Window.H>
+ #include <string>
++#include "Osc_DataModel.h"
+ 
+ class Fl_Osc_Pane
+ {
+@@ -16,8 +17,12 @@ class Fl_Osc_Pane
+ 
+ class Fl_Osc_Window:public Fl_Double_Window, public Fl_Osc_Pane
+ {
++    Osc_DataModel *title_ext;
++    std::string title_orig;
++    std::string title_new;
+     public:
+         Fl_Osc_Window(int w, int h, const char *L=0);
++        ~Fl_Osc_Window(void);
+ 
+         void init(Fl_Osc_Interface *osc_, std::string loc_);
+         virtual std::string loc(void) const;
+diff --git a/src/UI/Fl_Osc_Pane.cpp b/src/UI/Fl_Osc_Pane.cpp
+index 2ca97157..c1eac185 100644
+--- a/src/UI/Fl_Osc_Pane.cpp
++++ b/src/UI/Fl_Osc_Pane.cpp
+@@ -9,15 +9,28 @@ Fl_Osc_Pane::Fl_Osc_Pane(void)
+ 
+ 
+ Fl_Osc_Window::Fl_Osc_Window(int w, int h, const char *L)
+-    :Fl_Double_Window(w,h,L)
++    :Fl_Double_Window(w,h,L), title_ext(NULL)
+ {}
+         
+ void Fl_Osc_Window::init(Fl_Osc_Interface *osc_, std::string loc_)
+ {
++    title_ext  = new Osc_DataModel(osc_);
++    title_ext->update("/ui/title");
++    title_ext->callback = [this](string next) {
++        title_new = title_orig + next;
++        this->label(title_new.c_str());
++    };
++    title_orig = label();
++
+     osc   = osc_;
+     base = loc_;
+ }
+ 
++Fl_Osc_Window::~Fl_Osc_Window(void)
++{
++    delete title_ext;
++}
++
+ std::string Fl_Osc_Window::loc(void) const
+ {
+     return base;
+diff --git a/src/UI/Fl_Osc_Widget.H b/src/UI/Fl_Osc_Widget.H
+index 39a8894c..6ed7fa0f 100644
+--- a/src/UI/Fl_Osc_Widget.H
++++ b/src/UI/Fl_Osc_Widget.H
+@@ -4,7 +4,6 @@
+ #include <cassert>
+ #include <cmath>
+ #include "Fl_Osc_Interface.h"
+-#include "Fl_Osc_Pane.H"
+ #include <FL/Fl_Group.H>
+ 
+ class Fl_Osc_Widget
+@@ -54,5 +53,5 @@ class Fl_Osc_Widget
+         std::string ext;
+         Fl_Osc_Interface *osc;
+     protected:
+-        Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w);
++        class Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w);
+ };
+diff --git a/src/UI/Fl_Osc_Widget.cpp b/src/UI/Fl_Osc_Widget.cpp
+index 2ab925f2..dda9e990 100644
+--- a/src/UI/Fl_Osc_Widget.cpp
++++ b/src/UI/Fl_Osc_Widget.cpp
+@@ -1,4 +1,5 @@
+ #include "Fl_Osc_Widget.H"
++#include "Fl_Osc_Pane.H"
+ #include <rtosc/rtosc.h>
+ 
+ Fl_Osc_Widget::Fl_Osc_Widget(void) //Deprecated
+diff --git a/src/UI/LFOUI.fl b/src/UI/LFOUI.fl
+index c45cbc03..29e6105c 100644
+--- a/src/UI/LFOUI.fl
++++ b/src/UI/LFOUI.fl
+@@ -20,6 +20,9 @@ decl {\#include "Fl_Osc_Choice.H"} {public local
+ decl {\#include "Fl_Osc_Check.H"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Pane.H"} {public local
++}
++
+ decl {\#include "../globals.h"} {private global
+ } 
+ 
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 80e2dd9b..f8f5226c 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -241,7 +241,13 @@ class MasterUI {open
+     close();
+ };} open
+       xywh {330 365 390 525} type Double xclass zynaddsubfx visible
++      class Fl_Osc_Window
+     } {
++        Fl_Box dummy_again {
++          xywh {25 25 25 25}
++          code0 {masterwindow->init(osc, "");}
++        }
++
+       Fl_Group win_root {open
+         xywh {0 0 390 525}
+         class Fl_Osc_Group
+@@ -855,8 +861,7 @@ GNU General Public License for details.}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {syseffsendwindow->osc = osc; assert(osc);}
+-        code1 {syseffsendwindow->base = "";}
++        code0 {syseffsendwindow->init(osc,"");}
+       }
+       Fl_Scroll syseffscroll {open
+         xywh {0 45 120 170} box FLAT_BOX resizable
+@@ -880,8 +885,7 @@ GNU General Public License for details.}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {panelwindow->osc  = osc;}
+-        code1 {panelwindow->base = "/";}
++        code0 {panelwindow->init(osc,"/");}
+       }
+       Fl_Scroll {} {open
+         xywh {0 5 570 310} type HORIZONTAL box THIN_UP_BOX
+@@ -924,8 +928,7 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {simplemasterwindow->osc  = osc;}
+-        code1 {simplemasterwindow->base = "/";}
++        code0 {simplemasterwindow->init(osc, "/");}
+       }
+       Fl_Menu_Bar simplemastermenu {
+         xywh {0 0 600 25}
+@@ -1427,6 +1430,7 @@ virkeys->take_focus();}
+       label {User Interface mode}
+       callback {*exitprogram=1;}
+       xywh {342 246 430 250} type Double hide non_modal
++      class Fl_Osc_Window
+     } {
+       Fl_Box {} {
+         label {Welcome to ZynAddSubFX}
+diff --git a/src/UI/MicrotonalUI.fl b/src/UI/MicrotonalUI.fl
+index 889217f4..6ca5676b 100644
+--- a/src/UI/MicrotonalUI.fl
++++ b/src/UI/MicrotonalUI.fl
+@@ -51,8 +51,7 @@ class MicrotonalUI {} {
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {microtonaluiwindow->osc = osc;}
+-        code1 {microtonaluiwindow->base = base;}
++        code0 {microtonaluiwindow->init(osc, base);}
+       }
+       Fl_Group {} {
+         tooltip {Center where the note's freqs. are turned upside-down} xywh {249 2 155 45} box ENGRAVED_FRAME
+diff --git a/src/UI/NioUI.cpp b/src/UI/NioUI.cpp
+index b0879370..45e476a4 100644
+--- a/src/UI/NioUI.cpp
++++ b/src/UI/NioUI.cpp
+@@ -11,6 +11,7 @@
+ #include <FL/Fl_Group.H>
+ #include <FL/Fl_Text_Display.H>
+ #include "Osc_SimpleListModel.h"
++#include "Fl_Osc_Pane.H"
+ 
+ using namespace std;
+ 
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 239ede04..d9e6afd4 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -84,8 +84,7 @@ initialized = true;} {selected
+     } {
+ 
+       Fl_Box dummy {
+-        code0 {padnotewindow->osc = osc_i; padnotewindow->base = location;}
+-        code1 {puts("dummy setup done...");}
++        code0 {padnotewindow->init(osc_i, location);}
+       }
+       Fl_Tabs {} {
+         callback {if (o->value()!=harmonicstructuregroup) applybutton->hide();
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index d2a55c42..f045b928 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -418,8 +418,7 @@ if (event==FL_RIGHT_MOUSE){
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {ctlwindow->osc = osc;}
+-        code1 {ctlwindow->base = "/part"+to_s(npart)+"/ctl/";}
++        code0 {ctlwindow->init(osc,"/part"+to_s(npart)+"/ctl/");}
+       }
+       Fl_Check_Button {} {
+         label Expr
+@@ -610,8 +609,7 @@ else {propta->deactivate();proptb->deactivate();}}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {partfx->osc  = osc;}
+-        code1 {partfx->base = part_path;}
++        code0 {partfx->init(osc, part_path);}
+       }
+       Fl_Counter inseffnocounter {
+         label {FX No.}
+@@ -742,8 +740,7 @@ if (x==2) part->partefx[ninseff]->setdryonly(true);
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {instrumentkitlist->osc = osc;}
+-        code1 {instrumentkitlist->base = "/part"+to_s(npart)+"/";}
++        code0 {instrumentkitlist->init(osc, "/part"+to_s(npart)+"/");}
+       }
+       Fl_Button {} {
+         label {Close Window}
+@@ -824,8 +821,7 @@ if (x==2) part->partefx[ninseff]->setdryonly(true);
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0}
+-        code0 {instrumenteditwindow->osc = osc;}
+-        code1 {instrumenteditwindow->base = "/part"+to_s(npart)+"/";}
++        code0 {instrumenteditwindow->init(osc, "/part"+to_s(npart)+"/");}
+       }
+       Fl_Group editgroup {
+         xywh {0 220 395 110} box UP_FRAME
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index d257b392..a4edafaa 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -184,7 +184,7 @@ class SUBnoteUI {open : {public PresetsUI_}
+     } {
+       Fl_Box {} {
+         xywh {0 0 0 0} box FLAT_BOX color 45
+-        code0 {SUBparameters->osc = osc; SUBparameters->base = loc;}
++        code0 {SUBparameters->init(osc, loc);}
+       }
+       Fl_Scroll {} {
+         label scroll open
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index a22eb33d..4849d0f7 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -541,6 +541,7 @@ int main(int argc, char *argv[])
+         lo_server_add_method(server, NULL, NULL, handler_function, 0);
+         sendtourl = argv[1];
+     }
++    fprintf(stderr, "ext client running on %d\n", lo_server_get_port(server));
+     
+     gui = GUI::createUi(new UI_Interface(), &Pexitprogram);
+ 
+-- 
+2.47.0
+

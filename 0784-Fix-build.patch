@@ -1,0 +1,28 @@
+From 1d4cf915a1fa9e3a03523c268c779c235500f69b Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 13 Dec 2015 17:14:37 +0100
+Subject: [PATCH 0784/1936] Fix build
+
+---
+ src/Plugin/AlienWah/AlienWah.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Plugin/AlienWah/AlienWah.cpp b/src/Plugin/AlienWah/AlienWah.cpp
+index 01df889e..0cfde3af 100644
+--- a/src/Plugin/AlienWah/AlienWah.cpp
++++ b/src/Plugin/AlienWah/AlienWah.cpp
+@@ -181,7 +181,11 @@ protected:
+ /* ------------------------------------------------------------------------------------------------------------
+  * Create plugin, entry point */
+ 
++START_NAMESPACE_DISTRHO
++
+ Plugin* createPlugin()
+ {
+     return new AlienWahPlugin();
+ }
++
++END_NAMESPACE_DISTRHO
+-- 
+2.47.0
+

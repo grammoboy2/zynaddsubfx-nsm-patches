@@ -1,0 +1,154 @@
+From 5a61d2043f4738a200fd3273adc568fae246fa21 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 7 Nov 2015 09:02:05 -0500
+Subject: [PATCH 0697/1936] PADnoteUI: Fix Apply Button Via OSC Message Snoop
+
+It's not a perfect heuristic, but it should work well
+enough for the time being.
+---
+ src/Misc/MiddleWare.cpp | 13 +++++++++++--
+ src/UI/Osc_IntModel.h   |  8 ++++++++
+ src/UI/OscilGenUI.fl    |  9 ++-------
+ src/UI/PADnoteUI.fl     | 37 ++++++++++++++++++++++++++++++++++++-
+ 4 files changed, 57 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 6614cab6..99d5bd01 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -325,13 +325,22 @@ struct NonRtObjStore
+     void handlePad(const char *msg, rtosc::RtData &d) {
+         string obj_rl(d.message, msg);
+         void *pad = get(obj_rl);
+-        if(!strcmp(msg, "prepare"))
++        if(!strcmp(msg, "prepare")) {
+             preparePadSynth(obj_rl, (PADnoteParameters*)pad, d);
+-        else {
++            d.matches++;
++            d.reply((obj_rl+"needPrepare").c_str(), "F");
++        } else {
+             assert(pad);
+             strcpy(d.loc, obj_rl.c_str());
+             d.obj = pad;
+             PADnoteParameters::non_realtime_ports.dispatch(msg, d);
++            if(rtosc_narguments(msg)) {
++                if(!strcmp(msg, "oscilgen/prepare"))
++                    ; //ignore
++                else {
++                    d.reply((obj_rl+"needPrepare").c_str(), "T");
++                }
++            }
+         }
+     }
+ };
+diff --git a/src/UI/Osc_IntModel.h b/src/UI/Osc_IntModel.h
+index e0167816..707573ad 100644
+--- a/src/UI/Osc_IntModel.h
++++ b/src/UI/Osc_IntModel.h
+@@ -40,6 +40,14 @@ class Osc_IntModel:public Fl_Osc_Widget
+                 value = rtosc_argument(msg, 0).i;
+                 if(callback)
+                     callback(value);
++            } else if(args == "T") {
++                value = 1;
++                if(callback)
++                    callback(value);
++            }  else if(args == "F") {
++                value = 0;
++                if(callback)
++                    callback(value);
+             }
+         }
+ };
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index bb7291f0..e6527bd6 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -247,13 +247,8 @@ class OscilEditor {open : {public PresetsUI_}
+       } {
+         Fl_Button applybutton {
+           label Apply
+-          callback {//applybutton->color(FL_GRAY);
+-//applybutton->redraw();
+-//if (cbapplywidget!=NULL) {
+-//	cbapplywidget->do_callback();
+-//	cbapplywidget->color(FL_GRAY);
+-//	cbapplywidget->redraw();
+-//};}
++          callback {
++          dummy->osc->requestValue(loc+"../prepare");}
+           xywh {305 285 60 20} box THIN_UP_BOX labelfont 1
+           code0 {if(adnotep) o->hide();}
+           code1 {dummy->base = loc;}
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 9472ab94..8fbda582 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -32,6 +32,9 @@ decl {\#include <string.h>} {private local
+ decl {\#include <string>} {public local
+ } 
+ 
++decl {\#include "Osc_IntModel.h"} {private local
++}
++
+ decl {\#include "Fl_Osc_TSlider.H"} {public local
+ } 
+ 
+@@ -73,6 +76,33 @@ resui=new ResonanceUI(osc_i, location+"resonance/");
+ initialized = false;
+ applybutton = NULL;
+ make_window();
++apply_watcher = new Osc_IntModel(osc_i);
++apply_watcher->callback=[this](int needsPrepare) {
++    if(needsPrepare) {
++        applybutton->color(FL_RED);
++        applybutton->redraw();
++        if(oscui) {
++            oscui->applybutton->color(FL_RED);
++            oscui->applybutton->redraw();
++        }
++        if(resui) {
++            resui->applybutton->color(FL_RED);
++            resui->applybutton->redraw();
++        }
++    } else {
++        applybutton->color(FL_GRAY);
++        applybutton->redraw();
++        if(oscui) {
++            oscui->applybutton->color(FL_GRAY);
++            oscui->applybutton->redraw();
++        }
++        if(resui) {
++            resui->applybutton->color(FL_GRAY);
++            resui->applybutton->redraw();
++        }
++    }
++};
++apply_watcher->doUpdate(location+"needPrepare");
+ initialized = true;} {}
+   }
+   Function {make_window()} {open
+@@ -877,9 +907,12 @@ applybutton->color(FL_GRAY);
+ applybutton->parent()->redraw();} {}
+   }
+   Function {~PADnoteUI()} {} {
+-    code {delete(oscui);
++    code {
++delete apply_watcher;
++delete(oscui);
+ delete(resui);
+ 
++
+ padnotewindow->hide();
+ delete padnotewindow;} {}
+   }
+@@ -899,4 +932,6 @@ delete padnotewindow;} {}
+   }
+   decl {PADnoteOvertonePosition *opui;} {private local
+   }
++  decl {class Osc_IntModel *apply_watcher;} {private local
++  }
+ } 
+-- 
+2.47.0
+

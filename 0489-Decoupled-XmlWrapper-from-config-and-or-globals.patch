@@ -1,0 +1,210 @@
+From 7f5a5f1abc959d5981aac8f44ad2a6c80b79409d Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Mon, 8 Jun 2015 07:25:03 +0200
+Subject: [PATCH 0489/1936] Decoupled XmlWrapper from config and/or globals.
+
+---
+ TODO.txt                    | 12 ++++++++++++
+ src/Misc/Config.cpp         | 12 +++++-------
+ src/Misc/Config.h           |  6 +++---
+ src/Misc/Master.cpp         |  2 +-
+ src/Misc/Microtonal.cpp     |  2 +-
+ src/Misc/Part.cpp           |  2 +-
+ src/Misc/Util.h             |  1 -
+ src/Misc/XMLwrapper.cpp     |  4 +---
+ src/Misc/XMLwrapper.h       |  2 +-
+ src/Params/PresetsStore.cpp |  2 +-
+ 10 files changed, 26 insertions(+), 19 deletions(-)
+
+diff --git a/TODO.txt b/TODO.txt
+index 9543a620..27147e97 100644
+--- a/TODO.txt
++++ b/TODO.txt
+@@ -1,3 +1,4 @@
++Issues:
+ (1) src/Params/LFOParams.h:        static int time; //is used by Pcontinous 
+ parameter
+ (2) src/DSP/FFTwrapper.cpp:static pthread_mutex_t *mutex = NULL;
+@@ -9,3 +10,14 @@ in order to avoid denormalisation*/
+ (7) src/Misc/Util.h:extern prng_t prng_state;
+ (8) src/Params/PresetsStore.h:extern PresetsStore presetsstore;
+ 
++Status:
++(1)
++(2)
++(3)
++(4)
++(5)
++(6)
++(7)
++(8) fixed + tested
++
++
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 287ebe4d..0badf57f 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -237,7 +237,7 @@ Config::~Config()
+ }
+ 
+ 
+-void Config::save()
++void Config::save() const
+ {
+     char filename[MAX_STRING_SIZE];
+     getConfigFileName(filename, MAX_STRING_SIZE);
+@@ -352,7 +352,7 @@ void Config::readConfig(const char *filename)
+     cfg.OscilSize = (int) powf(2, ceil(logf(cfg.OscilSize - 1.0f) / logf(2.0f)));
+ }
+ 
+-void Config::saveConfig(const char *filename)
++void Config::saveConfig(const char *filename) const
+ {
+     XMLwrapper *xmlcfg = new XMLwrapper();
+ 
+@@ -401,15 +401,13 @@ void Config::saveConfig(const char *filename)
+ 
+     xmlcfg->endbranch();
+ 
+-    int tmp = cfg.GzipCompression;
+-    cfg.GzipCompression = 0;
+-    xmlcfg->saveXMLfile(filename);
+-    cfg.GzipCompression = tmp;
++    // for some reason (which one?), the gzip compression is bashed to 0
++    xmlcfg->saveXMLfile(filename, 0);
+ 
+     delete (xmlcfg);
+ }
+ 
+-void Config::getConfigFileName(char *name, int namesize)
++void Config::getConfigFileName(char *name, int namesize) const
+ {
+     name[0] = 0;
+     snprintf(name, namesize, "%s%s", getenv("HOME"), "/.zynaddsubfxXML.cfg");
+diff --git a/src/Misc/Config.h b/src/Misc/Config.h
+index a8d35a93..5395a141 100644
+--- a/src/Misc/Config.h
++++ b/src/Misc/Config.h
+@@ -62,12 +62,12 @@ class Config
+         void clearbankrootdirlist();
+         void clearpresetsdirlist();
+         void init();
+-        void save();
++        void save() const;
+ 
+         static const rtosc::Ports &ports;
+     private:
+         void readConfig(const char *filename);
+-        void saveConfig(const char *filename);
+-        void getConfigFileName(char *name, int namesize);
++        void saveConfig(const char *filename) const;
++        void getConfigFileName(char *name, int namesize) const;
+ };
+ #endif
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index b192ebf2..5051ad01 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1044,7 +1044,7 @@ int Master::saveXML(const char *filename)
+     add2XML(xml);
+     xml->endbranch();
+ 
+-    int result = xml->saveXMLfile(filename);
++    int result = xml->saveXMLfile(filename, config.cfg.GzipCompression);
+     delete (xml);
+     return result;
+ }
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 0a7076a8..af70d2e5 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -688,7 +688,7 @@ int Microtonal::saveXML(const char *filename) const
+     add2XML(xml);
+     xml->endbranch();
+ 
+-    int result = xml->saveXMLfile(filename);
++    int result = xml->saveXMLfile(filename, config.cfg.GzipCompression);
+     delete (xml);
+     return result;
+ }
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index d22bad3b..d5654d27 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -1193,7 +1193,7 @@ int Part::saveXML(const char *filename)
+     add2XMLinstrument(&xml);
+     xml.endbranch();
+ 
+-    int result = xml.saveXMLfile(filename);
++    int result = xml.saveXMLfile(filename, config.cfg.GzipCompression);
+     return result;
+ }
+ 
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index aaf5aa19..f2404797 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -28,7 +28,6 @@
+ #include <stdint.h>
+ #include <algorithm>
+ #include "Config.h"
+-#include "../globals.h"
+ 
+ using std::min;
+ using std::max;
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index e47e7e36..4d74e8f2 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -31,7 +31,6 @@
+ #include <iostream>
+ #include <sstream>
+ 
+-#include "../globals.h"
+ #include "Util.h"
+ 
+ using namespace std;
+@@ -187,13 +186,12 @@ bool XMLwrapper::hasPadSynth() const
+ 
+ /* SAVE XML members */
+ 
+-int XMLwrapper::saveXMLfile(const string &filename) const
++int XMLwrapper::saveXMLfile(const string &filename, int compression) const
+ {
+     char *xmldata = getXMLdata();
+     if(xmldata == NULL)
+         return -2;
+ 
+-    int compression = config.cfg.GzipCompression;
+     int result      = dosavefile(filename.c_str(), compression, xmldata);
+ 
+     free(xmldata);
+diff --git a/src/Misc/XMLwrapper.h b/src/Misc/XMLwrapper.h
+index 077c32db..d95769d3 100644
+--- a/src/Misc/XMLwrapper.h
++++ b/src/Misc/XMLwrapper.h
+@@ -49,7 +49,7 @@ class XMLwrapper
+          * @param filename the name of the destination file.
+          * @returns 0 if ok or -1 if the file cannot be saved.
+          */
+-        int saveXMLfile(const std::string &filename) const;
++        int saveXMLfile(const std::string &filename, int compression) const;
+ 
+         /**
+          * Return XML tree as a string.
+diff --git a/src/Params/PresetsStore.cpp b/src/Params/PresetsStore.cpp
+index 475029f3..c0623613 100644
+--- a/src/Params/PresetsStore.cpp
++++ b/src/Params/PresetsStore.cpp
+@@ -154,7 +154,7 @@ void PresetsStore::copypreset(XMLwrapper &xml, char *type, string name)
+ 
+     string filename("" + dirname + tmps + name + "." + &type[1] + ".xpz");
+ 
+-    xml.saveXMLfile(filename);
++    xml.saveXMLfile(filename, config.cfg.GzipCompression);
+ }
+ 
+ bool PresetsStore::pastepreset(XMLwrapper &xml, unsigned int npreset)
+-- 
+2.47.0
+

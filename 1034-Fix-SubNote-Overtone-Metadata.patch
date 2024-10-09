@@ -1,0 +1,27 @@
+From 2bf5f7fcea76f2cfefdddda4279cbac3a7fdb2bc Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 30 Sep 2016 20:44:37 -0400
+Subject: [PATCH 1034/1936] Fix SubNote Overtone Metadata
+
+---
+ src/Params/SUBnoteParameters.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 17f25349..9fc4ba1c 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -66,8 +66,8 @@ static const rtosc::Ports SUBnotePorts = {
+             "Overtone Parameter"),
+     rParamI(POvertoneSpread.par2, rMap(min, 0), rMap(max, 255), rShort("p2"),
+             "Overtone Parameter"),
+-    rParamI(POvertoneSpread.par3, rMap(min, 0), rMap(max, 255), rShort("p3"),
+-            "Overtone Parameter"),
++    rParamI(POvertoneSpread.par3, rMap(min, 0), rMap(max, 255), rShort("forceH"),
++            "Force Overtones To Harmonics"),
+ #undef rChangeCb
+ #define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+     rParamI(Pnumstages, rShort("stages"), rMap(min, 1), rMap(max, 5), "Number of filter stages"),
+-- 
+2.47.0
+

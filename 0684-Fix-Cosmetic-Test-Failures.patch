@@ -1,0 +1,52 @@
+From 5ea2d878efc9869ec5011afa792dd90530156ef4 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 5 Nov 2015 20:09:40 -0500
+Subject: [PATCH 0684/1936] Fix Cosmetic Test Failures
+
+---
+ src/Tests/OscilGenTest.h    | 16 ++++++++--------
+ src/Tests/guitar-adnote.xmz |  1 +
+ 2 files changed, 9 insertions(+), 8 deletions(-)
+
+diff --git a/src/Tests/OscilGenTest.h b/src/Tests/OscilGenTest.h
+index 22358547..2fae2bbe 100644
+--- a/src/Tests/OscilGenTest.h
++++ b/src/Tests/OscilGenTest.h
+@@ -104,14 +104,14 @@ class OscilGenTest:public CxxTest::TestSuite
+         void testSpectrum(void)
+         {
+             oscil->getspectrum(synth->oscilsize / 2, outR, 1);
+-            TS_ASSERT_DELTA(outR[0], 350.698059f, 0.0001f);
+-            TS_ASSERT_DELTA(outR[1], 228.889267f, 0.0001f);
+-            TS_ASSERT_DELTA(outR[2], 62.187931f, 0.0001f);
+-            TS_ASSERT_DELTA(outR[3], 22.295225f, 0.0001f);
+-            TS_ASSERT_DELTA(outR[4], 6.942001f, 0.0001f);
+-            TS_ASSERT_DELTA(outR[26], 0.015110f, 0.0001f);
+-            TS_ASSERT_DELTA(outR[47], 0.003425f, 0.0001f);
+-            TS_ASSERT_DELTA(outR[65], 0.001293f, 0.0001f);
++            TS_ASSERT_DELTA(outR[1], 350.698059f, 0.0001f);
++            TS_ASSERT_DELTA(outR[2], 228.889267f, 0.0001f);
++            TS_ASSERT_DELTA(outR[3], 62.187931f, 0.0001f);
++            TS_ASSERT_DELTA(outR[4], 22.295225f, 0.0001f);
++            TS_ASSERT_DELTA(outR[5], 6.942001f, 0.0001f);
++            TS_ASSERT_DELTA(outR[27], 0.015110f, 0.0001f);
++            TS_ASSERT_DELTA(outR[48], 0.003425f, 0.0001f);
++            TS_ASSERT_DELTA(outR[66], 0.001293f, 0.0001f);
+         }
+ 
+         //performance testing
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index d0b9aee2..864b31a3 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -3319,6 +3319,7 @@ version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="volume" value="90" />
+ <par name="panning" value="64" />
+ <par name="velocity_sensing" value="64" />
++<par name="fadein_adjustment" value="20" />
+ <par name="punch_strength" value="0" />
+ <par name="punch_time" value="60" />
+ <par name="punch_stretch" value="64" />
+-- 
+2.47.0
+

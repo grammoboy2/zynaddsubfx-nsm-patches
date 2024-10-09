@@ -1,0 +1,27 @@
+From 752b97b4009b1e6651c7e689344ba05c00af41ec Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 26 May 2016 21:57:44 -0400
+Subject: [PATCH 0918/1936] LFOParams: Shorten Type Metadata
+
+---
+ src/Params/LFOParams.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index f0be456b..d52fd098 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -37,8 +37,8 @@ static const rtosc::Ports _ports = {
+             "true frequency is [0,85.33] Hz"),
+     rParamZyn(Pintensity, rShort("depth"), "Intensity of LFO"),
+     rParamZyn(Pstartphase, rShort("start"), rSpecial(random), "Starting Phase"),
+-    rOption(PLFOtype, rShort("type"), rOptions(sine, triangle, square, ramp-up, ramp-down,
+-                exponential-down1, exponential-down2), "Shape of LFO"),
++    rOption(PLFOtype, rShort("type"), rOptions(sine, triangle, square, up, down,
++                exp1, exp2), "Shape of LFO"),
+     rParamZyn(Prandomness, rShort("a.r."), rSpecial(disable),
+             "Amplitude Randomness (calculated uniformly at each cycle)"),
+     rParamZyn(Pfreqrand, rShort("f.r."), rSpecial(disable),
+-- 
+2.47.0
+

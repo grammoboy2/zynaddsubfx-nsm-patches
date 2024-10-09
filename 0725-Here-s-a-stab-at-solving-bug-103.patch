@@ -1,0 +1,349 @@
+From bc836f342afe9b7f5b21945b679a032c44245378 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Fri, 13 Nov 2015 18:51:25 -0500
+Subject: [PATCH 0725/1936] Here's a stab at solving bug #103.
+
+I really don't like these hairy state machines, but at least mouse
+gestures should appear consistent now.
+---
+ src/UI/Fl_Osc_Dial.cpp   |   2 +-
+ src/UI/Fl_Osc_DialF.cpp  |   2 +-
+ src/UI/Fl_Osc_Slider.H   |   3 +
+ src/UI/Fl_Osc_Slider.cpp | 118 +++++++++++++++++++++++++++++----------
+ src/UI/WidgetPDial.cpp   |  50 ++++++++++++++---
+ src/UI/WidgetPDial.h     |   1 +
+ 6 files changed, 136 insertions(+), 40 deletions(-)
+
+diff --git a/src/UI/Fl_Osc_Dial.cpp b/src/UI/Fl_Osc_Dial.cpp
+index 77ceb297..3f319e18 100644
+--- a/src/UI/Fl_Osc_Dial.cpp
++++ b/src/UI/Fl_Osc_Dial.cpp
+@@ -63,7 +63,7 @@ void Fl_Osc_Dial::callback(Fl_Callback *cb, void *p)
+ int Fl_Osc_Dial::handle(int ev)
+ {
+     bool middle_mouse = (ev == FL_PUSH && Fl::event_state(FL_BUTTON2) && !Fl::event_shift());
+-    bool ctl_click    = (ev == FL_PUSH && Fl::event_state(FL_BUTTON1) && Fl::event_ctrl());
++    bool ctl_click    = (ev == FL_PUSH && Fl::event_state(FL_BUTTON3) && Fl::event_ctrl());
+     bool shift_middle = (ev == FL_PUSH && Fl::event_state(FL_BUTTON2) && Fl::event_shift());
+     if(middle_mouse || ctl_click) {
+         printf("Trying to learn...\n");
+diff --git a/src/UI/Fl_Osc_DialF.cpp b/src/UI/Fl_Osc_DialF.cpp
+index 502c5236..0e2718d2 100644
+--- a/src/UI/Fl_Osc_DialF.cpp
++++ b/src/UI/Fl_Osc_DialF.cpp
+@@ -54,7 +54,7 @@ void Fl_Osc_DialF::callback(Fl_Callback *cb, void *p)
+ int Fl_Osc_DialF::handle(int ev)
+ {
+     bool middle_mouse = (ev == FL_PUSH && Fl::event_state(FL_BUTTON2) && !Fl::event_shift());
+-    bool ctl_click    = (ev == FL_PUSH && Fl::event_state(FL_BUTTON1) && Fl::event_ctrl());
++    bool ctl_click    = (ev == FL_PUSH && Fl::event_state(FL_BUTTON3) && Fl::event_ctrl());
+     bool shift_middle = (ev == FL_PUSH && Fl::event_state(FL_BUTTON2) && Fl::event_shift());
+     if(middle_mouse || ctl_click) {
+         printf("Trying to learn...\n");
+diff --git a/src/UI/Fl_Osc_Slider.H b/src/UI/Fl_Osc_Slider.H
+index 7bc66cb2..db4d303d 100644
+--- a/src/UI/Fl_Osc_Slider.H
++++ b/src/UI/Fl_Osc_Slider.H
+@@ -33,6 +33,9 @@ class Fl_Osc_Slider:public Fl_Slider, public Fl_Osc_Widget
+ 
+     private:
+         float old_value;
++        int mod_state;
++        int slow_state;
+         int start_pos;
++        bool just_pushed;
+     float denominator;
+ };
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index aeb7ec55..ba70d46a 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -16,7 +16,7 @@ static double min__(double a, double b)
+ 
+ Fl_Osc_Slider::Fl_Osc_Slider(int X, int Y, int W, int H, const char *label)
+     :Fl_Slider(X,Y,W,H,label), Fl_Osc_Widget(this), reset_value(0),
+-     cb_data(NULL, NULL)
++     cb_data(NULL, NULL), just_pushed(true)
+ {
+     //bounds(0.0f,1.0f);
+     Fl_Slider::callback(Fl_Osc_Slider::_cb);
+@@ -74,10 +74,12 @@ void Fl_Osc_Slider::callback(Fl_Callback *cb, void *p)
+     cb_data.second = p;
+ }
+ 
++#define MOD_MASK (FL_CTRL | FL_SHIFT)
++
+ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+ {
+     bool middle_mouse = (ev == FL_PUSH && Fl::event_state(FL_BUTTON2) && !Fl::event_shift());
+-    bool ctl_click    = (ev == FL_PUSH && Fl::event_state(FL_BUTTON1) && Fl::event_ctrl());
++    bool ctl_click    = (ev == FL_PUSH && Fl::event_state(FL_BUTTON3) && Fl::event_ctrl());
+     bool shift_middle = (ev == FL_PUSH && Fl::event_state(FL_BUTTON2) && Fl::event_shift());
+     if(middle_mouse || ctl_click) {
+         printf("Trying to learn...\n");
+@@ -91,38 +93,35 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+     int handled;
+     float rounded;
+ 
+-    if (ev != FL_MOUSEWHEEL)
+-        handled = Fl_Slider::handle(ev, X, Y, W, H);
++    const float range = maximum() - minimum();
++    const float absrange = (range > 0 ? range : -range)+1;
++    int old_mod_state;
++    const float normal_step = range / W;
+ 
+     switch (ev) {
+         case FL_PUSH:
+-            denominator = 2.0;
+-            old_value = value();
+-            start_pos = horizontal() ? Fl::event_x() : Fl::event_y();
+-            {
+-                float range = maximum() - minimum();
+-                float absrng = range > 0 ? range : -range;
+-                float step_ = step();
+-                if (step_ == 0) step_ = 1;
+-
+-                if (absrng / W / step_ > 32 && Fl::event_button1())
+-                    denominator = 0.25;
+-                if (range < 0)
+-                    denominator *= -1;
+-            }
++            just_pushed = true;
++            mod_state = Fl::event_state() & MOD_MASK;
++            slow_state = 0;
++            handled = mod_state ? 1 : Fl_Slider::handle(ev, X, Y, W, H);
+             break;
+         case FL_MOUSEWHEEL:
++            mod_state = Fl::event_state() & MOD_MASK;
++            if (Fl::event_buttons())
++                return 1;
+             if (this == Fl::belowmouse() && Fl::e_dy != 0) {
+                 int step_ = 1, divisor = 16;
+-                switch (Fl::event_state() & ( FL_CTRL | FL_SHIFT)) {
++
++                switch (mod_state) {
+                     case FL_SHIFT:
+-                        step_ = 8;
++                        if (absrange > divisor * 8)
++                            step_ = 8;
+                     case FL_SHIFT | FL_CTRL:
+                         break;
+                     case FL_CTRL:
+                         divisor = 128;
+                     default:
+-                        step_ = (fabs(maximum() - minimum()) + 1) / divisor;
++                        step_ = absrange / divisor;
+                         if (step_ < 1)
+                             step_ = 1;
+                 }
+@@ -133,6 +132,7 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+             }
+             return 1;
+         case FL_RELEASE:
++            handled = Fl_Slider::handle(ev, X, Y, W, H);
+             if (Fl::event_clicks() == 1) {
+                 Fl::event_clicks(0);
+                 value(reset_value);
+@@ -143,15 +143,75 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+             value_damage();
+             do_callback();
+             break;
+-        case FL_DRAG:
+-            if (Fl::event_shift()) {
+-                int delta = (horizontal() ? Fl::event_x() : Fl::event_y()) -
+-                    start_pos;
+-                rounded = floor(clamp(old_value + delta/denominator) + 0.5);
+-                value(rounded);
+-                value_damage();
+-                do_callback();
++        case FL_DRAG: {
++            old_mod_state = mod_state;
++            mod_state = Fl::event_state() & MOD_MASK;
++            if (slow_state == 0 && mod_state == 0)
++                return Fl_Slider::handle(ev, X, Y, W, H);
++
++            if (mod_state != 0) {
++                slow_state = 1;
++            } else if (slow_state == 1)
++                slow_state = 2;
++
++            if (just_pushed || old_mod_state != mod_state) {
++                just_pushed = false;
++                old_value = value();
++                start_pos = horizontal() ? Fl::event_x() : Fl::event_y();
++                if (slow_state == 1) {
++                    denominator = 2.0;
++                    float step_ = step();
++                    if (step_ == 0) step_ = 1;
++
++                    if (absrange / W / step_ > 32)
++                        switch (mod_state) {
++                            case FL_CTRL:
++                                denominator = 0.15;
++                                break;
++                            case FL_SHIFT:
++                                denominator = 0.7;
++                                break;
++                            case MOD_MASK:
++                                denominator = 3.0;
++                                break;
++                        }
++                    else if (mod_state & FL_SHIFT)
++                        denominator = 5.0;
++
++                    if (range < 0)
++                        denominator *= -1;
++                }
++            }
++
++            int delta = (horizontal() ? Fl::event_x() : Fl::event_y())
++                - start_pos;
++            float new_value;
++            if (slow_state == 1) {
++                new_value = old_value + delta / denominator;
++            } else {
++                new_value = old_value + delta * normal_step;
++            }
++            const float clamped_value = clamp(new_value);
++            rounded = floor(clamped_value + 0.5);
++            if (new_value != clamped_value) {
++                start_pos = horizontal() ? Fl::event_x() : Fl::event_y();
++                old_value = rounded;
++                if (slow_state == 2 &&
++                    ((horizontal() &&
++                      (Fl::event_x() < X || Fl::event_x() > X + W)) ||
++                     (!horizontal() &&
++                      (Fl::event_y() < Y || Fl::event_y() > Y + H))))
++                    slow_state = 0;
+             }
++            value(rounded);
++            value_damage();
++            do_callback();
++
++            handled = 1;
++            break;
++        }
++        default:
++            handled = Fl_Slider::handle(ev, X, Y, W, H);
+     }
+     
+     return handled;
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index 1fb39484..9a52a639 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -33,6 +33,8 @@ void WidgetPDial::setRounding(unsigned int digits)
+     tipwin->setRounding(digits);
+ }
+ 
++#define MOD_MASK (FL_CTRL | FL_SHIFT)
++
+ int WidgetPDial::handle(int event)
+ {
+     double dragsize, min = minimum(), max = maximum(), result;
+@@ -48,24 +50,49 @@ int WidgetPDial::handle(int event)
+         return 1;
+     }
+ 
++    int old_mod_state;
++
+     switch(event) {
+         case FL_PUSH:
++            mod_state = Fl::event_state() & MOD_MASK;
+             if (integer_step)
+                 setRounding(0);
+-            else if (Fl::event_shift())
++            else if (mod_state == MOD_MASK)
++                setRounding(5);
++            else if (mod_state == FL_SHIFT)
+                 setRounding(4);
+             else
+-                setRounding(Fl::event_button1() ? 2 : 3);
++                setRounding((Fl::event_button3() || mod_state & FL_CTRL)
++                            ? 3 : 2);
+             oldvalue = value();
+             old_y = Fl::event_y();
+         case FL_DRAG:
+             getPos();
++            old_mod_state = mod_state;
++            mod_state = Fl::event_state() & MOD_MASK;
++            if (old_mod_state != mod_state) {
++                oldvalue = value();
++                old_y = Fl::event_y();
++                if (integer_step)
++                    setRounding(0);
++                else if (mod_state == MOD_MASK)
++                    setRounding(5);
++                else if (mod_state == FL_SHIFT)
++                    setRounding(4);
++                else
++                    setRounding((Fl::event_button3() || mod_state & FL_CTRL)
++                                ? 3 : 2);
++                break;
++            }
+             dy = old_y - Fl::event_y();
+ 
+-            if (Fl::event_shift())
++            if (!integer_step && mod_state == MOD_MASK)
++                dragsize = 200000.0f;
++            else if (!integer_step && mod_state == FL_SHIFT)
+                 dragsize = 20000.0f;
+             else
+-                dragsize = Fl::event_button1() ? 200.0f : 2000.0f;
++                dragsize = (Fl::event_button3() || mod_state & MOD_MASK)
++                    ? 1000.0f : 200.0f;
+ 
+             value(clamp(oldvalue + dy / dragsize * (max - min)));
+             tipwin->showValue(transform(value()));
+@@ -74,19 +101,25 @@ int WidgetPDial::handle(int event)
+                 do_callback();
+             return 1;
+         case FL_MOUSEWHEEL:
+-            if (Fl::belowmouse() != this)
++            if (Fl::event_buttons() || Fl::belowmouse() != this)
+                 return 1;
++            mod_state = Fl::event_state() & MOD_MASK;
+             dy = - Fl::event_dy();
+ 
+             if (integer_step) {
+                 setRounding(0);
+-                result = (int)(value() + dy * (Fl::event_ctrl() ? 1 : 8));
++                result = (int)(value() +
++                               dy * ((Fl::event_ctrl() ||
++                                      Fl::event_shift()) ? 1 : 8));
+             } else {
+                 float dragsize;
+-                if (Fl::event_shift()) {
++                if (mod_state == MOD_MASK) {
++                    dragsize = 100000.0;
++                    setRounding(5);
++                } else if (mod_state == FL_SHIFT) {
+                     dragsize = 10000.0;
+                     setRounding(4);
+-                } else if (Fl::event_ctrl()) {
++                } else if (mod_state == FL_CTRL) {
+                     dragsize = 1000.0;
+                     setRounding(3);
+                 } else {
+@@ -121,7 +154,6 @@ int WidgetPDial::handle(int event)
+             if(this->when() == 0)
+                 do_callback();
+             return 1;
+-            break;
+     }
+     return 0;
+ //#endif
+diff --git a/src/UI/WidgetPDial.h b/src/UI/WidgetPDial.h
+index 534e3d7c..faf95141 100644
+--- a/src/UI/WidgetPDial.h
++++ b/src/UI/WidgetPDial.h
+@@ -31,5 +31,6 @@ class WidgetPDial:public Fl_Dial
+         class TipWin * tipwin;
+         float value_offset;
+         float value_scale;
++        int mod_state;
+ };
+ #endif
+-- 
+2.47.0
+

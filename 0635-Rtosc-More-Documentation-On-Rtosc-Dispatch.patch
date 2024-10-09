@@ -1,0 +1,217 @@
+From e4260cc33c52774c079f65ef6ce7c4f36c14c71f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 24 Oct 2015 22:27:28 -0400
+Subject: [PATCH 0635/1936] Rtosc: More Documentation On Rtosc Dispatch
+
+---
+ rtosc                           |  2 +-
+ src/Misc/Master.cpp             | 26 ++++++++++++--------------
+ src/Misc/Microtonal.cpp         |  4 ++--
+ src/Misc/Part.cpp               | 26 ++++++++++++++++----------
+ src/Params/ADnoteParameters.cpp |  3 ++-
+ src/Params/LFOParams.cpp        | 14 +++++++++-----
+ 6 files changed, 42 insertions(+), 33 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index e77cd1e4..969bcffa 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit e77cd1e4cd573a0781418eb976ab69264d32a9fd
++Subproject commit 969bcffac5cf4128e3aeb173548f7673a11d6b62
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 2e10dbe4..1ce6e23f 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -131,25 +131,20 @@ static const Ports master_ports = {
+        d.reply("/free", "sb", "Part", sizeof(void*), &m->part[i]);
+        m->part[i] = p;
+        p->initialize_rt();
+-       //printf("part %d is now pointer %p\n", i, p);
+-                                                                                                          }},
+-    {"Pvolume::i", rProp(parameter) rDoc("Master Volume"), 0,
++       }},
++    {"Pvolume::i", rProp(parameter) rLinear(0,127) rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "i", ((Master*)d.obj)->Pvolume);
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
+             ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
+             d.broadcast(d.loc, "i", ((Master*)d.obj)->Pvolume);}}},
+-    {"volume::i", rProp(parameter) rDoc("Master Volume"), 0,
++    {"volume::i", rProp(parameter) rLinear(0,127) rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "i", ((Master*)d.obj)->Pvolume);
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
+-            //printf("looking at value %d\n", rtosc_argument(m,0).i);
+-            //printf("limited value is %d\n", limit<char>(
+-            //            rtosc_argument(m,0).i, 0,127));
+             ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
+-            //printf("sets volume to value %d\n", ((Master*)d.obj)->Pvolume);
+             d.broadcast(d.loc, "i", ((Master*)d.obj)->Pvolume);}}},
+     {"Psysefxvol#" STRINGIFY(NUM_SYS_EFX) "/::i", 0, &sysefxPort,
+         [](const char *msg, rtosc::RtData &d) {
+@@ -176,18 +171,21 @@ static const Ports master_ports = {
+         [](const char *m,RtData &d){
+             Master *M =  (Master*)d.obj;
+             M->setController(rtosc_argument(m,0).i,rtosc_argument(m,1).i,rtosc_argument(m,2).i);}},
+-    {"Panic:", rDoc("Stop All Sound"), 0,
++    {"Panic:", rDoc("Stop all sound"), 0,
+         [](const char *, RtData &d) {
+             Master &M =  *(Master*)d.obj;
+             M.ShutUp();
+         }},
+-    {"freeze_state:", rDoc("Internal Read-only Mode"), 0,
++    {"freeze_state:", rProp(internal) rDoc("Disable OSC event handling\n"
++            "This sets up a read-only mode from which it's safe for another"
++            " thread to save parameters"), 0,
+         [](const char *,RtData &d) {
+             Master *M =  (Master*)d.obj;
+             std::atomic_thread_fence(std::memory_order_release);
+             M->frozenState = true;
+             d.reply("/state_frozen", "");}},
+-    {"thaw_state:", rDoc("Internal Read-only Mode"), 0,
++    {"thaw_state:", rProp(internal) rDoc("Resume handling OSC messages\n"
++            "See /freeze_state for more information"), 0,
+         [](const char *,RtData &d) {
+             Master *M =  (Master*)d.obj;
+             M->frozenState = false;}},
+@@ -216,11 +214,11 @@ static const Ports master_ports = {
+             m.memory->addMemory(mem, i);
+             m.pendingMemory = false;
+         }},
+-    {"samplerate:", rMap(unit, Hz) rDoc("Synthesizer Global Sample Rate"), 0, [](const char *, RtData &d) {
++    {"samplerate:", rMap(unit, Hz) rDoc("Get synthesizer sample rate"), 0, [](const char *, RtData &d) {
+             Master &m = *(Master*)d.obj;
+             d.reply("/samplerate", "f", m.synth.samplerate_f);
+         }},
+-    {"oscilsize:", rDoc("Synthesizer Global Oscillator Size"), 0, [](const char *, RtData &d) {
++    {"oscilsize:", rDoc("Get synthesizer oscillator size"), 0, [](const char *, RtData &d) {
+             Master &m = *(Master*)d.obj;
+             d.reply("/oscilsize", "f", m.synth.oscilsize_f);
+             d.reply("/oscilsize", "i", m.synth.oscilsize);
+@@ -639,7 +637,7 @@ void Master::AudioOut(float *outl, float *outr)
+     DataObj d{loc_buf, 1024, this, bToU};
+     memset(loc_buf, 0, sizeof(loc_buf));
+     int events = 0;
+-    while(uToB && uToB->hasNext() && events < 10) {
++    while(uToB && uToB->hasNext() && events < 100) {
+         const char *msg = uToB->read();
+ 
+         if(!strcmp(msg, "/load-master")) {
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 3e61ad1c..1f8eebc9 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -58,10 +58,10 @@ const rtosc::Ports Microtonal::ports = {
+     rParamZyn(Pmiddlenote, "Scale degree 0 note"),
+ 
+     //TODO check to see if this should be exposed
+-    rParamZyn(Pmapsize, "UNDOCUMENTED"),
++    rParamZyn(Pmapsize, "Size of key map"),
+     rToggle(Pmappingenabled, "Mapping Enable"),
+ 
+-    rParams(Pmapping, "UNDOCUMENTED"),
++    rParams(Pmapping, 128, "Mapping of keys"),
+     rParamZyn(Pglobalfinedetune, "Fine detune for all notes"),
+ 
+     rString(Pname, MICROTONAL_MAX_NAME_LEN, "Microtonal Name"),
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 33682493..2b35a843 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -71,16 +71,18 @@ static const Ports partPorts = {
+     rParamZyn(Pvelsns,   "Velocity sensing"),
+     rParamZyn(Pveloffs,  "Velocity offset"),
+     rToggle(Pnoteon,  "If the channel accepts note on events"),
+-    //TODO FIXME Change to 0=OFF 1=MULTI 2=SINGLE
+-    rParamI(Pkitmode, "Kit mode enable"),
++    rOption(Pkitmode, rOptions(Off, Multi-Kit, Single-Kit), "Kit mode/enable\n"
++            "Off        - Only the first kit is ever utilized\n"
++            "Multi-kit  - Every applicable kit is run for a note\n"
++            "Single-kit - The first applicable kit is run for a given note"),
+     rToggle(Pdrummode, "Drum mode enable\n"
+             "When drum mode is enabled all keys are mapped to 12tET and legato is disabled"),
+-    rToggle(Ppolymode,  "Polyphoney mode"),
+-    rToggle(Plegatomode, "Legato enable"),
++    rToggle(Ppolymode,  "Polyphony mode"),
++    rToggle(Plegatomode, "Legato mode"),
+     rParamZyn(info.Ptype, "Class of Instrument"),
+-    rString(info.Pauthor, MAX_INFO_TEXT_SIZE, "Instrument Author"),
+-    rString(info.Pcomments, MAX_INFO_TEXT_SIZE, "Instrument Comments"),
+-    rString(Pname, PART_MAX_NAME_LEN, "Kit User Specified Label"),
++    rString(info.Pauthor, MAX_INFO_TEXT_SIZE, "Instrument author"),
++    rString(info.Pcomments, MAX_INFO_TEXT_SIZE, "Instrument comments"),
++    rString(Pname, PART_MAX_NAME_LEN, "User specified label"),
+     rArray(Pefxroute, NUM_PART_EFX,  "Effect Routing"),
+     rArrayT(Pefxbypass, NUM_PART_EFX, "If an effect is bypassed"),
+     {"captureMin:", rDoc("Capture minimum valid note"), NULL,
+@@ -90,7 +92,13 @@ static const Ports partPorts = {
+         [](const char *, RtData &r)
+         {Part *p = (Part*)r.obj; p->Pmaxkey = p->lastnote;}},
+     {"polyType::c:i", rProp(parameter) rOptions(Polyphonic, Monophonic, Legato)
+-        rDoc("synthesis polyphony type"), NULL,
++        rDoc("Synthesis polyphony type\n"
++                "Polyphonic - Each note is played independently\n"
++                "Monophonic - A single note is played at a time with"
++                " envelopes resetting between notes\n"
++                "Legato     - A single note is played at a time without"
++                " envelopes resetting between notes\n"
++            ), NULL,
+         [](const char *msg, RtData &d)
+         {
+             Part *p = (Part*)d.obj;
+@@ -188,8 +196,6 @@ static const Ports kitPorts = {
+             assert(o.subpars == NULL);
+             o.subpars = *(decltype(o.subpars)*)rtosc_argument(msg, 0).b.data;
+         }},
+-
+-    //    [](
+ };
+ 
+ const Ports &Part::Kit::ports = kitPorts;
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index cf7aa0fb..befb41ab 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -95,7 +95,8 @@ static const Ports voicePorts = {
+ 
+ 
+     //Modulator Stuff
+-    rParamZyn(PFMEnabled,              "Modulator Enable/Type"),
++    rOption(PFMEnabled, rOptions(none, morph, ring modulation, phase modulation,
++                frequency modulation, pitch modulation), "Modulator mode"),
+     rParamI(PFMVoice,                "Modulator Oscillator Selection"),
+     rParamZyn(PFMVolume,                "Modulator Magnitude"),
+     rParamZyn(PFMVolumeDamp,            "Modulator HF dampening"),
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 27fc0b98..43dc0838 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -36,13 +36,17 @@ using namespace rtosc;
+ static const rtosc::Ports _ports = {
+     rSelf(LFOParams),
+     rPaste,
+-    rParamF(Pfreq, "frequency of LFO"),
++    rParamF(Pfreq, rLinear(0.0,1.0), "frequency of LFO\n"
++            "lfo frequency = (2^(10*Pfreq)-1)/12 * stretch\n"
++            "true frequency is [0,85.33] Hz"),
+     rParamZyn(Pintensity, "Intensity of LFO"),
+     rParamZyn(Pstartphase, rSpecial(random), "Starting Phase"),
+-    rOption(PLFOtype,"Shape of LFO"),
+-    rParamZyn(Prandomness, rSpecial(disable), "Amplitude Randomness"),
+-    rParamZyn(Pfreqrand, rSpecial(disable), "Frequency Randomness"),
+-    rParamZyn(Pdelay, rSpecial(disable), "Delay before LFO start"),
++    rOption(PLFOtype, rOptions(sine, triangle, square, ramp-up, ramp-down,
++                exponential-down1, exponential-down2), "Shape of LFO"),
++    rParamZyn(Prandomness, rSpecial(disable), "Amplitude Randomness (calculated uniformly at each cycle)"),
++    rParamZyn(Pfreqrand, rSpecial(disable), "Frequency Randomness (calculated uniformly at each cycle)"),
++    rParamZyn(Pdelay, rSpecial(disable), "Delay before LFO start\n"
++            "0..4 second delay"),
+     rToggle(Pcontinous, "Enable for global operation"),
+     rParamZyn(Pstretch, rCentered, "Note frequency stretch"),
+ };
+-- 
+2.47.0
+

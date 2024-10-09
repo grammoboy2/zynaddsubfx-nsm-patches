@@ -1,0 +1,814 @@
+From ec9b8ba3b3d4b43a6693f480a4a719101cf1b80f Mon Sep 17 00:00:00 2001
+From: friedolino78 <34608315+friedolino78@users.noreply.github.com>
+Date: Sun, 8 Aug 2021 16:00:53 +0200
+Subject: [PATCH 1758/1936] add internal sync mechanism for LFOs and some
+ effects (#117)
+
+Co-authored-by: Friedolino <mkirchn@freenet.de>
+---
+ rtosc                       |   2 +-
+ src/Effects/EffectMgr.cpp   | 138 ++++++++++++++++++++++++++++++++++++
+ src/Effects/EffectMgr.h     |   6 ++
+ src/Misc/Master.cpp         |  13 +++-
+ src/Misc/Time.h             |   2 +
+ src/Params/LFOParams.cpp    |  38 ++++++----
+ src/Params/LFOParams.h      |   2 +
+ src/Synth/LFO.cpp           | 118 +++++++++++++++---------------
+ src/Synth/LFO.h             |  16 +++--
+ src/Tests/guitar-adnote.xmz |  26 +++++++
+ 10 files changed, 284 insertions(+), 77 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index a86bb27b..75a58931 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit a86bb27bd16d796b10104f264e8ea96130c1d61c
++Subproject commit 75a58931f633ce77b08ce5ef86d7db58434af3ac
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index c73dc77d..cf184cc7 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -28,11 +28,14 @@
+ #include "Phaser.h"
+ #include "../Misc/XMLwrapper.h"
+ #include "../Misc/Util.h"
++#include "../Misc/Time.h"
+ #include "../Params/FilterParams.h"
+ #include "../Misc/Allocator.h"
+ 
+ namespace zyn {
+ 
++static const float S2DELAY = 127.0f / 40.0f;
++
+ #define rObject EffectMgr
+ #define rSubtype(name) \
+     {STRINGIFY(name)"/", NULL, &name::ports,\
+@@ -117,6 +120,100 @@ static const rtosc::Ports local_ports = {
+                 }
+             }
+         }},
++    {"numerator::i", rShort("num") rDefault(0) rLinear(0,99)
++        rProp(parameter) rDoc("Numerator of ratio to bpm"), NULL,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            EffectMgr *eff = (EffectMgr*)d.obj;
++            if(rtosc_narguments(msg)) {
++                int val = rtosc_argument(msg, 0).i;
++                if (val>=0) {
++                    eff->numerator = val;
++                    int Pdelay, Pfreq;
++                    float freq;
++                    if(eff->denominator) {
++                        switch(eff->nefx) {
++                        case 2: // Echo
++                            // invert:
++                            // delay = (Pdelay / 127.0f * 1.5f); //0 .. 1.5 sec
++                            Pdelay = (int)roundf((20320.0f / (float)eff->time->tempo) * 
++                                                 ((float)eff->numerator / (float)eff->denominator));
++                            if (eff->numerator&&eff->denominator)
++                                eff->seteffectparrt(2, Pdelay);
++                            break;
++                        case 3: // Chorus
++                        case 4: // Phaser
++                        case 5: // Alienwah
++                        case 8: // DynamicFilter
++                            freq =  ((float)eff->time->tempo * 
++                                     (float)eff->denominator / 
++                                     (240.0f * (float)eff->numerator));
++                            // invert:
++                            // (powf(2.0f, Pfreq / 127.0f * 10.0f) - 1.0f) * 0.03f
++                            Pfreq = (int)roundf(logf((freq/0.03f)+1.0f)/LOG_2 * 12.7f);
++                            if (eff->numerator&&eff->denominator)
++                                eff->seteffectparrt(2, Pfreq);
++                            break;
++                        case 1: // Reverb
++                        case 6: // Distorsion
++                        case 7: // EQ
++                        default:
++                            break;
++                        }
++                    }
++                }
++                d.broadcast(d.loc, "i", val);
++            } else {
++                d.reply(d.loc, "i", eff->numerator); 
++            }
++        }},
++    {"denominator::i", rShort("dem") rDefault(4) rLinear(1,99)
++        rProp(parameter) rDoc("Denominator of ratio to bpm"), NULL,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            EffectMgr *eff = (EffectMgr*)d.obj;
++            if(rtosc_narguments(msg)) {
++                int val = rtosc_argument(msg, 0).i;
++                if (val > 0) {
++                    eff->denominator = val;
++                    int Pdelay, Pfreq;
++                    float freq;
++                    if(eff->numerator) {
++                        switch(eff->nefx) {
++                        case 2: // Echo
++                            // invert:
++                            // delay = (Pdelay / 127.0f * 1.5f); //0 .. 1.5 sec
++                            Pdelay = (int)roundf((20320.0f / (float)eff->time->tempo) * 
++                                                 ((float)eff->numerator / (float)eff->denominator));
++                            if (eff->numerator&&eff->denominator)
++                                eff->seteffectparrt(2, Pdelay);
++                            break;
++                        case 3: // Chorus
++                        case 4: // Phaser
++                        case 5: // Alienwah
++                        case 8: // DynamicFilter
++                            freq =  ((float)eff->time->tempo * 
++                                     (float)eff->denominator / 
++                                     (240.0f * (float)eff->numerator));
++                            // invert:
++                            // (powf(2.0f, Pfreq / 127.0f * 10.0f) - 1.0f) * 0.03f
++                            Pfreq = (int)roundf(logf((freq/0.03f)+1.0f)/LOG_2 * 12.7f);
++                            if (eff->numerator&&eff->denominator)
++                                eff->seteffectparrt(2, Pfreq);
++                            break;
++                        case 1: // Reverb
++                        case 6: // Distorsion
++                        case 7: // EQ
++                        default:
++                            break;
++                        }
++                    }
++                }
++                d.broadcast(d.loc, "i", val);
++            } else {
++                d.reply(d.loc, "i", eff->denominator); 
++            }
++        }},
+     {"eq-coeffs:", rProp(internal) rDoc("Get equalizer Coefficients"), NULL,
+         [](const char *, rtosc::RtData &d)
+         {
+@@ -173,6 +270,8 @@ EffectMgr::EffectMgr(Allocator &alloc, const SYNTH_T &synth_,
+       nefx(0),
+       efx(NULL),
+       time(time_),
++      numerator(0),
++      denominator(4),
+       dryonly(false),
+       memory(alloc),
+       synth(synth_)
+@@ -243,6 +342,41 @@ void EffectMgr::changeeffectrt(int _nefx, bool avoidSmash)
+                 efx = NULL;
+                 break; //no effect (thru)
+         }
++        
++        // set freq / delay params according to bpm ratio 
++        int Pdelay, Pfreq;
++        float freq;
++        if (numerator>0) {
++            switch(nefx) {
++                case 2: // Echo
++                    // invert:
++                    // delay = (Pdelay / 127.0f * 1.5f); //0 .. 1.5 sec
++                    Pdelay = (int)roundf((20320.0f / (float)time->tempo) * 
++                                         ((float)numerator / (float)denominator));
++                    if (numerator&&denominator)
++                        seteffectparrt(2, Pdelay);
++                    break;
++                case 3: // Chorus
++                case 4: // Phaser
++                case 5: // Alienwah
++                case 8: // DynamicFilter
++                    freq =  ((float)time->tempo * 
++                             (float)denominator / 
++                             (240.0f * (float)numerator));
++                    // invert:
++                    // (powf(2.0f, Pfreq / 127.0f * 10.0f) - 1.0f) * 0.03f
++                    Pfreq = (int)roundf(logf((freq/0.03f)+1.0f)/LOG_2 * 12.7f);
++                    if (numerator&&denominator)
++                        seteffectparrt(2, Pfreq);
++                    break;
++                case 1: // Reverb
++                case 6: // Distorsion
++                case 7: // EQ
++                default:
++                    break;
++            }
++        }
++        
+     } catch (std::bad_alloc &ba) {
+         std::cerr << "failed to change effect " << _nefx << ": " << ba.what() << std::endl;
+         return;
+@@ -488,6 +622,8 @@ void EffectMgr::add2XML(XMLwrapper& xml)
+         xml.endbranch();
+     }
+     xml.endbranch();
++    xml.addpar("numerator", numerator);
++    xml.addpar("denominator", denominator);
+ }
+ 
+ void EffectMgr::getfromXML(XMLwrapper& xml)
+@@ -533,6 +669,8 @@ void EffectMgr::getfromXML(XMLwrapper& xml)
+         }
+         xml.exitbranch();
+     }
++    numerator = xml.getpar("numerator", numerator, 0, 99);
++    denominator = xml.getpar("denominator", denominator, 1, 99);
+     cleanup();
+ }
+ 
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index 22397b77..b89fafd4 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -73,6 +73,10 @@ class EffectMgr:public Presets
+         int     nefx;
+         Effect *efx;
+         const AbsTime *time;
++        
++        int numerator;
++        int denominator;
++        
+     private:
+ 
+         //Parameters Prior to initialization
+@@ -106,6 +110,8 @@ class EffectMgr:public Presets
+         bool dryonly;
+         Allocator &memory;
+         const SYNTH_T &synth;
++        
++        
+ };
+ 
+ }
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 1ed50ab1..78866501 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -477,7 +477,6 @@ static const Ports master_ports = {
+             SNIP;
+             sysefsendto.dispatch(msg, d);
+         }},
+-
+     {"noteOn:iii:iiif", rDoc("Noteon Event"), 0,
+         [](const char *m,RtData &d){
+             Master *M =  (Master*)d.obj;
+@@ -497,11 +496,18 @@ static const Ports master_ports = {
+         [](const char *m,RtData &d){
+             Master *M =  (Master*)d.obj;
+             M->setController(rtosc_argument(m,0).i,rtosc_argument(m,1).i,rtosc_argument(m,2).i);}},
+-
+     {"setController:iii", rDoc("MIDI CC Event"), 0,
+         [](const char *m,RtData &d){
+             Master *M =  (Master*)d.obj;
+             M->setController(rtosc_argument(m,0).i,rtosc_argument(m,1).i,rtosc_argument(m,2).i);}},
++    {"tempo::i", rProp(parameter) rDefault(120) rShort("Tempo") rUnit(BPM) rDoc("Tempo / Beats per minute") rLinear(40, 200), 0,
++        rBegin;
++        if(!strcmp("i",rtosc_argument_string(msg))) {
++            m->time.tempo = rtosc_argument(msg, 0).i;
++            d.broadcast(d.loc, "i", m->time.tempo);
++        } else
++            d.reply(d.loc, "i", m->time.tempo);
++        rEnd},
+     {"Panic:", rDoc("Stop all sound"), 0,
+         [](const char *, RtData &d) {
+             Master &M =  *(Master*)d.obj;
+@@ -764,6 +770,9 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+ {
+     bToU = NULL;
+     uToB = NULL;
++    
++    // set default tempo
++    time.tempo = 120;
+ 
+     //Setup MIDI Learn
+     automate.set_ports(master_ports);
+diff --git a/src/Misc/Time.h b/src/Misc/Time.h
+index 9baabdbf..6cb27615 100644
+--- a/src/Misc/Time.h
++++ b/src/Misc/Time.h
+@@ -24,12 +24,14 @@ class AbsTime
+         void operator++(){++frames;};
+         void operator++(int){frames++;};
+         int64_t time() const {return frames;};
++        unsigned int tempo;
+         float dt() const { return s.dt(); }
+         float framesPerSec() const { return 1/s.dt();}
+         int   samplesPerFrame() const {return s.buffersize;}
+     private:
+         int64_t frames;
+         const SYNTH_T &s;
++        
+ };
+ 
+ //Marker for an event relative to some position of the absolute timer
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 371bd446..dda281d8 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -30,6 +30,7 @@ namespace zyn {
+ #define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ #define rBegin [](const char *msg, rtosc::RtData &d) {
+ #define rEnd }
++
+ static const rtosc::Ports _ports = {
+     rSelf(LFOParams),
+     rPaste,
+@@ -104,6 +105,10 @@ static const rtosc::Ports _ports = {
+             "Enable for global operation"),
+     rParamZyn(Pstretch, rShort("str"), rCentered, rDefault(64),
+         "Note frequency stretch"),
++    rParamZyn(numerator, rShort("num"), rLinear(0,99), rDefault(0),
++        "Numerator of ratio to bpm"),
++    rParamZyn(denominator, rShort("dem"), rLinear(0,99), rDefault(4),
++        "Denominator of ratio to bpm"),
+ // these are currently not yet implemented and must be hidden therefore
+ #ifdef DEAD_PORTS
+     //Float valued aliases
+@@ -192,29 +197,29 @@ LFOParams::LFOParams(consumer_location_t loc,
+                                              last_update_timestamp(0) {
+ 
+     auto init =
+-        [&](float freq_, char Pintensity_, char Pstartphase_, char Pcutoff_, char PLFOtype_,
+-            char Prandomness_, float delay_, char Pcontinous_)
++        [&](float freq_, char Pintensity_, char Pstartphase_, float delay_)
+     {
+         Dfreq       = freq_;
+         Dintensity  = Pintensity_;
+         Dstartphase = Pstartphase_;
+-        Dcutoff     = Pcutoff_;
+-        DLFOtype    = PLFOtype_;
+-        Drandomness = Prandomness_;
++        Dcutoff     = 127;
++        DLFOtype    = 0;
++        Drandomness = 0;
+         Ddelay      = delay_;
+         Dfadein     = 0.0f;
+         Dfadeout    = 10.0f;
+-        Dcontinous  = Pcontinous_;
++        Dcontinous  = 0;
++
+     };
+ 
+     switch(loc)
+     {
+-        case ad_global_amp:    init(6.49, 0, 64, 127, 0, 0, 0, 0); break;
+-        case ad_global_freq:   init(3.71, 0, 64, 127, 0, 0, 0, 0); break;
+-        case ad_global_filter: init(6.49, 0, 64, 127, 0, 0, 0, 0); break;
+-        case ad_voice_amp:     init(11.25, 32, 64, 127, 0, 0, 0.94, 0); break;
+-        case ad_voice_freq:    init(1.19, 40,  0, 127, 0, 0, 0, 0); break;
+-        case ad_voice_filter:  init(1.19, 20, 64, 127, 0, 0, 0, 0); break;
++        case ad_global_amp:    init(6.49, 0, 64, 0.0f); break;
++        case ad_global_freq:   init(3.71, 0, 64, 0.0f); break;
++        case ad_global_filter: init(6.49, 0, 64, 0.0f); break;
++        case ad_voice_amp:     init(11.25, 32, 64, 0.94f); break;
++        case ad_voice_freq:    init(1.19, 40,  0, 0.0f); break;
++        case ad_voice_filter:  init(1.19, 20, 64, 0.0f); break;
+         default: throw std::logic_error("Invalid LFO consumer location");
+     }
+ 
+@@ -238,6 +243,8 @@ void LFOParams::defaults()
+     Pcontinous  = Dcontinous;
+     Pfreqrand   = 0;
+     Pstretch    = 64;
++    numerator   = 0;
++    denominator = 4;
+ }
+ 
+ 
+@@ -255,6 +262,8 @@ void LFOParams::add2XML(XMLwrapper& xml)
+     xml.addparreal("fadeout", fadeout);
+     xml.addpar("stretch", Pstretch);
+     xml.addparbool("continous", Pcontinous);
++    xml.addpar("numerator", numerator);
++    xml.addpar("denominator", denominator);
+ }
+ 
+ void LFOParams::getfromXML(XMLwrapper& xml)
+@@ -284,6 +293,9 @@ void LFOParams::getfromXML(XMLwrapper& xml)
+     }
+     Pstretch    = xml.getpar127("stretch", Pstretch);
+     Pcontinous  = xml.getparbool("continous", Pcontinous);
++
++    numerator = xml.getpar("numerator", numerator, 0, 99);
++    denominator = xml.getpar("denominator", denominator, 0, 99);
+ }
+ 
+ #define COPY(y) this->y=x.y
+@@ -300,6 +312,8 @@ void LFOParams::paste(LFOParams &x)
+     COPY(fadein);
+     COPY(fadeout);
+     COPY(Pcontinous);
++    COPY(numerator);
++    COPY(denominator);
+     COPY(Pstretch);
+ 
+     if ( time ) {
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index fbbcf809..e5ce3f29 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -69,6 +69,8 @@ class LFOParams:public Presets
+         float         fadein; /**<fadein, relative to delay*/
+         float         fadeout; /**<fadeout on key release (10.0=off)*/
+         unsigned char Pcontinous; /**<1 if LFO is continous*/
++        int           numerator;  /**<numerator for integer ratio between system tempo and LFO freq (0=off)*/
++        int           denominator;/**<denominator for integer ratio between system tempo and LFO freq (0=off)*/
+         unsigned char Pstretch; /**<how the LFO is "stretched" according the note frequency (64=no stretch)*/
+ 
+         //! what kind is the LFO (0 - frequency, 1 - amplitude, 2 - filter)
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index c62df976..19aed227 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -21,43 +21,29 @@
+ 
+ namespace zyn {
+ 
+-LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManager *m,
++LFO::LFO(const LFOParams &lfopars_, float basefreq_, const AbsTime &t, WatchManager *m,
+         const char *watch_prefix)
+     :first_half(-1),
+-    delayTime(t, lfopars.delay), //0..4 sec
+-    waveShape(lfopars.PLFOtype),
+-    deterministic(!lfopars.Pfreqrand),
+-    dt_(t.dt()),
+-    lfopars_(lfopars), 
+-    basefreq_(basefreq),
++    time(t),
++    delayTime(t, lfopars_.delay), //0..4 sec
++    deterministic(!lfopars_.Pfreqrand),
++    dt(t.dt()),
++    lfopars(lfopars_), 
++    basefreq(basefreq_),
+     watchOut(m, watch_prefix, "out")
+ {
+-    int stretch = lfopars.Pstretch;
+-    if(stretch == 0)
+-        stretch = 1;
+-
+-    //max 2x/octave
+-    const float lfostretch = powf(basefreq / 440.0f, (stretch - 64.0f) / 63.0f);
+-
+-    const float lfofreq = lfopars.freq * lfostretch;
+-    phaseInc = fabsf(lfofreq) * t.dt();
+-
++    updatePars();
++    
+     if(!lfopars.Pcontinous) {
+-        if(lfopars.Pstartphase == 0)
++        if(!lfopars.Pstartphase)
+             phase = RND;
+         else
+-            phase = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f, 1.0f);
++            phase = 0.0f;
+     }
+     else {
+-        const float tmp = fmod(t.time() * phaseInc, 1.0f);
+-        phase = fmod((lfopars.Pstartphase - 64.0f) / 127.0f + 1.0f + tmp, 1.0f);
++        phase = fmod((float)t.time() * phaseInc, 1.0f);
+     }
+ 
+-    //Limit the Frequency(or else...)
+-    if(phaseInc > 0.49999999f)
+-        phaseInc = 0.499999999f;
+-
+-
+     lfornd = limit(lfopars.Prandomness / 127.0f, 0.0f, 1.0f);
+     lfofreqrnd = powf(lfopars.Pfreqrand / 127.0f, 2.0f) * 4.0f;
+ 
+@@ -92,6 +78,30 @@ LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManage
+ LFO::~LFO()
+ {}
+ 
++void LFO::updatePars()
++{
++    waveShape = lfopars.PLFOtype;
++    int stretch = lfopars.Pstretch;
++    if(stretch == 0)
++        stretch = 1;
++
++    // stretch max 2x/octave
++    const float lfostretch = powf(basefreq / 440.0f, (stretch - 64.0f) / 63.0f);
++
++    float lfofreq;
++    if (!lfopars.numerator || !lfopars.denominator) {
++        lfofreq = lfopars.freq * lfostretch;   
++    } else {
++        tempo = time.tempo;
++        lfofreq = float(tempo) * float(lfopars.denominator)/(240.0f * float(lfopars.numerator));
++    }
++    phaseInc = fabsf(lfofreq) * dt;
++    
++    //Limit the Frequency(or else...)
++    if(phaseInc > 0.49999999f)
++        phaseInc = 0.499999999f;
++}
++
+ float LFO::baseOut(const char waveShape, const float phase)
+ {
+     float lfo_out;
+@@ -128,18 +138,17 @@ float LFO::baseOut(const char waveShape, const float phase)
+     }
+ }
+ 
+-
+ float LFO::biquad(float input)
+ {
+     float output;
+-    if (lfopars_.Pcutoff!=cutoff ) // calculate coeffs only if cutoff changed
++    if (lfopars.Pcutoff!=cutoff ) // calculate coeffs only if cutoff changed
+     {
+-        cutoff = lfopars_.Pcutoff;
++        cutoff = lfopars.Pcutoff;
+         if (cutoff != 127) // at cutoff 127 we bypass filter, no coeffs needed
+         {
+             // calculate biquad coefficients
+             FcAbs = (cutoff + 7.0f)*(cutoff + 7.0f)/ 450.56f; // max value < 40
+-            K = tan(PI * limit(FcAbs * dt_,0.001f,0.4f)); // FcRel * dt_ max 40 * 0.01 = 0.4,
++            K = tan(PI * limit(FcAbs * dt,0.001f,0.4f)); // FcRel * dt_ max 40 * 0.01 = 0.4,
+             // LIMIT in case of LFO sampling frequency lower than 100 Hz
+ 
+             norm = 1 / (1 + K / 0.7071f + K * K);
+@@ -162,7 +171,7 @@ float LFO::biquad(float input)
+ 
+ void LFO::releasekey()
+ {
+-    if (lfopars_.fadeout==10.0f) { // deactivated
++    if (lfopars.fadeout==10.0f) { // deactivated
+         fadeOutDuration = 0.0f;
+         return;
+     }
+@@ -173,46 +182,43 @@ void LFO::releasekey()
+     // and divide by current ramp factor. It will be multiplied during fading out.
+     outStartValue *= (1.0f - rampOnRelease);
+     // store current time
+-    releaseTimestamp = lfopars_.time->time();
++    releaseTimestamp = lfopars.time->time();
+     // calculate fade out duration in frames
+-    fadeOutDuration = lfopars_.fadeout * lfopars_.time->framesPerSec();
++    fadeOutDuration = lfopars.fadeout * lfopars.time->framesPerSec();
+     // set fadeout state
+     lfo_state = lfo_state_type::fadingOut;
+ }
+-
+ float LFO::lfoout()
+ {
+     //update internals
+-    if ( ! lfopars_.time || lfopars_.last_update_timestamp == lfopars_.time->time())
++    if ( ! lfopars.time || lfopars.last_update_timestamp == lfopars.time->time())
+     {
+-        waveShape = lfopars_.PLFOtype;
+-        int stretch = lfopars_.Pstretch;
+-        if(stretch == 0)
+-            stretch = 1;
++        updatePars();
++        switch(lfopars.fel) {
+         
+-        const float lfostretch = powf(basefreq_ / 440.0f, (stretch - 64.0f) / 63.0f);
+-
+-        float lfofreq = lfopars_.freq * lfostretch;
+-        phaseInc = fabsf(lfofreq) * dt_;
+-
+-        switch(lfopars_.fel) {
+             case consumer_location_type_t::amp:
+-                lfointensity = lfopars_.Pintensity / 127.0f; // [0...1]
++                lfointensity = lfopars.Pintensity / 127.0f; // [0...1]
+                 break;
+             case consumer_location_type_t::filter:
+-                lfointensity = lfopars_.Pintensity / 127.0f * 4.0f; // [0...4] octaves
++                lfointensity = lfopars.Pintensity / 127.0f * 4.0f; // [0...4] octaves
+                 break; 
+             case consumer_location_type_t::freq:
+             case consumer_location_type_t::unspecified:
+-                lfointensity = powf(2, lfopars_.Pintensity / 127.0f * 11.0f) - 1.0f; // [0...2047] cent
++                lfointensity = powf(2, lfopars.Pintensity / 127.0f * 11.0f) - 1.0f; // [0...2047] cent
+                 break;
+         }
+     }
+     
+-    float out = baseOut(waveShape, phase);
+-    // Apply intensity
++    // refresh freq if tempo has changed
++    if (lfopars.numerator && lfopars.denominator && tempo != time.tempo) {
++        tempo = time.tempo;
++        float lfofreq = float(tempo) * float(lfopars.denominator)/(240.0f * float(lfopars.numerator));
++        phaseInc = fabsf(lfofreq) * dt;
++    }
++    float phaseWithStartphase = fmod(phase + (lfopars.Pstartphase + 63.0f) / 127.0f, 1.0f);
++    float out = baseOut(waveShape, phaseWithStartphase);
+     if(waveShape == LFO_SINE || waveShape == LFO_TRIANGLE)
+-        out *= lfointensity * (amp1 + phase * (amp2 - amp1));
++        out *= lfointensity * (amp1 + phaseWithStartphase * (amp2 - amp1));
+     else
+         out *= lfointensity * amp2;
+     
+@@ -225,8 +231,8 @@ float LFO::lfoout()
+             if (delayTime.inFuture()) {
+                 return out;
+             }else{
+-                fadeInTimestamp = lfopars_.time->time();
+-                fadeInDuration = lfopars_.fadein * lfopars_.time->framesPerSec();
++                fadeInTimestamp = lfopars.time->time();
++                fadeInDuration = lfopars.fadein * lfopars.time->framesPerSec();
+                 lfo_state = lfo_state_type::fadingIn;
+             }
+             
+@@ -235,7 +241,7 @@ float LFO::lfoout()
+         case fadingIn:
+             
+             if (fadeInDuration && rampUp < 1.0) {
+-                rampUp = ((float)(lfopars_.time->time() - fadeInTimestamp) / (float)fadeInDuration);
++                rampUp = ((float)(lfopars.time->time() - fadeInTimestamp) / (float)fadeInDuration);
+                 rampUp *= rampUp; // square for soft start
+                     
+             } 
+@@ -251,7 +257,7 @@ float LFO::lfoout()
+         
+         case fadingOut:
+             if(fadeOutDuration && rampDown) {// no division by zero, please
+-                rampDown = 1.0f - ( (float)(lfopars_.time->time() - releaseTimestamp) / (float)fadeOutDuration );
++                rampDown = 1.0f - ( (float)(lfopars.time->time() - releaseTimestamp) / (float)fadeOutDuration );
+                 rampDown *= rampDown; // square for soft end
+             }
+             else // no ramp down
+@@ -283,7 +289,7 @@ float LFO::lfoout()
+         computeNextFreqRnd();
+     }
+             
+-    float watch_data[2] = {phase, out};
++    float watch_data[2] = {phaseWithStartphase, out};
+     watchOut(watch_data, 2);
+ 
+     return out;
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index 44ad1004..bc5d5a1e 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -31,7 +31,7 @@ class LFO
+          * @param lfopars pointer to a LFOParams object
+          * @param basefreq base frequency of LFO
+          */
+-        LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManager *m=0,
++        LFO(const LFOParams &lfopars_, float basefreq_, const AbsTime &t, WatchManager *m=0,
+                 const char *watch_prefix=0);
+         ~LFO();
+ 
+@@ -48,9 +48,12 @@ class LFO
+     
+         float baseOut(const char waveShape, const float phase);
+         float biquad(float input);
++        void updatePars();
++        
+         lfo_state_type lfo_state;
+         
+-        //~ float out;
++        //tempo stored to detect changes
++        unsigned int tempo;
+         //Phase of Oscillator
+         float phase;
+         //Phase Increment Per Frame
+@@ -69,7 +72,8 @@ class LFO
+         float lfointensity;
+         //Amount Randomness
+         float lfornd, lfofreqrnd;
+-
++        // Ref to AbsTime object for time.tempo
++        const AbsTime &time;
+         //Delay before starting
+         RelTime delayTime;
+ 
+@@ -90,9 +94,9 @@ class LFO
+         //If After initialization there are no calls to random number gen.
+         bool  deterministic;
+ 
+-        const float     dt_;
+-        const LFOParams &lfopars_;
+-        const float basefreq_;
++        const float     dt;
++        const LFOParams &lfopars;
++        const float basefreq;
+ 
+         float FcAbs, K, norm;
+ 
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 21d32c0c..0277e72e 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -104,6 +104,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </AMPLITUDE_LFO>
+ </AMPLITUDE_PARAMETERS>
+ <FREQUENCY_PARAMETERS>
+@@ -140,6 +142,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FREQUENCY_LFO>
+ </FREQUENCY_PARAMETERS>
+ <FILTER_PARAMETERS>
+@@ -183,6 +187,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FILTER_LFO>
+ </FILTER_PARAMETERS>
+ <RESONANCE>
+@@ -283,6 +289,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </AMPLITUDE_LFO>
+ </AMPLITUDE_PARAMETERS>
+ <FREQUENCY_PARAMETERS>
+@@ -324,6 +332,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="yes" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FREQUENCY_LFO>
+ </FREQUENCY_PARAMETERS>
+ <FILTER_PARAMETERS>
+@@ -369,6 +379,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FILTER_LFO>
+ </FILTER_PARAMETERS>
+ <FM_PARAMETERS>
+@@ -540,6 +552,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="yes" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FREQUENCY_LFO>
+ </FREQUENCY_PARAMETERS>
+ </VOICE>
+@@ -629,6 +643,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="yes" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FREQUENCY_LFO>
+ </FREQUENCY_PARAMETERS>
+ </VOICE>
+@@ -833,6 +849,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="par" value="0" />
+ </par_no>
+ </EFFECT_PARAMETERS>
++<par name="numerator" value="0" />
++<par name="denominator" value="4" />
+ </EFFECT>
+ <par name="route" value="0" />
+ <par_bool name="bypass" value="no" />
+@@ -1227,6 +1245,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par name="par" value="0" />
+ </par_no>
+ </EFFECT_PARAMETERS>
++<par name="numerator" value="0" />
++<par name="denominator" value="4" />
+ </EFFECT>
+ <par name="route" value="0" />
+ <par_bool name="bypass" value="no" />
+@@ -3727,6 +3747,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </AMPLITUDE_LFO>
+ </AMPLITUDE_PARAMETERS>
+ <FREQUENCY_PARAMETERS>
+@@ -3766,6 +3788,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FREQUENCY_LFO>
+ </FREQUENCY_PARAMETERS>
+ <FILTER_PARAMETERS>
+@@ -3809,6 +3833,8 @@ version-revision="6" ZynAddSubFX-author="Nasca Octavian Paul">
+ <par_real name="fadeout" value="10" exact_value="0x41200000" />
+ <par name="stretch" value="64" />
+ <par_bool name="continous" value="no" />
++<par name="numerator" value="0" />
++<par name="denominator" value="0" />
+ </FILTER_LFO>
+ </FILTER_PARAMETERS>
+ </PAD_SYNTH_PARAMETERS>
+-- 
+2.47.0
+

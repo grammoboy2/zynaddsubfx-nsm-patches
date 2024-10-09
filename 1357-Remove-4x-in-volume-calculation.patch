@@ -1,0 +1,151 @@
+From 8484e6e4fdd6f1816506d17a7fad2f8fd5d927af Mon Sep 17 00:00:00 2001
+From: Daniel Sheeler <dsheeler@pobox.com>
+Date: Mon, 22 Apr 2019 18:22:54 -0500
+Subject: [PATCH 1357/1936] Remove 4x in volume calculation
+
+---
+ .gitignore                      |  1 +
+ src/Params/ADnoteParameters.cpp | 18 +++++++++++-------
+ src/Synth/ADnote.cpp            |  9 ++++-----
+ src/Tests/UnisonTest.h          |  8 ++++----
+ src/Tests/guitar-adnote.xmz     |  2 +-
+ 5 files changed, 21 insertions(+), 17 deletions(-)
+
+diff --git a/.gitignore b/.gitignore
+index e2033350..66e27008 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -10,6 +10,7 @@
+ src/zynaddsubfx
+ src/Tests/runner
+ src/Tests/runner.cpp
++src/Tests/Testing
+ CMakeCache.txt
+ CMakeFiles
+ build
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 8a0e1a85..c3b549ab 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -336,8 +336,8 @@ static const Ports globalPorts = {
+     //Amplitude
+     rParamZyn(PPanning, rShort("pan"), rDefault(64),
+         "Panning of ADsynth (0 random, 1 left, 127 right)"),
+-    rParamF(Volume,                   rShort("vol"), rLinear(-60.0f,20.0f),
+-        rUnit(dB), rDefault(-3.75f), "volume control"),
++    rParamF(Volume,                   rShort("vol"), rLinear(-47.9588f,32.0412f),
++        rUnit(dB), rDefault(8.29f), "volume control"),
+     rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), rDefault(64),
+         "Volume velocity sense"),
+     {"PVolume::i", rShort("vol.") rLinear(0,127)
+@@ -346,9 +346,9 @@ static const Ports globalPorts = {
+         {
+             rObject *obj = (rObject *)d.obj;
+             if (!rtosc_narguments(msg))
+-                d.reply(d.loc, "i", (int)roundf(96.0f * (1.0f + obj->Volume/60.0f)));
++                d.reply(d.loc, "i", (int)roundf(96.0f * (1.0f + (obj->Volume - 12.0412)/60.0f)));
+             else 
+-                obj->Volume = -60.0f * (1.0f - rtosc_argument(msg, 0).i / 96.0f);
++                obj->Volume = 12.0412 - 60.0f * (1.0f - rtosc_argument(msg, 0).i / 96.0f);
+         }},
+     rParamZyn(Fadein_adjustment, rDefault(FADEIN_ADJUSTMENT_SCALE),
+         "Adjustment for anti-pop strategy."),
+@@ -491,7 +491,7 @@ void ADnoteGlobalParam::defaults()
+     PBandwidth = 64;
+ 
+     /* Amplitude Global Parameters */
+-    Volume  = -3.75f;
++    Volume  = 8.29f;
+     PPanning = 64; //center
+     PAmpVelocityScaleFunction = 64;
+     AmpEnvelope->defaults();
+@@ -945,14 +945,18 @@ void ADnoteGlobalParam::getfromXML(XMLwrapper& xml)
+     PStereo = xml.getparbool("stereo", PStereo);
+ 
+     if(xml.enterbranch("AMPLITUDE_PARAMETERS")) {
++        const bool upgrade_3_0_5 = (xml.fileversion() < version_type(3,0,5));
+         const bool upgrade_3_0_3 = (xml.fileversion() < version_type(3,0,3)) ||
+             (!xml.hasparreal("volume"));
+ 
+         if (upgrade_3_0_3) {
+             int vol = xml.getpar127("volume", 0);
+-            Volume    = -60.0f * ( 1.0f - vol / 96.0f);
++            Volume = 12.0412 - 60.0f * ( 1.0f - vol / 96.0f);
++        } else if (upgrade_3_0_5) {
++            printf("file version less than 3.0.5\n");
++            Volume = 12.0412 + xml.getparreal("volume", Volume);
+         } else {
+-            Volume    = xml.getparreal("volume", Volume);
++            Volume = xml.getparreal("volume", Volume);
+         }
+         PPanning = xml.getpar127("panning", PPanning);
+         PAmpVelocityScaleFunction = xml.getpar127("velocity_sensing",
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 91ab1a86..7e9f8847 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -668,11 +668,10 @@ void ADnote::legatonote(LegatoParams lpars)
+ 
+     int tmp[NUM_VOICES];
+ 
+-    NoteGlobalPar.Volume = 4.0f
+-                           * powf(10.0f, pars.GlobalPar.Volume / 20.0) //-60 dB .. 20 dB
++    NoteGlobalPar.Volume = dB2rap(pars.GlobalPar.Volume) //-60 dB .. 20 dB
+                            * VelF(
+-        velocity,
+-        pars.GlobalPar.PAmpVelocityScaleFunction); //velocity sensing
++                               velocity,
++                               pars.GlobalPar.PAmpVelocityScaleFunction); //velocity sensing
+ 
+     {
+         auto        *filter  = NoteGlobalPar.Filter;
+@@ -1974,7 +1973,7 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+     AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq, time, wm,
+                    (pre+"GlobalPar/AmpLfo/").c_str);
+ 
+-    Volume = 4.0f * powf(10.0f, param.Volume / 20.0) //-60 dB .. 20 dB
++    Volume = dB2rap(param.Volume) 
+              * VelF(velocity, param.PAmpVelocityScaleFunction);     //sensing
+ 
+     Filter = memory.alloc<ModFilter>(*param.GlobalFilter, synth, time, memory,
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.h
+index 5cfc4cab..4121fe27 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.h
+@@ -101,16 +101,16 @@ class AdNoteTest:public CxxTest::TestSuite
+             SynthParams pars{memory, *controller, *synth, *time, freq, 120, 0, testnote / 12.0f, false, prng()};
+             note = new ADnote(params, pars);
+             note->noteout(outL, outR);
+-            TS_ASSERT_DELTA(outL[80], values[0], 1e-5);
++            TS_ASSERT_DELTA(outL[80], values[0], 1.9e-5);
+             printf("\n{%f,", outL[80]);
+             note->noteout(outL, outR);
+-            TS_ASSERT_DELTA(outR[90], values[1], 1e-5);
++            TS_ASSERT_DELTA(outR[90], values[1], 1.9e-5);
+             printf("\n%f,", outR[90]);
+             note->noteout(outL, outR);
+-            TS_ASSERT_DELTA(outL[20], values[2], 1e-5);
++            TS_ASSERT_DELTA(outL[20], values[2], 1.9e-5);
+             printf("\n%f,", outL[20]);
+             note->noteout(outL, outR);
+-            TS_ASSERT_DELTA(outR[200], values[3], 1e-5);
++            TS_ASSERT_DELTA(outR[200], values[3], 1.9e-5);
+             printf("\n%f},\n", outR[200]);
+         }
+ 
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 3ea07b63..7386ed2a 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -66,7 +66,7 @@ version-revision="5" ZynAddSubFX-author="Nasca Octavian Paul">
+ <ADD_SYNTH_PARAMETERS>
+ <par_bool name="stereo" value="yes" />
+ <AMPLITUDE_PARAMETERS>
+-<par_real name="volume" value="-14.375" exact_value="0xC165FFFF" />
++<par_real name="volume" value="-2.3338" exact_value="0xC0155CF7" />
+ <par name="panning" value="74" />
+ <par name="velocity_sensing" value="85" />
+ <par name="fadein_adjustment" value="20" />
+-- 
+2.47.0
+

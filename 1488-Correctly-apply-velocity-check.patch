@@ -1,0 +1,28 @@
+From 5d80ba8e3b775dce3f368302bb764b72822e6e14 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 01:36:29 +0200
+Subject: [PATCH 1488/1936] Correctly apply velocity check.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/ADnote.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index ea8268b1..398598d8 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -539,9 +539,9 @@ void ADnote::legatonote(LegatoParams lpars)
+     initial_seed = lpars.seed;
+     current_prng_state = lpars.seed;
+ 
++    velocity = lpars.velocity;
+     if(velocity > 1.0f)
+         velocity = 1.0f;
+-    velocity = lpars.velocity;
+ 
+     NoteGlobalPar.Detune = getdetune(pars.GlobalPar.PDetuneType,
+                                      pars.GlobalPar.PCoarseDetune,
+-- 
+2.47.0
+

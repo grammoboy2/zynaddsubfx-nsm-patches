@@ -1,0 +1,64 @@
+From 994b86036251bb52003443895715520f37c274ba Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 25 Oct 2020 19:25:12 +0100
+Subject: [PATCH 1641/1936] MiddleWare: Mark functions const
+
+---
+ src/Misc/MiddleWare.cpp | 4 ++--
+ src/Misc/MiddleWare.h   | 6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 49da9d50..30da7dda 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -2185,7 +2185,7 @@ void MiddleWare::enableAutoSave(int interval_sec)
+     impl->autoSave.dt = interval_sec;
+ }
+ 
+-int MiddleWare::checkAutoSave(void)
++int MiddleWare::checkAutoSave(void) const
+ {
+     //save spec zynaddsubfx-PID-autosave.xmz
+     const std::string home     = getenv("HOME");
+@@ -2317,7 +2317,7 @@ void MiddleWare::pendingSetProgram(int part, int program)
+     impl->bToU->write("/setprogram", "cc", part, program);
+ }
+ 
+-std::string MiddleWare::activeUrl(void)
++std::string MiddleWare::activeUrl(void) const
+ {
+     return impl->last_url;
+ }
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 7f6f39f8..360df7ef 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -40,7 +40,7 @@ class MiddleWare
+         //instances are in use OR when there was a crash
+         //
+         //When an old save is found return the id of the save file
+-        int checkAutoSave(void);
++        int checkAutoSave(void) const;
+ 
+         void removeAutoSave(void);
+ 
+@@ -73,13 +73,13 @@ class MiddleWare
+         void pendingSetProgram(int part, int program);
+ 
+         //Get/Set the active bToU url
+-        std::string activeUrl(void);
++        std::string activeUrl(void) const;
+         void activeUrl(std::string u);
+         //View Synthesis Parameters
+         const SYNTH_T &getSynth(void) const;
+         //liblo stuff
+         const char* getServerAddress(void) const;
+-        
++
+         const PresetsStore& getPresetsStore() const;
+         PresetsStore& getPresetsStore();
+ 
+-- 
+2.47.0
+

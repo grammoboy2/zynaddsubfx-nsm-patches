@@ -1,0 +1,30 @@
+From d4935ed9a2449493f47a0240f5290e5f404e530b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 24 Jul 2017 19:17:35 -0400
+Subject: [PATCH 1179/1936] Clear Notes When Part Is Disabled
+
+---
+ src/Misc/Part.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 830d66e2..4444fe2b 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -49,9 +49,13 @@ static const Ports partPorts = {
+     rRecur(ctl,       "Controller"),
+     rParamZyn(partno, rProp(internal),
+               "How many parts are before this in the Master"),
++#undef  rChangeCb
++#define rChangeCb if(obj->Penabled == false) obj->AllNotesOff();
+     rToggle(Penabled, rShort("enable"), rDefaultDepends(partno),
+             rPresets(true), rDefault(false), "Part enable"),
+ #undef rChangeCb
++#define rChangeCb
++#undef rChangeCb
+ #define rChangeCb obj->setPvolume(obj->Pvolume);
+     rParamZyn(Pvolume, rShort("Vol"), rDefault(96),"Part Volume"),
+ #undef rChangeCb
+-- 
+2.47.0
+

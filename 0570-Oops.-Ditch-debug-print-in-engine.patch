@@ -1,0 +1,24 @@
+From 349620105cb013fc289ace734de8db5ace96b418 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 6 Oct 2015 01:56:22 -0400
+Subject: [PATCH 0570/1936] Oops.  Ditch debug print in engine.
+
+---
+ src/Synth/OscilGen.cpp | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 4a644cf1..220dfc52 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -635,7 +635,6 @@ void OscilGen::spectrumadjust(fft_t *freqs)
+ {
+     if(Psatype == 0)
+         return;
+-    dprintf(2, "Psapar = %f\n", (float)Psapar);
+     float par = Psapar / 127.0f;
+     switch(Psatype) {
+         case 1:
+-- 
+2.47.0
+

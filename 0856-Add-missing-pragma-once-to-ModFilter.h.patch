@@ -1,0 +1,21 @@
+From a15d29d8fc8f2bb8dd833172c1ae97962c1e8e16 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 14 Feb 2016 17:39:54 +0100
+Subject: [PATCH 0856/1936] Add missing 'pragma once' to ModFilter.h
+
+---
+ src/Synth/ModFilter.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Synth/ModFilter.h b/src/Synth/ModFilter.h
+index be5bec0f..ad22c914 100644
+--- a/src/Synth/ModFilter.h
++++ b/src/Synth/ModFilter.h
+@@ -1,3 +1,4 @@
++#pragma once
+ #include "../globals.h"
+ #include "../Misc/Time.h"
+ 
+-- 
+2.47.0
+

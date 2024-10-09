@@ -1,0 +1,226 @@
+From b7823300567216d65314b86f42130b1d37694fe2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 17 Aug 2016 21:47:39 -0400
+Subject: [PATCH 1008/1936] Add Bank Cache To Speed Up Startup With Slow IO
+
+---
+ src/Misc/BankDb.cpp | 102 +++++++++++++++++++++++++++++++++++++++++---
+ src/Misc/BankDb.h   |  10 +++--
+ 2 files changed, 104 insertions(+), 8 deletions(-)
+
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index 9e3a9e3d..3fb77bb1 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -1,8 +1,10 @@
+ #include "BankDb.h"
+ #include "XMLwrapper.h"
++#include "Util.h"
+ #include "../globals.h"
+ #include <cstring>
+ #include <dirent.h>
++#include <sys/stat.h>
+ 
+ #define INSTRUMENT_EXTENSION ".xiz"
+ 
+@@ -11,7 +13,7 @@ typedef BankDb::svec svec;
+ typedef BankDb::bvec bvec;
+ 
+ BankEntry::BankEntry(void)
+-    :id(0), add(false), pad(false), sub(false)
++    :id(0), add(false), pad(false), sub(false), time(0)
+ {}
+ 
+ bool platform_strcasestr(const char *hay, const char *needle)
+@@ -114,9 +116,77 @@ void BankDb::clear(void)
+     fields.clear();
+ }
+ 
++static std::string getCacheName(void)
++{
++    char name[512] = {0};
++    snprintf(name, sizeof(name), "%s%s", getenv("HOME"),
++            "/.zynaddsubfx-bank-cache.xml");
++    return name;
++}
++
++static bvec loadCache(void)
++{
++    bvec cache;
++    XMLwrapper xml;
++    xml.loadXMLfile(getCacheName());
++    if(xml.enterbranch("bank-cache")) {
++        auto nodes = xml.getBranch();
++
++        for(auto node:nodes) {
++            BankEntry be;
++#define bind(x,y) if(node.has(#x)) {be.x = y(node[#x].c_str());}
++            bind(file, string);
++            bind(bank, string);
++            bind(name, string);
++            bind(comments, string);
++            bind(author, string);
++            bind(type, atoi);
++            bind(id, atoi);
++            bind(add, atoi);
++            bind(pad, atoi);
++            bind(sub, atoi);
++            bind(time, atoi);
++#undef bind
++            cache.push_back(be);
++        }
++    }
++    return cache;
++}
++
++static void saveCache(bvec vec)
++{
++    XMLwrapper xml;
++    xml.beginbranch("bank-cache");
++    for(auto value:vec) {
++        XmlNode binding("instrument-entry");
++#define bind(x) binding[#x] = to_s(value.x);
++        bind(file);
++        bind(bank);
++        bind(name);
++        bind(comments);
++        bind(author);
++        bind(type);
++        bind(id);
++        bind(add);
++        bind(pad);
++        bind(sub);
++        bind(time);
++#undef bind
++        xml.add(binding);
++    }
++    xml.endbranch();
++    xml.saveXMLfile(getCacheName(), 0);
++}
++
+ void BankDb::scanBanks(void)
+ {
+     fields.clear();
++    bvec cache = loadCache();
++    bmap cc;
++    for(auto c:cache)
++        cc[c.bank + c.file] = c;
++
++    bvec ncache;
+     for(auto bank:banks)
+     {
+         DIR *dir = opendir(bank.c_str());
+@@ -124,6 +194,7 @@ void BankDb::scanBanks(void)
+         if(!dir)
+             continue;
+ 
++
+         struct dirent *fn;
+ 
+         while((fn = readdir(dir))) {
+@@ -133,16 +204,36 @@ void BankDb::scanBanks(void)
+             if(!strstr(filename, INSTRUMENT_EXTENSION))
+                 continue;
+ 
+-            auto xiz = processXiz(filename, bank);
++            auto xiz = processXiz(filename, bank, cc);
+             fields.push_back(xiz);
++            ncache.push_back(xiz);
+         }
+ 
+         closedir(dir);
++
+     }
++    saveCache(ncache);
+ }
+ 
+-BankEntry BankDb::processXiz(std::string filename, std::string bank) const
++BankEntry BankDb::processXiz(std::string filename,
++        std::string bank, bmap &cache) const
+ {
++    string fname = bank+filename;
++
++    //Grab a timestamp
++    struct stat st;
++    int ret  = lstat(fname.c_str(), &st);
++    int time = 0;
++    if(ret != -1)
++        time = st.st_mtim.tv_sec;
++
++    //quickly check if the file exists in the cache and if it is up-to-date
++    if(cache.find(fname) != cache.end() &&
++            cache[fname].time == time)
++        return cache[fname];
++
++
++
+     //verify if the name is like this NNNN-name (where N is a digit)
+     int no = 0;
+     unsigned int startname = 0;
+@@ -175,6 +266,7 @@ BankEntry BankDb::processXiz(std::string filename, std::string bank) const
+     entry.file = filename;
+     entry.bank = bank;
+     entry.id   = no;
++    entry.time = time;
+ 
+     if(no != 0) //the instrument position in the bank is found
+         entry.name = name.substr(startname);
+@@ -201,10 +293,10 @@ BankEntry BankDb::processXiz(std::string filename, std::string bank) const
+         "Sound Effects",
+     };
+ 
++
+     //Try to obtain other metadata (expensive)
+     XMLwrapper xml;
+-    string fname = bank+filename;
+-    int ret = xml.loadXMLfile(fname);
++    ret = xml.loadXMLfile(fname);
+     if(xml.enterbranch("INSTRUMENT")) {
+         if(xml.enterbranch("INFO")) {
+             char author[1024];
+diff --git a/src/Misc/BankDb.h b/src/Misc/BankDb.h
+index b0acfe94..455807f9 100644
+--- a/src/Misc/BankDb.h
++++ b/src/Misc/BankDb.h
+@@ -1,6 +1,7 @@
+ #pragma once
+ #include <string>
+ #include <vector>
++#include <map>
+ 
+ struct BankEntry
+ {
+@@ -15,16 +16,19 @@ struct BankEntry
+     bool        add;
+     bool        pad;
+     bool        sub;
++    int         time;//last update
+     typedef std::vector<std::string> svec;
+     svec tags(void) const;
+     bool match(std::string) const;
+ };
+ 
++
+ class BankDb
+ {
+     public:
+-        typedef std::vector<std::string> svec;
+-        typedef std::vector<BankEntry>   bvec;
++        typedef std::vector<std::string>        svec;
++        typedef std::vector<BankEntry>          bvec;
++        typedef std::map<std::string,BankEntry> bmap;
+ 
+         //search for banks
+         //uses a space separated list of keywords and
+@@ -44,7 +48,7 @@ class BankDb
+         void scanBanks(void);
+ 
+     private:
+-        BankEntry processXiz(std::string, std::string) const;
++        BankEntry processXiz(std::string, std::string, bmap&) const;
+         bvec fields;
+         svec banks;
+ };
+-- 
+2.47.0
+

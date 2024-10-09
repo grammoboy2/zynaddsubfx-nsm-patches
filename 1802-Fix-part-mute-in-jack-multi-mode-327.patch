@@ -1,0 +1,79 @@
+From fc71427c9bf88f2e474cd525862120a05a281d19 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Tue, 4 Jan 2022 20:24:40 +0100
+Subject: [PATCH 1802/1936] Fix part mute in jack multi mode (#327)
+
+When part was muted, it was still sent on the individual output channels
+when operating in jack-multi mode, which resulted in the last audio
+buffer that had been generated beeing looped.
+
+This turned out to be slightly more complex to fix than expected.
+First of all, when a part is muted, Part::AllNotesOff() is called,
+which makes the next call to Part::ComputePartSmps() gracefully shut
+down the part, clearing all notes, resetting the part insert effects,
+and ramping down the signal to zero in the buffer being generated to
+avoid clicks. However, as the code was written, ComputePartSmps() was
+never called for a disabled part, so the graceful shutdown was not
+executed until the part was subsequently enabled. So simply setting the
+output buffer from the part to zero when the part is disabled is not
+sufficient, as there will be a slight click when it is subsequently
+re-enabled, and ComputePartSmps() finally gets a chance to go through
+its shutdown sequence, after having essentially been in suspended
+animation while the voice was disabled.
+
+The solution is to always call ComputePartSmps(), which will then
+internally decide when to execute the audio generation code or whether
+to generate silence.
+
+When generating the master audio bus, there are still a lot of places
+where the audio is chopped off when Penabled for the part is set to
+false, resulting in a more audible click than technically should be
+necessary.  This could be addressed in a separate patch if needed.
+---
+ src/Misc/Master.cpp |  5 +++--
+ src/Misc/Part.cpp   | 12 ++++++++++++
+ 2 files changed, 15 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index be741f8d..85bf9ec1 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1277,9 +1277,10 @@ bool Master::AudioOut(float *outr, float *outl)
+     memset(outr, 0, synth.bufferbytes);
+ 
+     //Compute part samples and store them part[npart]->partoutl,partoutr
++    //Note: We do this regardless if the part is enabled or not, to allow
++    //the part to graciously shut down when disabled.
+     for(int npart = 0; npart < NUM_MIDI_PARTS; ++npart)
+-        if(part[npart]->Penabled)
+-            part[npart]->ComputePartSmps();
++        part[npart]->ComputePartSmps();
+ 
+     //Insertion effects
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index b5dc984c..0f52117d 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -994,6 +994,18 @@ void Part::AllNotesOff()
+  */
+ void Part::ComputePartSmps()
+ {
++    /* When we are in the process of being disabled (Penabled set to false),
++     * AllNotesOff will be called, setting killallnotes, which causes all
++     * playing voices to terminate and the signal level being graciously
++     * muted during the course of the current buffer. After that, all
++     * subsequent output buffers will be set to 0 until we are enabled again.
++     */
++    if (!Penabled && !killallnotes) {
++        memset(partoutl, 0, synth.bufferbytes);
++        memset(partoutr, 0, synth.bufferbytes);
++        return;
++    }
++
+     assert(partefx[0]);
+     for(unsigned nefx = 0; nefx < NUM_PART_EFX + 1; ++nefx) {
+         memset(partfxinputl[nefx], 0, synth.bufferbytes);
+-- 
+2.47.0
+

@@ -1,0 +1,193 @@
+From a403e9a1d6788b2cf4b6372655526ccbc16b3725 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Thu, 5 Nov 2015 14:02:54 -0500
+Subject: [PATCH 0682/1936] Now user can adjust anti-pop filter for both
+ ADsynth and PADsynth.
+
+---
+ src/Params/ADnoteParameters.h    |  2 --
+ src/Params/PADnoteParameters.cpp |  5 +++++
+ src/Params/PADnoteParameters.h   |  3 +++
+ src/Synth/PADnote.cpp            |  4 ++++
+ src/Synth/PADnote.h              |  1 +
+ src/UI/PADnoteUI.fl              | 18 ++++++++++++------
+ src/globals.h                    |  5 +++++
+ 7 files changed, 30 insertions(+), 8 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index a0ea3f96..1edf5fba 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -30,8 +30,6 @@ enum FMTYPE {
+     NONE, MORPH, RING_MOD, PHASE_MOD, FREQ_MOD, PITCH_MOD
+ };
+ 
+-#define FADEIN_ADJUSTMENT_SCALE 20
+-
+ /*****************************************************************/
+ /*                    GLOBAL PARAMETERS                          */
+ /*****************************************************************/
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 6e2cf5f1..79537fc0 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -51,6 +51,8 @@ static const rtosc::Ports realtime_ports =
+     rParamZyn(PVolume, "Synth Volume"),
+     rParamZyn(PAmpVelocityScaleFunction, "Amplitude Velocity Sensing function"),
+ 
++    rParamZyn(Fadein_adjustment, "Adjustment for anti-pop strategy."),
++
+     //Punch
+     rParamZyn(PPunchStrength, "Punch Strength"),
+     rParamZyn(PPunchTime, "UNKNOWN"),
+@@ -323,6 +325,7 @@ void PADnoteParameters::defaults()
+     PAmpVelocityScaleFunction = 64;
+     AmpEnvelope->defaults();
+     AmpLfo->defaults();
++    Fadein_adjustment = FADEIN_ADJUSTMENT_SCALE;
+     PPunchStrength = 0;
+     PPunchTime     = 60;
+     PPunchStretch  = 64;
+@@ -947,6 +950,7 @@ void PADnoteParameters::add2XML(XMLwrapper *xml)
+     xml->addpar("volume", PVolume);
+     xml->addpar("panning", PPanning);
+     xml->addpar("velocity_sensing", PAmpVelocityScaleFunction);
++    xml->addpar("fadein_adjustment", Fadein_adjustment);
+     xml->addpar("punch_strength", PPunchStrength);
+     xml->addpar("punch_time", PPunchTime);
+     xml->addpar("punch_stretch", PPunchStretch);
+@@ -1058,6 +1062,7 @@ void PADnoteParameters::getfromXML(XMLwrapper *xml)
+         PPanning = xml->getpar127("panning", PPanning);
+         PAmpVelocityScaleFunction = xml->getpar127("velocity_sensing",
+                                                    PAmpVelocityScaleFunction);
++        Fadein_adjustment = xml->getpar127("fadein_adjustment", Fadein_adjustment);
+         PPunchStrength = xml->getpar127("punch_strength", PPunchStrength);
+         PPunchTime     = xml->getpar127("punch_time", PPunchTime);
+         PPunchStretch  = xml->getpar127("punch_stretch", PPunchStretch);
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index 659e2d59..c5e9ac73 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -126,6 +126,9 @@ class PADnoteParameters:public Presets
+ 
+         LFOParams *AmpLfo;
+ 
++        /* Adjustment factor for anti-pop fadein */
++        unsigned char Fadein_adjustment;
++
+         unsigned char PPunchStrength, PPunchTime, PPunchStretch,
+                       PPunchVelocitySensing;
+ 
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 4fc84e9f..9f664087 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -114,6 +114,9 @@ void PADnote::setup(float freq,
+                                               PFilterVelocityScaleFunction) - 1);
+ 
+     if(!legato) {
++        NoteGlobalPar.Fadein_adjustment =
++            pars.Fadein_adjustment / (float)FADEIN_ADJUSTMENT_SCALE;
++        NoteGlobalPar.Fadein_adjustment *= NoteGlobalPar.Fadein_adjustment;
+         if(pars.PPunchStrength != 0) {
+             NoteGlobalPar.Punch.Enabled = 1;
+             NoteGlobalPar.Punch.t = 1.0f; //start from 1.0f and to 0.0f
+@@ -206,6 +209,7 @@ inline void PADnote::fadein(float *smps)
+     float tmp = (synth.buffersize_f - 1.0f) / (zerocrossings + 1) / 3.0f;
+     if(tmp < 8.0f)
+         tmp = 8.0f;
++    tmp *= NoteGlobalPar.Fadein_adjustment;
+ 
+     int n;
+     F2I(tmp, n); //how many samples is the fade-in
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index aa2b4f76..960798bc 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -85,6 +85,7 @@ class PADnote:public SynthNote
+             Envelope *AmpEnvelope;
+             LFO      *AmpLfo;
+ 
++            float Fadein_adjustment;
+             struct {
+                 int   Enabled;
+                 float initialvalue, dt, t;
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index ed7b8414..93e53a36 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -714,27 +714,33 @@ cbwidget->do_callback();}
+               code0 {o->init("PPanning");}
+               class Fl_Osc_Dial
+             }
++            Fl_Dial {} {
++              label De-pop selected
++              tooltip {Pop suppression} xywh {208 238 20 20} type Float labelsize 10 maximum 127 step 1 textfont 1 textsize 11
++              code0 {o->init("Fadein_adjustment");}
++              class Fl_Osc_Dial
++            }
+             Fl_Dial pstr {
+               label {P.Str.}
+-              tooltip {Punch Strength} xywh {125 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
++              tooltip {Punch Strength} xywh {78 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+               code0 {o->init("PPunchStrength");}
+               class Fl_Osc_Dial
+             }
+             Fl_Dial pt {
+               label {P.t.}
+-              tooltip {Punch Time (duration)} xywh {155 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
++              tooltip {Punch Time (duration)} xywh {108 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+               code0 {o->init("PPunchTime");}
+               class Fl_Osc_Dial
+             }
+             Fl_Dial pstc {
+               label {P.Stc.}
+-              tooltip {Punch Stretch} xywh {185 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
++              tooltip {Punch Stretch} xywh {138 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+               code0 {o->init("PPunchStretch");}
+               class Fl_Osc_Dial
+             }
+             Fl_Dial pvel {
+               label {P.Vel.}
+-              tooltip {Punch Velocity Sensing} xywh {215 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
++              tooltip {Punch Velocity Sensing} xywh {168 247 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+               code0 {o->init("PPunchVelocitySensing");}
+               class Fl_Osc_Dial
+             }
+@@ -753,7 +759,7 @@ cbwidget->do_callback();}
+             Fl_Check_Button stereo {
+               label Stereo
+               callback {hprofile->redraw();}
+-              xywh {15 245 70 25} down_box DOWN_BOX
++              xywh {10 245 70 25} down_box DOWN_BOX labelsize 12
+               code0 {o->init("PStereo");}
+               class Fl_Osc_Check
+             }
+@@ -776,7 +782,7 @@ cbwidget->do_callback();}
+             } {}
+             Fl_Group filterui {
+               label {PADsynth - Filter} open
+-              xywh {250 55 275 75} box FLAT_BOX color 50 align 144
++              xywh {250 50 275 75} box FLAT_BOX color 50 align 144
+               code0 {o->init(location + "PFilter",
+               osc_i, location, "GlobalFilter/");}
+               class FilterUI
+diff --git a/src/globals.h b/src/globals.h
+index 39992fd2..cf8f639b 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -179,6 +179,11 @@ typedef std::complex<fftw_real> fft_t;
+ #define PI 3.1415926536f
+ #define LOG_10 2.302585093f
+ 
++/*
++ * For de-pop adjustment
++ */
++#define FADEIN_ADJUSTMENT_SCALE 20
++
+ /*
+  * Envelope Limits
+  */
+-- 
+2.47.0
+

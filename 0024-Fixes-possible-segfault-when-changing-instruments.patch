@@ -1,0 +1,26 @@
+From 78819d0209f0fd0ed922c710e4b8c09cc7bc622a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 16 Jun 2012 21:02:44 -0400
+Subject: [PATCH 0024/1936] Fixes possible segfault when changing instruments
+
+- Part is now told to shut up before changing instrument, this should avoid race
+  conditions with the newer part loading
+---
+ src/Misc/Bank.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index b7dae616..1a673da6 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -175,6 +175,7 @@ void Bank::loadfromslot(unsigned int ninstrument, Part *part)
+     if(emptyslot(ninstrument))
+         return;
+ 
++    part->AllNotesOff();
+     part->defaultsinstrument();
+ 
+     part->loadXMLinstrument(ins[ninstrument].filename.c_str());
+-- 
+2.47.0
+

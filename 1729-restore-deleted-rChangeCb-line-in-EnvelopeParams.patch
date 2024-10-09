@@ -1,0 +1,24 @@
+From c1f3eea3dc37bf8b226d00265e5b3b3c973a27b1 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Thu, 11 Mar 2021 12:09:12 +0100
+Subject: [PATCH 1729/1936] restore deleted rChangeCb line in EnvelopeParams
+
+---
+ src/Params/EnvelopeParams.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 39eedc85..9839da36 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -45,6 +45,7 @@ namespace zyn {
+             rLIMIT(var, atoi) \
+             rCAPPLY(obj->name, "f", obj->name = dTREAL(var)) \
+             data.broadcast(loc, "i", dT127(obj->name));\
++            rChangeCb \
+         } rBOIL_END
+ 
+ #define rParamsDT(name, length, ...) \
+-- 
+2.47.0
+

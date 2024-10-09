@@ -1,0 +1,73 @@
+From 6661ccd99f57100d34356d47b6e1d631e04a73b2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 21 Feb 2015 17:23:47 -0500
+Subject: [PATCH 0346/1936] UI: Change BankUI's button type
+
+---
+ src/UI/BankView.cpp | 14 +++++++++-----
+ src/UI/BankView.h   | 10 +++++-----
+ 2 files changed, 14 insertions(+), 10 deletions(-)
+
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index 681f9a7f..a36489ec 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -1,7 +1,7 @@
+ #include "BankView.h"
+ #include "../Misc/Util.h"
+ #include <FL/Fl.H>
+-#include <FL/Fl_Light_Button.H>
++#include <FL/Fl_Check_Button.H>
+ #include <FL/fl_ask.H>
+ #include <rtosc/rtosc.h>
+ #include <cstdio>
+@@ -168,10 +168,14 @@ BankViewControls::BankViewControls(int x, int y, int w, int h, const char *label
+     //Width per elm
+     const float W = w/4;
+ 
+-    read  = new Fl_Light_Button(x+m+0*W, y+m, W-2*m, h-2*m, "Read");
+-    write = new Fl_Light_Button(x+m+1*W, y+m, W-2*m, h-2*m, "Write");
+-    clear = new Fl_Light_Button(x+m+2*W, y+m, W-2*m, h-2*m, "Clear");
+-    swap  = new Fl_Light_Button(x+m+3*W, y+m, W-2*m, h-2*m, "Swap");
++    read  = new Fl_Check_Button(x+m+0*W, y+m, W-2*m, h-2*m, "Read");
++    write = new Fl_Check_Button(x+m+1*W, y+m, W-2*m, h-2*m, "Write");
++    clear = new Fl_Check_Button(x+m+2*W, y+m, W-2*m, h-2*m, "Clear");
++    swap  = new Fl_Check_Button(x+m+3*W, y+m, W-2*m, h-2*m, "Swap");
++    read->box(FL_BORDER_BOX);
++    write->box(FL_BORDER_BOX);
++    clear->box(FL_BORDER_BOX);
++    swap->box(FL_BORDER_BOX);
+     read->callback(modeButtonCb, this);
+     write->callback(modeButtonCb, this);
+     clear->callback(modeButtonCb, this);
+diff --git a/src/UI/BankView.h b/src/UI/BankView.h
+index 0754856b..97494afe 100644
+--- a/src/UI/BankView.h
++++ b/src/UI/BankView.h
+@@ -4,7 +4,7 @@
+ #include "Fl_Osc_Widget.H"
+ #include "Fl_Osc_Choice.H"
+ #include <FL/Fl_Group.H>
+-#include <FL/Fl_Button.H>
++#include <FL/Fl_Check_Button.H>
+ #include <string>
+ 
+ #include "common.H"
+@@ -52,10 +52,10 @@ class BankViewControls: public Fl_Group
+         void mode(int);
+ 
+     private:
+-        Fl_Light_Button *read;
+-        Fl_Light_Button *write;
+-        Fl_Light_Button *clear;
+-        Fl_Light_Button *swap;
++        Fl_Check_Button *read;
++        Fl_Check_Button *write;
++        Fl_Check_Button *clear;
++        Fl_Check_Button *swap;
+ 
+         //1 -> read
+         //2 -> write
+-- 
+2.47.0
+

@@ -1,0 +1,33 @@
+From f5dcd7f8ada6d5eff073684931436aa9aa703c26 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 2 Nov 2015 11:00:36 -0500
+Subject: [PATCH 0666/1936] Update HISTORY.txt
+
+---
+ HISTORY.txt | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/HISTORY.txt b/HISTORY.txt
+index a16524d9..f0a24228 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,3 +1,16 @@
++2.5.2 (XXX)
++        - Add MIDI-Learn serialization
++        - Add pink noise source
++        - Restore mousewheel functionality
++        - Restore bank LSB/MSB MIDI support
++        - Improve tip windows
++        - Improve oscdoc output
++        - Restore Ext Oscil/Mod functionality
++        - Remove remaining globals
++        - Fix UI connection bugs
++        - Add UI title rewrite support (FIXME)
++        - Other misc bug fixes
++
+ 2.5.1 (4 July 2015)
+         - Add Colorized CMake Configuration
+         - Add PID option for jack
+-- 
+2.47.0
+

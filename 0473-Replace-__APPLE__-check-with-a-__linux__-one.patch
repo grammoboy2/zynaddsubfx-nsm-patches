@@ -1,0 +1,25 @@
+From ace6de35890243903cec04f9e8bf4c33f0c0b25f Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Tue, 26 May 2015 10:08:42 +0200
+Subject: [PATCH 0473/1936] Replace !__APPLE__ check with a __linux__ one
+
+---
+ src/UI/MasterUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 9052bc0c..f0a9e016 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1495,7 +1495,7 @@ configui=new ConfigUI(osc);
+ make_window();
+ fl_open_display();
+ 
+-\#ifndef __APPLE__
++\#ifdef __linux__
+ Pixmap p = XCreateBitmapFromData(fl_display, DefaultRootWindow(fl_display),
+                                  (char*)zynaddsubfx_bits, zynaddsubfx_width, zynaddsubfx_height);
+ masterwindow->icon((char *)p);
+-- 
+2.47.0
+

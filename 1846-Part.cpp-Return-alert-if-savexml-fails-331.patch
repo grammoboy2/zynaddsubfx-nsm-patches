@@ -1,0 +1,47 @@
+From c6777e6d48e9cef86db21bfb461cb8a66a4f94a0 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Mon, 14 Feb 2022 00:49:12 +0100
+Subject: [PATCH 1846/1936] Part.cpp: Return /alert if savexml: fails (#331)
+
+Return an /alert message if savexml fails, so the UI has a chance to
+notify the user.
+---
+ src/Misc/Part.cpp | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 2b8c3573..2638955a 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -179,20 +179,24 @@ static const Ports partPorts = {
+         [](const char *, RtData &d)
+         {
+             Part *p = (Part*)d.obj;
++            int err;
+             if (p->loaded_file[0] == '\0') {  // if part was never loaded or saved
+                 time_t rawtime;     // make a new name from date and time
+                 char filename[32];
+                 time (&rawtime);
+                 const struct tm* timeinfo = localtime (&rawtime);
+                 strftime (filename,23,"%F_%R.xiz",timeinfo);
+-                p->saveXML(filename);
+-                fprintf(stderr, "Part %d saved to %s\n", (p->partno + 1), filename);
++                err = p->saveXML(filename);
++                fprintf(stderr, "Part %d saved to %s: %s\n", (p->partno + 1), filename, err ? "failed" : "ok");
+             }
+             else
+             {
+-                p->saveXML(p->loaded_file);
+-                fprintf(stderr, "Part %d saved to %s\n", (p->partno + 1), p->loaded_file);
++                err = p->saveXML(p->loaded_file);
++                fprintf(stderr, "Part %d saved to %s: %s\n", (p->partno + 1), p->loaded_file, err ? "failed" : "ok");
+             }
++            if (err)
++                d.reply("/alert", "s",
++                        "Failed To Save File, please check file permissions");
+         }},
+     //{"kit#16::T:F", "::Enables or disables kit item", 0,
+     //    [](const char *m, RtData &d) {
+-- 
+2.47.0
+

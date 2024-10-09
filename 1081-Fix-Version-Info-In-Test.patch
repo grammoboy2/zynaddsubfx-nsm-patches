@@ -1,0 +1,27 @@
+From 890201ad6ebb40912d35d9b1238a05fec4cf372a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 17 Nov 2016 08:21:42 -0500
+Subject: [PATCH 1081/1936] Fix Version Info In Test
+
+---
+ src/Tests/guitar-adnote.xmz | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 45fcde45..83b423df 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -1,8 +1,8 @@
+ 
+ <?xml version="1.0f" encoding="UTF-8"?>
+ <!DOCTYPE ZynAddSubFX-data>
+-<ZynAddSubFX-data version-major="2" version-minor="5"
+-version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
++<ZynAddSubFX-data version-major="3" version-minor="0"
++version-revision="0" ZynAddSubFX-author="Nasca Octavian Paul">
+ <INFORMATION>
+ <par_bool name="PADsynth_used" value="yes" />
+ </INFORMATION>
+-- 
+2.47.0
+

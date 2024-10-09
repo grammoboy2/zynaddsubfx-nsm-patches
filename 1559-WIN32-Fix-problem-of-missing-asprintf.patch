@@ -1,0 +1,37 @@
+From 456487fcef2871646876a7594a688da27b024c33 Mon Sep 17 00:00:00 2001
+From: Carlo Bramini <30959007+carlo-bramini@users.noreply.github.com>
+Date: Fri, 17 Jul 2020 09:49:56 +0200
+Subject: [PATCH 1559/1936] [WIN32] Fix problem of missing asprintf()
+
+Since existing implementation does not check if asprintf() is executed successfully, I left modified code also in the same manner, to be sure that new code works exactly like the old one. Probably, it should just return an error, but the value is unknown to me.
+---
+ src/UI/NSM.C | 12 +++++++-----
+ 1 file changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index 621d0874..9aa524a9 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -80,12 +80,14 @@ NSM_Client::command_open(const char *name,
+ 
+     zyn::Nio::start();
+ 
+-    char *new_filename;
++    char *new_filename = (char *)malloc(strlen(name) + 5);
+ 
+-    //if you're on windows enjoy the undefined behavior...
+-#ifndef WIN32
+-    asprintf(&new_filename, "%s.xmz", name);
+-#endif
++    if (new_filename) {
++        strcpy(new_filename, name);
++        strcat(new_filename, ".xmz");
++    } else {
++        // TODO, handle error condition...
++    }
+ 
+     struct stat st;
+ 
+-- 
+2.47.0
+

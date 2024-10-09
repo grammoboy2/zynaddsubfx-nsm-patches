@@ -1,0 +1,311 @@
+From 381a6b0f5423b3f7e64e779fa18a1c626ec6bb42 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 12 Apr 2020 12:22:13 +0200
+Subject: [PATCH 1527/1936] ADnoteParameters: make FMTYPE an enum class
+
+---
+ src/Params/ADnoteParameters.cpp |  8 ++--
+ src/Params/ADnoteParameters.h   |  6 +--
+ src/Synth/ADnote.cpp            | 76 +++++++++++++--------------------
+ src/Synth/ADnote.h              |  2 +-
+ 4 files changed, 37 insertions(+), 55 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index d7bb8420..63864f54 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -587,7 +587,7 @@ void ADnoteVoiceParam::defaults()
+     PFilterLfoEnabled         = 0;
+     PFilterVelocityScale = 0;
+     PFilterVelocityScaleFunction = 64;
+-    PFMEnabled                = 0;
++    PFMEnabled                = FMTYPE::NONE;
+     PFMFixedFreq              = false;
+ 
+     //I use the internal oscillator (-1)
+@@ -773,7 +773,7 @@ void ADnoteVoiceParam::add2XML(XMLwrapper& xml, bool fmoscilused)
+     xml.addparbool("filter_enabled", PFilterEnabled);
+     xml.addparbool("filter_bypass", Pfilterbypass);
+ 
+-    xml.addpar("fm_enabled", PFMEnabled);
++    xml.addpar("fm_enabled", (int)PFMEnabled);
+ 
+     xml.beginbranch("OSCIL");
+     OscilSmp->add2XML(xml);
+@@ -852,7 +852,7 @@ void ADnoteVoiceParam::add2XML(XMLwrapper& xml, bool fmoscilused)
+         xml.endbranch();
+     }
+ 
+-    if((PFMEnabled != 0) || (fmoscilused != 0)
++    if((PFMEnabled != FMTYPE::NONE) || (fmoscilused != 0)
+        || (!xml.minimal)) {
+         xml.beginbranch("FM_PARAMETERS");
+         xml.addpar("input_voice", PFMVoice);
+@@ -1261,7 +1261,7 @@ void ADnoteVoiceParam::getfromXML(XMLwrapper& xml, unsigned nvoice)
+     PFMoscilphase  = xml.getpar127("oscil_fm_phase", PFMoscilphase);
+     PFilterEnabled = xml.getparbool("filter_enabled", PFilterEnabled);
+     Pfilterbypass  = xml.getparbool("filter_bypass", Pfilterbypass);
+-    PFMEnabled     = xml.getpar127("fm_enabled", PFMEnabled);
++    PFMEnabled     = (FMTYPE)xml.getpar127("fm_enabled", (int)PFMEnabled);
+ 
+     if(xml.enterbranch("OSCIL")) {
+         OscilSmp->getfromXML(xml);
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index b90b94c2..5b19e0f2 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -19,7 +19,7 @@
+ 
+ namespace zyn {
+ 
+-enum FMTYPE {
++enum class FMTYPE {
+     NONE, MIX, RING_MOD, PHASE_MOD, FREQ_MOD, PW_MOD
+ };
+ 
+@@ -261,8 +261,8 @@ struct ADnoteVoiceParam {
+     *   MODULLATOR PARAMETERS   *
+     ****************************/
+ 
+-    /* Modullator Parameters (0=off,1=Mix,2=RM,3=PM,4=FM.. */
+-    unsigned char PFMEnabled;
++    /* Modulator Parameters (0=off,1=Mix,2=RM,3=PM,4=FM.. */
++    FMTYPE PFMEnabled;
+ 
+     /* Voice that I use as modullator instead of FMSmp.
+        It is -1 if I use FMSmp(default).
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index e38032e5..f4de7fd4 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -244,7 +244,7 @@ int ADnote::setupVoiceUnison(int nvoice)
+     if(unison < 1)
+         unison = 1;
+ 
+-    bool is_pwm = pars.VoicePar[nvoice].PFMEnabled == PW_MOD;
++    bool is_pwm = pars.VoicePar[nvoice].PFMEnabled == FMTYPE::PW_MOD;
+ 
+     if (pars.VoicePar[nvoice].Type != 0) {
+         // Since noise unison of greater than two is touch goofy...
+@@ -427,32 +427,14 @@ void ADnote::setupVoiceMod(int nvoice, bool first_run)
+     float FMVolume;
+ 
+     if (param.Type != 0)
+-        voice.FMEnabled = NONE;
++        voice.FMEnabled = FMTYPE::NONE;
+     else
+-        switch(param.PFMEnabled) {
+-            case 1:
+-                voice.FMEnabled = MIX;
+-                break;
+-            case 2:
+-                voice.FMEnabled = RING_MOD;
+-                break;
+-            case 3:
+-                voice.FMEnabled = PHASE_MOD;
+-                break;
+-            case 4:
+-                voice.FMEnabled = FREQ_MOD;
+-                break;
+-            case 5:
+-                voice.FMEnabled = PW_MOD;
+-                break;
+-            default:
+-                voice.FMEnabled = NONE;
+-        }
++        voice.FMEnabled = param.PFMEnabled;
+ 
+     voice.FMFreqFixed  = param.PFMFixedFreq;
+ 
+     //Triggers when a user enables modulation on a running voice
+-    if(!first_run && voice.FMEnabled != NONE && voice.FMSmp == NULL && voice.FMVoice < 0) {
++    if(!first_run && voice.FMEnabled != FMTYPE::NONE && voice.FMSmp == NULL && voice.FMVoice < 0) {
+         param.FMSmp->newrandseed(prng());
+         voice.FMSmp = memory.valloc<float>(synth.oscilsize + OSCIL_SMP_EXTRA_SAMPLES);
+         memset(voice.FMSmp, 0, sizeof(float)*(synth.oscilsize + OSCIL_SMP_EXTRA_SAMPLES));
+@@ -462,8 +444,8 @@ void ADnote::setupVoiceMod(int nvoice, bool first_run)
+ 
+         float tmp = 1.0f;
+         if((pars.VoicePar[vc].FMSmp->Padaptiveharmonics != 0)
+-                || (voice.FMEnabled == MIX)
+-                || (voice.FMEnabled == RING_MOD))
++                || (voice.FMEnabled == FMTYPE::MIX)
++                || (voice.FMEnabled == FMTYPE::RING_MOD))
+             tmp = getFMvoicebasefreq(nvoice);
+ 
+         if(!pars.GlobalPar.Hrandgrouping)
+@@ -493,14 +475,14 @@ void ADnote::setupVoiceMod(int nvoice, bool first_run)
+             param.PFMVolumeDamp / 64.0f - 1.0f);
+     const float fmvolume_ = param.FMvolume / 100.0f;
+     switch(voice.FMEnabled) {
+-        case PHASE_MOD:
+-        case PW_MOD:
++        case FMTYPE::PHASE_MOD:
++        case FMTYPE::PW_MOD:
+             fmvoldamp = powf(440.0f / getvoicebasefreq(nvoice),
+                     param.PFMVolumeDamp / 64.0f);
+             FMVolume = (expf(fmvolume_ * FM_AMP_MULTIPLIER) - 1.0f)
+                 * fmvoldamp * 4.0f;
+             break;
+-        case FREQ_MOD:
++        case FMTYPE::FREQ_MOD:
+             FMVolume = (expf(fmvolume_ * FM_AMP_MULTIPLIER) - 1.0f)
+                 * fmvoldamp * 4.0f;
+             break;
+@@ -621,8 +603,8 @@ void ADnote::legatonote(const LegatoParams &lpars)
+                                - 1.0f);
+ 
+         switch(voice.FMEnabled) {
+-            case PHASE_MOD:
+-            case PW_MOD:
++            case FMTYPE::PHASE_MOD:
++            case FMTYPE::PW_MOD:
+                 fmvoldamp =
+                     powf(440.0f / getvoicebasefreq(
+                              nvoice), pars.VoicePar[nvoice].PFMVolumeDamp
+@@ -631,7 +613,7 @@ void ADnote::legatonote(const LegatoParams &lpars)
+                     (expf(pars.VoicePar[nvoice].FMvolume / 100.0f
+                           * FM_AMP_MULTIPLIER) - 1.0f) * fmvoldamp * 4.0f;
+                 break;
+-            case FREQ_MOD:
++            case FMTYPE::FREQ_MOD:
+                 FMVolume =
+                     (expf(pars.VoicePar[nvoice].FMvolume / 100.0f
+                           * FM_AMP_MULTIPLIER) - 1.0f) * fmvoldamp * 4.0f;
+@@ -717,7 +699,7 @@ void ADnote::legatonote(const LegatoParams &lpars)
+         }
+ 
+         /* Voice Modulation Parameters Init */
+-        if((NoteVoicePar[nvoice].FMEnabled != NONE)
++        if((NoteVoicePar[nvoice].FMEnabled != FMTYPE::NONE)
+            && (NoteVoicePar[nvoice].FMVoice < 0)) {
+             pars.VoicePar[nvoice].FMSmp->newrandseed(prng());
+ 
+@@ -907,7 +889,7 @@ void ADnote::initparameters(WatchManager *wm, const char *prefix)
+         }
+ 
+         /* Voice Modulation Parameters Init */
+-        if((vce.FMEnabled != NONE) && (vce.FMVoice < 0)) {
++        if((vce.FMEnabled != FMTYPE::NONE) && (vce.FMVoice < 0)) {
+             param.FMSmp->newrandseed(prng());
+             vce.FMSmp = memory.valloc<float>(synth.oscilsize + OSCIL_SMP_EXTRA_SAMPLES);
+ 
+@@ -919,8 +901,8 @@ void ADnote::initparameters(WatchManager *wm, const char *prefix)
+ 
+             float tmp = 1.0f;
+             if((pars.VoicePar[vc].FMSmp->Padaptiveharmonics != 0)
+-               || (vce.FMEnabled == MIX)
+-               || (vce.FMEnabled == RING_MOD))
++               || (vce.FMEnabled == FMTYPE::MIX)
++               || (vce.FMEnabled == FMTYPE::RING_MOD))
+                 tmp = getFMvoicebasefreq(nvoice);
+ 
+             if(!pars.GlobalPar.Hrandgrouping)
+@@ -1162,7 +1144,7 @@ void ADnote::computecurrentparameters()
+             /***************/
+ 
+ 
+-            if(NoteVoicePar[nvoice].FMEnabled != NONE) {
++            if(NoteVoicePar[nvoice].FMEnabled != FMTYPE::NONE) {
+                 FMrelativepitch = NoteVoicePar[nvoice].FMDetune / 100.0f;
+                 if(NoteVoicePar[nvoice].FMFreqEnvelope)
+                     FMrelativepitch +=
+@@ -1457,14 +1439,14 @@ inline void ADnote::ComputeVoiceOscillatorRingModulation(int nvoice)
+  * Computes the Oscillator (Phase Modulation or Frequency Modulation)
+  */
+ inline void ADnote::ComputeVoiceOscillatorFrequencyModulation(int nvoice,
+-                                                              int FMmode)
++                                                              FMTYPE FMmode)
+ {
+     if(NoteVoicePar[nvoice].FMVoice >= 0) {
+         //if I use VoiceOut[] as modulator
+         for(int k = 0; k < unison_size[nvoice]; ++k) {
+             float *tw = tmpwave_unison[k];
+             const float *smps = NoteVoicePar[NoteVoicePar[nvoice].FMVoice].VoiceOut;
+-            if (FMmode == PW_MOD && (k & 1))
++            if (FMmode == FMTYPE::PW_MOD && (k & 1))
+                 for (int i = 0; i < synth.buffersize; ++i)
+                     tw[i] = -smps[i];
+             else
+@@ -1483,7 +1465,7 @@ inline void ADnote::ComputeVoiceOscillatorFrequencyModulation(int nvoice,
+             for(int i = 0; i < synth.buffersize; ++i) {
+                 tw[i] = (smps[poshiFM] * ((1<<24) - posloFM)
+                          + smps[poshiFM + 1] * posloFM) / (1.0f*(1<<24));
+-                if (FMmode == PW_MOD && (k & 1))
++                if (FMmode == FMTYPE::PW_MOD && (k & 1))
+                     tw[i] = -tw[i];
+ 
+                 posloFM += freqloFM;
+@@ -1519,7 +1501,7 @@ inline void ADnote::ComputeVoiceOscillatorFrequencyModulation(int nvoice,
+ 
+ 
+     //normalize: makes all sample-rates, oscil_sizes to produce same sound
+-    if(FMmode == FREQ_MOD) { //Frequency modulation
++    if(FMmode == FMTYPE::FREQ_MOD) { //Frequency modulation
+         const float normalize = synth.oscilsize_f / 262144.0f * 44100.0f
+                           / synth.samplerate_f;
+         for(int k = 0; k < unison_size[nvoice]; ++k) {
+@@ -1560,7 +1542,7 @@ inline void ADnote::ComputeVoiceOscillatorFrequencyModulation(int nvoice,
+             //carrier
+             int carposhi = poshi + FMmodfreqhi;
+             int carposlo = poslo + FMmodfreqlo;
+-            if (FMmode == PW_MOD && (k & 1))
++            if (FMmode == FMTYPE::PW_MOD && (k & 1))
+                 carposhi += NoteVoicePar[nvoice].phase_offset;
+ 
+             if(carposlo >= (1<<24)) {
+@@ -1662,15 +1644,15 @@ int ADnote::noteout(float *outl, float *outr)
+         switch (NoteVoicePar[nvoice].noisetype) {
+             case 0: //voice mode=sound
+                 switch(NoteVoicePar[nvoice].FMEnabled) {
+-                    case MIX:
++                    case FMTYPE::MIX:
+                         ComputeVoiceOscillatorMix(nvoice);
+                         break;
+-                    case RING_MOD:
++                    case FMTYPE::RING_MOD:
+                         ComputeVoiceOscillatorRingModulation(nvoice);
+                         break;
+-                    case FREQ_MOD:
+-                    case PHASE_MOD:
+-                    case PW_MOD:
++                    case FMTYPE::FREQ_MOD:
++                    case FMTYPE::PHASE_MOD:
++                    case FMTYPE::PW_MOD:
+                         ComputeVoiceOscillatorFrequencyModulation(nvoice,
+                                                                   NoteVoicePar[nvoice].FMEnabled);
+                         break;
+@@ -1701,7 +1683,7 @@ int ADnote::noteout(float *outl, float *outr)
+             float *tw = tmpwave_unison[k];
+             if(stereo) {
+                 float stereo_pos = 0;
+-                bool is_pwm = NoteVoicePar[nvoice].FMEnabled == PW_MOD;
++                bool is_pwm = NoteVoicePar[nvoice].FMEnabled == FMTYPE::PW_MOD;
+                 if (is_pwm) {
+                     if(unison_size[nvoice] > 2)
+                         stereo_pos = k/2
+@@ -1983,7 +1965,7 @@ void ADnote::Voice::kill(Allocator &memory, const SYNTH_T &synth)
+     memory.dealloc(FMFreqEnvelope);
+     memory.dealloc(FMAmpEnvelope);
+ 
+-    if((FMEnabled != NONE) && (FMVoice < 0))
++    if((FMEnabled != FMTYPE::NONE) && (FMVoice < 0))
+         memory.devalloc(FMSmp);
+ 
+     if(VoiceOut)
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 181f1f85..ac31ee70 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -99,7 +99,7 @@ class ADnote:public SynthNote
+         /**Computes the Frequency Modulated Oscillator.
+          * @param FMmode modulation type 0=Phase 1=Frequency*/
+         inline void ComputeVoiceOscillatorFrequencyModulation(int nvoice,
+-                                                              int FMmode);
++                                                              FMTYPE FMmode);
+         //  inline void ComputeVoiceOscillatorFrequencyModulation(int nvoice);
+         /**TODO*/
+         inline void ComputeVoiceOscillatorPitchModulation(int nvoice);
+-- 
+2.47.0
+

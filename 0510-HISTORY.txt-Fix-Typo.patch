@@ -1,0 +1,25 @@
+From 8f12820e12149d95795531ad4163ec4ca938d5d0 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 18 Jun 2015 21:17:04 -0400
+Subject: [PATCH 0510/1936] HISTORY.txt: Fix Typo
+
+---
+ HISTORY.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/HISTORY.txt b/HISTORY.txt
+index c7fe9a51..e343c558 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -4,7 +4,7 @@
+         - Add OSC port option
+         - Add MIDI unlearn
+         - Add External UI Compilation
+-        - Add Split Pitchblend
++        - Add Split Pitchbend
+         - Fix No Install NTK Build
+         - Fix Linker Issues
+         - Fix Presets/Copy/Paste
+-- 
+2.47.0
+

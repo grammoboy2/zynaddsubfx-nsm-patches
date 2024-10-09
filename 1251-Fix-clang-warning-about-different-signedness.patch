@@ -1,0 +1,30 @@
+From 51a52afa20abb351d5fc6afd34932a5e4c9d64c2 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sun, 11 Feb 2018 16:44:39 +0100
+Subject: [PATCH 1251/1936] Fix clang warning about different signedness.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Tests/MessageTest.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Tests/MessageTest.h b/src/Tests/MessageTest.h
+index b76ac42a..45975d6e 100644
+--- a/src/Tests/MessageTest.h
++++ b/src/Tests/MessageTest.h
+@@ -303,10 +303,10 @@ class MessageTest:public CxxTest::TestSuite
+             while(ms->bToU->hasNext()) {
+                 const char *msg = ms->bToU->read();
+                 if(state == 0) {
+-                    TS_ASSERT_EQUALS(rtosc_narguments(msg), 0);
++                    TS_ASSERT_EQUALS(rtosc_narguments(msg), 0U);
+                     state = 1;
+                 } else if(state == 1) {
+-                    TS_ASSERT_EQUALS(rtosc_narguments(msg), 1);
++                    TS_ASSERT_EQUALS(rtosc_narguments(msg), 1U);
+                     value = rtosc_argument(msg, 0).i;
+                     state = 2;
+                 } else if(state == 2) {
+-- 
+2.47.0
+

@@ -1,0 +1,92 @@
+From 86facfe86f41519258f3c02e2976131b1eb85e85 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 28 Feb 2015 15:54:18 -0500
+Subject: [PATCH 0380/1936] Fix NTK Running Within Build Dir
+
+---
+ src/CMakeLists.txt    |  3 ---
+ src/UI/CMakeLists.txt |  7 ++++---
+ src/UI/Connection.cpp | 14 +++++++++++---
+ 3 files changed, 15 insertions(+), 9 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 9ecd1c70..fa356866 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -397,11 +397,8 @@ message(STATUS "Link libraries: ${ZLIB_LIBRARY} ${FFTW_LIBRARY} ${MXML_LIBRARIES
+ install(TARGETS zynaddsubfx
+ 	RUNTIME DESTINATION bin
+ 	)
+-
+ if(NtkGui)
+ install(DIRECTORY ../pixmaps DESTINATION share/zynaddsubfx)
+-add_definitions(-DPIXMAP_PATH="${CMAKE_INSTALL_PREFIX}/share/zynaddsubfx/pixmaps/")
+-add_definitions(-DSOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+ endif(NtkGui)
+ 
+ include(CTest)
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index 79f2ee6c..66270961 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -22,12 +22,13 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
+ set_source_files_properties(UI/MasterUI.h PROPERTIES GENERATED 1)
+ fltk_wrap_ui(zynaddsubfx_gui ${UI_fl_files})
+ 
+-add_definitions(-DPIXMAP_PATH="${CMAKE_INSTALL_PREFIX}/share/zynaddsubfx/pixmaps/")
+-add_definitions(-DSOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+-
+ if(LibloEnable)
+     set(zynaddsubfx_gui_FLTK_UI_SRCS ${zynaddsubfx_gui_FLTK_UI_SRCS} NSM.C NSM/Client.C)
+ endif()
++if(NtkGui)
++    add_definitions(-DPIXMAP_PATH="${CMAKE_INSTALL_PREFIX}/share/zynaddsubfx/pixmaps/")
++    add_definitions(-DSOURCE_DIR="${CMAKE_SOURCE_DIR}")
++endif()
+ 
+ add_library(zynaddsubfx_gui STATIC
+ 	${UI_objs}
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index 24b5f96e..73492f52 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -15,6 +15,7 @@
+ #include <FL/Fl_Shared_Image.H>
+ #include <FL/Fl_Tiled_Image.H>
+ #include <FL/Fl_Dial.H>
++#include <err.h>
+ #endif // NTK_GUI
+ 
+ using namespace GUI;
+@@ -71,18 +72,25 @@ ui_handle_t GUI::createUi(Fl_Osc_Interface *osc, void *exit)
+ 
+     if(Fl_Shared_Image *img = Fl_Shared_Image::get(PIXMAP_PATH "/knob.png"))
+         Fl_Dial::default_image(img);
++    else if(Fl_Shared_Image *img = Fl_Shared_Image::get(SOURCE_DIR "/pixmaps/knob.png"))
++        Fl_Dial::default_image(img);
+     else
+-        Fl_Dial::default_image(Fl_Shared_Image::get(SOURCE_DIR "/../pixmaps/knob.png"));
++        errx(1, "ERROR: Cannot find pixmaps/knob.png");
++
+ 
+     if(Fl_Shared_Image *img = Fl_Shared_Image::get(PIXMAP_PATH "/window_backdrop.png"))
+         Fl::scheme_bg(new Fl_Tiled_Image(img));
++    else if(Fl_Shared_Image *img = Fl_Shared_Image::get(SOURCE_DIR "/pixmaps/window_backdrop.png"))
++        Fl::scheme_bg(new Fl_Tiled_Image(img));
+     else
+-        Fl::scheme_bg(new Fl_Tiled_Image(Fl_Shared_Image::get(SOURCE_DIR "/../pixmaps/window_backdrop.png")));
++        errx(1, "ERROR: Cannot find pixmaps/window_backdrop.png");
+ 
+     if(Fl_Shared_Image *img = Fl_Shared_Image::get(PIXMAP_PATH "/module_backdrop.png"))
+         module_backdrop = new Fl_Tiled_Image(img);
++    else if(Fl_Shared_Image *img = Fl_Shared_Image::get(SOURCE_DIR "/pixmaps/module_backdrop.png"))
++        module_backdrop = new Fl_Tiled_Image(img);
+     else
+-        module_backdrop = new Fl_Tiled_Image(Fl_Shared_Image::get(SOURCE_DIR "/../pixmaps/module_backdrop.png"));
++        errx(1, "ERROR: Cannot find pixmaps/module_backdrop");
+ 
+     Fl::background(50,  50,  50);
+     Fl::background2(70, 70,  70);
+-- 
+2.47.0
+

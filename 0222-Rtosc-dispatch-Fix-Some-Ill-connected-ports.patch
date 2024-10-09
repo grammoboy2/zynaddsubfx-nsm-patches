@@ -1,0 +1,130 @@
+From 601fc9c372c1ab27705b4ec33ed1459205d4935c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 1 Sep 2014 00:32:08 -0400
+Subject: [PATCH 0222/1936] Rtosc-dispatch: Fix Some Ill connected ports
+
+---
+ src/Misc/Master.cpp             |  2 +-
+ src/Params/ADnoteParameters.cpp | 35 +++++++++++++++++++++++++++++++++
+ src/Params/FilterParams.cpp     | 10 ++++++++++
+ src/Synth/OscilGen.cpp          |  1 -
+ src/UI/MasterUI.fl              |  4 ++--
+ 5 files changed, 48 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index b2ed25d8..81bd7838 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -450,7 +450,7 @@ void Master::AudioOut(float *outl, float *outr)
+         //fprintf(stdout, "address '%s'\n", uToB->peak());
+         ports.dispatch(msg+1, d);
+         events++;
+-        if(!d.matches && false) {
++        if(!d.matches && !ports.apropos(msg)) {
+             fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 1, 7 + 30, 0 + 40);
+             fprintf(stderr, "Unknown address '%s'\n", uToB->peak());
+             fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 292e3b9c..b1f5e94b 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -140,6 +140,41 @@ static Ports voicePorts = {
+                 obj->PCoarseDetune = k + (obj->PCoarseDetune/1024)*1024;
+             }
+         }},
++    
++    //weird stuff for PCoarseDetune
++    {"FMdetunevalue:", NULL, NULL, [](const char *, RtData &d)
++        {
++            rObject *obj = (rObject *)d.obj;
++            //TODO check if this is accurate or if PCoarseDetune is utilized
++            //TODO do the same for the other engines
++            d.reply(d.loc, "f", getdetune(obj->PFMDetuneType, 0, obj->PFMDetune));
++        }},
++    {"FMoctave::c:i", NULL, NULL, [](const char *msg, RtData &d)
++        {
++            rObject *obj = (rObject *)d.obj;
++            if(!rtosc_narguments(msg)) {
++                int k=obj->PFMCoarseDetune/1024;
++                if (k>=8) k-=16;
++                d.reply(d.loc, "i", k);
++            } else {
++                int k=(int) rtosc_argument(msg, 0).i;
++                if (k<0) k+=16;
++                obj->PFMCoarseDetune = k*1024 + obj->PFMCoarseDetune%1024;
++            }
++        }},
++    {"FMcoarsedetune::c:i", NULL, NULL, [](const char *msg, RtData &d)
++        {
++            rObject *obj = (rObject *)d.obj;
++            if(!rtosc_narguments(msg)) {
++                int k=obj->PFMCoarseDetune%1024;
++                if (k>=512) k-=1024;
++                d.reply(d.loc, "i", k);
++            } else {
++                int k=(int) rtosc_argument(msg, 0).i;
++                if (k<0) k+=1024;
++                obj->PFMCoarseDetune = k + (obj->PFMCoarseDetune/1024)*1024;
++            }
++        }},
+ };
+ 
+ #undef  rObject
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 23fea64e..3c9b7137 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -102,6 +102,16 @@ rtosc::Ports FilterParams::ports = {
+             if(rtosc_narguments(msg))
+                 rChangeCb;
+         }},
++    {"centerfreq:", NULL, NULL,
++        [](const char *, RtData &d) {
++            FilterParams *obj = (FilterParams *) d.obj;
++            d.reply(d.loc, "f", obj->getcenterfreq());
++        }},
++    {"octavesfreq:", NULL, NULL,
++        [](const char *, RtData &d) {
++            FilterParams *obj = (FilterParams *) d.obj;
++            d.reply(d.loc, "f", obj->getoctavesfreq());
++        }},
+     //    "", NULL, [](){}},"/freq"
+     //{"Pvowels#" FF_MAX_VOWELS "/formants#" FF_MAX_FORMANTS "/amp",
+     //    "", NULL, [](){}},
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index f0d97adb..e92a6182 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -53,7 +53,6 @@ static rtosc::Ports localPorts = {
+     PC(hmagtype),
+     PC(currentbasefunc),
+     PC(basefuncpar),
+-    PC(basefuncpar),
+     PC(basefuncmodulation),
+     PC(basefuncmodulationpar1),
+     PC(basefuncmodulationpar2),
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index b245025c..42dfa25f 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -806,7 +806,7 @@ globalfinedetuneslider->do_callback();}
+           Fl_Dial globalfinedetuneslider {
+             label {Fine Detune}
+             tooltip {global fine detune} xywh {95 73 45 45} box ROUND_UP_BOX labelsize 9 align 130 maximum 127 step 1 value 64
+-            code0 {o->init("microtonal.Pglobalfinedetune");}
++            code0 {o->init("microtonal/Pglobalfinedetune");}
+             class Fl_Osc_Dial
+           }
+         }
+@@ -1393,7 +1393,7 @@ simpleglobalfinedetuneslider->do_callback();}
+       Fl_Dial simpleglobalfinedetuneslider {
+         label {Fine Detune}
+         tooltip {global fine detune} xywh {80 50 30 30} box ROUND_UP_BOX labelsize 11 align 130 maximum 127 step 1 value 64
+-        code0 {o->init("microtonal.Pglobalfinedetune");}
++        code0 {o->init("microtonal/Pglobalfinedetune");}
+         class Fl_Osc_Dial
+       }
+       Fl_Counter simplenpartcounter {
+-- 
+2.47.0
+

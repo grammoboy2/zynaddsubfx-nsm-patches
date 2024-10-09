@@ -1,0 +1,46 @@
+From cd47ba351116a283920b6edda5acaba5b1a2475f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 7 Jul 2012 14:55:52 -0400
+Subject: [PATCH 0028/1936] Bank: Fixes instrument saving/renaming bug
+
+- Renamed instruments should show up properly in bank window
+- New patches should store the correct filename
+- Fixes "problems with saving/naming presets in a bank - ID: 3540122", reported
+  by Lieven Moors
+---
+ src/Misc/Bank.cpp | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 1a673da6..220d0b78 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -91,6 +91,7 @@ void Bank::setname(unsigned int ninstrument, const string &newname, int newslot)
+ 
+     string newfilename;
+     char   tmpfilename[100 + 1];
++    tmpfilename[100] = 0;
+ 
+     if(newslot >= 0)
+         snprintf(tmpfilename, 100, "%4d-%s", newslot + 1, newname.c_str());
+@@ -107,7 +108,7 @@ void Bank::setname(unsigned int ninstrument, const string &newname, int newslot)
+     rename(ins[ninstrument].filename.c_str(), newfilename.c_str());
+ 
+     ins[ninstrument].filename = newfilename;
+-    ins[ninstrument].name     = legalizeFilename(tmpfilename); //TODO limit name to PART_MAX_NAME_LEN
++    ins[ninstrument].name     = newname;
+ }
+ 
+ /*
+@@ -164,7 +165,7 @@ void Bank::savetoslot(unsigned int ninstrument, Part *part)
+ 
+     remove(filename.c_str());
+     part->saveXML(filename.c_str());
+-    addtobank(ninstrument, legalizeFilename(tmpfilename), (char *) part->Pname);
++    addtobank(ninstrument, legalizeFilename(tmpfilename) + ".xiz", (char *) part->Pname);
+ }
+ 
+ /*
+-- 
+2.47.0
+

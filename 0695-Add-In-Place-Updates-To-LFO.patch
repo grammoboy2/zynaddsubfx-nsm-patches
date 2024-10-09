@@ -1,0 +1,78 @@
+From 3cff7cc8d595c8b333e7dbd0bfc9c63c8e60a54d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 6 Nov 2015 23:54:30 -0500
+Subject: [PATCH 0695/1936] Add In-Place Updates To LFO
+
+Resolves https://sourceforge.net/p/zynaddsubfx/feature-requests/47/
+---
+ src/Synth/LFO.cpp | 31 ++++++++++++++++++++++++++++++-
+ src/Synth/LFO.h   |  4 ++++
+ 2 files changed, 34 insertions(+), 1 deletion(-)
+
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index 37449959..d8b272d4 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -31,7 +31,9 @@
+ LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t)
+     :delayTime(t, lfopars.Pdelay / 127.0f * 4.0f), //0..4 sec
+     waveShape(lfopars.PLFOtype),
+-    deterministic(!lfopars.Pfreqrand)
++    deterministic(!lfopars.Pfreqrand),
++    dt_(t.dt()),
++    lfopars_(lfopars), basefreq_(basefreq)
+ {
+     int stretch = lfopars.Pstretch;
+     if(stretch == 0)
+@@ -114,6 +116,33 @@ float LFO::baseOut(const char waveShape, const float phase) const
+ 
+ float LFO::lfoout()
+ {
++    //update internals XXX TODO cleanup
++    {
++        waveShape = lfopars_.PLFOtype;
++        int stretch = lfopars_.Pstretch;
++        if(stretch == 0)
++            stretch = 1;
++        const float lfostretch = powf(basefreq_ / 440.0f, (stretch - 64.0f) / 63.0f);
++
++        float lfofreq =
++            (powf(2, lfopars_.Pfreq * 10.0f) - 1.0f) / 12.0f * lfostretch;
++
++        phaseInc = fabs(lfofreq) * dt_;
++
++        switch(lfopars_.fel) {
++            case 1:
++                lfointensity = lfopars_.Pintensity / 127.0f;
++                break;
++            case 2:
++                lfointensity = lfopars_.Pintensity / 127.0f * 4.0f;
++                break; //in octave
++            default:
++                lfointensity = powf(2, lfopars_.Pintensity / 127.0f * 11.0f) - 1.0f; //in centi
++                //x -= 0.25f; //chance the starting phase
++                break;
++        }
++    }
++
+     float out = baseOut(waveShape, phase);
+ 
+     if(waveShape == LFO_SINE || waveShape == LFO_TRIANGLE)
+diff --git a/src/Synth/LFO.h b/src/Synth/LFO.h
+index ebe5707a..5a00bd55 100644
+--- a/src/Synth/LFO.h
++++ b/src/Synth/LFO.h
+@@ -64,6 +64,10 @@ class LFO
+         //If After initialization there are no calls to random number gen.
+         bool  deterministic;
+ 
++        const float     dt_;
++        const LFOParams &lfopars_;
++        const float basefreq_;
++
+         void computeNextFreqRnd(void);
+ };
+ 
+-- 
+2.47.0
+

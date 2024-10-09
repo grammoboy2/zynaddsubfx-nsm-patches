@@ -1,0 +1,77 @@
+From 246fa6062f2ae4384eef52d1c8d00d58d7f00a75 Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Wed, 9 Jun 2021 23:32:32 +0200
+Subject: [PATCH 1742/1936] fix instability at maximum fcutoff in moog filter
+
+---
+ src/DSP/MoogFilter.cpp | 24 +++++++++++++-----------
+ src/globals.h          |  1 +
+ 2 files changed, 14 insertions(+), 11 deletions(-)
+
+diff --git a/src/DSP/MoogFilter.cpp b/src/DSP/MoogFilter.cpp
+index 45841d0f..c0afec45 100644
+--- a/src/DSP/MoogFilter.cpp
++++ b/src/DSP/MoogFilter.cpp
+@@ -28,13 +28,6 @@ MoogFilter::~MoogFilter(void)
+ 
+ }
+ 
+-inline float MoogFilter::tan_2(const float x) const
+-{
+-    //Pade approximation tan(x) hand tuned to map fCutoff
+-    float x2 = x*x;
+-    return ((9.54f*x*((11.08f - x2)))/(105.0f - x2*(45.0f + x2)));
+-}
+-
+ inline float MoogFilter::tanhX(const float x) const
+ {
+     // Pade approximation of tanh(x) bound to [-1 .. +1]
+@@ -48,7 +41,8 @@ inline float MoogFilter::tanhXdivX(float x) const
+ {
+     // Pade approximation for tanh(x)/x used in filter stages
+     float x2 = x*x;
+-    return ((15.0+x2)/(15.0+6.0*x2));
++    //~ return ((15.0+x2)/(15.0+6.0*x2)); // more accurate but instable at high frequencies
++    return (1.0f-(0.35f*x2)+(0.1f*x2*x2));
+ }
+ 
+ inline float MoogFilter::step(float input)
+@@ -123,12 +117,20 @@ void MoogFilter::setfreq_and_q(float frequency, float q_)
+     setq(q_);
+ }
+ 
++inline float MoogFilter::tan_2(const float x) const
++{
++    //Pade approximation tan(x) hand tuned to map fCutoff
++    float x2 = x*x;
++    //~ return ((9.54f*x*((11.08f - x2)))/(105.0f - x2*(45.0f + x2)));
++    return (x+0.15f*x2+0.3f*x2*x2);
++}
++
+ void MoogFilter::setfreq(float ff)
+ {
+-    // limit cutoff to prevent overflow
+-    ff = limit(ff,0.0002f,0.48f);
+     // pre warp cutoff to map to reality
+-    c = tan_2(PI * ff);
++    c = tan_2(PI * ff);    
++    // limit cutoff to prevent overflow
++    c = limit(c,0.0006f,1.5f);
+     // pre calculate some stuff outside the hot zone
+     ct2 = c * 2.0f;
+     cp2 = c * c;
+diff --git a/src/globals.h b/src/globals.h
+index 592babc5..3c446f67 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -179,6 +179,7 @@ typedef std::complex<fftw_real> fft_t;
+ 
+ #define LOG_2 0.693147181f
+ #define PI 3.1415926536f
++#define PIDIV2 1.5707963268f
+ #define LOG_10 2.302585093f
+ 
+ /*
+-- 
+2.47.0
+

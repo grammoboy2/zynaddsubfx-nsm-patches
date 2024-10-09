@@ -1,0 +1,203 @@
+From d232f6611adf5e2309e14c6907091495f27e0702 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 29 Apr 2023 22:45:35 +0200
+Subject: [PATCH 1895/1936] metadata: Add missing dependencies
+
+---
+ rtosc                         |  2 +-
+ src/Effects/Echo.cpp          |  2 +-
+ src/Effects/EffectMgr.cpp     |  4 ++--
+ src/Effects/Reverb.cpp        |  2 +-
+ src/Misc/Part.cpp             |  6 ++++--
+ src/Misc/Part.h               |  2 +-
+ src/Params/EnvelopeParams.cpp | 35 +++++++++++++++++++++++------------
+ 7 files changed, 33 insertions(+), 20 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index bf3621ff..dcfa725f 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit bf3621ff0540ca3c5d30b5ffc8edc5126684c622
++Subproject commit dcfa725f3f77ce3765972d805372b9eadb764b9e
+diff --git a/src/Effects/Echo.cpp b/src/Effects/Echo.cpp
+index e57c4dd3..3ec5dcf4 100644
+--- a/src/Effects/Echo.cpp
++++ b/src/Effects/Echo.cpp
+@@ -44,7 +44,7 @@ rtosc::Ports Echo::ports = {
+     rEffParVol(rDefaultDepends(presetOfVolume), rDefault(67),
+         rPresetsAt(6, 81, 81, 62),
+         rPresetsAt(16, 33, 33, 33, 33, 33, 33, 40, 40, 31)),
+-    rEffParPan(rPresetsAt(2, 75, 60, 60, 64, 60, 60)),
++    rEffParPan(rDefaultDepends(preset), rPresetsAt(2, 75, 60, 60, 64, 60, 60)),
+     rEffPar(Pdelay,   2, rShort("delay"), rLinear(0, 127),
+             rPresets(35, 21, 60, 44, 102, 44, 46, 26, 28),
+             "Length of Echo"),
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index e18ebbab..7db4a6a9 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -48,7 +48,7 @@ namespace zyn {
+         }}
+ static const rtosc::Ports local_ports = {
+     rSelf(EffectMgr, rEnabledByCondition(self-enabled)),
+-    {"preset::i", rProp(parameter) rDoc("Effect Preset Selector")
++    {"preset::i", rProp(parameter) rDepends(efftype) rDoc("Effect Preset Selector")
+         rDefault(0), NULL,
+         [](const char *msg, rtosc::RtData &d)
+         {
+@@ -73,7 +73,7 @@ static const rtosc::Ports local_ports = {
+         }}, // must come before rPaste, because apropos otherwise picks "preset-type" first
+     rPaste,
+     rEnabledCondition(self-enabled, obj->geteffect()),
+-    rRecurp(filterpars, "Filter Parameter for Dynamic Filter"),
++    rRecurp(filterpars, rDefaultDepends(efftype), "Filter Parameter for Dynamic Filter"),
+     {"Pvolume::i", rProp(parameter) rLinear(0,127) rShort("amt") rDoc("amount of effect"),
+         0,
+         [](const char *msg, rtosc::RtData &d)
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index e9378d6f..0e9b358e 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -47,7 +47,7 @@ rtosc::Ports Reverb::ports = {
+           rPresetsAt(5, 100, 100, 110, 85, 95),
+           rPresetsAt(16, 40, 40, 40, 45, 45),
+           rPresetsAt(21, 50, 50, 55, 42, 47, 45, 45, 45)),
+-    rEffParPan(rPreset(8, 80)),
++    rEffParPan(rDefaultDepends(preset), rPreset(8, 80)),
+     rEffPar(Ptime,    2, rShort("time"), rLinear(0, 127),
+             rPresets(63, 69, 69, 51, 53, 33, 21, 14, 84, 26, 40, 93, 111),
+             "Length of Reverb"),
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 899c0b47..c44d3285 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -53,8 +53,9 @@ static const Ports partPorts = {
+               "How many parts are before this in the Master"),
+ #undef  rChangeCb
+ #define rChangeCb if(obj->Penabled == false) obj->AllNotesOff();
+-    rToggle(Penabled, rShort("enable"), rDefaultDepends(partno),
+-            rPresets(true), rDefault(false), "Part enable"),
++    rToggle(Penabled, rShort("enable"),
++            rPreset(0, true), rDefault(false), rDefaultDepends(partno),
++            "Part enable"),
+ #undef rChangeCb
+ #define rChangeCb
+ #undef rChangeCb
+@@ -89,6 +90,7 @@ static const Ports partPorts = {
+     rParamZyn(Pmaxkey, rShort("max"), rDefault(127), "Max Used Key"),
+     rParamZyn(Pkeyshift, rShort("shift"), rDefault(64), "Part keyshift"),
+     rOption(Prcvchn, rOptions(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16),
++            rDefaultDepends(partno),
+             rPresets(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16),
+             "Active MIDI channel"),
+     rParamZyn(Pvelsns,   rShort("sense"), rDefault(64), "Velocity sensing"),
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index 167ab26a..bd7ae1fa 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -126,7 +126,7 @@ class Part
+         void setvoicelimit(unsigned char Pvoicelimit);
+         void setkititemstatus(unsigned kititem, bool Penabled_);
+ 
+-        unsigned char partno; /**<if it's the Master's first part*/
++        unsigned char partno; /**<the part number in Master*/
+         bool          Penabled; /**<if the part is enabled*/
+         float         Volume; /**<part volume*/
+         unsigned char Pminkey; /**<the minimum key that the part receives noteon messages*/
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 6379cbbf..aa88fb5c 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -92,12 +92,14 @@ static const rtosc::Ports localPorts = {
+             rPresetAtMulti(3, ad_global_freq, ad_voice_freq,
+                               ad_voice_fm_freq,
+                               sub_freq, sub_bandwidth),
++            rDepends(Pfreemode),
+             rDefault(4),
+             "Number of points in complex definition"),
+     rParamZyn(Penvsustain, rDefaultDepends(loc),
+             rPresetAtMulti(1, ad_global_freq, ad_voice_freq,
+                               ad_voice_fm_freq,
+                               sub_freq, sub_bandwidth),
++            rDepends(Pfreemode),
+             rDefault(2),
+             "Location of the sustain point"),
+     rParamsDT(envdt,  MAX_ENVELOPE_POINTS, "Envelope Delay Times"),
+@@ -112,7 +114,7 @@ static const rtosc::Ports localPorts = {
+         rPreset(ad_voice_filter, [90 40 64 40 64 64 ...]),
+         rPreset(sub_bandwidth, [100 64 64 ...]),
+         rPreset(sub_freq, [30 64 64 ...]),
+-        rDefaultDepends(loc), "Envelope Values"),
++        rDefaultDepends(loc) rDepends(Penvpoints,Pfreemode,PA_val,PD_val,PS_val,PR_val), "Envelope Values"),
+     rParamZyn(Penvstretch,  rShort("stretch"), rDefaultDepends(loc),
+             rPresetAtMulti(0, ad_global_freq, ad_global_filter,
+                               ad_voice_freq, ad_voice_filter, ad_voice_fm_freq,
+@@ -128,8 +130,10 @@ static const rtosc::Ports localPorts = {
+             "Linear or Logarithmic Envelopes"),
+     rToggle(Prepeating, rShort("repeat"), rDefault(false),
+             "Repeat the Envelope"),
+-    rParamDT(A_dt ,  rShort("a.dt"), rLinear(0,127), "Attack Time"),
+-    rParamF(A_dt,  rShort("a.dt"), rLogWithLogmin(0.f,41.0f, 0.0001f), rDefaultDepends(loc),
++    rParamDT(A_dt ,  rShort("a.dt"), rLinear(0,127), rDepends(Pfreemode),
++            "Attack Time"),
++    rParamF(A_dt,  rShort("a.dt"), rLogWithLogmin(0.f,41.0f, 0.0001f),
++              rDefaultDepends(loc), rDepends(Pfreemode),
+               rPreset(ad_global_freq, 0.254f),   rPreset(ad_global_filter, 0.127f),
+               rPreset(ad_voice_freq, 0.127f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_freq, 3.620f), rPreset(ad_voice_fm_amp, 1.876f),
+@@ -138,35 +142,42 @@ static const rtosc::Ports localPorts = {
+               rDefault(0.0f),
+               "Attack Time"),
+ 
+-    rParamZyn(PA_val, rShort("a.val"), rDefaultDepends(loc),
++    rParamZyn(PA_val, rShort("a.val"),
++              rDefaultDepends(loc), rDepends(Pfreemode),
+               rPreset(ad_voice_freq, 30),    rPreset(ad_voice_filter, 90),
+               rPreset(ad_voice_fm_freq, 20),
+               rPreset(sub_freq, 30),         rPreset(sub_bandwidth, 100),
+               rDefault(64),
+               "Attack Value"),
+-    rParamDT(D_dt, rShort("d.dt"), rLinear(0,127), "Decay Time"),
+-    rParamF(D_dt,  rShort("d.dt"), rLogWithLogmin(0.f, 41.0f, 0.0001f),  rDefaultDepends(loc),
++    rParamDT(D_dt, rShort("d.dt"), rLinear(0,127), rDepends(Pfreemode),
++              "Decay Time"),
++    rParamF(D_dt,  rShort("d.dt"), rLogWithLogmin(0.f, 41.0f, 0.0001f),
++              rDefaultDepends(loc), rDepends(Pfreemode),
+               rPreset(ad_global_amp, 0.127f),    rPreset(ad_global_filter, 0.970f),
+               rPreset(ad_voice_amp, 6.978f),    rPreset(ad_voice_filter, 0.970f),
+               rPreset(ad_voice_fm_amp, 3.620f),
+               rPreset(sub_filter, 0.97),
+               rDefault(0.009f),
+               "Decay Time"),
+-    rParamZyn(PD_val, rShort("d.val"), rDefaultDepends(loc),
++    rParamZyn(PD_val, rShort("d.val"),
++              rDefaultDepends(loc), rDepends(Pfreemode),
+               rDefault(64), rPreset(ad_voice_filter, 40),
+               "Decay Value"),
+-    rParamZyn(PS_val, rShort("s.val"), rDefaultDepends(loc),
+-              rDefault(64),
++    rParamZyn(PS_val, rShort("s.val"),
++              rDefaultDepends(loc), rDepends(Pfreemode), rDefault(64),
+               rPresetAtMulti(127, ad_global_amp, ad_voice_amp, ad_voice_fm_amp),
+               "Sustain Value"),
+-    rParamDT(R_dt, rShort("r.dt"), rLinear(0,127), "Release Time"),
+-    rParamF(R_dt,  rShort("r.dt"), rLogWithLogmin(0.f,41.0f,0.009f),  rDefaultDepends(loc),
++    rParamDT(R_dt, rShort("r.dt"), rLinear(0,127), rDepends(Pfreemode),
++              "Release Time"),
++    rParamF(R_dt,  rShort("r.dt"), rLogWithLogmin(0.f,41.0f,0.009f),
++              rDefaultDepends(loc), rDepends(Pfreemode),
+               rPreset(ad_global_amp, 0.041f),
+               rPreset(ad_voice_amp, 6.978f),    rPreset(ad_voice_filter, 0.009f),
+               rPreset(ad_voice_fm_freq, 1.876f), rPreset(ad_voice_fm_amp, 6.978f),
+               rDefault(0.499f),
+               "Release Time"),
+-    rParamZyn(PR_val, rShort("r.val"), rDefaultDepends(loc),
++    rParamZyn(PR_val, rShort("r.val"),
++              rDefaultDepends(loc), rDepends(Pfreemode),
+               rPresetAtMulti(40, ad_voice_filter, ad_voice_fm_freq),
+               rDefault(64),
+               "Release Value"),
+-- 
+2.47.0
+

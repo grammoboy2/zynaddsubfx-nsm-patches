@@ -1,0 +1,26 @@
+From a49b63c567f9816e2736bbb2b30b346b3b269dbc Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 23 Feb 2015 18:13:49 -0500
+Subject: [PATCH 0356/1936] FFTwrapper: Remove Redefinition of fft_t
+
+---
+ src/DSP/FFTwrapper.h | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/src/DSP/FFTwrapper.h b/src/DSP/FFTwrapper.h
+index cd42c7fc..c222524d 100644
+--- a/src/DSP/FFTwrapper.h
++++ b/src/DSP/FFTwrapper.h
+@@ -24,8 +24,7 @@
+ #define FFT_WRAPPER_H
+ #include <fftw3.h>
+ #include <complex>
+-typedef double                  fftw_real;
+-typedef std::complex<fftw_real> fft_t;
++#include "../globals.h"
+ 
+ /**A wrapper for the FFTW library (Fast Fourier Transforms)*/
+ class FFTwrapper
+-- 
+2.47.0
+

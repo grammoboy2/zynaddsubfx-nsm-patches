@@ -1,0 +1,369 @@
+From 4bf4af2fc5735dcf55fce28603aeb053963541bd Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 14 Feb 2015 13:10:08 -0500
+Subject: [PATCH 0316/1936] Envlope: Refactor
+
+---
+ src/Params/EnvelopeParams.h | 11 ++++-------
+ src/Synth/ADnote.cpp        | 24 +++++++++++------------
+ src/Synth/Envelope.cpp      | 38 ++++++++++++++++++-------------------
+ src/Synth/Envelope.h        |  3 +--
+ src/Synth/OscilGen.cpp      | 11 ++++++-----
+ src/Synth/OscilGen.h        |  3 ---
+ src/Synth/PADnote.cpp       |  6 +++---
+ src/Synth/SUBnote.cpp       |  8 ++++----
+ src/globals.h               | 13 +++++++++++++
+ 9 files changed, 62 insertions(+), 55 deletions(-)
+
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index 9162e280..652fb574 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -27,9 +27,6 @@
+ #include "../Misc/XMLwrapper.h"
+ #include "Presets.h"
+ 
+-#define MAX_ENVELOPE_POINTS 40
+-#define MIN_ENVELOPE_DB -400
+-
+ class EnvelopeParams:public Presets
+ {
+     public:
+@@ -72,10 +69,10 @@ class EnvelopeParams:public Presets
+ 
+ 
+         int Envmode; // 1 for ADSR parameters (linear amplitude)
+-        // 2 for ADSR_dB parameters (dB amplitude)
+-        // 3 for ASR parameters (frequency LFO)
+-        // 4 for ADSR_filter parameters (filter parameters)
+-        // 5 for ASR_bw parameters (bandwidth parameters)
++                     // 2 for ADSR_dB parameters (dB amplitude)
++                     // 3 for ASR parameters (frequency LFO)
++                     // 4 for ADSR_filter parameters (filter parameters)
++                     // 5 for ASR_bw parameters (bandwidth parameters)
+ 
+         static rtosc::Ports &ports;
+     private:
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 5d9776d4..88483303 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -753,7 +753,7 @@ void ADnote::initparameters()
+ 
+         newamplitude[nvoice] = 1.0f;
+         if(param.PAmpEnvelopeEnabled) {
+-            vce.AmpEnvelope = memory.alloc<Envelope>(param.AmpEnvelope, basefreq);
++            vce.AmpEnvelope = memory.alloc<Envelope>(*param.AmpEnvelope, basefreq);
+             vce.AmpEnvelope->envout_dB(); //discard the first envelope sample
+             newamplitude[nvoice] *= vce.AmpEnvelope->envout_dB();
+         }
+@@ -765,7 +765,7 @@ void ADnote::initparameters()
+ 
+         /* Voice Frequency Parameters Init */
+         if(param.PFreqEnvelopeEnabled)
+-            vce.FreqEnvelope = memory.alloc<Envelope>(param.FreqEnvelope, basefreq);
++            vce.FreqEnvelope = memory.alloc<Envelope>(*param.FreqEnvelope, basefreq);
+ 
+         if(param.PFreqLfoEnabled)
+             vce.FreqLfo = memory.alloc<LFO>(*param.FreqLfo, basefreq);
+@@ -777,7 +777,7 @@ void ADnote::initparameters()
+         }
+ 
+         if(param.PFilterEnvelopeEnabled)
+-            vce.FilterEnvelope = memory.alloc<Envelope>(param.FilterEnvelope, basefreq);
++            vce.FilterEnvelope = memory.alloc<Envelope>(*param.FilterEnvelope, basefreq);
+ 
+         if(param.PFilterLfoEnabled)
+             vce.FilterLfo = memory.alloc<LFO>(*param.FilterLfo, basefreq);
+@@ -823,14 +823,14 @@ void ADnote::initparameters()
+             }
+         }
+ 
+-        if(param.PFMFreqEnvelopeEnabled != 0)
+-            vce.FMFreqEnvelope = memory.alloc<Envelope>(param.FMFreqEnvelope, basefreq);
++        if(param.PFMFreqEnvelopeEnabled)
++            vce.FMFreqEnvelope = memory.alloc<Envelope>(*param.FMFreqEnvelope, basefreq);
+ 
+         FMnewamplitude[nvoice] = vce.FMVolume * ctl->fmamp.relamp;
+ 
+-        if(param.PFMAmpEnvelopeEnabled != 0) {
++        if(param.PFMAmpEnvelopeEnabled ) {
+             vce.FMAmpEnvelope =
+-                memory.alloc<Envelope>(param.FMAmpEnvelope, basefreq);
++                memory.alloc<Envelope>(*param.FMAmpEnvelope, basefreq);
+             FMnewamplitude[nvoice] *= vce.FMAmpEnvelope->envout_dB();
+         }
+     }
+@@ -1010,10 +1010,10 @@ void ADnote::computecurrentparameters()
+         oldamplitude[nvoice] = newamplitude[nvoice];
+         newamplitude[nvoice] = 1.0f;
+ 
+-        if(NoteVoicePar[nvoice].AmpEnvelope != NULL)
++        if(NoteVoicePar[nvoice].AmpEnvelope)
+             newamplitude[nvoice] *= NoteVoicePar[nvoice].AmpEnvelope->envout_dB();
+ 
+-        if(NoteVoicePar[nvoice].AmpLfo != NULL)
++        if(NoteVoicePar[nvoice].AmpLfo)
+             newamplitude[nvoice] *= NoteVoicePar[nvoice].AmpLfo->amplfoout();
+ 
+         /****************/
+@@ -1783,10 +1783,10 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+                                     float basefreq, float velocity,
+                                     bool stereo)
+ {
+-    FreqEnvelope = memory.alloc<Envelope>(param.FreqEnvelope, basefreq);
++    FreqEnvelope = memory.alloc<Envelope>(*param.FreqEnvelope, basefreq);
+     FreqLfo      = memory.alloc<LFO>(*param.FreqLfo, basefreq);
+ 
+-    AmpEnvelope = memory.alloc<Envelope>(param.AmpEnvelope, basefreq);
++    AmpEnvelope = memory.alloc<Envelope>(*param.AmpEnvelope, basefreq);
+     AmpLfo      = memory.alloc<LFO>(*param.AmpLfo, basefreq);
+ 
+     Volume = 4.0f * powf(0.1f, 3.0f * (1.0f - param.PVolume / 96.0f)) //-60 dB .. 0 dB
+@@ -1798,7 +1798,7 @@ void ADnote::Global::initparameters(const ADnoteGlobalParam &param,
+     else
+         GlobalFilterR = NULL;
+ 
+-    FilterEnvelope = memory.alloc<Envelope>(param.FilterEnvelope, basefreq);
++    FilterEnvelope = memory.alloc<Envelope>(*param.FilterEnvelope, basefreq);
+     FilterLfo      = memory.alloc<LFO>(*param.FilterLfo, basefreq);
+     FilterQ = param.GlobalFilter->getq();
+     FilterFreqTracking = param.GlobalFilter->getfreqtracking(basefreq);
+diff --git a/src/Synth/Envelope.cpp b/src/Synth/Envelope.cpp
+index eaa15b07..813e5ff4 100644
+--- a/src/Synth/Envelope.cpp
++++ b/src/Synth/Envelope.cpp
+@@ -24,31 +24,31 @@
+ #include "Envelope.h"
+ #include "../Params/EnvelopeParams.h"
+ 
+-Envelope::Envelope(EnvelopeParams *envpars, float basefreq)
++Envelope::Envelope(EnvelopeParams &pars, float basefreq)
+ {
+-    envpoints = envpars->Penvpoints;
++    envpoints = pars.Penvpoints;
+     if(envpoints > MAX_ENVELOPE_POINTS)
+         envpoints = MAX_ENVELOPE_POINTS;
+-    envsustain     = (envpars->Penvsustain == 0) ? -1 : envpars->Penvsustain;
+-    forcedrelase   = envpars->Pforcedrelease;
+-    envstretch     = powf(440.0f / basefreq, envpars->Penvstretch / 64.0f);
+-    linearenvelope = envpars->Plinearenvelope;
++    envsustain     = (pars.Penvsustain == 0) ? -1 : pars.Penvsustain;
++    forcedrelase   = pars.Pforcedrelease;
++    envstretch     = powf(440.0f / basefreq, pars.Penvstretch / 64.0f);
++    linearenvelope = pars.Plinearenvelope;
+ 
+-    if(envpars->Pfreemode == 0)
+-        envpars->converttofree();
++    if(!pars.Pfreemode)
++        pars.converttofree();
+ 
+-    float bufferdt = synth->buffersize_f / synth->samplerate_f;
++    const float bufferdt = synth->buffersize_f / synth->samplerate_f;
+ 
+-    int mode = envpars->Envmode;
++    int mode = pars.Envmode;
+ 
+     //for amplitude envelopes
+-    if((mode == 1) && (linearenvelope == 0))
++    if((mode == 1) && !linearenvelope)
+         mode = 2;                              //change to log envelope
+-    if((mode == 2) && (linearenvelope != 0))
++    if((mode == 2) && linearenvelope)
+         mode = 1;                              //change to linear
+ 
+     for(int i = 0; i < MAX_ENVELOPE_POINTS; ++i) {
+-        float tmp = envpars->getdt(i) / 1000.0f * envstretch;
++        const float tmp = pars.getdt(i) / 1000.0f * envstretch;
+         if(tmp > bufferdt)
+             envdt[i] = bufferdt / tmp;
+         else
+@@ -56,24 +56,24 @@ Envelope::Envelope(EnvelopeParams *envpars, float basefreq)
+ 
+         switch(mode) {
+             case 2:
+-                envval[i] = (1.0f - envpars->Penvval[i] / 127.0f) * -40;
++                envval[i] = (1.0f - pars.Penvval[i] / 127.0f) * -40;
+                 break;
+             case 3:
+                 envval[i] =
+                     (powf(2, 6.0f
+-                          * fabs(envpars->Penvval[i]
++                          * fabs(pars.Penvval[i]
+                                  - 64.0f) / 64.0f) - 1.0f) * 100.0f;
+-                if(envpars->Penvval[i] < 64)
++                if(pars.Penvval[i] < 64)
+                     envval[i] = -envval[i];
+                 break;
+             case 4:
+-                envval[i] = (envpars->Penvval[i] - 64.0f) / 64.0f * 6.0f; //6 octaves (filtru)
++                envval[i] = (pars.Penvval[i] - 64.0f) / 64.0f * 6.0f; //6 octaves (filtru)
+                 break;
+             case 5:
+-                envval[i] = (envpars->Penvval[i] - 64.0f) / 64.0f * 10;
++                envval[i] = (pars.Penvval[i] - 64.0f) / 64.0f * 10;
+                 break;
+             default:
+-                envval[i] = envpars->Penvval[i] / 127.0f;
++                envval[i] = pars.Penvval[i] / 127.0f;
+         }
+     }
+ 
+diff --git a/src/Synth/Envelope.h b/src/Synth/Envelope.h
+index 8c6b082a..9d5041f8 100644
+--- a/src/Synth/Envelope.h
++++ b/src/Synth/Envelope.h
+@@ -24,7 +24,6 @@
+ #define ENVELOPE_H
+ 
+ #include "../globals.h"
+-#include "../Params/EnvelopeParams.h"
+ 
+ /**Implementation of a general Envelope*/
+ class Envelope
+@@ -32,7 +31,7 @@ class Envelope
+     public:
+ 
+         /**Constructor*/
+-        Envelope(class EnvelopeParams *envpars, float basefreq);
++        Envelope(class EnvelopeParams &pars, float basefreq);
+         /**Destructor*/
+         ~Envelope();
+         void relasekey();
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index e95a0fbc..40f8fa5e 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -21,14 +21,15 @@
+ */
+ 
+ #include "OscilGen.h"
++#include "../DSP/FFTwrapper.h"
++#include "../Synth/Resonance.h"
+ #include "../Misc/WaveShapeSmps.h"
+ 
+ #include <cassert>
+-#include <stdlib.h>
+-#include <math.h>
+-#include <stdio.h>
+-#include <stddef.h>
+-#include <pthread.h>
++#include <cstdlib>
++#include <cmath>
++#include <cstdio>
++#include <cstddef>
+ 
+ #include <unistd.h>
+ 
+diff --git a/src/Synth/OscilGen.h b/src/Synth/OscilGen.h
+index 9b8f6e93..5dbb87c4 100644
+--- a/src/Synth/OscilGen.h
++++ b/src/Synth/OscilGen.h
+@@ -24,10 +24,7 @@
+ #define OSCIL_GEN_H
+ 
+ #include "../globals.h"
+-#include "../Misc/XMLwrapper.h"
+-#include "../DSP/FFTwrapper.h"
+ #include "../Params/Presets.h"
+-#include "Resonance.h"
+ 
+ class OscilGen:public Presets
+ {
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 5c8475c4..3b87a960 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -130,10 +130,10 @@ void PADnote::setup(float freq,
+         else
+             NoteGlobalPar.Punch.Enabled = 0;
+ 
+-        NoteGlobalPar.FreqEnvelope = memory.alloc<Envelope>(pars->FreqEnvelope, basefreq);
++        NoteGlobalPar.FreqEnvelope = memory.alloc<Envelope>(*pars->FreqEnvelope, basefreq);
+         NoteGlobalPar.FreqLfo      = memory.alloc<LFO>(*pars->FreqLfo, basefreq);
+ 
+-        NoteGlobalPar.AmpEnvelope = memory.alloc<Envelope>(pars->AmpEnvelope, basefreq);
++        NoteGlobalPar.AmpEnvelope = memory.alloc<Envelope>(*pars->AmpEnvelope, basefreq);
+         NoteGlobalPar.AmpLfo      = memory.alloc<LFO>(*pars->AmpLfo, basefreq);
+     }
+ 
+@@ -151,7 +151,7 @@ void PADnote::setup(float freq,
+         NoteGlobalPar.GlobalFilterL = Filter::generate(memory, pars->GlobalFilter);
+         NoteGlobalPar.GlobalFilterR = Filter::generate(memory, pars->GlobalFilter);
+ 
+-        NoteGlobalPar.FilterEnvelope = memory.alloc<Envelope>(pars->FilterEnvelope, basefreq);
++        NoteGlobalPar.FilterEnvelope = memory.alloc<Envelope>(*pars->FilterEnvelope, basefreq);
+         NoteGlobalPar.FilterLfo      = memory.alloc<LFO>(*pars->FilterLfo, basefreq);
+     }
+     NoteGlobalPar.FilterQ = pars->GlobalFilter->getq();
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 5c895077..45a7a3f5 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -360,13 +360,13 @@ void SUBnote::filter(bpfilter &filter, float *smps)
+  */
+ void SUBnote::initparameters(float freq)
+ {
+-    AmpEnvelope = memory.alloc<Envelope>(pars->AmpEnvelope, freq);
++    AmpEnvelope = memory.alloc<Envelope>(*pars->AmpEnvelope, freq);
+     if(pars->PFreqEnvelopeEnabled)
+-        FreqEnvelope = memory.alloc<Envelope>(pars->FreqEnvelope, freq);
++        FreqEnvelope = memory.alloc<Envelope>(*pars->FreqEnvelope, freq);
+     else
+         FreqEnvelope = NULL;
+     if(pars->PBandWidthEnvelopeEnabled)
+-        BandWidthEnvelope = memory.alloc<Envelope>(pars->BandWidthEnvelope, freq);
++        BandWidthEnvelope = memory.alloc<Envelope>(*pars->BandWidthEnvelope, freq);
+     else
+         BandWidthEnvelope = NULL;
+     if(pars->PGlobalFilterEnabled) {
+@@ -374,7 +374,7 @@ void SUBnote::initparameters(float freq)
+         GlobalFilterL = Filter::generate(memory, pars->GlobalFilter);
+         if(stereo)
+             GlobalFilterR = Filter::generate(memory, pars->GlobalFilter);
+-        GlobalFilterEnvelope = memory.alloc<Envelope>(pars->GlobalFilterEnvelope, freq);
++        GlobalFilterEnvelope = memory.alloc<Envelope>(*pars->GlobalFilterEnvelope, freq);
+         GlobalFilterFreqTracking = pars->GlobalFilter->getfreqtracking(basefreq);
+     }
+     computecurrentparameters();
+diff --git a/src/globals.h b/src/globals.h
+index 541ac86f..245b96c2 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -48,6 +48,7 @@ class  SynthNote;
+ 
+ class  Microtonal;
+ class  XMLwrapper;
++class  Resonance;
+ class  FFTwrapper;
+ class  LFOParams;
+ class  FilterParams;
+@@ -58,6 +59,12 @@ class  Controller;
+ class  Master;
+ class  Part;
+ 
++namespace std {
++    template<class T> struct complex;
++};
++typedef double fftw_real;
++typedef std::complex<fftw_real> fft_t;
++
+ /**
+  * The number of harmonics of additive synth
+  * This must be smaller than OSCIL_SIZE/2
+@@ -154,6 +161,12 @@ class  Part;
+ #define PI 3.1415926536f
+ #define LOG_10 2.302585093f
+ 
++/*
++ * Envelope Limits
++ */
++#define MAX_ENVELOPE_POINTS 40
++#define MIN_ENVELOPE_DB -400
++
+ /*
+  * The threshold for the amplitude interpolation used if the amplitude
+  * is changed (by LFO's or Envelope's). If the change of the amplitude
+-- 
+2.47.0
+

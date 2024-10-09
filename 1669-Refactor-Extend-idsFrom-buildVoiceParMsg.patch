@@ -1,0 +1,325 @@
+From 3733b4ed7130b4e0aafea255891294563d8b1d1b Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 13 Dec 2020 10:14:43 +0100
+Subject: [PATCH 1669/1936] Refactor/Extend idsFrom/buildVoiceParMsg
+
+---
+ src/Misc/CMakeLists.txt  |  1 +
+ src/Misc/MiddleWare.cpp  | 46 ++------------------
+ src/Misc/MsgParsing.cpp  | 93 ++++++++++++++++++++++++++++++++++++++++
+ src/Misc/MsgParsing.h    | 32 ++++++++++++++
+ src/Tests/CMakeLists.txt |  2 +
+ src/Tests/MsgParseTest.h | 59 +++++++++++++++++++++++++
+ 6 files changed, 190 insertions(+), 43 deletions(-)
+ create mode 100644 src/Misc/MsgParsing.cpp
+ create mode 100644 src/Misc/MsgParsing.h
+ create mode 100644 src/Tests/MsgParseTest.h
+
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index 603e4678..21a3c21c 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -13,6 +13,7 @@ set(zynaddsubfx_misc_SRCS
+ 	Misc/WavFile.cpp
+ 	Misc/WaveShapeSmps.cpp
+     Misc/MiddleWare.cpp
++    Misc/MsgParsing.cpp
+     Misc/PresetExtractor.cpp
+     Misc/Allocator.cpp
+     Misc/CallbackRepeater.cpp
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 35566699..100dc374 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -36,6 +36,7 @@
+ #include "Util.h"
+ #include "CallbackRepeater.h"
+ #include "Master.h"
++#include "MsgParsing.h"
+ #include "Part.h"
+ #include "PresetExtractor.h"
+ #include "../Containers/MultiPseudoStack.h"
+@@ -242,48 +243,6 @@ void preparePadSynth(string path, PADnoteParameters *p, rtosc::RtData &d)
+     }
+ }
+ 
+-/*
+- * Build/parse messages from/to part/kit/voice IDs
+- */
+-static std::string buildVoiceParMsg(int part, int kit, int voice)
+-{
+-    return std::string("/part") + std::to_string(part)
+-           + std::string("/kit") + std::to_string(kit)
+-           + std::string("/adpars/VoicePar") + std::to_string(voice);
+-}
+-
+-static void idsFromMsg(const char* msg, int* part, int* kit, int* voice)
+-{
+-    auto must_match = [](const char* msg, const char* match) {
+-        assert(!strncmp(msg, match, strlen(match)));
+-    };
+-
+-    const char *end = msg;
+-    char *newend;
+-
+-    if(*end == '/')
+-        ++end;
+-
+-    must_match(end, "part");
+-    end += 4;
+-    *part = static_cast<int>(strtol(end, &newend, 10));
+-    assert(newend != end);
+-    end = newend;
+-
+-    must_match(end, "/kit");
+-    end += 4;
+-    *kit = static_cast<int>(strtol(end, &newend, 10));
+-    assert(newend != end);
+-    end = newend;
+-
+-    if(!strncmp(end, "/adpars/V", 9) && voice)
+-    {
+-        must_match(end, "/adpars/VoicePar");
+-        end += 16;
+-        *voice = static_cast<int>(strtol(end, &newend, 10));
+-    }
+-}
+-
+ /******************************************************************************
+  *                      Non-RealTime Object Store                             *
+  *                                                                            *
+@@ -2202,7 +2161,8 @@ void MiddleWareImpl::kitEnable(const char *msg)
+         return;
+ 
+     int part, kit;
+-    idsFromMsg(msg, &part, &kit, nullptr);
++    bool res = idsFromMsg(msg, &part, &kit, nullptr);
++    assert(res);
+     kitEnable(part, kit, type);
+ }
+ 
+diff --git a/src/Misc/MsgParsing.cpp b/src/Misc/MsgParsing.cpp
+new file mode 100644
+index 00000000..60ac29e3
+--- /dev/null
++++ b/src/Misc/MsgParsing.cpp
+@@ -0,0 +1,93 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  MsgParsing.cpp - Parsing messages int <-> string
++  Copyright (C) 2020-2020 Johannes Lorenz
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#include <cstring>
++#include <string>
++
++#include "MsgParsing.h"
++
++namespace zyn {
++
++std::string buildVoiceParMsg(const int* part, const int* kit, const int* voice,
++                             const bool* isFm)
++{
++    std::string res;
++    if(!part || !kit) { return std::string(); }
++    res = std::string("/part") + std::to_string(*part)
++        + std::string("/kit") + std::to_string(*kit);
++    if(voice)
++    {
++        res += std::string("/adpars/VoicePar") + std::to_string(*voice);
++        if(isFm)
++            res += (*isFm) ? "/FMSmp" : "/OscilSmp";
++    }
++    return res;
++}
++
++std::size_t idsFromMsg(const char* const msg, int* part, int* kit, int* voice, bool* isFm)
++{
++    auto msg_match = [](const char* msg, const char* match) -> bool {
++        return !strncmp(msg, match, strlen(match));
++    };
++
++    const char *end = msg;
++    char *newend;
++
++    if(*end == '/')
++        ++end;
++
++    if(!msg_match(end, "part")) return 0;
++    end += 4;
++    *part = static_cast<int>(strtol(end, &newend, 10));
++    if(newend == end) return 0; // number read?
++    end = newend;
++
++    if(!msg_match(end, "/kit")) return 0;
++    end += 4;
++    *kit = static_cast<int>(strtol(end, &newend, 10));
++    if(newend == end) return 0;
++    end = newend;
++
++    if(voice)
++    {
++        if(!msg_match(end, "/adpars/VoicePar")) return 0;
++        end += 16;
++        *voice = static_cast<int>(strtol(end, &newend, 10));
++        if(newend == end) return 0;
++        end = newend;
++
++        if(isFm)
++        {
++            if(msg_match(end, "/OscilSmp")) {
++                end += 9;
++                *isFm = false;
++            }
++            else if(msg_match(end, "/FMSmp")) {
++                end += 6;
++                *isFm = true;
++            }
++            else { return 0; }
++        }
++    }
++    return end - msg;
++}
++
++}
+diff --git a/src/Misc/MsgParsing.h b/src/Misc/MsgParsing.h
+new file mode 100644
+index 00000000..f67ef20b
+--- /dev/null
++++ b/src/Misc/MsgParsing.h
+@@ -0,0 +1,32 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  MsgParsing.h - Message Parsing declarations
++  Copyright (C) 2020-2020 Johannes Lorenz
++  Author: Johannes Lorenz
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++#ifndef MSGPARSING_H
++#define MSGPARSING_H
++
++#include <string>
++
++/*
++ * Build/parse messages from/to part/kit/voice IDs
++ */
++
++namespace zyn {
++
++std::string buildVoiceParMsg(const int *part, const int *kit,
++                             const int *voice = nullptr, const bool *isFm = nullptr);
++std::size_t idsFromMsg(const char* msg, int* part, int* kit,
++                       int* voice = nullptr, bool* isFm = nullptr);
++
++}
++
++#endif // MSGPARSING_H
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 98dd4e47..1b25e8f1 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -18,6 +18,7 @@ CXXTEST_ADD_TEST(OscilGenTest OscilGenTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/Oscil
+ CXXTEST_ADD_TEST(RandTest RandTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RandTest.h)
+ CXXTEST_ADD_TEST(PADnoteTest PadNoteTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/PadNoteTest.h)
+ CXXTEST_ADD_TEST(PluginTest PluginTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/PluginTest.h)
++CXXTEST_ADD_TEST(MsgParseTest MsgParseTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MsgParseTest.h)
+ CXXTEST_ADD_TEST(MiddlewareTest MiddlewareTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MiddlewareTest.h)
+ CXXTEST_ADD_TEST(MessageTest MessageTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/MessageTest.h)
+ CXXTEST_ADD_TEST(UnisonTest UnisonTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/UnisonTest.h)
+@@ -55,6 +56,7 @@ target_link_libraries(TriggerTest      ${test_lib})
+ target_link_libraries(PluginTest     zynaddsubfx_core zynaddsubfx_nio
+     zynaddsubfx_gui_bridge
+     ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
++target_link_libraries(MsgParseTest ${test_lib})
+ target_link_libraries(MiddlewareTest zynaddsubfx_core zynaddsubfx_nio
+     zynaddsubfx_gui_bridge
+     ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES})
+diff --git a/src/Tests/MsgParseTest.h b/src/Tests/MsgParseTest.h
+new file mode 100644
+index 00000000..ebb12d0d
+--- /dev/null
++++ b/src/Tests/MsgParseTest.h
+@@ -0,0 +1,59 @@
++#ifndef MSGPARSETEST_H
++#define MSGPARSETEST_H
++
++#include <cxxtest/TestSuite.h>
++#include "../Misc/MsgParsing.h"
++
++class PluginTest:public CxxTest::TestSuite
++{
++    public:
++        void setUp() {}
++
++        void tearDown() {}
++
++        void testExtracting() {
++            std::size_t res;
++            int part, kit, vc;
++            bool isFm;
++
++            // test a full string with OscilSmp
++            res = zyn::idsFromMsg("/part1/kit2/adpars/VoicePar3/OscilSmp", &part, &kit, &vc, &isFm);
++            TS_ASSERT(res);
++            TS_ASSERT_EQUALS(part, 1);
++            TS_ASSERT_EQUALS(kit, 2);
++            TS_ASSERT_EQUALS(vc, 3);
++            TS_ASSERT(!isFm);
++            // translate back into string
++            std::string str = zyn::buildVoiceParMsg(&part, &kit, &vc, &isFm);
++            TS_ASSERT_EQUALS(str, "/part1/kit2/adpars/VoicePar3/OscilSmp");
++
++            // same with FMSmp
++            res = zyn::idsFromMsg("/part11/kit12/adpars/VoicePar13/FMSmp", &part, &kit, &vc, &isFm);
++            TS_ASSERT(res);
++            TS_ASSERT_EQUALS(part, 11);
++            TS_ASSERT_EQUALS(kit, 12);
++            TS_ASSERT_EQUALS(vc, 13);
++            TS_ASSERT(isFm);
++            // translate back into string
++            str = zyn::buildVoiceParMsg(&part, &kit, &vc, &isFm);
++            TS_ASSERT_EQUALS(str, "/part11/kit12/adpars/VoicePar13/FMSmp");
++
++            // check return values
++            TS_ASSERT(!zyn::idsFromMsg("/part", &part, &kit, nullptr));
++            TS_ASSERT(!zyn::idsFromMsg("/part1", &part, &kit, nullptr));
++            TS_ASSERT(!zyn::idsFromMsg("/part1/kit", &part, &kit, nullptr));
++            TS_ASSERT(zyn::idsFromMsg("/part1/kit2", &part, &kit, nullptr));
++            TS_ASSERT(!zyn::idsFromMsg("/part1/kit2", &part, &kit, &vc));
++            TS_ASSERT(!zyn::idsFromMsg("/part1/kit2/adpars/", &part, &kit, &vc));
++            TS_ASSERT(!zyn::idsFromMsg("/part1/kit2/adpars/", &part, &kit, &vc));
++            TS_ASSERT(!zyn::idsFromMsg("/part1/kit2/adpars/VoicePar", &part, &kit, &vc));
++            TS_ASSERT(!zyn::idsFromMsg("/part1/kit2/adpars/VoicePar/", &part, &kit, &vc));
++            TS_ASSERT(zyn::idsFromMsg("/part1/kit2/adpars/VoicePar0/", &part, &kit, &vc));
++            TS_ASSERT(zyn::idsFromMsg("/part1/kit2/adpars/VoicePar0/XXX", &part, &kit, &vc));
++            TS_ASSERT(!zyn::idsFromMsg("/part1/kit2/adpars/VoicePar0/XXX", &part, &kit, &vc, &isFm));
++            TS_ASSERT(zyn::idsFromMsg("/part1/kit2/adpars/VoicePar0/OscilSmp", &part, &kit, &vc, &isFm));
++            TS_ASSERT(zyn::idsFromMsg("/part1/kit2/adpars/VoicePar0/FMSmp", &part, &kit, &vc, &isFm));
++        }
++};
++
++#endif // MSGPARSETEST_H
+-- 
+2.47.0
+

@@ -1,0 +1,43 @@
+From 0ae8ac7a8fca7f3aeaf0111cea7ebbc483ecfd6d Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 28 May 2023 13:46:12 +0200
+Subject: [PATCH 1916/1936] Fix uninitialized Part::partno
+
+---
+ src/Misc/MiddleWare.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d3cb161a..3bacaabc 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -628,6 +628,8 @@ public:
+                                    config->cfg.Interpolation,
+                                    &master->microtonal, master->fft, &master->watcher,
+                                    ("/part"+to_s(npart)+"/").c_str());
++                p->partno  = npart % NUM_MIDI_CHANNELS;
++                p->Prcvchn = npart % NUM_MIDI_CHANNELS;
+                 if(p->loadXMLinstrument(filename))
+                     fprintf(stderr, "Warning: failed to load part<%s>!\n", filename);
+ 
+@@ -651,6 +653,8 @@ public:
+                 config->cfg.GzipCompression,
+                 config->cfg.Interpolation,
+                 &master->microtonal, master->fft);
++        p->partno  = npart % NUM_MIDI_CHANNELS;
++        p->Prcvchn = npart % NUM_MIDI_CHANNELS;
+ 
+         if(p->loadXMLinstrument(filename))
+             fprintf(stderr, "Warning: failed to load part<%s>!\n", filename);
+@@ -682,6 +686,8 @@ public:
+                 config->cfg.GzipCompression,
+                 config->cfg.Interpolation,
+                 &master->microtonal, master->fft);
++        p->partno  = npart % NUM_MIDI_CHANNELS;
++        p->Prcvchn = npart % NUM_MIDI_CHANNELS;
+         p->applyparameters();
+         obj_store.extractPart(p, npart);
+         kits.extractPart(p, npart);
+-- 
+2.47.0
+

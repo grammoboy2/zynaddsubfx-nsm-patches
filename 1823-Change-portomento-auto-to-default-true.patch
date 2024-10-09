@@ -1,0 +1,35 @@
+From fcd5b2e2bb9589ac3aa38b0c943215fa28886af6 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 10 Feb 2022 21:59:08 -0500
+Subject: [PATCH 1823/1936] Change portomento auto to default true
+
+Feels better to play based on some limited experimentation
+---
+ src/Params/Controller.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index 38c38825..2f0f5368 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -62,7 +62,7 @@ const rtosc::Ports Controller::ports = {
+         "Portamento MIDI Receive"),
+     rToggle(portamento.portamento, rDefault(false),
+         "Portamento Enable"),
+-    rToggle(portamento.automode, rDefault(false),
++    rToggle(portamento.automode, rDefault(true),
+         "Portamento Auto mode"),
+     rParamZyn(portamento.time,          rShort("time"), rDefault(64),
+         "Portamento Length"),
+@@ -114,7 +114,7 @@ void Controller::defaults()
+     NRPN.receive                 = 1;
+ 
+     portamento.portamento        = 0;
+-    portamento.automode          = 0;
++    portamento.automode          = 1;
+     portamento.proportional      = 0;
+     portamento.propRate          = 80;
+     portamento.propDepth         = 90;
+-- 
+2.47.0
+

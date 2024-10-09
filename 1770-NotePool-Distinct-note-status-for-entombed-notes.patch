@@ -1,0 +1,155 @@
+From 42c767ae1fa5935c1766b70806b84f3fcc9a8cda Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Sat, 18 Sep 2021 10:19:37 +0200
+Subject: [PATCH 1770/1936] NotePool: Distinct note status for entombed notes
+
+In order to differentiate released voices (with potentially long release
+times) from entombed voices (which are active just long enough to quieten
+them gracefully without clicks or other audible artefacts), create a new
+noteStatus member indicating entombed note.
+
+This change itself does not incur any functional change, but KitTest
+modified to test for the ENTOMBED state after assumed voice stealing,
+rather than RELEASED.
+---
+ src/Containers/NotePool.cpp | 27 +++++++++++++++++++++------
+ src/Containers/NotePool.h   |  2 ++
+ src/Tests/KitTest.cpp       | 11 +++++++----
+ 3 files changed, 30 insertions(+), 10 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 0e5be890..423a5a70 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -26,7 +26,8 @@ enum NoteStatus {
+     KEY_PLAYING                = 0x01,
+     KEY_RELEASED_AND_SUSTAINED = 0x02,
+     KEY_RELEASED               = 0x03,
+-    KEY_LATCHED                = 0x04
++    KEY_ENTOMBED               = 0x04,
++    KEY_LATCHED                = 0x05
+ };
+ 
+ const char *getStatus(int status)
+@@ -37,6 +38,7 @@ const char *getStatus(int status)
+         case KEY_PLAYING:                 return "PLAY";
+         case KEY_RELEASED_AND_SUSTAINED:  return "SUST";
+         case KEY_RELEASED:                return "RELA";
++        case KEY_ENTOMBED:                return "TOMB";
+         case KEY_LATCHED:                 return "LTCH";
+         default:                          return "INVD";
+     }
+@@ -69,6 +71,18 @@ bool NotePool::NoteDescriptor::released(void) const
+     return (status&NOTE_MASK) == KEY_RELEASED;
+ }
+ 
++bool NotePool::NoteDescriptor::entombed(void) const
++{
++    return (status&NOTE_MASK) == KEY_ENTOMBED;
++}
++
++// Notes that are no longer playing, for whatever reason.
++bool NotePool::NoteDescriptor::dying(void) const
++{
++    return (status&NOTE_MASK) == KEY_ENTOMBED ||
++           (status&NOTE_MASK) == KEY_RELEASED;
++}
++
+ bool NotePool::NoteDescriptor::off(void) const
+ {
+     return (status&NOTE_MASK) == KEY_OFF;
+@@ -300,12 +314,13 @@ void NotePool::enforceKeyLimit(int limit)
+             //There must be something to kill
+             oldest  = nd.age;
+             to_kill = &nd;
+-        } else if(to_kill->released() && nd.playing()) {
++        } else if(to_kill->dying() && nd.playing()) {
+             //Prefer to kill off a running note
+             oldest = nd.age;
+             to_kill = &nd;
+-        } else if(nd.age > oldest && !(to_kill->playing() && nd.released())) {
+-            //Get an older note when it doesn't move from running to released
++        } else if(nd.age > oldest && !(to_kill->playing() && nd.dying())) {
++            //Get an older note when it doesn't move from running to
++            //released (or entombed)
+             oldest = nd.age;
+             to_kill = &nd;
+         }
+@@ -313,7 +328,7 @@ void NotePool::enforceKeyLimit(int limit)
+ 
+     if(to_kill) {
+         auto &tk = *to_kill;
+-        if(tk.released() || tk.sustained())
++        if(tk.dying() || tk.sustained())
+             kill(*to_kill);
+         else
+             entomb(*to_kill);
+@@ -381,7 +396,7 @@ void NotePool::kill(SynthDescriptor &s)
+ 
+ void NotePool::entomb(NoteDescriptor &d)
+ {
+-    d.setStatus(KEY_RELEASED);
++    d.setStatus(KEY_ENTOMBED);
+     for(auto &s:activeNotes(d))
+         s.note->entomb();
+ }
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 3a4cdf47..658b8f52 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -44,6 +44,8 @@ class NotePool
+             bool off(void) const;
+             bool sustained(void) const;
+             bool released(void) const;
++            bool entombed(void) const;
++            bool dying(void) const;
+             bool latched(void) const;
+ 
+             //status transitions
+diff --git a/src/Tests/KitTest.cpp b/src/Tests/KitTest.cpp
+index b9a203f8..e6a67764 100644
+--- a/src/Tests/KitTest.cpp
++++ b/src/Tests/KitTest.cpp
+@@ -35,7 +35,8 @@ enum PrivateNoteStatus {
+     KEY_OFF                    = 0x00,
+     KEY_PLAYING                = 0x01,
+     KEY_RELEASED_AND_SUSTAINED = 0x02,
+-    KEY_RELEASED               = 0x03
++    KEY_RELEASED               = 0x03,
++    KEY_ENTOMBED               = 0x04
+ };
+ 
+ 
+@@ -710,6 +711,8 @@ class KitTest
+             part->NoteOn(67, 127, 0);
+             part->NoteOn(68, 127, 0);
+ 
++            printf("Keylimit 3: After noteons:\n");
++            pool.dump();
+             //Verify that notes are spawned as expected with limit
+             TS_ASSERT_EQUAL_INT(pool.getRunningNotes(),  3);//2 entombed
+             TS_ASSERT_EQUAL_INT(pool.usedNoteDesc(),     5);
+@@ -747,7 +750,7 @@ class KitTest
+             TS_ASSERT_EQUAL_INT(pool.ndesc[0].note, 64);
+             TS_ASSERT_EQUAL_INT(pool.ndesc[1].note, 65);
+             TS_ASSERT_EQUAL_INT(pool.ndesc[2].note, 66);
+-            TS_ASSERT_EQUAL_INT(pool.ndesc[2].status, KEY_RELEASED);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[2].status, KEY_ENTOMBED);
+             TS_ASSERT_EQUAL_INT(pool.ndesc[3].note, 67);
+ 
+             part->NoteOn(68, 127, 0);
+@@ -759,9 +762,9 @@ class KitTest
+             //Check that the result is {64, 68, 67}
+             TS_ASSERT_EQUAL_INT(pool.ndesc[0].note, 64);
+             TS_ASSERT_EQUAL_INT(pool.ndesc[1].note, 65);
+-            TS_ASSERT_EQUAL_INT(pool.ndesc[1].status, KEY_RELEASED);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[1].status, KEY_ENTOMBED);
+             TS_ASSERT_EQUAL_INT(pool.ndesc[2].note, 66);
+-            TS_ASSERT_EQUAL_INT(pool.ndesc[2].status, KEY_RELEASED);
++            TS_ASSERT_EQUAL_INT(pool.ndesc[2].status, KEY_ENTOMBED);
+             TS_ASSERT_EQUAL_INT(pool.ndesc[3].note, 67);
+             TS_ASSERT_EQUAL_INT(pool.ndesc[4].note, 68);
+         }
+-- 
+2.47.0
+

@@ -1,0 +1,275 @@
+From 2e37c9277e3adc4b8d2ca51673dd91905ba086b2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 7 May 2015 14:21:52 -0400
+Subject: [PATCH 0439/1936] UI: Fix Presets Display List
+
+---
+ src/Misc/PresetExtractor.cpp |  1 +
+ src/UI/Fl_Osc_Widget.H       |  1 +
+ src/UI/Fl_Osc_Widget.cpp     |  5 ++++
+ src/UI/MasterUI.fl           |  3 ++-
+ src/UI/Osc_DataModel.h       | 40 +++++++++++++++++++++++++++++++
+ src/UI/Osc_ListModel.h       | 46 ++++++++++++++++++++++++++++++++++++
+ src/UI/PresetsUI.fl          | 41 ++++++++++++++++++++++++++------
+ 7 files changed, 129 insertions(+), 8 deletions(-)
+ create mode 100644 src/UI/Osc_DataModel.h
+ create mode 100644 src/UI/Osc_ListModel.h
+
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index bf0d7714..2e8018ce 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -34,6 +34,7 @@ const rtosc::Ports real_preset_ports =
+         [](const char *msg, rtosc::RtData &d) {
+             presetsstore.scanforpresets();
+             auto &pre = presetsstore.presets;
++            d.reply(d.loc, "i", pre.size());
+             for(unsigned i=0; i<pre.size();++i)
+                 d.reply(d.loc, "isss", i,
+                         pre[i].file.c_str(),
+diff --git a/src/UI/Fl_Osc_Widget.H b/src/UI/Fl_Osc_Widget.H
+index df5bb5fb..39a8894c 100644
+--- a/src/UI/Fl_Osc_Widget.H
++++ b/src/UI/Fl_Osc_Widget.H
+@@ -12,6 +12,7 @@ class Fl_Osc_Widget
+     public:
+         Fl_Osc_Widget(void); //Deprecated
+         Fl_Osc_Widget(Fl_Widget *self);
++        Fl_Osc_Widget(std::string loc, Fl_Osc_Interface *osc);
+         virtual ~Fl_Osc_Widget(void);
+ 
+         //Callback methods
+diff --git a/src/UI/Fl_Osc_Widget.cpp b/src/UI/Fl_Osc_Widget.cpp
+index 0ed0433c..2ab925f2 100644
+--- a/src/UI/Fl_Osc_Widget.cpp
++++ b/src/UI/Fl_Osc_Widget.cpp
+@@ -5,6 +5,11 @@ Fl_Osc_Widget::Fl_Osc_Widget(void) //Deprecated
+ :loc(), osc(NULL)
+ {}
+ 
++Fl_Osc_Widget::Fl_Osc_Widget(std::string loc_, Fl_Osc_Interface *osc_)
++:loc(loc_), osc(osc_)
++{
++    assert(osc);
++}
+ Fl_Osc_Widget:: Fl_Osc_Widget(Fl_Widget *self)
+ {
+     assert(fetch_osc_pane(self));
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 3ce45ad5..9052bc0c 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1500,7 +1500,8 @@ Pixmap p = XCreateBitmapFromData(fl_display, DefaultRootWindow(fl_display),
+                                  (char*)zynaddsubfx_bits, zynaddsubfx_width, zynaddsubfx_height);
+ masterwindow->icon((char *)p);
+ \#endif
+-presetsui=new PresetsUI();
++assert(osc);
++presetsui=new PresetsUI(osc);
+ setfilelabel(NULL);
+ swapefftype=0;
+ simplerefresh();} {}
+diff --git a/src/UI/Osc_DataModel.h b/src/UI/Osc_DataModel.h
+new file mode 100644
+index 00000000..d038c39d
+--- /dev/null
++++ b/src/UI/Osc_DataModel.h
+@@ -0,0 +1,40 @@
++#include "Fl_Osc_Widget.H"
++#include <functional>
++#include <vector>
++#include <rtosc/rtosc.h>
++
++class Osc_DataModel:public Fl_Osc_Widget
++{
++    public:
++        Osc_DataModel(Fl_Osc_Interface *osc_)
++            :Fl_Osc_Widget("", osc_), list_size(0)
++        {
++            assert(osc);
++        }
++
++        typedef std::string value_t;
++        value_t value;
++        std::function<void(value_t)> callback;
++        unsigned list_size;
++
++        void update(std::string url)
++        {
++            if(!ext.empty())
++                osc->removeLink(this);
++            ext = url;
++            value = "";
++
++            oscRegister(ext.c_str());
++        }
++        
++        //Raw messages
++        virtual void OSC_raw(const char *msg)
++        {
++            std::string args = rtosc_argument_string(msg);
++            if(args == "s") {
++                value = rtosc_argument(msg, 0).s;
++                if(callback)
++                    callback(value);
++            }
++        }
++};
+diff --git a/src/UI/Osc_ListModel.h b/src/UI/Osc_ListModel.h
+new file mode 100644
+index 00000000..b1be674c
+--- /dev/null
++++ b/src/UI/Osc_ListModel.h
+@@ -0,0 +1,46 @@
++#include "Fl_Osc_Widget.H"
++#include <functional>
++#include <vector>
++#include <rtosc/rtosc.h>
++
++class Osc_ListModel:public Fl_Osc_Widget
++{
++    public:
++        Osc_ListModel(Fl_Osc_Interface *osc_)
++            :Fl_Osc_Widget("", osc_), list_size(0)
++        {
++            assert(osc);
++        }
++
++        typedef std::vector<std::tuple<std::string, std::string, std::string>> list_t;
++        list_t list;
++        std::function<void(list_t)> callback;
++        unsigned list_size;
++
++        void update(std::string url)
++        {
++            if(!ext.empty())
++                osc->removeLink(this);
++            ext = url;
++
++            oscRegister(ext.c_str());
++        }
++        
++        //Raw messages
++        virtual void OSC_raw(const char *msg)
++        {
++            std::string args = rtosc_argument_string(msg);
++            if(args == "i") {
++                list_size = rtosc_argument(msg, 0).i;
++                list.clear();
++                list.resize(list_size);
++            } else if(args == "isss") {
++                int idx = rtosc_argument(msg,0).i;
++                std::get<0>(list[idx]) = rtosc_argument(msg,1).s;
++                std::get<1>(list[idx]) = rtosc_argument(msg,2).s;
++                std::get<2>(list[idx]) = rtosc_argument(msg,3).s;
++                if(idx == (int)list_size-1 && callback)
++                    callback(list);
++            }
++        }
++};
+diff --git a/src/UI/PresetsUI.fl b/src/UI/PresetsUI.fl
+index 5bcb52bf..28dac583 100644
+--- a/src/UI/PresetsUI.fl
++++ b/src/UI/PresetsUI.fl
+@@ -14,6 +14,12 @@ decl {\#include <cstdlib>} {public
+ decl {\#include <string>} {public
+ } 
+ 
++decl {\#include "Osc_ListModel.h"} {public
++} 
++
++decl {\#include "Osc_DataModel.h"} {public
++} 
++
+ class PresetsUI_ {} {
+     Function {refresh()} {open return_type {virtual void}
+     } {
+@@ -26,8 +32,20 @@ class PresetsUI_ {} {
+ } 
+ 
+ class PresetsUI {} {
+-    Function {PresetsUI()} {} {
+-        code {make_window();} {}
++    Function {PresetsUI(Fl_Osc_Interface *osc_):listmodel(osc_), datamodel(osc_)} {} {
++        code {osc = osc_;make_window();
++            listmodel.callback = [this](Osc_ListModel::list_t list) {
++                copybrowse->clear();
++                pastebrowse->clear();
++                for(unsigned i=0;i<list.size();++i){
++                    copybrowse->add(std::get<1>(list[i]).c_str());
++                    pastebrowse->add(std::get<1>(list[i]).c_str());
++            }};
++            datamodel.callback = [this](Osc_DataModel::value_t val) {
++                printf("Value = %s\\n", val.c_str());
++            };
++        
++        } {}
+     }
+     Function {~PresetsUI()} {} {
+         code {copywin->hide();delete(copywin);
+@@ -137,7 +155,7 @@ class PresetsUI {} {
+                         if (n!=0) {
+                             /*presetDelete(n);*/
+                         }
+-                        rescan();
++                        rescan(url);
+                     } selected
+                 xywh {180 355 75 20} box THIN_UP_BOX
+             }
+@@ -152,8 +170,8 @@ class PresetsUI {} {
+     Function {copy(std::string url_)} {} {
+         code {copybutton->activate();
+             copypbutton->deactivate();
+-            (void) url_;
+ 
++            url = url_;
+             this->pui=NULL;
+             bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
+             presetname->cut(0,presetname->maximum_size());
+@@ -161,7 +179,7 @@ class PresetsUI {} {
+             if(but) {
+                 /*presetCopy(url_, "");*/
+             } else {
+-                rescan();
++                rescan(url_);
+                 /*copytypetext->label(presetClipboardType().c_str());*/
+                 copywin->show();
+             };} {}
+@@ -178,16 +196,19 @@ class PresetsUI {} {
+                 /*presetPaste(url, 0);*/
+                 pui->refresh();
+             } else {
+-                rescan();
++                rescan(url_);
+                 /*pastetypetext->label(presetClipboardType().c_str());
+                 if (presetCheckClipboardType()) pastebutton->activate();
+                 else pastebutton->deactivate();*/
+                 pastewin->show();
+             };} {}
+     }
+-    Function {rescan()} {} {
++    Function {rescan(std::string url)} {} {
+         code {copybrowse->clear();
+             pastebrowse->clear();
++
++            datamodel.update(url+"preset-type");
++            listmodel.update("/presets/scan-for-presets");
+             /*presetRescan();*/
+ 
+             /*
+@@ -202,6 +223,12 @@ class PresetsUI {} {
+     }
+     decl {std::string url;} {public local
+     }
++    decl {Fl_Osc_Interface *osc;} {public local
++    }
++    decl {Osc_ListModel listmodel;} {public local
++    }
++    decl {Osc_DataModel datamodel;} {public local
++    }
+     decl {PresetsUI_ *pui;} {public local
+     }
+ } 
+-- 
+2.47.0
+

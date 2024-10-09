@@ -1,0 +1,447 @@
+From 659b994d2dc9a528ca6024839c9dbffdf2ec3855 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 14 Jul 2013 16:41:29 -0400
+Subject: [PATCH 0090/1936] Oscify VirKeyboard
+
+- Add noteOn, noteOff, setController handlers to Master port table
+
+This was actually a rather quick and small fix that eliminated about a half
+dozen references to the dreaded master->mutex.
+Right now MasterUI still assumes that it is the root element, so in future
+revisions it will need to start prefixing things correctly, but until then this
+approach works fine.
+---
+ src/Misc/Master.cpp   |  32 +++++++---
+ src/UI/MasterUI.fl    |  22 +++----
+ src/UI/VirKeyboard.fl | 135 ++++++++++++++++++++++++------------------
+ src/UI/common.H       |   1 +
+ 4 files changed, 114 insertions(+), 76 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 295f8910..af61b02f 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -45,15 +45,16 @@ using rtosc::Ports;
+ using rtosc::RtData;
+ 
+ static Ports localports = {
+-    {"echo", ":'hidden':Hidden port to echo messages", 0, [](const char *m, RtData&) {
++    RECURSP(Master, Part, part, part, 16, "Part"),//NUM_MIDI_PARTS
++    {"echo", "=doc\0:Hidden port to echo messages\0", 0, [](const char *m, RtData&) {
+        bToU->raw_write(m-1);}},
+-    {"get-vu", "::", 0, [](const char *, RtData &d) {
++    {"get-vu", "", 0, [](const char *, RtData &d) {
+        Master *m = (Master*)d.obj;
+        bToU->write("/vu-meter", "bb", sizeof(m->vu), &m->vu, sizeof(float)*NUM_MIDI_PARTS, m->vuoutpeakpart);}},
+-    {"reset-vu", "::", 0, [](const char *, RtData &d) {
++    {"reset-vu", "", 0, [](const char *, RtData &d) {
+        Master *m = (Master*)d.obj;
+        m->vuresetpeaks();}},
+-    {"load-part:ib", "::", 0, [](const char *msg, RtData &d) {
++    {"load-part:ib", "", 0, [](const char *msg, RtData &d) {
+        Master *m =  (Master*)d.obj;
+        Part   *p = *(Part**)rtosc_argument(msg, 1).b.data;
+        int     i = rtosc_argument(msg, 0).i;
+@@ -61,7 +62,7 @@ static Ports localports = {
+        d.reply("/free", "sb", "Part", sizeof(void*), &m->part[i]);
+        m->part[i] = p;
+        printf("part %d is now pointer %p\n", i, p);}},
+-    {"volume::c", ":'old-param':", 0,
++    {"volume::c", "", 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "c", ((Master*)d.obj)->Pvolume);
+@@ -72,13 +73,28 @@ static Ports localports = {
+             ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
+             printf("sets volume to value %d\n", ((Master*)d.obj)->Pvolume);
+             d.broadcast(d.loc, "c", ((Master*)d.obj)->Pvolume);}}},
+-    RECURSP(Master, Part, part, part, 16, "Part"),//NUM_MIDI_PARTS
+ 
+-    {"register:iis","::", 0,
++    {"noteOn:ccc", "", 0,
++        [](const char *m,RtData &d){
++            Master *M =  (Master*)d.obj;
++            M->noteOn(rtosc_argument(m,0).i,rtosc_argument(m,1).i,rtosc_argument(m,2).i);}},
++
++    {"noteOff:cc", "", 0,
++        [](const char *m,RtData &d){
++            Master *M =  (Master*)d.obj;
++            M->noteOff(rtosc_argument(m,0).i,rtosc_argument(m,1).i);}},
++
++    {"setController:ccc", "", 0,
++        [](const char *m,RtData &d){
++            Master *M =  (Master*)d.obj;
++            M->setController(rtosc_argument(m,0).i,rtosc_argument(m,1).i,rtosc_argument(m,2).i);}},
++
++
++    {"register:iis","", 0,
+         [](const char *m,RtData &d){
+             Master *M =  (Master*)d.obj;
+             M->midi.addElm(rtosc_argument(m,0).i, rtosc_argument(m,1).i,rtosc_argument(m,2).s);}},
+-    {"learn:s", "::", 0,
++    {"learn:s", "", 0,
+         [](const char *m, RtData &d){
+             Master *M =  (Master*)d.obj;
+             printf("learning '%s'\n", rtosc_argument(m,0).s);
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 6f761527..e8971d87 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1,5 +1,5 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0300 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+ decl {//Copyright (c) 2002-2009 Nasca Octavian Paul} {private local
+@@ -126,7 +126,7 @@ class Panellistitem {open : {public Fl_Group}
+   Function {make_window()} {open private
+   } {
+     Fl_Window panellistitem {open
+-      private xywh {629 721 100 260} type Double box NO_BOX
++      private xywh {632 721 100 260} type Double box NO_BOX
+       class Fl_Group visible
+     } {
+       Fl_Group panellistitemgroup {open
+@@ -264,7 +264,7 @@ if ((
+     *exitprogram=1;
+ };
+ \#endif} open
+-      xywh {324 319 390 525} type Double xclass zynaddsubfx visible
++      xywh {327 342 390 525} type Double xclass zynaddsubfx visible
+     } {
+       Fl_Group win_root {open
+         xywh {0 0 390 525}
+@@ -511,7 +511,7 @@ if (result!=0) fl_alert("Error: Could not save the file.");}
+           }
+         }
+         Fl_Dial mastervolumedial {
+-          label {Master Volume} selected
++          label {Master Volume}
+           tooltip {Master Volume} xywh {20 37 55 55} box ROUND_UP_BOX labelsize 9 align 130 maximum 127 step 1
+           code0 {win_root->osc = osc;}
+           code1 {win_root->pane_name = "/";}
+@@ -910,7 +910,7 @@ GNU General Public License for details.}
+     }
+     Fl_Window panelwindow {
+       label {ZynAddSubFX Panel} open
+-      xywh {612 184 630 635} type Double visible
++      xywh {615 207 630 635} type Double visible
+     } {
+       Fl_Scroll {} {open
+         xywh {0 5 570 310} type HORIZONTAL box THIN_UP_BOX
+@@ -950,7 +950,7 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
+ 	*exitprogram=1;
+ };
+ \#endif}
+-      xywh {655 338 600 335} type Double visible
++      xywh {658 361 600 335} type Double visible
+     } {
+       Fl_Menu_Bar simplemastermenu {
+         xywh {0 0 690 25}
+@@ -1172,7 +1172,7 @@ o->redraw();}
+       Fl_Box virkeys {
+         label Keyboard
+         xywh {5 215 590 80} box BORDER_BOX color 17
+-        code0 {o->init(master);}
++        code0 {o->init(osc, "/");}
+         class VirKeys
+       }
+       Fl_Group {} {
+@@ -1500,7 +1500,8 @@ masterwindowlabel[99]='\\0';
+ masterwindow->label(&masterwindowlabel[0]);
+ simplemasterwindow->label(&masterwindowlabel[0]);} {}
+   }
+-  Function {MasterUI(Master *master_,int *exitprogram_, class Fl_Osc_Interface *osc_)} {} {
++  Function {MasterUI(Master *master_,int *exitprogram_, class Fl_Osc_Interface *osc_)} {open
++  } {
+     code {master=master_;
+ exitprogram=exitprogram_;
+ osc=osc_;
+@@ -1513,7 +1514,7 @@ for (int i=0;i<NUM_SYS_EFX;i++)
+      syseffsend[i][j]=NULL;
+ 
+ microtonalui=new MicrotonalUI(&master->microtonal);
+-virkeyboard=new VirKeyboard(master);
++virkeyboard=new VirKeyboard(osc, "/");
+ bankui=new BankUI(master, &npart, osc);
+ configui=new ConfigUI();
+ 
+@@ -1521,7 +1522,8 @@ make_window();
+ presetsui=new PresetsUI();
+ setfilelabel(NULL);
+ swapefftype=0;
+-simplerefresh();} {}
++simplerefresh();} {selected
++    }
+   }
+   Function {~MasterUI()} {} {
+     code {masterwindow->hide();
+diff --git a/src/UI/VirKeyboard.fl b/src/UI/VirKeyboard.fl
+index c07a74ea..c477efac 100644
+--- a/src/UI/VirKeyboard.fl
++++ b/src/UI/VirKeyboard.fl
+@@ -1,68 +1,81 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0110 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {} 
+-
+-decl {//License: GNU GPL version 2 or later} {} 
++decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
++} 
+ 
+-decl {\#include <stdlib.h>} {public
++decl {//License: GNU GPL version 2 or later} {private local
+ } 
+ 
+-decl {\#include <FL/fl_draw.H>} {public
++decl {\#include <stdlib.h>} {public local
+ } 
+ 
+-decl {\#include <FL/Fl_Box.H>} {public
++decl {\#include <FL/fl_draw.H>} {public local
+ } 
+ 
+-decl {\#include "../globals.h"} {public
++decl {\#include <FL/Fl_Box.H>} {public local
+ } 
+ 
+-decl {\#include "../Misc/Master.h"} {public
++decl {\#include "../globals.h"} {public local
+ } 
+ 
+-decl {\#include "../Misc/Util.h"} {public
++decl {\#include "../Misc/Util.h"} {public local
+ } 
+ 
+-decl {\#include "WidgetPDial.h"} {public
++decl {\#include "WidgetPDial.h"} {public local
+ } 
+ 
+-decl {\#include "common.H"} {public
++decl {\#include "common.H"} {public local
+ } 
+ 
+ decl {\#ifdef NTK_GUI
+      \#include "FL/Fl_Shared_Image.H"
+-     \#endif} {public
++     \#endif} {public local
+ } 
+ 
+-decl {const int keyspos[12]={0,-1,1,-2,2,3,-4,4,-5,5,-6,6};} {} 
++decl {const int keyspos[12]={0,-1,1,-2,2,3,-4,4,-5,5,-6,6};} {private local
++} 
+ 
+-decl {const int keysoct1qwerty[]={'q','2','w','3','e','r','5','t','6','y','7','u','i','9','o','0','p','[','=',']','\\\\',FL_Enter,0};} {} 
++decl {const int keysoct1qwerty[]={'q','2','w','3','e','r','5','t','6','y','7','u','i','9','o','0','p','[','=',']','\\\\',FL_Enter,0};} {private local
++} 
+ 
+-decl {const int keysoct2qwerty[]={'z','s','x','d','c','v','g','b','h','n','j','m',',','l','.',';','/',0};} {} 
++decl {const int keysoct2qwerty[]={'z','s','x','d','c','v','g','b','h','n','j','m',',','l','.',';','/',0};} {private local
++} 
+ 
+-decl {const int keysoct1dw[]={'\\'','2',',','3','.','p','5','y','6','f','7','g','c','9','r','0','l','/',']','=','\\\\',FL_Enter,0};} {} 
++decl {const int keysoct1dw[]={'\\'','2',',','3','.','p','5','y','6','f','7','g','c','9','r','0','l','/',']','=','\\\\',FL_Enter,0};} {private local
++} 
+ 
+-decl {const int keysoct2dw[]={';','o','q','e','j','k','i','x','d','b','h','m','w','n','v','s','z',0};} {} 
++decl {const int keysoct2dw[]={';','o','q','e','j','k','i','x','d','b','h','m','w','n','v','s','z',0};} {private local
++} 
+ 
+-decl {const int keysoct1qwertz[]={'q','2','w','3','e','r','5','t','6','z','7','u','i','9','o','0','p',252,'\\'','+','\\\\',FL_Enter,0};} {} 
++decl {const int keysoct1qwertz[]={'q','2','w','3','e','r','5','t','6','z','7','u','i','9','o','0','p',252,'\\'','+','\\\\',FL_Enter,0};} {private local
++} 
+ 
+-decl {const int keysoct2qwertz[]={'y','s','x','d','c','v','g','b','h','n','j','m',',','l','.',246,'-',0};} {} 
++decl {const int keysoct2qwertz[]={'y','s','x','d','c','v','g','b','h','n','j','m',',','l','.',246,'-',0};} {private local
++} 
+ 
+-decl {const int keysoct1az[]={'a',233,'z','\\"','e','r','(','t','-','y',232,'u','i',231,'o',224,'p',65106,'=','$',0};} {} 
++decl {const int keysoct1az[]={'a',233,'z','\\"','e','r','(','t','-','y',232,'u','i',231,'o',224,'p',65106,'=','$',0};} {private local
++} 
+ 
+-decl {const int keysoct2az[]={'w','s','x','d','c','v','g','b','h','n','j',',',';','l',':','m','!',0};} {} 
++decl {const int keysoct2az[]={'w','s','x','d','c','v','g','b','h','n','j',',',';','l',':','m','!',0};} {private local
++} 
+ 
+-class VirKeys {: {public Fl_Box}
++class VirKeys {open : {public Fl_Box}
+ } {
+-  decl {static const int N_OCT=6;} {}
+-  decl {static const int SIZE_WHITE=14;} {}
+-  decl {static const int SIZE_BLACK=8;} {}
++  decl {static const int N_OCT=6;} {private local
++  }
++  decl {static const int SIZE_WHITE=14;} {private local
++  }
++  decl {static const int SIZE_BLACK=8;} {private local
++  }
+   Function {VirKeys(int x,int y, int w, int h, const char *label=0):Fl_Box(x,y,w,h,label)} {} {
+-    code {master=NULL;} {}
++    code {} {}
+   }
+-  Function {init(Master *master_)} {} {
+-    code {master=master_;
++  Function {init(Fl_Osc_Interface *osc_, std::string loc_)} {open
++  } {
++    code {osc=osc_;
++loc=loc_;
+ for (int i=0;i<N_OCT*12+1;i++) pressed[i]=0;
+ midich=0;
+ midivel=100;
+@@ -70,7 +83,8 @@ midioct=2;
+ 
+ keyoct1=3;
+ keyoct2=2;
+-rndvelocity=0;} {}
++rndvelocity=0;} {selected
++    }
+   }
+   Function {draw()} {} {
+     code {int ox=x(),oy=y(),lx=w(),ly=h()-1,i;
+@@ -259,9 +273,7 @@ if (rndvelocity!=0){
+   vel=midivel*(127.0-rndvelocity)/127.0+RND*rndvelocity;
+ };
+ 
+-pthread_mutex_lock(&master->mutex);
+-master->noteOn(midich,nk+midioct*12,(int)vel);
+-pthread_mutex_unlock(&master->mutex);} {}
++osc->write(loc+"noteOn", "ccc", midich,nk+midioct*12,(int)vel);} {}
+   }
+   Function {relasekey(int nk,int type)} {} {
+     code {if ((nk<0)||(nk>=N_OCT*12)) return;
+@@ -273,22 +285,24 @@ pressed[nk]=0;
+ 
+ damage(1);
+ 
+-pthread_mutex_lock(&master->mutex);
+-master->noteOff(midich,nk+12*midioct);
+-pthread_mutex_unlock(&master->mutex);} {}
++osc->write(loc+"noteOff", "cc", midich,nk+12*midioct);} {}
+   }
+   Function {relaseallkeys(int type)} {} {
+     code {for (int i=0;i<N_OCT*12;i++) relasekey(i,type);} {}
+   }
+-  decl {Master *master;} {}
+-  decl {int pressed[N_OCT*12+1];} {}
+-  decl {unsigned char midich;} {public
++  decl {int pressed[N_OCT*12+1];} {private local
++  }
++  decl {unsigned char midich;} {public local
++  }
++  decl {unsigned char midivel;} {public local
+   }
+-  decl {unsigned char midivel;} {public
++  decl {char midioct,keyoct1,keyoct2;} {public local
+   }
+-  decl {char midioct,keyoct1,keyoct2;} {public
++  decl {unsigned char rndvelocity;} {public local
+   }
+-  decl {unsigned char rndvelocity;} {public
++  decl {Fl_Osc_Interface *osc;} {private local
++  }
++  decl {std::string loc;} {private local
+   }
+ } 
+ 
+@@ -300,12 +314,12 @@ class VirKeyboard {open
+       label {Virtual Keyboard - ZynAddSubFX}
+       callback {relaseallkeys();
+ virkeyboardwindow->hide();} open
+-      xywh {100 597 650 130} type Double visible
++      xywh {103 620 650 130} type Double visible
+     } {
+       Fl_Box virkeys {
+         label Keyboard
+         xywh {10 10 590 80} box FLAT_BOX color 17
+-        code0 {o->init(master);}
++        code0 {o->init(osc,loc);}
+         class VirKeys
+       }
+       Fl_Counter {} {
+@@ -327,7 +341,7 @@ virkeys->take_focus();}
+       Fl_Value_Slider {} {
+         label Vel
+         callback {virkeys->midivel=(int) o->value();
+-virkeys->take_focus();} selected
++virkeys->take_focus();}
+         tooltip Velocity xywh {95 105 100 15} type {Horz Knob} box NO_BOX labelsize 10 align 5 minimum 1 maximum 127 step 1
+         code0 {o->value(virkeys->midivel);}
+       }
+@@ -349,9 +363,7 @@ virkeyboardwindow->hide();}
+         label Cval
+         callback {int ctl=midictl;
+ 
+-pthread_mutex_lock(&master->mutex);
+-master->setController(virkeys->midich,ctl,(int) o->value());
+-pthread_mutex_unlock(&master->mutex);
++osc->write("setController", "ccc", virkeys->midich,ctl,(int) o->value());
+ virkeys->take_focus();}
+         tooltip {Controller value} xywh {605 10 15 115} type {Vert Fill} box ENGRAVED_BOX selection_color 229 labelsize 8 align 5 minimum 127 maximum 0 step 1 value 64 textsize 7
+       }
+@@ -431,9 +443,7 @@ virkeys->take_focus();}
+       }
+       Fl_Roller pitchwheelroller {
+         label Pwh
+-        callback {pthread_mutex_lock(&master->mutex);
+-master->setController(virkeys->midich,C_pitchwheel,-(int) o->value());
+-pthread_mutex_unlock(&master->mutex);
++        callback {osc->write("setController", "ccc", virkeys->midich,C_pitchwheel,-(int) o->value());
+ virkeys->take_focus();}
+         tooltip {Pitch Wheel} xywh {625 10 20 95} labelsize 8 align 1 when 3 minimum -8192 maximum 8192 step 64
+       }
+@@ -461,20 +471,29 @@ virkeys->take_focus();} open
+       } {}
+     }
+   }
+-  Function {VirKeyboard(Master *master_)} {} {
+-    code {master=master_;
++  Function {VirKeyboard(Fl_Osc_Interface *osc_, std::string loc_)} {open
++  } {
++    code {osc=osc_;
++loc=loc_;
+ midictl=75;
+ make_window();} {}
+   }
+-  Function {~VirKeyboard()} {} {
++  Function {~VirKeyboard()} {open
++  } {
+     code {delete virkeyboardwindow;} {}
+   }
+-  Function {show()} {} {
++  Function {show()} {open
++  } {
+     code {virkeyboardwindow->show();} {}
+   }
+-  Function {relaseallkeys()} {} {
++  Function {relaseallkeys()} {open
++  } {
+     code {virkeys->relaseallkeys(0);} {}
+   }
+-  decl {Master *master;} {}
+-  decl {int midictl;} {}
++  decl {int midictl;} {private local
++  }
++  decl {Fl_Osc_Interface *osc;} {private local
++  }
++  decl {std::string loc;} {private local
++  }
+ } 
+diff --git a/src/UI/common.H b/src/UI/common.H
+index 4a077e32..79db8030 100644
+--- a/src/UI/common.H
++++ b/src/UI/common.H
+@@ -17,6 +17,7 @@
+ /* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
+ /*******************************************************************************/
+ 
++#include "Fl_Osc_Interface.h"
+ class Fl_Widget;
+ extern void set_module_parameters ( Fl_Widget * );
+ 
+-- 
+2.47.0
+

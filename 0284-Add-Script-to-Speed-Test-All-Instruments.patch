@@ -1,0 +1,38 @@
+From 5569a37873d09433fc50a40ff6ad01e5e3b606f8 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 1 Nov 2014 23:34:13 -0400
+Subject: [PATCH 0284/1936] Add Script to Speed Test All Instruments
+
+Script is designed to generate performance numbers for all
+installed instruments.
+This should permit more easy tracking of performance problems
+and possible regressions.
+In the future this may also identify parameter usage
+(aka no one uses feature xyz)
+and possibly generation of some hash of each instrument's output.
+---
+ src/Tests/test-all.rb | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+ create mode 100644 src/Tests/test-all.rb
+
+diff --git a/src/Tests/test-all.rb b/src/Tests/test-all.rb
+new file mode 100644
+index 00000000..47047aef
+--- /dev/null
++++ b/src/Tests/test-all.rb
+@@ -0,0 +1,12 @@
++#!/usr/bin/ruby
++
++files = Dir.glob("/usr/local/share/zynaddsubfx/banks/*/*.xiz")
++f = open("out.csv", "w+")
++files.each do |input|
++    res = `ins-test "#{input}"`
++    res = "\"#{input}\", #{res}"
++    puts res
++    f.puts res
++end
++f.close
++
+-- 
+2.47.0
+

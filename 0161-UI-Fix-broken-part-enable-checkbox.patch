@@ -1,0 +1,36 @@
+From 483c3c05c3b5107383a3ab37b60fa9af4e93c1f2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Mar 2014 19:48:43 -0400
+Subject: [PATCH 0161/1936] UI: Fix broken part enable checkbox
+
+---
+ src/UI/PartUI.fl | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 9542b8ec..d1b23ad1 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -400,7 +400,7 @@ osc->write("/setkeylimit", "i", val);} open
+           class Fl_Osc_Choice
+         } {}
+       }
+-      Fl_Check_Button {} {
++      Fl_Check_Button partenablebutton {
+         label Enabled
+         callback {if (o->value()==0) partgroupui->deactivate();
+     else partgroupui->activate();}
+@@ -1119,7 +1119,9 @@ delete(instrumenteditwindow);} {}
+ ctlwindow->rebase(new_loc+"ctl/");
+ partfx->rebase(new_loc);
+ instrumentkitlist->rebase(new_loc);
+-instrumenteditwindow->rebase(new_loc);} {selected
++instrumenteditwindow->rebase(new_loc);
++partenablebutton->rebase(new_loc);
++} {selected
+     }
+   }
+ } 
+-- 
+2.47.0
+

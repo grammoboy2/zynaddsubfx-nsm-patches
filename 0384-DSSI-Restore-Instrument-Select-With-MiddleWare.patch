@@ -1,0 +1,162 @@
+From 6f3c33b62ee7f691ae0d4937e7bede51a1f524a9 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 5 Mar 2015 19:13:03 -0500
+Subject: [PATCH 0384/1936] DSSI: Restore Instrument Select With MiddleWare
+
+---
+ src/Misc/MiddleWare.cpp        |  7 +++++-
+ src/Output/DSSIaudiooutput.cpp | 40 ++++++++++++++++++++--------------
+ src/Output/DSSIaudiooutput.h   |  7 +++---
+ 3 files changed, 34 insertions(+), 20 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 42b9c58b..224e7978 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -652,7 +652,8 @@ public:
+         //Give it to the backend and wait for the old part to return for
+         //deallocation
+         uToB->write("/load-part", "ib", npart, sizeof(Part*), &p);
+-        osc->damage(("/part"+to_s(npart)+"/").c_str());
++        if(osc)
++            osc->damage(("/part"+to_s(npart)+"/").c_str());
+     }
+ 
+     //Well, you don't get much crazier than changing out all of your RT
+@@ -1079,6 +1080,10 @@ void MiddleWareImpl::handleMsg(const char *msg)
+     } else if(strstr(msg, "load-part") && !strcmp(rtosc_argument_string(msg), "is")) {
+         pending_load[rtosc_argument(msg,0).i]++;
+         loadPart(rtosc_argument(msg,0).i, rtosc_argument(msg,1).s, master, osc);
++    } else if(!strcmp(msg, "/setprogram")
++            && !strcmp(rtosc_argument_string(msg),"c")) {
++        pending_load[0]++;
++        loadPart(0, master->bank.ins[rtosc_argument(msg,0).i].filename.c_str(), master, osc);
+     } else if(strstr(msg, "save-bank-part") && !strcmp(rtosc_argument_string(msg), "ii")) {
+         saveBankSlot(rtosc_argument(msg,0).i, rtosc_argument(msg,1).i, master, osc);
+     } else if(strstr(msg, "bank-rename") && !strcmp(rtosc_argument_string(msg), "is")) {
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index b3e1e15d..ae8c3039 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -28,9 +28,12 @@
+ //the DSSI (published by Steve Harris under public domain) as a template.
+ 
+ #include "DSSIaudiooutput.h"
++#include "../Misc/Master.h"
+ #include "../Misc/Config.h"
+ #include "../Misc/Bank.h"
+ #include "../Misc/Util.h"
++#include <rtosc/thread-link.h>
++#include <unistd.h>
+ #include <string.h>
+ #include <limits.h>
+ 
+@@ -361,18 +364,9 @@ const DSSI_Program_Descriptor *DSSIaudiooutput::getProgram(unsigned long index)
+  */
+ void DSSIaudiooutput::selectProgram(unsigned long bank, unsigned long program)
+ {
+-    initBanks();
+-//    cerr << "selectProgram(" << (bank & 0x7F) << ':' << ((bank >> 7) & 0x7F) << "," << program  << ")" << '\n';
+-    if((bank < master->bank.banks.size()) && (program < BANK_SIZE)) {
+-        const std::string bankdir = master->bank.banks[bank].dir;
+-        if(!bankdir.empty()) {
+-            /* Load the bank... */
+-            master->bank.loadbank(bankdir);
+-
+-            /* Now load the instrument... */
+-            master->bank.loadfromslot((unsigned int)program, master->part[0]);
+-        }
+-    }
++    middleware->pendingSetProgram(0);
++    extern rtosc::ThreadLink *bToU;
++    bToU->write("/setprogram", "cc", 0, program);
+ }
+ 
+ /**
+@@ -430,6 +424,8 @@ void DSSIaudiooutput::runSynth(unsigned long sample_count,
+     unsigned long next_event_frame = 0;
+     unsigned long to_frame = 0;
+ 
++    Master *master = middleware->spawnMaster();
++
+     do {
+         /* Find the time of the next event, if any */
+         if((events == NULL) || (event_index >= event_count))
+@@ -616,7 +612,13 @@ DSSIaudiooutput::DSSIaudiooutput(unsigned long sampleRate)
+         denormalkillbuf[i] = (RND - 0.5f) * 1e-16;
+ 
+     synth->alias();
+-    this->master = new Master();
++    middleware = new MiddleWare();
++    initBanks();
++    loadThread = new std::thread([this]() {
++            while(middleware) {
++            middleware->tick();
++            usleep(1000);
++            }});
+ }
+ 
+ /**
+@@ -624,7 +626,13 @@ DSSIaudiooutput::DSSIaudiooutput(unsigned long sampleRate)
+  * @return
+  */
+ DSSIaudiooutput::~DSSIaudiooutput()
+-{}
++{
++    auto *tmp = middleware;
++    middleware = 0;
++    loadThread->join();
++    delete tmp;
++    delete loadThread;
++}
+ 
+ /**
+  * Ensures the list of bank (directories) has been initialised.
+@@ -632,7 +640,7 @@ DSSIaudiooutput::~DSSIaudiooutput()
+ void DSSIaudiooutput::initBanks(void)
+ {
+     if(!banksInited) {
+-        master->bank.rescanforbanks();
++        middleware->spawnMaster()->bank.rescanforbanks();
+         banksInited = true;
+     }
+ }
+@@ -671,7 +679,7 @@ long DSSIaudiooutput::bankNoToMap = 1;
+  */
+ bool DSSIaudiooutput::mapNextBank()
+ {
+-    Bank &bank = master->bank;
++    Bank &bank = middleware->spawnMaster()->bank;
+     bool  retval;
+     if((bankNoToMap >= (int)bank.banks.size())
+        || bank.banks[bankNoToMap].dir.empty())
+diff --git a/src/Output/DSSIaudiooutput.h b/src/Output/DSSIaudiooutput.h
+index f7eaaf35..a17222c8 100644
+--- a/src/Output/DSSIaudiooutput.h
++++ b/src/Output/DSSIaudiooutput.h
+@@ -22,10 +22,10 @@
+ #ifndef VST_AUDIO_OUTPUT_H
+ #define VST_AUDIO_OUTPUT_H
+ 
+-#include <pthread.h>
++#include <thread>
+ 
+ #include "../globals.h"
+-#include "../Misc/Master.h"
++#include "../Misc/MiddleWare.h"
+ 
+ #include <dssi.h>
+ #include <ladspa.h>
+@@ -105,7 +105,8 @@ class DSSIaudiooutput
+         LADSPA_Data *outl;
+         LADSPA_Data *outr;
+         long    sampleRate;
+-        Master *master;
++        MiddleWare *middleware;
++        std::thread *loadThread;
+         static DSSI_Descriptor *dssiDescriptor;
+         static std::string      bankDirNames[];
+         static
+-- 
+2.47.0
+

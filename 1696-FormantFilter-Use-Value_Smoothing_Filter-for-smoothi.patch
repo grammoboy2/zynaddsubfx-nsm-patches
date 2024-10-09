@@ -1,0 +1,109 @@
+From eb427f941f0f6d60845a66ec678d3db7b2b52802 Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Fri, 11 Dec 2020 17:16:04 -0800
+Subject: [PATCH 1696/1936] FormantFilter: Use Value_Smoothing_Filter for
+ smoothing formant amplitude.
+
+---
+ src/DSP/FormantFilter.cpp | 37 ++++++++++++++++++++++---------------
+ src/DSP/FormantFilter.h   |  5 +++--
+ 2 files changed, 25 insertions(+), 17 deletions(-)
+
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index 06b1243a..e9a56bc9 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -40,7 +40,11 @@ FormantFilter::FormantFilter(const FilterParams *pars, Allocator *alloc, unsigne
+         }
+ 
+     for(int i = 0; i < FF_MAX_FORMANTS; ++i)
+-        oldformantamp[i] = 1.0f;
++    {
++	formant_amp_smoothing[i].sample_rate(srate);
++	formant_amp_smoothing[i].reset(1.0f);
++    }
++        
+     for(int i = 0; i < numformants; ++i) {
+         currentformants[i].freq = 1000.0f;
+         currentformants[i].amp  = 1.0f;
+@@ -138,7 +142,6 @@ void FormantFilter::setpos(float frequency)
+                 formantpar[p1][i].q * (1.0f - pos) + formantpar[p2][i].q * pos;
+             formant[i]->setfreq_and_q(currentformants[i].freq,
+                                       currentformants[i].q * Qfactor);
+-            oldformantamp[i] = currentformants[i].amp;
+         }
+         firsttime = false;
+     }
+@@ -198,23 +201,27 @@ void FormantFilter::filterout(float *smp)
+     memcpy(inbuffer, smp, bufferbytes);
+     memset(smp, 0, bufferbytes);
+ 
++    float formantbuf[buffersize];
++    
+     for(int j = 0; j < numformants; ++j) {
++	
+         float tmpbuf[buffersize];
+-        for(int i = 0; i < buffersize; ++i)
++
++	for(int i = 0; i < buffersize; ++i)
+             tmpbuf[i] = inbuffer[i] * outgain;
+-        formant[j]->filterout(tmpbuf);
+-
+-        if(ABOVE_AMPLITUDE_THRESHOLD(oldformantamp[j], currentformants[j].amp))
+-            for(int i = 0; i < buffersize; ++i)
+-                smp[i] += tmpbuf[i]
+-                          * INTERPOLATE_AMPLITUDE(oldformantamp[j],
+-                                                  currentformants[j].amp,
+-                                                  i,
+-                                                  buffersize);
+-        else
+-            for(int i = 0; i < buffersize; ++i)
++
++	formant[j]->filterout(tmpbuf);
++	
++	if ( formant_amp_smoothing[j].apply( formantbuf, buffersize, currentformants[j].amp ) )
++	{
++	    for(int i = 0; i < buffersize; ++i)
++		smp[i] += tmpbuf[i] * formantbuf[i];
++	}
++	else
++	{
++	    for(int i = 0; i < buffersize; ++i)
+                 smp[i] += tmpbuf[i] * currentformants[j].amp;
+-        oldformantamp[j] = currentformants[j].amp;
++	}
+     }
+ }
+ 
+diff --git a/src/DSP/FormantFilter.h b/src/DSP/FormantFilter.h
+index dd4e3617..0e0e027b 100644
+--- a/src/DSP/FormantFilter.h
++++ b/src/DSP/FormantFilter.h
+@@ -16,6 +16,7 @@
+ 
+ #include "../globals.h"
+ #include "Filter.h"
++#include "Value_Smoothing_Filter.h"
+ 
+ namespace zyn {
+ 
+@@ -47,14 +48,14 @@ class FormantFilter:public Filter
+             unsigned char nvowel;
+         } sequence [FF_MAX_SEQUENCE];
+ 
+-        float oldformantamp[FF_MAX_FORMANTS];
+-
+         int   sequencesize, numformants;
+         bool  firsttime;
+         float oldinput, slowinput;
+         float Qfactor, formantslowness, oldQfactor;
+         float vowelclearness, sequencestretch;
+         Allocator &memory;
++    
++    Value_Smoothing_Filter formant_amp_smoothing[FF_MAX_FORMANTS];
+ };
+ 
+ }
+-- 
+2.47.0
+

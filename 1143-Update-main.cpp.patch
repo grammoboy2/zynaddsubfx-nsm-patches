@@ -1,0 +1,25 @@
+From c115394c3f6a7e0a0882a4efd6326bc8aede4226 Mon Sep 17 00:00:00 2001
+From: Olivier Humbert <trebmuh@users.noreply.github.com>
+Date: Wed, 31 May 2017 18:54:53 +0200
+Subject: [PATCH 1143/1936] Update main.cpp
+
+---
+ src/main.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index 6d96b642..c72902dd 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
+     << "\nZynAddSubFX - Copyright (c) 2002-2013 Nasca Octavian Paul and others"
+     << endl;
+     cerr
+-    << "                Copyright (c) 2009-2016 Mark McCurry [active maintainer]"
++    << "                Copyright (c) 2009-2017 Mark McCurry [active maintainer]"
+     << endl;
+     cerr << "Compiled: " << __DATE__ << " " << __TIME__ << endl;
+     cerr << "This program is free software (GNU GPL v2 or later) and \n";
+-- 
+2.47.0
+

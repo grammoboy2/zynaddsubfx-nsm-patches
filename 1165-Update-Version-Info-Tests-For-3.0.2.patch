@@ -1,0 +1,72 @@
+From be48638b705bf14b7dda62050db997192931a93e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 20 Jul 2017 17:04:05 -0400
+Subject: [PATCH 1165/1936] Update Version Info + Tests For 3.0.2
+
+---
+ CMakeLists.txt              | 2 +-
+ HISTORY.txt                 | 2 +-
+ rtosc                       | 2 +-
+ src/Tests/guitar-adnote.xmz | 2 +-
+ src/main.cpp                | 2 +-
+ 5 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 0eea1b1d..20b8955b 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,7 +3,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+ set(VERSION_MAJOR "3")
+ set(VERSION_MINOR "0")
+-set(VERSION_REVISION "1")
++set(VERSION_REVISION "2")
+ 
+ 
+ #Include RTOSC
+diff --git a/HISTORY.txt b/HISTORY.txt
+index 8466b20f..c8e5e847 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,4 +1,4 @@
+-3.0.2 (TBD)
++3.0.2 (21 July 2017)
+         - Upgrade MIDI learn system to include host automations and macro
+           learned controls
+         - Upgrade analog filter parameters to floating point resolution
+diff --git a/rtosc b/rtosc
+index 85bed736..d2868a00 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 85bed7367c40643c0d9428d50881de32d271594e
++Subproject commit d2868a0031c01066dfcd21de02aa309b2bb7c1e9
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index c5687e33..2acc809f 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -2,7 +2,7 @@
+ <?xml version="1.0f" encoding="UTF-8"?>
+ <!DOCTYPE ZynAddSubFX-data>
+ <ZynAddSubFX-data version-major="3" version-minor="0"
+-version-revision="1" ZynAddSubFX-author="Nasca Octavian Paul">
++version-revision="2" ZynAddSubFX-author="Nasca Octavian Paul">
+ <INFORMATION>
+ <par_bool name="PADsynth_used" value="yes" />
+ </INFORMATION>
+diff --git a/src/main.cpp b/src/main.cpp
+index b3aed9b1..0a741c6d 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -3,7 +3,7 @@
+ 
+   main.cpp  -  Main file of the synthesizer
+   Copyright (C) 2002-2005 Nasca Octavian Paul
+-  Copyright (C) 2012-2016 Mark McCurry
++  Copyright (C) 2012-2017 Mark McCurry
+ 
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+-- 
+2.47.0
+

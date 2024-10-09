@@ -1,0 +1,484 @@
+From db2756d00fddced77b20b704ed367081e3d3851b Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 2 Nov 2019 17:11:20 +0100
+Subject: [PATCH 1738/1936] add a moog filter type
+
+---
+ src/DSP/CMakeLists.txt      |   1 +
+ src/DSP/Filter.cpp          |   5 ++
+ src/DSP/MoogFilter.cpp      | 174 ++++++++++++++++++++++++++++++++++++
+ src/DSP/MoogFilter.h        |  53 +++++++++++
+ src/Params/FilterParams.cpp |   6 +-
+ src/Synth/ModFilter.cpp     |  11 +++
+ src/Synth/ModFilter.h       |   1 +
+ src/UI/FilterUI.fl          |  61 +++++++++----
+ src/globals.h               |   1 +
+ 9 files changed, 294 insertions(+), 19 deletions(-)
+ create mode 100644 src/DSP/MoogFilter.cpp
+ create mode 100644 src/DSP/MoogFilter.h
+
+diff --git a/src/DSP/CMakeLists.txt b/src/DSP/CMakeLists.txt
+index b8be91b2..f4a51a7d 100644
+--- a/src/DSP/CMakeLists.txt
++++ b/src/DSP/CMakeLists.txt
+@@ -4,6 +4,7 @@ set(zynaddsubfx_dsp_SRCS
+     DSP/Filter.cpp
+     DSP/FormantFilter.cpp
+     DSP/SVFilter.cpp
++    DSP/MoogFilter.cpp
+     DSP/Unison.cpp
+     DSP/Value_Smoothing_Filter.cpp
+     PARENT_SCOPE
+diff --git a/src/DSP/Filter.cpp b/src/DSP/Filter.cpp
+index b4369d13..91e37bcb 100644
+--- a/src/DSP/Filter.cpp
++++ b/src/DSP/Filter.cpp
+@@ -19,6 +19,7 @@
+ #include "AnalogFilter.h"
+ #include "FormantFilter.h"
+ #include "SVFilter.h"
++#include "MoogFilter.h"
+ #include "../Params/FilterParams.h"
+ #include "../Misc/Allocator.h"
+ 
+@@ -52,6 +53,10 @@ Filter *Filter::generate(Allocator &memory, const FilterParams *pars,
+             if(filter->outgain > 1.0f)
+                 filter->outgain = sqrt(filter->outgain);
+             break;
++        case 3:
++            filter = memory.alloc<MoogFilter>(Ftype, 1000.0f, pars->getq(), srate, bufsize);
++            filter->setgain(pars->getgain());
++            break;
+         default:
+             filter = memory.alloc<AnalogFilter>(Ftype, 1000.0f, pars->getq(), Fstages, srate, bufsize);
+             if((Ftype >= 6) && (Ftype <= 8))
+diff --git a/src/DSP/MoogFilter.cpp b/src/DSP/MoogFilter.cpp
+new file mode 100644
+index 00000000..e9ff4d38
+--- /dev/null
++++ b/src/DSP/MoogFilter.cpp
+@@ -0,0 +1,174 @@
++#include <cassert>
++#include <cstdio>
++#include <cmath>
++#include <stdio.h>
++
++#include "../Misc/Util.h"
++#include "MoogFilter.h"
++
++// theory from "THE ART OF VA FILTER DESIGN"
++// by Vadim Zavalishin
++
++namespace zyn{
++
++MoogFilter::MoogFilter(unsigned char Ftype, float Ffreq, float Fq,
++    unsigned int srate, int bufsize)
++    :Filter(srate, bufsize), sr(srate), gain(1.0f), type(Ftype)
++{
++    setfreq_and_q(Ffreq/srate, Fq);
++    settype(type); // q must be set before
++    for (unsigned int i = 0; i<(sizeof(state)/sizeof(*state)); i++)
++    {
++        state[i] = 0.0f;
++    }
++}
++
++MoogFilter::~MoogFilter(void)
++{
++
++}
++
++inline float MoogFilter::tan_2(const float x)
++{
++    //Pade approximation tan(x) hand tuned to map fCutoff
++    float x2 = x*x;
++    return ((9.5f*(11.15f*x - x2*x))/(105.0f - 45.0f*x2 + x2*x2));
++}
++
++inline float MoogFilter::tanhX(const float x)
++{
++    // Pade approximation of tanh(x) bound to [-1 .. +1]
++    // https://mathr.co.uk/blog/2017-09-06_approximating_hyperbolic_tangent.html
++    float x2 = x*x;
++    return (x*(105.0f+10.0f*x2)/(105.0f+(45.0f+x2)*x2)); //
++}
++
++
++inline float MoogFilter::tanhXdivX(float x)
++{
++    // Pade approximation for tanh(x)/x used in filter stages
++    float x2 = x*x;
++    return ((x2 + 105.0f)*x2 + 945.0f) / ((15.0f*x2 + 420.0f)*x2 + 945.0f);
++}
++
++inline float MoogFilter::step(float input)
++{
++    // transconductance
++    // gM(vIn) = tanh( vIn ) / vIn
++    float gm0 = tanhXdivX(state[0]);
++    float gm1 = tanhXdivX(state[1]);
++    float gm2 = tanhXdivX(state[2]);
++    float gm3 = tanhXdivX(state[3]);
++
++    // pre calc often used terms
++    float ctgm0 = c*gm0;
++    float ctgm1 = c*gm1;
++    float ctgm2 = c*gm2;
++    float ctgm3 = c*gm3;
++
++    // denominators
++    float d0 = 1.0f / (1.0f + ctgm0);
++    float d1 = 1.0f / (1.0f + ctgm1);
++    float d2 = 1.0f / (1.0f + ctgm2);
++    float d3 = 1.0f / (1.0f + ctgm3);
++
++    // pre calc often used term
++    float gm1td2tgm2td3 = gm1 * d2 * gm2 * d3;
++
++    // instantaneous response estimate
++    float y3Estimate =
++        cp4 * d0 * gm0 * d1 * gm1td2tgm2td3 * input +
++        cp3 * gm0 * d1 * gm1td2tgm2td3      * d0 * state[0] +
++        cp2 * gm1td2tgm2td3                 * d1 * state[1] +
++        c   * gm2 * d3                      * d2 * state[2] +
++                                              d3 * state[3];
++
++    // instantaneous gain coefficient
++    float z0 = ctgm0 * d0;
++    float z1 = ctgm1 * d1;
++    float z2 = ctgm2 * d2;
++    float z3 = ctgm3 * d3;
++    float instantaneousgain = 1.0f / (1.0f + feedbackGain * z0*z1*z2*z3);
++
++    // input for the fist stage
++    float u = input - tanhX(feedbackGain * y3Estimate) * instantaneousgain;
++    // output of all stages
++    float y0 = gm0 * d0 * (state[0] + c * u);
++    float y1 = gm1 * d1 * (state[1] + c * y0);
++    float y2 = gm2 * d2 * (state[2] + c * y1);
++    float y3 = gm3 * d3 * (state[3] + c * y2);
++
++    // update state
++    state[0] += ct2 * (u - y0);
++    state[1] += ct2 * (y0 - y1);
++    state[2] += ct2 * (y1 - y2);
++    state[3] += ct2 * (y2 - y3);
++
++    // calculate multimode filter output
++    return (a0 * u
++          + a1 * y0
++          + a2 * y1
++          + a3 * y2
++          + a4 * y3);
++}
++
++void MoogFilter::filterout(float *smp)
++{
++    for (int i = 0; i < buffersize; i ++)
++    {
++        smp[i] = step(tanhX(smp[i]*gain));
++        smp[i] *= outgain;
++    }
++}
++
++void MoogFilter::setfreq_and_q(float frequency, float q_)
++{
++    setfreq(frequency/sr);
++    setq(q_);
++}
++
++void MoogFilter::setfreq(float ff)
++{
++    // limit cutoff to prevent overflow
++    ff = limit(ff,0.0002f,0.48f);
++    // pre warp cutoff to map to reality
++    c = tan_2(PI * ff);
++    // pre calculate some stuff outside the hot zone
++    ct2 = c * 2.0f;
++    cp2 = c * c;
++    cp3 = cp2 * c;
++    cp4 = cp2 * cp2;
++}
++
++void MoogFilter::setq(float q)
++{
++    // flattening the Q input
++    feedbackGain = cbrtf(q/1000.0f)*4.0f + 0.1f;
++    // compensation factor for passband reduction by the negative feedback
++    passbandCompensation = 1.0f + limit(feedbackGain, 0.0f, 1.0f);
++}
++
++void MoogFilter::setgain(float dBgain)
++{
++    gain = dB2rap(dBgain);
++}
++
++void MoogFilter::settype(unsigned char type_)
++{
++    type = type_;
++    switch (type)
++    {
++        case 1:
++            a0 = 0.0f; a1 = 0.0f; a2 = 4.0f; a3 =-8.0f; a4 = 4.0f;
++            break;
++        case 0:
++            a0 = 1.0f; a1 =-4.0f; a2 = 6.0f; a3 =-4.0f; a4 = 1.0f;
++            break;
++        case 2:
++        default:
++            a0 = 0.0f; a1 = 0.0f; a2 = 0.0f; a3 = 0.0f; a4 = passbandCompensation;
++            break;
++    }
++}
++
++};
+diff --git a/src/DSP/MoogFilter.h b/src/DSP/MoogFilter.h
+new file mode 100644
+index 00000000..4a0b0f15
+--- /dev/null
++++ b/src/DSP/MoogFilter.h
+@@ -0,0 +1,53 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Moog Filter.h - Several analog filters (lowpass, highpass...)
++  Copyright (C) 2018-2018 Mark McCurry
++  Author: Mark McCurry
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++#pragma once
++#include "Filter.h"
++
++namespace zyn {
++
++class MoogFilter:public Filter
++{
++    public:
++        //! @param Fq resonance, range [0.1,1000], logscale
++        MoogFilter(unsigned char Ftype, float Ffreq, float Fq,
++                unsigned int srate, int bufsize);
++        ~MoogFilter() override;
++        void filterout(float *smp) override;
++        void setfreq(float /*frequency*/) override;
++        void setfreq_and_q(float frequency, float q_) override;
++        void setq(float /*q_*/) override;
++        void setgain(float dBgain) override;
++        void settype(unsigned char type); //
++
++    private:
++        unsigned sr;
++        float gain;
++        unsigned char type;
++
++        float step(float x);
++
++        float tanhXdivX(const float x);
++        float tanhX(const float x);
++        float tan_2(const float x);
++
++        float feedbackGain;
++        // aN: multimode coefficients for LP,BP,HP configurations
++        float a0, a1, a2, a3, a4;
++        float state[4] = {0.0f,0.0f,0.0f,0.0f};
++        float passbandCompensation;
++        // c*: cutoff frequency c and precalced products (times t) and powers(p) of it
++        float c, ct2, cp2, cp3, cp4;
++};
++
++}
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index cac633c8..3b3a0b09 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -69,7 +69,7 @@ const rtosc::Ports FilterParams::ports = {
+             rOptions(ad_global_filter, ad_voice_filter, sub_filter, in_effect),
+             "location of the filter"),
+     rOption(Pcategory,          rShort("class"),
+-            rOptions(analog, formant, st.var.), rDefault(analog),
++            rOptions(analog, formant, st.var., moog), rDefault(analog),
+             "Class of filter"),
+     rOption(Ptype,              rShort("type"),
+             rOptions(LP1, HP1, LP2, HP2, BP, notch, peak, l.shelf, h.shelf),
+@@ -131,7 +131,9 @@ const rtosc::Ports FilterParams::ports = {
+     {"type-svf::i", rProp(parameter) rShort("type")
+         rOptions(low, high, band, notch)
+             rDoc("Filter Type"), 0, rOptionCb(Ptype)},
+-
++    {"type-moog::i", rProp(parameter) rShort("type")
++        rOptions(HP, BP, LP)
++            rDoc("Filter Type"), 0, rOptionCb(Ptype)},
+     //UI reader
+     {"Pvowels:", rDoc("Get Formant Vowels"), NULL,
+         [](const char *, RtData &d) {
+diff --git a/src/Synth/ModFilter.cpp b/src/Synth/ModFilter.cpp
+index ac2fab9e..349173c7 100644
+--- a/src/Synth/ModFilter.cpp
++++ b/src/Synth/ModFilter.cpp
+@@ -19,6 +19,7 @@
+ #include "../DSP/SVFilter.h"
+ #include "../DSP/AnalogFilter.h"
+ #include "../DSP/FormantFilter.h"
++#include "../DSP/MoogFilter.h"
+ #include <cassert>
+ 
+ namespace zyn {
+@@ -124,6 +125,8 @@ static int current_category(Filter *f)
+         return 1;
+     else if(dynamic_cast<SVFilter*>(f))
+         return 2;
++    else if(dynamic_cast<MoogFilter*>(f))
++        return 3;
+ 
+     assert(false);
+     return -1;
+@@ -146,6 +149,8 @@ void ModFilter::paramUpdate(Filter *&f)
+         svParamUpdate(*sv);
+     else if(auto *an = dynamic_cast<AnalogFilter*>(f))
+         anParamUpdate(*an);
++    else if(auto *mg = dynamic_cast<MoogFilter*>(f))
++        mgParamUpdate(*mg);
+ }
+ 
+ void ModFilter::svParamUpdate(SVFilter &sv)
+@@ -161,4 +166,10 @@ void ModFilter::anParamUpdate(AnalogFilter &an)
+     an.setgain(pars.getgain());
+ }
+ 
++void ModFilter::mgParamUpdate(MoogFilter &mg)
++{
++    mg.settype(pars.Ptype);
++    mg.setgain(pars.getgain());
++}
++
+ }
+diff --git a/src/Synth/ModFilter.h b/src/Synth/ModFilter.h
+index c09541bf..e87d1d41 100644
+--- a/src/Synth/ModFilter.h
++++ b/src/Synth/ModFilter.h
+@@ -45,6 +45,7 @@ class ModFilter
+         void paramUpdate(Filter *&f);
+         void svParamUpdate(SVFilter &sv);
+         void anParamUpdate(AnalogFilter &an);
++        void mgParamUpdate(MoogFilter &mg);
+ 
+ 
+         const FilterParams &pars;  //Parameters to Pull Updates From
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index f56ee517..9686e4ff 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -164,6 +164,16 @@ delete (formantparswindow);} {}
+             label 1NF
+             xywh {164 164 100 20} labelfont 1 labelsize 10
+           }
++        } Fl_Choice moogfiltertypechoice {
++          label FilterType
++          tooltip {The Filter type} xywh {10 50 50 15} down_box BORDER_BOX labelsize 10 align 5 textsize 10
++          code1 {o->init("Ptype");}
++          class Fl_Osc_Choice
++        } {
++          MenuItem {} {
++            label LPF
++            xywh {134 134 100 20} labelfont 1 labelsize 10
++          }
+         }
+         Fl_Choice filtertype {
+           label Category
+@@ -184,6 +194,10 @@ delete (formantparswindow);} {}
+             label StVarF
+             xywh {70 70 100 20} labelfont 1 labelsize 10
+           }
++          MenuItem {} {
++            label Moog
++            xywh {80 80 100 20} labelfont 1 labelsize 10
++          }
+         }
+         Fl_Dial cfreqdial {
+           label {C.Freq}
+@@ -436,10 +450,10 @@ formantfiltergraph->redraw();}
+ //formant_q_dial->value(pars->Pvowels[nvowel].formants[nformant].q);
+ //formant_amp_dial->value(pars->Pvowels[nvowel].formants[nformant].amp);
+ if (nformant<numformants->value()) formantparsgroup->activate();
+-	else formantparsgroup->deactivate();
++    else formantparsgroup->deactivate();
+ 
+ if (nseqpos<sequencesize->value()) vowel_counter->activate();
+-	else vowel_counter->deactivate();
++    else vowel_counter->deactivate();
+ 
+ 
+ //vowel_counter->value(pars->Psequence[nseqpos].nvowel);} {}
+@@ -451,25 +465,38 @@ formantfiltergraph->redraw();
+ const int Pcategory = filtertype->value();
+ const int Ptype     = analogfiltertypechoice->value();
+ 
+-if (Pcategory==2) svfiltertypechoice->value(Ptype);
+-if (Pcategory==0) analogfiltertypechoice->value(Ptype);
+-
+ const int categ=Pcategory;
+-if ((categ==0)||(categ==2)) {
+-	if (categ==0) {
+-           analogfiltertypechoice->show();
+-           svfiltertypechoice->hide();
+-        } else {
+-           svfiltertypechoice->show();
+-           analogfiltertypechoice->hide();
+-        };
+-	editbutton->hide();
++
++if (categ == 3) {
++    stcounter->hide(); // not (yet?) implemented for moog filter
++}
++else {
++    stcounter->show();
++}
++
++switch(categ)
++{
++    case 2: svfiltertypechoice->value(Ptype); break;
++    case 0: analogfiltertypechoice->value(Ptype); break;
++    case 3: moogfiltertypechoice->value(Ptype); break;
++}
++
++analogfiltertypechoice->hide();
++svfiltertypechoice->hide();
++moogfiltertypechoice->hide();
++
++if ((categ==0)||(categ==2)||(categ==3)) {
++        switch (categ)
++        {
++            case 0: analogfiltertypechoice->show(); break;
++            case 2: svfiltertypechoice->show(); break;
++            case 3: moogfiltertypechoice->show(); break;
++        }
++        editbutton->hide();
+         formantparswindow->hide();
+         cfreqdial->label("C.freq");
+ } else {
+-	analogfiltertypechoice->hide();
+-	svfiltertypechoice->hide();
+-	editbutton->show();
++    editbutton->show();
+         cfreqdial->label("BS.pos");
+ };
+ 
+diff --git a/src/globals.h b/src/globals.h
+index 1e43c8a5..592babc5 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -67,6 +67,7 @@ class  Part;
+ 
+ class  Filter;
+ class  AnalogFilter;
++class  MoogFilter;
+ class  SVFilter;
+ class  FormantFilter;
+ class  ModFilter;
+-- 
+2.47.0
+

@@ -1,0 +1,33 @@
+From c6d9a996fb12976d6bca64d7f8e93b357e28a0a9 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 28 Jul 2017 23:24:55 -0400
+Subject: [PATCH 1187/1936] Fix Crash When Automating Automation Value
+
+---
+ rtosc               | 2 +-
+ src/Misc/Master.cpp | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index b84ca63b..167203ab 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit b84ca63bf12153e4531f88a320b1b9debf9b76ae
++Subproject commit 167203ab2eaa4b3b2608f09418f3d604eeda8a54
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 07d024f4..471688b0 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -219,7 +219,7 @@ static const Ports slot_ports = {
+     //                              rtosc_argument(msg, 1).s,
+     //                              rtosc_argument(msg, 2).T);
+     //    rEnd},
+-    {"value::f", rProp(parameter) rMap(default, 0.5) rLinear(0, 1) rDoc("Access current value in slot 'i' (0..1)"), 0,
++    {"value::f", rProp(no learn) rProp(parameter) rMap(default, 0.5) rLinear(0, 1) rDoc("Access current value in slot 'i' (0..1)"), 0,
+         rBegin;
+         int num = d.idx[0];
+         if(!strcmp("f",rtosc_argument_string(msg))) {
+-- 
+2.47.0
+

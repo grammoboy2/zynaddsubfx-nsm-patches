@@ -1,0 +1,1435 @@
+From c11810538bdcf777c4caf3c6085c3c3d23e5a303 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 10 May 2013 16:50:45 -0400
+Subject: [PATCH 0081/1936] Infection Spread to PADnoteUI
+
+- Fixes limit() argument issues
+- Disables PADsynth bank scanning due to startup delay
+- Converts most of the unique elements in padsynth's GUI to ports
+- Debug output colorified
+- Widgets can now know the source of their events
+
+Now things are moving along.
+The result is a very snappy UI that dumps out an insane amount of debug
+information. OscilGenUI is now more or less a free standing entity.
+Give it an OSC interface and a base path and it can run with nothing else.
+As per PADsynthUI, some of the standard elements (filters/envelopes) need to be
+updated before that thing can run on its own, but once that is done then ADsynth
+should be quite easy to finish off.
+As per what needs to get refactored -
+ * the callbacks are currently a bit inconsistent and possibly hazardous
+   based upon oscprompt blowing everything up previously
+ * There are quite a few plotting style widgets that have been extracted from
+   the UI. Combined these could form a very nice Fl_1D_Plot which would
+   eliminate some of the issues that have popped up at each one
+ * There should be some way of getting the software to dump out its ENTIRE tree.
+   I suspect this is halariously large at this point (16 part 16 kit 3 synths 8
+   voice 2 oscil 128 harmonics), but it would be nice to see it.
+   Perhaps restricting all of those branch sites to the '0' case would make that
+   a sane printout
+ * Now that the widgets are getting pulled out, it may make sense to create
+   src/UI/widgets/ for organizational purposes
+---
+ src/Misc/Bank.cpp                   |  12 +-
+ src/Misc/Master.cpp                 |  13 +-
+ src/Misc/MiddleWare.cpp             |  63 ++++--
+ src/Misc/Util.h                     |   7 +-
+ src/Params/PADnoteParameters.cpp    |  65 +++++++
+ src/Synth/OscilGen.cpp              |  12 +-
+ src/UI/ADnoteUI.fl                  |  12 +-
+ src/UI/Fl_Osc_Widget.H              |  20 +-
+ src/UI/Fl_OscilSpectrum.h           |  10 -
+ src/UI/Fl_PADnoteHarmonicProfile.h  | 125 ++++++++++++
+ src/UI/Fl_PADnoteOvertonePosition.h | 183 ++++++++++++++++++
+ src/UI/OscilGenUI.fl                |  64 +++---
+ src/UI/PADnoteUI.fl                 | 289 ++++++----------------------
+ 13 files changed, 554 insertions(+), 321 deletions(-)
+ create mode 100644 src/UI/Fl_PADnoteHarmonicProfile.h
+ create mode 100644 src/UI/Fl_PADnoteOvertonePosition.h
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 220d0b78..a7fbcce8 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -434,13 +434,13 @@ int Bank::addtobank(int pos, string filename, string name)
+     ins[pos].filename = dirname + '/' + filename;
+ 
+     //see if PADsynth is used
+-    if(config.cfg.CheckPADsynth) {
+-        XMLwrapper xml;
+-        xml.loadXMLfile(ins[pos].filename);
++    //if(config.cfg.CheckPADsynth) {
++    //    XMLwrapper xml;
++    //    xml.loadXMLfile(ins[pos].filename);
+ 
+-        ins[pos].info.PADsynth_used = xml.hasPadSynth();
+-    }
+-    else
++     //   ins[pos].info.PADsynth_used = xml.hasPadSynth();
++    //}
++    //else
+         ins[pos].info.PADsynth_used = false;
+ 
+     return 0;
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index ea17e080..ff760ad8 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -364,13 +364,20 @@ void Master::AudioOut(float *outl, float *outr)
+     memset(loc_buf, sizeof(loc_buf), 0);
+     int events = 0;
+     while(uToB->hasNext()) {
++        const char *msg = uToB->read();
++        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 5 + 30, 0 + 40);
++        fprintf(stderr, "backend: '%s'<%s>\n", msg,
++                rtosc_argument_string(msg));
++        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+         d.matches = 0;
+         //fprintf(stderr, "address '%s'\n", uToB->peak());
+-        ports.dispatch(uToB->read()+1, d);
++        ports.dispatch(msg+1, d);
+         events++;
+-        if(!d.matches)
++        if(!d.matches) {
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 1, 7 + 30, 0 + 40);
+             fprintf(stderr, "Unknown address '%s'\n", uToB->peak());
+-        fprintf(stderr, "backend: '%s'<%s>\n", uToB->peak(), rtosc_argument_string(uToB->peak()));
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++        }
+     }
+     if(events>1)
+         fprintf(stderr, "backend: %d events per cycle\n",events);
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 5ef77953..4ca362e2 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -230,10 +230,10 @@ class DummyDataObj:public rtosc::RtData
+                 rtosc_vmessage(buffer,4*4096,path,args,va);
+                 uToB->raw_write(buffer);
+             } else {
+-                printf("path = '%s' args = '%s'\n", path, args);
+-                printf("buffer = '%p'\n", buffer);
++                //printf("path = '%s' args = '%s'\n", path, args);
++                //printf("buffer = '%p'\n", buffer);
+                 rtosc_vmessage(buffer,4*4096,path,args,va);
+-                printf("buffer = '%s'\n", buffer);
++                //printf("buffer = '%s'\n", buffer);
+                 reply(buffer);
+             }
+         }
+@@ -335,6 +335,29 @@ struct MiddleWareImpl
+         osc_check(cb, ui);
+     }
+ 
++    bool handlePAD(string path, const char *msg, void *v)
++    {
++        char buffer[1024];
++        memset(buffer, 0, sizeof(buffer));
++        DummyDataObj d(buffer, 1024, v, cb, ui, osc);
++        strcpy(buffer, path.c_str());
++
++        //for(auto &p:OscilGen::ports.ports) {
++        //    if(strstr(p.name,msg) && strstr(p.metadata, "realtime") &&
++        //            !strcmp("b", rtosc_argument_string(msg))) {
++        //        printf("sending along packet '%s'...\n", msg);
++        //        return false;
++        //    }
++        //}
++
++        PADnoteParameters::ports.dispatch(msg, d);
++        if(!d.matches)
++            fprintf(stderr, "Unknown location '%s%s'<%s>\n",
++                    path.c_str(), msg, rtosc_argument_string(msg));
++
++        return true;
++    }
++
+     bool handleOscil(string path, const char *msg, void *v)
+     {
+         char buffer[1024];
+@@ -345,7 +368,7 @@ struct MiddleWareImpl
+         for(auto &p:OscilGen::ports.ports) {
+             if(strstr(p.name,msg) && strstr(p.metadata, "realtime") &&
+                     !strcmp("b", rtosc_argument_string(msg))) {
+-                printf("sending along packet '%s'...\n", msg);
++                //printf("sending along packet '%s'...\n", msg);
+                 return false;
+             }
+         }
+@@ -370,7 +393,9 @@ struct MiddleWareImpl
+     void handleMsg(const char *msg)
+     {
+         assert(!strstr(msg,"free"));
++        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 6 + 30, 0 + 40);
+         printf("middleware: '%s'\n", msg);
++        fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+         const char *last_path = rindex(msg, '/');
+         if(!last_path)
+             return;
+@@ -387,6 +412,9 @@ struct MiddleWareImpl
+             //    handleKitItem(obj_rl, objmap[obj_rl],atoi(rindex(msg,'m')+1),rtosc_argument(msg,0).T);
+             } else if(strstr(msg, "padpars/prepare"))
+                 preparePadSynth(obj_rl,(PADnoteParameters *) objmap[obj_rl]);
++            else if(strstr(msg, "padpars"))
++                if(!handlePAD(obj_rl, last_path+1, objmap[obj_rl]))
++                    uToB->raw_write(msg);
+             else //just forward the message
+                 uToB->raw_write(msg);
+         } else if(strstr(msg, "load-part"))
+@@ -475,13 +503,17 @@ class UI_Interface:public Fl_Osc_Interface
+ 
+         void writeValue(string s, string ss) override
+         {
+-            Fl_Osc_Interface::writeValue(s,ss);
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 4 + 30, 0 + 40);
++            fprintf(stderr, "writevalue<string>(%s,%s)\n", s.c_str(),ss.c_str());
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+             impl->write(s.c_str(), "s", ss.c_str());
+         }
+ 
+         void writeValue(string s, char c) override
+         {
+-            Fl_Osc_Interface::writeValue(s,c);
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 4 + 30, 0 + 40);
++            fprintf(stderr, "writevalue<char>(%s,%d)\n", s.c_str(),c);
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+             impl->write(s.c_str(), "c", c);
+         }
+ 
+@@ -504,18 +536,25 @@ class UI_Interface:public Fl_Osc_Interface
+ 
+         void tryLink(const char *msg) override
+         {
++            const char *handle = rindex(msg,'/');
++            if(handle)
++                ++handle;
++
+             for(auto pair:map) {
+                 if(pair.first == msg) {
+                     const char *arg_str = rtosc_argument_string(msg);
+                     //printf("Possible location for application of '%s' is '%p'\n", msg, pair.second);
+                     if(!strcmp(arg_str, "b")) {
+-                        printf("'%s' matches '%s' ala blob\n", pair.first.c_str(), msg);
+-                        fprintf(stderr, "tossing blob params %d %p (%p)\n", rtosc_argument(msg,0).b.len,rtosc_argument(msg,0).b.data, pair.second);
+-                        pair.second->OSC_value(rtosc_argument(msg,0).b.len,rtosc_argument(msg,0).b.data);
++                        //printf("'%s' matches '%s' ala blob\n", pair.first.c_str(), msg);
++                        //fprintf(stderr, "tossing blob params %d %p (%p)\n", rtosc_argument(msg,0).b.len,rtosc_argument(msg,0).b.data, pair.second);
++                        pair.second->OSC_value(rtosc_argument(msg,0).b.len,
++                                rtosc_argument(msg,0).b.data,
++                                handle);
+                     } else if(!strcmp(arg_str, "c")) {
+-                        printf("'%s' => '%d'\n", msg, rtosc_argument(msg,0).i);
+-                        fprintf(stderr, "tossing char to %p\n", pair.second);
+-                        pair.second->OSC_value((char)rtosc_argument(msg,0).i);
++                        //printf("'%s' => '%d'\n", msg, rtosc_argument(msg,0).i);
++                        //fprintf(stderr, "tossing char to %p\n", pair.second);
++                        pair.second->OSC_value((char)rtosc_argument(msg,0).i,
++                                handle);
+                     }
+                 }
+             }
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 4a36bd76..74b1b903 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -154,7 +154,7 @@ const char *message_snip(const char *m);
+         if(rtosc_narguments(m)==0) {\
+             d.reply(d.loc, "f", ((type*)d.obj)->var); \
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='f') {\
+-            ((type*)d.obj)->var = limit<float>(_min,_max,rtosc_argument(m,0).f); \
++            ((type*)d.obj)->var = limit<float>(rtosc_argument(m,0).f,_min,_max); \
+             d.broadcast(d.loc, "f", ((type*)d.obj)->var);}}}
+ 
+ ///character parameter - with lookup code
+@@ -164,7 +164,10 @@ const char *message_snip(const char *m);
+         if(rtosc_narguments(m)==0) {\
+             d.reply(d.loc, "c", ((type*)d.obj)->var); \
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='c') {\
+-            ((type*)d.obj)->var = limit<char>(0,127,rtosc_argument(m,0).i); \
++            printf("looking at value %d\n", rtosc_argument(m,0).i); \
++            printf("limited value is %d\n", limit<char>(0,127,rtosc_argument(m,0).i)); \
++            ((type*)d.obj)->var = limit<char>(rtosc_argument(m,0).i,0,127); \
++            printf("set " #var" to value %d\n", ((type*)d.obj)->var); \
+             d.broadcast(d.loc, "c", ((type*)d.obj)->var);}}}
+ 
+ ///Recur - perform a simple recursion
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 2acde3a9..c7dce1fa 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -26,9 +26,74 @@
+ 
+ #include <rtosc/ports.h>
+ 
++
++#define PC(x) PARAMC(PADnoteParameters, P##x, x, "undocumented")
++
++template<int i>
++void simpleset(const char *m, rtosc::RtData &d)
++{
++    unsigned char *addr = ((unsigned char*) d.obj)+i;
++    if(!rtosc_narguments(m))
++        d.reply(d.loc, "c", *addr);
++    else
++        *addr = rtosc_argument(m, 0).i;
++}
++#define P_C(x) rtosc::Port{#x "::c", "::", NULL, \
++    simpleset<__builtin_offsetof(class PADnoteParameters, P##x)>}
+ static rtosc::Ports localPorts =
+ {
+     RECURP(PADnoteParameters, OscilGen, oscil, oscilgen, "Oscillator"),
++    PARAMC(PADnoteParameters, Pmode, mode,
++            "0 - bandwidth, 1 - discrete 2 - continious"),
++    PC(hp.base.type),
++    PC(hp.base.par1),
++    PC(hp.freqmult),
++    PC(hp.modulator.par1),
++    PC(hp.modulator.freq),
++    PC(hp.width),
++    PC(hp.amp.mode),
++    PC(hp.amp.type),
++    PC(hp.amp.par1),
++    PC(hp.amp.par2),
++    //TODO autoscale
++    PC(hp.onehalf),
++
++    PC(bandwidth),
++    PC(bwscale),
++
++    PC(hrpos.type),
++    P_C(hrpos.par1),
++    P_C(hrpos.par2),
++    P_C(hrpos.par3),
++
++    PC(quality.samplesize),
++    PC(quality.basenote),
++    PC(quality.oct),
++    PC(quality.smpoct),
++
++    PC(fixedfreq),
++    PC(fixedfreqET),
++    //TODO detune, coarse detune
++    PC(DetuneType),
++
++    {"nhr:", "::Returns the harmonic shifts",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            PADnoteParameters *p = ((PADnoteParameters*)d.obj);
++            const unsigned n = synth->oscilsize / 2;
++            float *tmp = new float[n];
++            for(int i=1; i<n; ++i)
++                tmp[i] = p->getNhr(i);
++            d.reply(d.loc, "b", n*sizeof(float), tmp);
++            delete[] tmp;}},
++    {"profile:i", "::UI display of the harmonic profile",
++        NULL, [](const char *m, rtosc::RtData &d) {
++            PADnoteParameters *p = ((PADnoteParameters*)d.obj);
++            const unsigned n = rtosc_argument(m, 0).i;
++            float *tmp = new float[n];
++            float realbw = p->getprofile(tmp, n);
++            d.reply(d.loc, "b", n*sizeof(float), tmp);
++            d.reply(d.loc, "i", realbw);
++            delete[] tmp;}},
+     {"sample#64:ifb", "::Nothing to see here", 0,
+         [](const char *m, rtosc::RtData d)
+         {
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 0062478a..21bef61f 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -141,11 +141,11 @@ static rtosc::Ports localPorts = {
+         }},
+     {"prepare:", "::Performs setup operation to oscillator",
+         NULL, [](const char *m, rtosc::RtData &d) {
+-            fprintf(stderr, "prepare: got a message from '%s'\n", m);
++            //fprintf(stderr, "prepare: got a message from '%s'\n", m);
+             OscilGen &o = *(OscilGen*)d.obj;
+             fft_t *data = new fft_t[synth->oscilsize / 2];
+             o.prepare(data);
+-            fprintf(stderr, "sending '%p' of fft data\n", data);
++            //fprintf(stderr, "sending '%p' of fft data\n", data);
+             d.reply("/forward", "sb", d.loc, sizeof(fft_t*), &data);
+             o.pendingfreqs = data;
+         }},
+@@ -155,13 +155,13 @@ static rtosc::Ports localPorts = {
+         }},
+     {"prepare:b", ":'pointer','realtime':Sets prepared fft data",
+         NULL, [](const char *m, rtosc::RtData &d) {
+-            fprintf(stderr, "prepare:b got a message from '%s'\n", m);
++            //fprintf(stderr, "prepare:b got a message from '%s'\n", m);
+             OscilGen &o = *(OscilGen*)d.obj;
+             assert(rtosc_argument(m,0).b.len == sizeof(void*));
+             d.reply("/free", "sb", "fft_t", sizeof(void*), &o.oscilFFTfreqs);
+-            fprintf(stderr, "\n\n");
+-            fprintf(stderr, "The ID of this of this thread is: %ld\n", (long int)syscall(224));
+-            fprintf(stderr, "o.oscilFFTfreqs = %p\n", o.oscilFFTfreqs);
++            //fprintf(stderr, "\n\n");
++            //fprintf(stderr, "The ID of this of this thread is: %ld\n", (long int)syscall(224));
++            //fprintf(stderr, "o.oscilFFTfreqs = %p\n", o.oscilFFTfreqs);
+             assert(main_thread != syscall(224));
+             assert(o.oscilFFTfreqs !=*(fft_t**)rtosc_argument(m,0).b.data);
+             o.oscilFFTfreqs = *(fft_t**)rtosc_argument(m,0).b.data;
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 32c814c4..424add29 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -64,7 +64,7 @@ class ADvoicelistitem {open : {public Fl_Group}
+   Function {make_window()} {open private
+   } {
+     Fl_Window ADnoteVoiceListItem {open
+-      private xywh {316 881 615 100} type Double box UP_FRAME
++      private xywh {319 881 615 100} type Double box UP_FRAME
+       class Fl_Group visible
+     } {
+       Fl_Group voicelistitemgroup {open
+@@ -207,7 +207,7 @@ class ADvoiceUI {open : {public Fl_Group}
+   } {
+     Fl_Window ADnoteVoiceParameters {
+       label Voice open
+-      xywh {508 391 765 590} type Double box NO_BOX
++      xywh {511 391 765 590} type Double box NO_BOX
+       class Fl_Group visible
+     } {
+       Fl_Group voiceparametersgroup {open
+@@ -350,7 +350,7 @@ int nv=nvoice;
+ if (pars->VoicePar[nvoice].PextFMoscil>=0)
+     nv=pars->VoicePar[nvoice].PextFMoscil;
+ 
+-oscedit=new OscilEditor(NULL,NULL,loc+"mod-oscil/", osc_i);}
++oscedit=new OscilEditor(true, loc+"mod-oscil/", osc_i);} selected
+                 xywh {700 380 55 15} box THIN_UP_BOX labelfont 1 labelsize 11
+                 code0 {if (pars->VoicePar[nvoice].PextFMoscil>=0) o->labelcolor(FL_BLUE);}
+               }
+@@ -546,7 +546,7 @@ int nv=nvoice;
+ if(pars->VoicePar[nvoice].Pextoscil>=0)
+     nv=pars->VoicePar[nvoice].Pextoscil;
+ 
+-oscedit=new OscilEditor(NULL,NULL,loc+"oscil/", osc_i);} selected
++oscedit=new OscilEditor(true,loc+"oscil/", osc_i);}
+             xywh {5 490 65 20} box THIN_UP_BOX labelfont 1 labelsize 11
+             code0 {if (pars->VoicePar[nvoice].Pextoscil>=0) o->labelcolor(FL_BLUE);}
+           }
+@@ -864,7 +864,7 @@ class ADnoteUI {open : {public PresetsUI_}
+   } {
+     Fl_Window ADnoteGlobalParameters {
+       label {ADsynth Global Parameters of the Instrument} open
+-      xywh {511 551 540 430} type Double visible
++      xywh {514 551 540 430} type Double visible
+     } {
+       Fl_Group {} {
+         label FREQUENCY open
+@@ -1073,7 +1073,7 @@ resui->resonancewindow->show();}
+     }
+     Fl_Window ADnoteVoice {
+       label {ADsynth Voice Parameters} open
+-      xywh {312 361 765 620} type Double visible
++      xywh {315 361 765 620} type Double visible
+     } {
+       Fl_Group advoice {open
+         xywh {0 0 765 585}
+diff --git a/src/UI/Fl_Osc_Widget.H b/src/UI/Fl_Osc_Widget.H
+index 961847bb..00702cbd 100644
+--- a/src/UI/Fl_Osc_Widget.H
++++ b/src/UI/Fl_Osc_Widget.H
+@@ -2,6 +2,7 @@
+ #include <string>
+ #include <cstring>
+ #include <cmath>
++#include "Fl_Osc_Pane.H"
+ #include <FL/Fl_Group.H>
+ 
+ class Fl_Osc_Widget
+@@ -11,11 +12,28 @@ class Fl_Osc_Widget
+         virtual ~Fl_Osc_Widget(void){};
+ 
+         virtual void OSC_value(float) {}
+-        virtual void OSC_value(bool) {}
+         virtual void OSC_value(int) {}
+         virtual void OSC_value(char) {}
+         virtual void OSC_value(unsigned,void*) {}
+ 
++        //labeled forwarding methods
++        virtual void OSC_value(float x, const char *) {OSC_value(x);}
++        virtual void OSC_value(bool x, const char *) {OSC_value(x);}
++        virtual void OSC_value(char x, const char *) {OSC_value(x);}
++        virtual void OSC_value(unsigned x, void *v, const char *)
++        {OSC_value(x,v);}
++
++        Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w)
++        {
++            if(!w)
++                return NULL;
++
++            Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(w->parent());
++            if(pane)
++                return pane;
++            return fetch_osc_pane(w->parent());
++        }
++
+         std::string loc;
+         class Fl_Osc_Interface *osc;
+ };
+diff --git a/src/UI/Fl_OscilSpectrum.h b/src/UI/Fl_OscilSpectrum.h
+index f07b929c..ca171e46 100644
+--- a/src/UI/Fl_OscilSpectrum.h
++++ b/src/UI/Fl_OscilSpectrum.h
+@@ -114,16 +114,6 @@ class Fl_OscilSpectrum : public Fl_Box, Fl_Osc_Widget
+             }
+         }
+     private:
+-        Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w)
+-        {
+-            if(!w)
+-                return NULL;
+-
+-            Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(w->parent());
+-            if(pane)
+-                return pane;
+-            return fetch_osc_pane(w->parent());
+-        }
+ 
+         size_t nsamples;
+         float *spc;
+diff --git a/src/UI/Fl_PADnoteHarmonicProfile.h b/src/UI/Fl_PADnoteHarmonicProfile.h
+new file mode 100644
+index 00000000..05a1d595
+--- /dev/null
++++ b/src/UI/Fl_PADnoteHarmonicProfile.h
+@@ -0,0 +1,125 @@
++
++class PADnoteHarmonicProfile: public Fl_Box, public Fl_Osc_Widget
++{
++    public:
++        PADnoteHarmonicProfile(int x,int y, int w, int h, const char *label=0)
++            :Fl_Box(x,y,w,h,label), smps(new float[w]), realbw(0.0f)
++        {
++            memset(smps, 0, w*sizeof(float));
++        }
++
++        ~PADnoteHarmonicProfile(void)
++        {
++            osc->removeLink(loc, (Fl_Osc_Widget*) this);
++            delete[] smps;
++        }
++
++        void init(void)
++        {
++            Fl_Osc_Pane *og  = fetch_osc_pane(this);
++            assert(og);
++
++            loc = og->pane_name + "profile";
++            osc = og->osc;
++            assert(osc);
++
++            osc->createLink(loc, (Fl_Osc_Widget*) this);
++            update();
++        }
++
++        void update(void)
++        {
++            osc->write(loc, "i", w());
++        }
++        
++        void OSC_value(unsigned N, void *data, const char *name) override
++        {
++            assert(!strcmp(name, "profile"));
++            assert(N==w()*sizeof(float));
++            memcpy(smps, data, N);
++            redraw();
++        }
++
++        void OSC_value(float x, const char *name) override
++        {
++            assert(!strcmp(name, "profile"));
++            realbw = x;
++            redraw();
++        }
++
++        void draw(void)
++        {
++            int ox=x(),oy=y(),lx=w(),ly=h();
++            const bool active=active_r();
++            if(!visible())
++                return;
++
++            if (damage()!=1){
++                fl_color(fl_color_average(FL_BLACK,
++                            FL_BACKGROUND_COLOR, 0.5 ));
++                fl_rectf(ox,oy,lx,ly);
++            }
++
++            //draw the equivalent bandwidth
++            if (active) fl_color(220,220,220);
++            else fl_color(160,165,165);
++            fl_line_style(FL_DASH);
++            int rbw=(int)(realbw*(lx-1.0)/2.0);
++            fl_begin_line();
++            for(int i=lx/2-rbw;i<(lx/2+rbw); ++i)
++                fl_vertex(ox+i,oy);
++            fl_end_line();
++
++            fl_line_style(FL_DASH);
++            if(active)
++                fl_color(200,200,200);
++            else
++                fl_color(160,160,160);
++
++            for (int i=1;i<10;i++){
++                const int kx=(int)(lx/10.0*i);
++                fl_line(ox + kx, oy, ox + kx, oy + ly - 1);
++            }
++            for (int i=1;i<5;i++){
++                const int ky=(int)(ly/5.0*i);
++                fl_line(ox,oy+ly-ky,ox+lx,oy+ly-ky-1);
++            }
++
++
++            fl_color(120,120,120);
++            fl_line_style(FL_DASH);
++            fl_line(ox+lx/2,oy,ox+lx/2,oy+ly);
++
++            //draw the graph
++            fl_line_style(FL_SOLID);
++            if (active)
++                fl_color(180,210,240);
++            else
++                fl_color(150,150,155);
++
++            fl_color(fl_color_add_alpha(fl_color(), 127));
++
++            fl_begin_polygon();
++            fl_vertex(ox, oy + h());
++            for (int i=0; i<lx; ++i){
++                int val=(int) ((ly-2)*smps[i]);
++                fl_vertex(ox+i,oy+ly-1-val);
++            }
++            fl_vertex(ox + w(), oy + h());
++            fl_end_polygon();
++
++
++            fl_line_style(FL_DASH);
++            if (active)
++                fl_color(0,100,220);
++            else
++                fl_color(150,160,170);
++            fl_line(ox+lx/2-rbw,oy,ox+lx/2-rbw,oy+ly-1);
++            fl_line(ox+lx/2+rbw,oy,ox+lx/2+rbw,oy+ly-1);
++
++            fl_line_style(0);
++        }
++    private:
++        float *smps;
++        float realbw;
++}; 
+diff --git a/src/UI/Fl_PADnoteOvertonePosition.h b/src/UI/Fl_PADnoteOvertonePosition.h
+new file mode 100644
+index 00000000..b54e2fff
+--- /dev/null
++++ b/src/UI/Fl_PADnoteOvertonePosition.h
+@@ -0,0 +1,183 @@
++#include <cstring>
++
++class PADnoteOvertonePosition: public Fl_Box, Fl_Osc_Widget
++{
++    public:
++        PADnoteOvertonePosition(int x,int y, int w, int h, const char *label=0)
++            :Fl_Box(x,y,w,h,label), nsamples(synth->oscilsize/2), 
++            spc(new float[synth->oscilsize/2]), 
++            nhr(new float[synth->oscilsize/2]), 
++            spectrum(new float[w]),
++            mode(0), osc(NULL)
++        {
++            memset(spectrum, 0, w*sizeof(float));
++            memset(spc, 0, synth->oscilsize/2*sizeof(float));
++            memset(nhr, 0, synth->oscilsize/2*sizeof(float));
++        }
++
++        ~PADnoteOvertonePosition(void)
++        {
++            osc->removeLink(base_path + "oscil/spectrum",
++                    (Fl_Osc_Widget*) this);
++            osc->removeLink(base_path + "nhr",
++                    (Fl_Osc_Widget*) this);
++            osc->removeLink(base_path + "mode",
++                    (Fl_Osc_Widget*) this);
++            delete [] spc;
++        }
++
++        void init(void)
++        {
++            Fl_Osc_Pane *og  = fetch_osc_pane(this);
++            assert(og);
++
++            base_path = og->pane_name;
++            osc = og->osc;
++            assert(osc);
++
++            osc->createLink(base_path + "nhr",
++                    (Fl_Osc_Widget*) this);
++            osc->createLink(base_path + "oscil/spectrum",
++                    (Fl_Osc_Widget*) this);
++            osc->createLink(base_path + "mode",
++                    (Fl_Osc_Widget*) this);
++
++            fprintf(stderr, "registered at my location '%s'\n", (base_path + "nhr").c_str());
++            update();
++        }
++
++        void update(void)
++        {
++            osc->requestValue(base_path + "nhr");
++            osc->requestValue(base_path + "oscil/spectrum");
++            osc->requestValue(base_path + "mode");
++        }
++
++        virtual void OSC_value(unsigned N, void *data, const char *name)
++            override
++        {
++            printf("why hello there, I seem to have a '%s'\n", name);
++            assert(N==(4*nsamples));
++            float *d = (float*)data;
++            if(!strcmp(name, "spectrum"))
++                updateSpectrum(d);
++            else if(!strcmp(name, "nhr"))
++                updateHarmonicPos(d);
++            else
++                assert(false);
++        }
++        virtual void OSC_value(char x, const char *name) override
++        {
++            printf("whyy hello there, I seem to have a '%s'\n", name);
++            assert(!strcmp(name, "mode"));
++            mode = x;
++            regenerateOvertones();
++        }
++
++    private:
++        void updateSpectrum(float *data)
++        {
++            //normalize
++            float max=0;
++            for (unsigned i=0; i<nsamples; i++){
++                const float x=fabs(data[i]);
++                if (max<x) max=x;
++            }
++            if (max<0.000001) max=1.0;
++            max=max*1.05;
++
++            for(unsigned i=0; i<nsamples; ++i)
++                spc[i] = data[i]/max;
++            regenerateOvertones();
++        }
++
++        void updateHarmonicPos(float *data)
++        {
++            memcpy(nhr, data, nsamples*sizeof(float));
++            regenerateOvertones();
++        }
++
++        void regenerateOvertones(void)
++        {
++            const int ox=x(),oy=y(),lx=w(),ly=h();
++            const int maxharmonic=64;
++
++            memset(spectrum, 0, lx*sizeof(float));
++
++            for (int i=1;i<nsamples;i++){
++                int kx=(int)(lx/(float)maxharmonic*nhr[i]);
++                if ((kx<0)||(kx>=lx)) continue;
++
++                spectrum[kx]=spc[i-1]+1e-9;
++            }
++
++
++            if(mode==2) {
++                int old=0;
++                for (int i=1;i<lx;i++){
++                    if ((spectrum[i]>1e-10)||(i==(lx-1))){
++                        const int delta=i-old;
++                        const float val1=spectrum[old];
++                        const float val2=spectrum[i];
++
++                        const float idelta=1.0/delta;
++                        for (int j=0;j<delta;j++) {
++                            const float x=idelta*j;
++                            spectrum[old+j]=val1*(1.0-x)+val2*x;
++                        }
++                        old=i;
++                    }
++
++                }
++            }
++            redraw();
++        }
++
++        void draw(void)
++        {
++            const int ox=x(),oy=y(),lx=w(),ly=h();
++            const int maxharmonic=64;
++            const int maxdb=60;
++
++            if (!visible())
++                return;
++            
++            if (damage()!=1){
++                fl_color(fl_color_average(FL_BLACK,
++                            FL_BACKGROUND_COLOR, 0.5 ));
++                fl_rectf(ox,oy,lx,ly);
++            }
++
++
++            for (int i=1;i<maxharmonic;i++){
++                fl_color(100,100,100);
++                fl_line_style(FL_DOT);
++                if (i%5==0) fl_line_style(0);
++                if (i%10==0) fl_color(120,120,120);
++                int kx=(int)(lx/(float)maxharmonic*i);
++                fl_line(ox+kx,oy,ox+kx,oy+ly);
++            };
++            
++            fl_color(180,0,0);
++            fl_line_style(0);
++
++            for (int i=0;i<lx;i++){
++                float x=spectrum[i];
++                if (x>dB2rap(-maxdb)) x=rap2dB(x)/maxdb+1;
++                else continue;
++                int yy=(int)(x*ly);
++                fl_line(ox+i,oy+ly-1-yy,ox+i,oy+ly-1);
++
++            }
++        }
++
++    private:
++        size_t nsamples;
++        float *spc;
++        float *nhr;
++        float *spectrum;
++        char mode;
++
++        std::string base_path;
++        Fl_Osc_Interface *osc;
++}; 
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 0f755b26..d443416a 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -111,7 +111,7 @@ class Oscilharmonic {: {public Fl_Group}
+   Function {make_window()} {open private
+   } {
+     Fl_Window harmonic {open
+-      private xywh {461 756 100 225} type Double box NO_BOX
++      private xywh {464 756 100 225} type Double box NO_BOX
+       class Fl_Osc_Group visible
+     } {
+       Fl_Slider mag {
+@@ -131,11 +131,7 @@ if (x==64) o->selection_color(0);
+  o->osc->requestValue(o->loc+"waveform");
+ 
+ display->redraw();
+-if (cbwidget!=NULL) {
+-	cbwidget->do_callback();
+-	applybutton->color(FL_RED);
+-	applybutton->redraw();
+-};}
++}
+         xywh {0 15 15 115} type {Vert Knob} box NO_BOX selection_color 222 maximum 127 step 1 value 64
+         code0 {o->phase=false;//o->value(127-oscil->Phmag[n]);}
+         code1 {//if (oscil->Phmag[n]==64) o->selection_color(0);}
+@@ -152,11 +148,7 @@ o->osc->requestValue(o->loc+"spectrum");
+ o->osc->requestValue(o->loc+"waveform");
+ 
+ display->redraw();
+-if (cbwidget!=NULL) {
+-	cbwidget->do_callback();
+-	applybutton->color(FL_RED);
+-	applybutton->redraw();
+-};}
++}
+         xywh {0 135 15 75} type {Vert Knob} box NO_BOX selection_color 222 maximum 127 step 1 value 64
+         code0 {o->phase=true;//o->value(oscil->Phphase[n]);}
+         class PSlider
+@@ -182,18 +174,15 @@ if (cbwidget!=NULL) {
+   Function {Oscilharmonic(int x,int y, int w, int h, const char *label=0):Fl_Group(x,y,w,h,label)} {} {
+     code {n=0;
+ display=NULL;
+-applybutton=NULL;
+-cbwidget=NULL;} {}
++} {}
+   }
+-  Function {init(int n_,Fl_Group *display_,Fl_Widget *cbwidget_,Fl_Widget *applybutton_, std::string loc_, Fl_Osc_Interface *osc_)} {open
++  Function {init(int n_,Fl_Group *display_, std::string loc_, Fl_Osc_Interface *osc_)} {open
+   } {
+     code {assert(osc_);
+ assert(!loc_.empty());
+ 
+ n=n_;
+ display=display_;
+-cbwidget=cbwidget_;
+-applybutton=applybutton_;
+ osc = osc_;
+ loc = loc_;
+ make_window();
+@@ -231,8 +220,6 @@ delete harmonic;} {}
+   }
+   decl {int n;} {private local
+   }
+-  decl {Fl_Widget *cbwidget,*applybutton;} {private local
+-  }
+   decl {Fl_Osc_Interface *osc;} {private local
+   }
+   decl {std::string loc;} {private local
+@@ -245,7 +232,7 @@ class OscilEditor {open : {public PresetsUI_}
+   } {
+     Fl_Window osceditUI {
+       label {ADsynth Oscillator Editor} open
+-      xywh {67 214 735 595} type Double
++      xywh {52 386 735 595} type Double
+       code0 {//if (oscil->ADvsPAD) o->label("PADsynth Harmonic Content Editor");} visible
+     } {
+       Fl_Group dummy {open
+@@ -254,15 +241,15 @@ class OscilEditor {open : {public PresetsUI_}
+       } {
+         Fl_Button applybutton {
+           label Apply
+-          callback {applybutton->color(FL_GRAY);
+-applybutton->redraw();
+-if (cbapplywidget!=NULL) {
+-	cbapplywidget->do_callback();
+-	cbapplywidget->color(FL_GRAY);
+-	cbapplywidget->redraw();
+-};}
++          callback {//applybutton->color(FL_GRAY);
++//applybutton->redraw();
++//if (cbapplywidget!=NULL) {
++//	cbapplywidget->do_callback();
++//	cbapplywidget->color(FL_GRAY);
++//	cbapplywidget->redraw();
++//};} selected
+           xywh {305 285 60 20} box THIN_UP_BOX labelfont 1
+-          code0 {//if (!oscil->ADvsPAD) o->hide();}
++          code0 {if(adnotep) o->hide();}
+           code1 {dummy->pane_name = loc;}
+           code2 {dummy->osc = osc;}
+         }
+@@ -290,9 +277,9 @@ oscildisplaygroup->redraw();}
+             code0 {oscils=new Fl_OscilSpectrum(o->x(),o->y(),o->w(),o->h(),"");}
+             code1 {oscils->parent(o);oscils->init(false);}
+           } {}
+-          Fl_Group {} {
++          Fl_Group {} {open
+             xywh {251 282 115 25} box UP_FRAME
+-            code0 {//if (oscil->ADvsPAD) o->hide();}
++            code0 {if (!adnotep) o->hide();}
+           } {
+             Fl_Choice hrndtype {
+               label {H.rnd}
+@@ -325,7 +312,7 @@ oscildisplaygroup->redraw();}
+             callback {//oscil->Phmagtype=(int) o->value();
+ basefuncdisplaygroup->redraw();
+ 
+-redrawoscil();} selected
++redrawoscil();}
+             xywh {75 285 65 20} down_box BORDER_BOX labelsize 11 when 1 textsize 11
+             code0 {o->init("hmagtype");}
+             class Fl_Osc_Choice
+@@ -952,19 +939,18 @@ refresh();}
+         } {
+           Fl_Pack harmonics {open
+             xywh {15 350 650 225} type HORIZONTAL
+-            code0 {for (int i=0;i<MAX_AD_HARMONICS;i++){h[i]=new Oscilharmonic(0,0,20,o->h(),"");h[i]->init(i,oscildisplaygroup,cbwidget,applybutton,loc,osc);}}
++            code0 {for (int i=0;i<MAX_AD_HARMONICS;i++){h[i]=new Oscilharmonic(0,0,20,o->h(),"");h[i]->init(i,oscildisplaygroup,loc,osc);}}
+           } {}
+         }
+       }
+     }
+   }
+-  Function {OscilEditor(Fl_Widget *cbwidget_,Fl_Widget *cbapplywidget_, std::string loc_, Fl_Osc_Interface *osc_)} {open
++  Function {OscilEditor(bool adnotep_, std::string loc_, Fl_Osc_Interface *osc_)} {open
+   } {
+     code {assert(osc_);
+ assert(!loc_.empty());
+ 
+-cbwidget=cbwidget_;
+-cbapplywidget=cbapplywidget_;
++adnotep = adnotep_;
+ osc = osc_;
+ loc = loc_;
+ 
+@@ -1049,13 +1035,7 @@ oscils_base->update();
+ 
+ //oscildisplaygroup->redraw();
+ //basefuncdisplaygroup->redraw();
+-if (cbwidget!=NULL) {
+-      cbwidget->do_callback();
+-      applybutton->color(FL_RED);
+-      applybutton->redraw();
+-};} {}
+-  }
+-  decl {Fl_Widget *cbwidget,*cbapplywidget;} {private local
++} {}
+   }
+   decl {Oscilharmonic *h[MAX_AD_HARMONICS];} {private local
+   }
+@@ -1067,4 +1047,6 @@ if (cbwidget!=NULL) {
+   }
+   decl {Fl_OscilSpectrum *oscils, *oscils_base;} {private local
+   }
++  decl {bool adnotep;} {private local
++  }
+ } 
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 609eded5..e6e6609b 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -56,188 +56,13 @@ decl {\#include "FilterUI.h"} {public local
+ decl {\#include "OscilGenUI.h"} {public local
+ } 
+ 
+-decl {\#include "PresetsUI.h"} {public local
++decl {\#include "Fl_PADnoteOvertonePosition.h"} {public local
+ } 
+ 
+-class PADnoteHarmonicProfile {: {public Fl_Box}
+-} {
+-  Function {PADnoteHarmonicProfile(int x,int y, int w, int h, const char *label=0):Fl_Box(x,y,w,h,label)} {} {
+-    code {pars=NULL;} {}
+-  }
+-  Function {init(PADnoteParameters *pars,Master *master_)} {} {
+-    code {master=master_;
+-this->pars=pars;} {}
+-  }
+-  Function {draw()} {} {
+-    code {int ox=x(),oy=y(),lx=w(),ly=h();
+-if (!visible()) return;
+-float smps[lx];
+-
+-float realbw=pars->getprofile(smps,lx);
+-bool active=active_r();
+-
+-//draw the equivalent bandwidth
+-if (active) fl_color(220,220,220);
+- else fl_color(160,165,165);
+-fl_line_style(FL_DASH);
+-int rbw=(int)(realbw*(lx-1.0)/2.0);
+-fl_begin_line();
+-for (int i=lx/2-rbw;i<(lx/2+rbw);i++) { fl_vertex(ox+i,oy); }
+-fl_end_line();
+-
+-fl_line_style(FL_DASH);
+-if (active) fl_color(200,200,200);
+- else  fl_color(160,160,160);
+-for (int i=1;i<10;i++){
+-	int kx=(int)(lx/10.0*i);
+-	fl_line( ox + kx, oy, ox + kx, oy + ly - 1 );
+-};
+-for (int i=1;i<5;i++){
+-	int ky=(int)(ly/5.0*i);
+-	fl_line(ox,oy+ly-ky,ox+lx,oy+ly-ky-1);
+-};
+-
+-
+-fl_color(120,120,120);
+-fl_line_style(FL_DASH);
+-fl_line(ox+lx/2,oy,ox+lx/2,oy+ly);
+-
+-//draw the graph
+-fl_line_style(FL_SOLID);
+-   if (active) fl_color(180,210,240);
+-      else fl_color(150,150,155);
+-
+-fl_color( fl_color_add_alpha( fl_color(), 127 ) );
+-
+-fl_begin_polygon();
+-fl_vertex( ox, oy + h() );
+-for (int i=0;i<lx;i++){
+-   int val=(int) ((ly-2)*smps[i]);
+- 
+-//   fl_vertex(ox+i,oy+ly-1);
+-   fl_vertex(ox+i,oy+ly-1-val);
+-
+-  // if (active) fl_color(0,0,100);
+-  //     else fl_color(150,150,150);
+-
+-//   if (i>0)
+-//	{
+-//	 fl_vertex(ox+i-1,oy+ly-2-old);
+-//	fl_vertex(ox+i,oy+ly-2-val);
+-//	}
+-};
+-fl_vertex( ox + w(), oy + h() );
+-fl_end_polygon();
+-
+-
+-fl_line_style(FL_DASH);
+-if (active) fl_color(0,100,220);
+-    else fl_color(150,160,170);
+-fl_line(ox+lx/2-rbw,oy,ox+lx/2-rbw,oy+ly-1);
+-fl_line(ox+lx/2+rbw,oy,ox+lx/2+rbw,oy+ly-1);
+-
+-fl_line_style(0);} {}
+-  }
+-  decl {Master *master;} {private local
+-  }
+-  decl {PADnoteParameters *pars;} {public local
+-  }
++decl {\#include "Fl_PADnoteHarmonicProfile.h"} {public local
+ } 
+ 
+-class PADnoteOvertonePosition {: {public Fl_Box}
+-} {
+-  Function {PADnoteOvertonePosition(int x,int y, int w, int h, const char *label=0):Fl_Box(x,y,w,h,label)} {} {
+-    code {pars=NULL;} {}
+-  }
+-  Function {init(PADnoteParameters *pars,Master *master_)} {} {
+-    code {master=master_;
+-this->pars=pars;} {}
+-  }
+-  Function {draw()} {} {
+-    code {if (!visible()) return;
+-const int maxdb=60;
+-
+-int ox=x(),oy=y(),lx=w(),ly=h();
+-const int maxharmonic=64;
+-
+-
+-for (int i=1;i<maxharmonic;i++){
+-	fl_color(100,100,100);
+-	fl_line_style(FL_DOT);
+-	if (i%5==0) fl_line_style(0);
+-	if (i%10==0) fl_color(120,120,120);
+-	int kx=(int)(lx/(float)maxharmonic*i);
+-	fl_line(ox+kx,oy,ox+kx,oy+ly);
+-};
+-
+-
+-
+-int n=synth->oscilsize/2;
+-float spc[n];
+-for (int i=0;i<n;i++) spc[i]=0.0;
+-
+-pthread_mutex_lock(&master->mutex);
+-pars->oscilgen->getspectrum(n,spc,0);
+-pthread_mutex_unlock(&master->mutex);
+-
+-
+-//normalize
+-float max=0;
+-for (int i=0;i<n;i++){
+-   float x=fabs(spc[i]);
+-   if (max<x) max=x;
+-}
+-if (max<0.000001) max=1.0;
+-max=max*1.05;
+-
+-float spectrum[lx];
+-for (int i=0;i<lx;i++) spectrum[i]=0;
+-
+-
+-for (int i=1;i<n;i++){
+-	float nhr=pars->getNhr(i);
+-	int kx=(int)(lx/(float)maxharmonic*nhr);
+-	if ((kx<0)||(kx>lx)) continue;
+-
+-        spectrum[kx]=spc[i-1]/max+1e-9;
+-
+-};
+-
+-fl_color(180,0,0);
+-fl_line_style(0);
+-
+-if (pars->Pmode==2){
+-   int old=0;
+-   for (int i=1;i<lx;i++){
+-	if ((spectrum[i]>1e-10)||(i==(lx-1))){
+-		int delta=i-old;
+-		float val1=spectrum[old];
+-		float val2=spectrum[i];
+-
+-		float idelta=1.0/delta;
+-		for (int j=0;j<delta;j++){
+-			float x=idelta*j;
+-			spectrum[old+j]=val1*(1.0-x)+val2*x;
+-		};
+-		old=i;
+-	};
+-      
+-   };
+-};
+-
+-for (int i=0;i<lx;i++){
+-	float x=spectrum[i];
+-        if (x>dB2rap(-maxdb)) x=rap2dB(x)/maxdb+1;
+-             else continue;
+-       	int yy=(int)(x*ly);
+-	fl_line(ox+i,oy+ly-1-yy,ox+i,oy+ly-1);
+-      
+-};} {}
+-  }
+-  decl {Master *master;} {private local
+-  }
+-  decl {PADnoteParameters *pars;} {public local
+-  }
++decl {\#include "PresetsUI.h"} {public local
+ } 
+ 
+ class PADnoteUI {open : {public PresetsUI_}
+@@ -259,7 +84,7 @@ make_window();} {}
+   } {
+     Fl_Window padnotewindow {
+       label {PAD synth Parameters} open
+-      xywh {252 515 535 435} type Double visible
++      xywh {40 232 535 435} type Double visible
+     } {
+       Fl_Tabs {} {
+         callback {if (o->value()!=harmonicstructuregroup) applybutton->hide();
+@@ -269,19 +94,20 @@ make_window();} {}
+         Fl_Group harmonicstructuregroup {
+           label {Harmonic Structure} open
+           xywh {0 20 535 375} box UP_FRAME
++          class Fl_Osc_Group
+         } {
+-          Fl_Group bwprofilegroup {
++          Fl_Group bwprofilegroup {open
+             xywh {5 30 90 260} box UP_FRAME
+             code0 {if (pars->Pmode!=0) o->deactivate();}
+           } {
+             Fl_Dial hpbasepar1 {
+               label Width
+-              callback {pars->Php.base.par1=(int) o->value();
+-hprofile->redraw();
++              callback {hpui->update();
+ cbwidget->do_callback();}
+               xywh {20 75 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-              code0 {o->value(pars->Php.base.par1);}
+-              class WidgetPDial
++              code1 {harmonicstructuregroup->osc = osc_i; harmonicstructuregroup->pane_name = location;}
++              code2 {o->init("hp.base.par1");}
++              class Fl_Osc_Dial
+             }
+             Fl_Choice hpbasetype {
+               label {Base Type}
+@@ -306,30 +132,27 @@ cbwidget->do_callback();}
+             }
+             Fl_Dial hpfreqmult {
+               label FreqMlt
+-              callback {pars->Php.freqmult=(int) o->value();
+-hprofile->redraw();
++              callback {hpui->update();
+ cbwidget->do_callback();}
+               xywh {55 75 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-              code0 {o->value(pars->Php.freqmult);}
+-              class WidgetPDial
++              code0 {o->init("hp.freqmult");}
++              class Fl_Osc_Dial
+             }
+             Fl_Dial hpmpar1 {
+               label Str
+-              callback {pars->Php.modulator.par1=(int) o->value();
+-hprofile->redraw();
++              callback {hpui->update();
+ cbwidget->do_callback();}
+               xywh {15 115 20 20} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-              code0 {o->value(pars->Php.modulator.par1);}
+-              class WidgetPDial
++              code0 {o->init("hp.modulator.par1");}
++              class Fl_Osc_Dial
+             }
+             Fl_Dial hpmfreq {
+               label SFreq
+-              callback {pars->Php.modulator.freq=(int) o->value();
+-hprofile->redraw();
++              callback {hpui->update();
+ cbwidget->do_callback();}
+               xywh {40 115 20 20} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-              code0 {o->value(pars->Php.modulator.freq);}
+-              class WidgetPDial
++              code0 {o->init("hp.modulator.freq");}
++              class Fl_Osc_Dial
+             }
+             Fl_Group {} {
+               xywh {10 160 80 105} box BORDER_BOX
+@@ -361,11 +184,11 @@ cbwidget->do_callback();}
+               }
+               Fl_Choice hpampmode {
+                 label AmpMode
+-                callback {pars->Php.amp.mode=o->value();
+-hprofile->redraw();
++                callback {hpui->update();
+ cbwidget->do_callback();}
+                 xywh {15 205 70 15} down_box BORDER_BOX labelsize 10 align 5 textsize 10
+-                code0 {o->value(pars->Php.amp.mode);}
++                code0 {o->init("hp.amp.mode");}
++                class Fl_Osc_Choice
+               } {
+                 MenuItem {} {
+                   label Sum
+@@ -386,21 +209,19 @@ cbwidget->do_callback();}
+               }
+               Fl_Dial hpamppar1 {
+                 label Par1
+-                callback {pars->Php.amp.par1=(int) o->value();
+-hprofile->redraw();
++                callback {hpui->update();
+ cbwidget->do_callback();}
+                 xywh {15 235 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-                code0 {o->value(pars->Php.amp.par1);}
+-                class WidgetPDial
++                code0 {o->init("hp.amp.par1");}
++                class Fl_Osc_Dial
+               }
+               Fl_Dial hpamppar2 {
+                 label Par2
+-                callback {pars->Php.amp.par2=(int) o->value();
+-hprofile->redraw();
++                callback {hpui->update();
+ cbwidget->do_callback();}
+                 xywh {55 235 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-                code0 {o->value(pars->Php.amp.par2);}
+-                class WidgetPDial
++                code0 {o->init("hp.amp.par2");}
++                class Fl_Osc_Dial
+               }
+             }
+             Fl_Check_Button hpautoscale {
+@@ -433,12 +254,11 @@ cbwidget->do_callback();}
+             }
+             Fl_Dial hpwidth {
+               label Size
+-              callback {pars->Php.width=(int) o->value();
+-hprofile->redraw();
++              callback {hpui->update();
+ cbwidget->do_callback();}
+               xywh {65 115 20 20} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-              code0 {o->value(pars->Php.width);}
+-              class WidgetPDial
++              code0 {o->init("hp.width");}
++              class Fl_Osc_Dial
+             }
+           }
+           Fl_Group oscilgroup {open
+@@ -450,14 +270,14 @@ cbwidget->do_callback();}
+           Fl_Button {} {
+             label Change
+             callback {if (oscui!=NULL) delete (oscui);
+-oscui=new OscilEditor(cbwidget,applybutton,location+"oscil/",osc_i);}
++oscui=new OscilEditor(false, location+"oscil/",osc_i);}
+             xywh {375 270 60 20} box THIN_UP_BOX labelfont 1 labelsize 11
+           }
+           Fl_Box cbwidget {
+             label {Harmonic Content}
+-            callback {overtonepos->redraw();
++            callback {opui->update();
+ applybutton->color(FL_RED);
+-applybutton->redraw();} selected
++applybutton->redraw();}
+             xywh {125 135 205 20} align 16
+           }
+           Fl_Button {} {
+@@ -482,13 +302,13 @@ cbwidget->do_callback();}
+             code0 {o->value(pars->setPbandwidth(pars->Pbandwidth));}
+             code1 {if (pars->Pmode!=0) o->deactivate();}
+           }
+-          Fl_Group {} {
++          Fl_Group {} {open
+             xywh {315 295 215 45} box UP_FRAME
+           } {
+             Fl_Choice hrpostype {
+               label OvertonesPosition
+               callback {pars->Phrpos.type=o->value();
+-overtonepos->redraw();
++opui->update();
+ cbwidget->do_callback();}
+               xywh {325 310 80 20} down_box BORDER_BOX labelsize 10 align 5 textsize 11
+               code0 {o->value(pars->Phrpos.type);}
+@@ -524,30 +344,27 @@ cbwidget->do_callback();}
+             }
+             Fl_Dial hrpospar1 {
+               label Par1
+-              callback {pars->Phrpos.par1=(int) o->value();
+-overtonepos->redraw();
++              callback {opui->update();
+ cbwidget->do_callback();}
+               xywh {425 310 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 255 step 1
+-              code0 {o->value(pars->Phrpos.par1);}
+-              class WidgetPDial
++              code0 {o->init("hrpos.par1");}
++              class Fl_Osc_Dial
+             }
+             Fl_Dial hrpospar2 {
+               label Par2
+-              callback {pars->Phrpos.par2=(int) o->value();
+-overtonepos->redraw();
++              callback {opui->update();
+ cbwidget->do_callback();}
+               xywh {460 310 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 255 step 1
+-              code0 {o->value(pars->Phrpos.par2);}
+-              class WidgetPDial
++              code0 {o->init("hrpos.par2");}
++              class Fl_Osc_Dial
+             }
+             Fl_Dial hrpospar3 {
+               label ForceH
+-              callback {pars->Phrpos.par3=(int) o->value();
+-overtonepos->redraw();
++              callback {opui->update();
+ cbwidget->do_callback();}
+               xywh {495 310 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 255 step 1
+-              code0 {o->value(pars->Phrpos.par3);}
+-              class WidgetPDial
++              code0 {o->init("hrpos.par3");}
++              class Fl_Osc_Dial
+             }
+           }
+           Fl_Choice bwscale {
+@@ -593,8 +410,8 @@ cbwidget->do_callback();}
+           }
+           Fl_Group overtonepos {
+             xywh {5 345 525 45} box FLAT_BOX color 51 selection_color 218 labelcolor 63
+-            code0 {PADnoteOvertonePosition *opui=new PADnoteOvertonePosition(o->x(),o->y(),o->w(),o->h(),"");}
+-            code1 {opui->init(pars,master);}
++            code0 {opui=new PADnoteOvertonePosition(o->x(),o->y(),o->w(),o->h(),"");}
++            code1 {opui->init();}
+           } {}
+           Fl_Choice qsamplesize {
+             label {Sample Size}
+@@ -711,7 +528,7 @@ cbwidget->do_callback();}
+           Fl_Choice qbasenote {
+             label base
+             callback {pars->Pquality.basenote=(int) o->value();
+-cbwidget->do_callback();}
++cbwidget->do_callback();} selected
+             xywh {375 155 50 20} down_box BORDER_BOX labelsize 11 align 5 textsize 11
+             code0 {o->value(pars->Pquality.basenote);}
+           } {
+@@ -754,8 +571,8 @@ cbwidget->do_callback();}
+           }
+           Fl_Group hprofile {
+             xywh {100 45 430 90} box FLAT_BOX color 51 selection_color 218 labelcolor 63
+-            code0 {PADnoteHarmonicProfile *hpui=new PADnoteHarmonicProfile(o->x(),o->y(),o->w(),o->h(),"");}
+-            code1 {hpui->init(pars,master);}
++            code0 {hpui=new PADnoteHarmonicProfile(o->x(),o->y(),o->w(),o->h(),"");}
++            code1 {hpui->init();}
+             code2 {if (pars->Pmode!=0) { o->deactivate(); o->color(48);};}
+           } {}
+           Fl_Box {} {
+@@ -1109,7 +926,7 @@ hrpospar2->value(pars->Phrpos.par2);
+ hrpospar3->value(pars->Phrpos.par3);
+ 
+ hprofile->redraw();
+-overtonepos->redraw();
++opui->update();
+ 
+ osc->redraw();
+ MiddleWare::preparePadSynth(location.c_str(), pars);
+@@ -1137,4 +954,8 @@ delete(padnotewindow);} {}
+   }
+   decl {Fl_Osc_Interface *osc_i;} {private local
+   }
++  decl {PADnoteHarmonicProfile *hpui;} {private local
++  }
++  decl {PADnoteOvertonePosition *opui;} {private local
++  }
+ } 
+-- 
+2.47.0
+

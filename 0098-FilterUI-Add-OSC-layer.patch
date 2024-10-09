@@ -1,0 +1,2095 @@
+From bbe8766b1ae0828f71850fb741dc2442bed5dd2b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 4 Aug 2013 14:44:48 -0400
+Subject: [PATCH 0098/1936] FilterUI: Add OSC layer
+
+While the formant modification UI is still not quite complete, this seems to
+work for the most part and now that this module is out of the way, all of the
+major submodules for PADsynth, ADsynth, and SUBsynth seem to be out of the way,
+thus stripping them of their pointers should not be too hard.
+The main missing feature here is formant/vowel knob moving based on other
+controls. Some contemplation has been done on this issue, but nothing has been
+finalized yet. As another note, the level of debugging output is getting to the
+point that it is difficult to see what needs to be seen. Some sort of
+lightweight logging setup should be added. Several of the widget classes have
+been partially converted to the new style interface, but that will still take a
+while to complete.
+---
+ rtosc                            |   2 +-
+ src/Params/ADnoteParameters.cpp  |  32 +++
+ src/Params/FilterParams.cpp      | 122 +++++++--
+ src/Params/FilterParams.h        |   5 +-
+ src/Params/PADnoteParameters.cpp |  18 +-
+ src/Params/SUBnoteParameters.cpp |   5 +
+ src/UI/ADnoteUI.fl               |  12 +-
+ src/UI/CMakeLists.txt            |   1 +
+ src/UI/EffUI.fl                  |   8 +-
+ src/UI/FilterUI.fl               | 448 +++++++++++--------------------
+ src/UI/Fl_Osc_Choice.H           |   5 +-
+ src/UI/Fl_Osc_Choice.cpp         |  37 +--
+ src/UI/Fl_Osc_Counter.H          |  16 +-
+ src/UI/Fl_Osc_Counter.cpp        |  38 ++-
+ src/UI/Fl_Osc_Dial.H             |   8 +-
+ src/UI/Fl_Osc_Dial.cpp           |  46 ++--
+ src/UI/Fl_Osc_Slider.H           |  11 +-
+ src/UI/Fl_Osc_Slider.cpp         |  60 ++---
+ src/UI/Fl_Osc_Widget.cpp         |   5 +
+ src/UI/Fl_Oscilloscope.h         |   4 +-
+ src/UI/FormantFilterGraph.H      |  62 +++++
+ src/UI/FormantFilterGraph.cpp    | 325 ++++++++++++++++++++++
+ src/UI/MasterUI.fl               |   4 +-
+ src/UI/PADnoteUI.fl              |   3 +-
+ src/UI/PartUI.fl                 |   3 +-
+ src/UI/SUBnoteUI.fl              |   2 +-
+ 26 files changed, 860 insertions(+), 422 deletions(-)
+ create mode 100644 src/UI/FormantFilterGraph.H
+ create mode 100644 src/UI/FormantFilterGraph.cpp
+
+diff --git a/rtosc b/rtosc
+index ad3738cc..2f012bc5 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit ad3738ccc1dd55bcd6fa453a4469a00d3b1524cf
++Subproject commit 2f012bc55e2e4b0ed210039f60f2db69f23bbd6d
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 6874aa4c..18a497d1 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -52,8 +52,12 @@ static Ports voicePorts = {
+     rRecurp(FilterEnvelope, "Filter Envelope"),
+     rRecurp(FMFreqEnvelope, "Modulator Frequency Envelope"),
+     rRecurp(FMAmpEnvelope,  "Modulator Amplitude Envelope"),
++    rRecurp(VoiceFilter,    "Optional Voice Filter"),
+ };
+ 
++#undef  rObject
++#define rObject ADnoteGlobalParam
++
+ static Ports globalPorts = {
+     PARAMC(ADnoteGlobalParam, PPanning, panning, "Panning (0 random, 1 left, 127 right)"),
+     RECURP(ADnoteGlobalParam, Resonance, Reson,   Reson, "Resonance"),
+@@ -63,6 +67,34 @@ static Ports globalPorts = {
+     RECURP(ADnoteGlobalParam,  EnvelopeParams, FreqEnvelope, FreqEnvelope, "Frequency Envelope"),
+     RECURP(ADnoteGlobalParam,  EnvelopeParams, AmpEnvelope, AmpEnvelope, "Frequency Envelope"),
+     RECURP(ADnoteGlobalParam,  EnvelopeParams, FilterEnvelope, FilterEnvelope, "Frequency Envelope"),
++    RECURP(ADnoteGlobalParam, FilterParams, GlobalFilter, GlobalFilter, "Filter"),
++    rToggle(PStereo, "Mono/Stereo Enable"),
++
++    //Frequency
++    rParam(PDetune, "Fine Detune"),
++    rParam(PCoarseDetune, "Coarse Detune"),
++    rParam(PDetuneType,   "Detune Scaling Type"),
++    rParam(PBandwidth,    "Relative Fine Detune Gain"),
++
++    //Amplitude
++    //TODO move panning here
++    rParam(PVolume, "volume control"),
++    rParam(PAmpVelocityScaleFunction, "Volume Velocity Control"),
++
++    rParam(PPunchStrength, "Punch Strength"),
++    rParam(PPunchTime, "UNKNOWN"),
++    rParam(PPunchStretch, "How Punch changes with note frequency"),
++    rParam(PPunchVelocitySensing, "Punch Velocity control"),
++
++    //Filter
++    rParam(PFilterVelocityScale, "Filter Velocity Magnitude"),
++    rParam(PFilterVelocityScaleFunction, "Filter Velocity Function Shape"),
++
++
++    //Resonance
++    rParam(Hrandgrouping, "How randomness is applied to multiple voices using the same oscil"),
++
++
+ };
+ 
+ static Ports adPorts = {//XXX 16 should not be hard coded
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 81309d6c..230c08a5 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -22,9 +22,91 @@
+ 
+ #include "FilterParams.h"
+ #include "../Misc/Util.h"
+-#include <math.h>
+-#include <stdio.h>
+-#include <stdlib.h>
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++
++#include <rtosc/rtosc.h>
++#include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
++
++using namespace rtosc;
++
++#define rObject FilterParams::Pvowels_t::formants_t
++static rtosc::Ports subsubports = {
++    rParam(freq, "Formant frequency"),
++    rParam(amp,  "Strength of formant"),
++    rParam(q,    "Quality Factor"),
++};
++#undef rObject
++
++static rtosc::Ports subports = {
++    {"Pformants#" STRINGIFY(FF_MAX_FORMANTS) "/", NULL, &subsubports,
++        [](const char *msg, RtData &d) {
++            const char *mm = msg;
++            while(*mm && !isdigit(*mm)) ++mm;
++            unsigned idx = atoi(mm);
++
++            SNIP;
++            FilterParams::Pvowels_t *obj = (FilterParams::Pvowels_t *) d.obj;
++            d.obj = (void*) &obj->formants[idx];
++            subsubports.dispatch(msg, d);
++        }},
++};
++
++#define rObject FilterParams
++#undef  rChangeCb
++#define rChangeCb obj->changed = true;
++rtosc::Ports FilterParams::ports = {
++    rParam(Pcategory,   "Class of filter"),
++    rParam(Ptype,       "Filter Type"),
++    rParam(Pfreq,        "Center Freq"),
++    rParam(Pq,           "Quality Factor (resonance/bandwidth)"),
++    rParam(Pstages,      "Filter Stages + 1"),
++    rParam(Pfreqtrack,   "Frequency Tracking amount"),
++    rParam(Pgain,        "Output Gain"),
++    rParam(Pnumformants, "Number of formants to be used"),
++    rParam(Pformantslowness, "Rate that formants change"),
++    rParam(Pvowelclearness, "Cost for mixing vowels"),
++    rParam(Pcenterfreq,     "Center Freq (formant)"),
++    rParam(Poctavesfreq,    "Number of octaves for formant"),
++
++    //TODO check if FF_MAX_SEQUENCE is acutally expanded or not
++    rParam(Psequencesize, rMap(max, FF_MAX_SEQUENCE), "Length of vowel sequence"),
++    rParam(Psequencestretch, "How modulators stretch the sequence"),
++    rToggle(Psequencereversed, "If the modulator input is inverted"),
++
++    //{"Psequence#" FF_MAX_SEQUENCE "/nvowel", "", NULL, [](){}},
++    
++    //UI reader
++    {"Pvowels", NULL, NULL,
++        [](const char *, RtData &d) {
++            FilterParams *obj = (FilterParams *) d.obj;
++            d.reply(d.loc, "b", sizeof(FilterParams::Pvowels), obj->Pvowels);
++        }},
++
++    {"Pvowels#" STRINGIFY(FF_MAX_VOWELS) "/", NULL, &subports,
++        [](const char *msg, RtData &d) {
++            const char *mm = msg; \
++            while(*mm && !isdigit(*mm)) ++mm; \
++            unsigned idx = atoi(mm);
++
++            SNIP;
++            FilterParams *obj = (FilterParams *) d.obj;
++            d.obj = (void*)&obj->Pvowels[idx];
++            subports.dispatch(msg, d);
++            
++            if(rtosc_narguments(msg))
++                rChangeCb;
++        }},
++    //    "", NULL, [](){}},"/freq"
++    //{"Pvowels#" FF_MAX_VOWELS "/formants#" FF_MAX_FORMANTS "/amp",
++    //    "", NULL, [](){}},
++    //{"Pvowels#" FF_MAX_VOWELS "/formants#" FF_MAX_FORMANTS "/q",
++    //    "", NULL, [](){}},
++};
++
++
+ 
+ FilterParams::FilterParams(unsigned char Ptype_,
+                            unsigned char Pfreq_,
+@@ -188,8 +270,6 @@ float FilterParams::getfreqpos(float freq)
+ void FilterParams::formantfilterH(int nvowel, int nfreqs, float *freqs)
+ {
+     float c[3], d[3];
+-    float filter_freq, filter_q, filter_amp;
+-    float omega, sn, cs, alpha;
+ 
+     for(int i = 0; i < nfreqs; ++i)
+         freqs[i] = 0.0f;
+@@ -197,22 +277,20 @@ void FilterParams::formantfilterH(int nvowel, int nfreqs, float *freqs)
+     //for each formant...
+     for(int nformant = 0; nformant < Pnumformants; ++nformant) {
+         //compute formant parameters(frequency,amplitude,etc.)
+-        filter_freq = getformantfreq(Pvowels[nvowel].formants[nformant].freq);
+-        filter_q    = getformantq(Pvowels[nvowel].formants[nformant].q) * getq();
++        const float filter_freq = getformantfreq(Pvowels[nvowel].formants[nformant].freq);
++        float filter_q    = getformantq(Pvowels[nvowel].formants[nformant].q) * getq();
+         if(Pstages > 0)
+-            filter_q =
+-                (filter_q >
+-                 1.0f ? powf(filter_q, 1.0f / (Pstages + 1)) : filter_q);
++            filter_q = (filter_q > 1.0f ? powf(filter_q, 1.0f / (Pstages + 1)) : filter_q);
+ 
+-        filter_amp = getformantamp(Pvowels[nvowel].formants[nformant].amp);
++        const float filter_amp = getformantamp(Pvowels[nvowel].formants[nformant].amp);
+ 
+ 
+         if(filter_freq <= (synth->samplerate / 2 - 100.0f)) {
+-            omega = 2 * PI * filter_freq / synth->samplerate_f;
+-            sn    = sinf(omega);
+-            cs    = cosf(omega);
+-            alpha = sn / (2 * filter_q);
+-            float tmp = 1 + alpha;
++            const float omega = 2 * PI * filter_freq / synth->samplerate_f;
++            const float sn    = sinf(omega);
++            const float cs    = cosf(omega);
++            const float alpha = sn / (2 * filter_q);
++            const float tmp   = 1 + alpha;
+             c[0] = alpha / tmp *sqrt(filter_q + 1);
+             c[1] = 0;
+             c[2] = -alpha / tmp *sqrt(filter_q + 1);
+@@ -224,13 +302,19 @@ void FilterParams::formantfilterH(int nvowel, int nfreqs, float *freqs)
+ 
+ 
+         for(int i = 0; i < nfreqs; ++i) {
+-            float freq = getfreqx(i / (float) nfreqs);
++            const float freq = getfreqx(i / (float) nfreqs);
++
++            //Discard frequencies above nyquist rate
+             if(freq > synth->samplerate / 2) {
+                 for(int tmp = i; tmp < nfreqs; ++tmp)
+                     freqs[tmp] = 0.0f;
+                 break;
+             }
+-            float fr = freq / synth->samplerate * PI * 2.0f;
++
++            //Convert to normalized frequency
++            const float fr = freq / synth->samplerate * PI * 2.0f;
++
++            //Evaluate Complex domain ratio
+             float x  = c[0], y = 0.0f;
+             for(int n = 1; n < 3; ++n) {
+                 x += cosf(n * fr) * c[n];
+@@ -248,6 +332,8 @@ void FilterParams::formantfilterH(int nvowel, int nfreqs, float *freqs)
+             freqs[i] += powf(h, (Pstages + 1.0f) / 2.0f) * filter_amp;
+         }
+     }
++
++    //Convert to logarithmic data ignoring points that are too small
+     for(int i = 0; i < nfreqs; ++i) {
+         if(freqs[i] > 0.000000001f)
+             freqs[i] = rap2dB(freqs[i]) + getgain();
+diff --git a/src/Params/FilterParams.h b/src/Params/FilterParams.h
+index 22a1a94f..bd9f97ee 100644
+--- a/src/Params/FilterParams.h
++++ b/src/Params/FilterParams.h
+@@ -63,8 +63,8 @@ class FilterParams:public PresetsArray
+         unsigned char Pvowelclearness; //how vowels are kept clean (how much try to avoid "mixed" vowels)
+         unsigned char Pcenterfreq, Poctavesfreq; //the center frequency of the res. func., and the number of octaves
+ 
+-        struct {
+-            struct {
++        struct Pvowels_t {
++            struct formants_t {
+                 unsigned char freq, amp, q; //frequency,amplitude,Q
+             } formants[FF_MAX_FORMANTS];
+         } Pvowels[FF_MAX_VOWELS];
+@@ -90,6 +90,7 @@ class FilterParams:public PresetsArray
+ 
+         bool changed;
+ 
++        static rtosc::Ports ports;
+     private:
+         void defaults(int n);
+ 
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 33fcfbcc..0e96ae2b 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -25,9 +25,11 @@
+ #include <cstdio>
+ 
+ #include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
++using namespace rtosc;
+ 
+ 
+-#define PC(x) PARAMC(PADnoteParameters, P##x, x, "undocumented")
++#define PC(x) PARAMC(PADnoteParameters, P##x, P##x, "undocumented")
+ 
+ template<int i>
+ void simpleset(const char *m, rtosc::RtData &d)
+@@ -38,6 +40,9 @@ void simpleset(const char *m, rtosc::RtData &d)
+     else
+         *addr = rtosc_argument(m, 0).i;
+ }
++
++#define rObject PADnoteParameters
++
+ #define P_C(x) rtosc::Port{#x "::c", "::", NULL, \
+     simpleset<__builtin_offsetof(class PADnoteParameters, P##x)>}
+ static rtosc::Ports localPorts =
+@@ -53,6 +58,7 @@ static rtosc::Ports localPorts =
+             "Amplitude Envelope"),
+     RECURP(PADnoteParameters, EnvelopeParams, FilterEnvelope, FilterEnvelope,
+             "Filter Envelope"),
++    rRecurp(GlobalFilter, "Post Filter"),
+     PARAMC(PADnoteParameters, Pmode, mode,
+             "0 - bandwidth, 1 - discrete 2 - continious"),
+     PC(hp.base.type),
+@@ -85,6 +91,16 @@ static rtosc::Ports localPorts =
+     PC(fixedfreqET),
+     //TODO detune, coarse detune
+     PC(DetuneType),
++    PC(Stereo),
++    PC(Panning),
++    PC(AmpVelocityScaleFunction),
++    PC(PunchStretch),
++    PC(PunchTime),
++    PC(PunchStretch),
++    PC(PunchVelocitySensing),
++    PC(FilterVelocityScale),
++    PC(FilterVelocityScaleFunction),
++
+ 
+     {"nhr:", "::Returns the harmonic shifts",
+         NULL, [](const char *, rtosc::RtData &d) {
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 8aba9dce..7d4244b8 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -40,6 +40,10 @@ static rtosc::Ports localPorts = {
+     //Real values needed
+     //rOption(PDetuneType, rOptions("100 cents", "200 cents", "500 cents")),
+     rToggle(PFreqEnvelopeEnabled, "Enable for Frequency Envelope"),
++    rToggle(PBandWidthEnvelopeEnabled, "Enable for Bandwidth Envelope"),
++    rToggle(PGlobalFilterEnabled, "Enable for Global Filter"),
++    rParam(PGlobalFilterVelocityScale, "Filter Velocity Magnitude"),
++    rParam(PGlobalFilterVelocityScaleFunction, "Filter Velocity Function Shape"),
+     //rRecur(FreqEnvelope, EnvelopeParams),
+     //rToggle(),//continue
+     rToggle(Pfixedfreq, "Base frequency fixed frequency enable"),
+@@ -53,6 +57,7 @@ static rtosc::Ports localPorts = {
+     rRecurp(FreqEnvelope,         "Frequency Envelope"),
+     rRecurp(BandWidthEnvelope,    "Bandwidth Envelope"),
+     rRecurp(GlobalFilterEnvelope, "Post Filter Envelope"),
++    rRecurp(GlobalFilter,         "Post Filter"),
+     //rOption(Pstart, rOptions("zero", "random", "ones")),
+ };
+ 
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index fff4ffd7..8e27d000 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -75,7 +75,8 @@ class ADvoicelistitem {open : {public Fl_Group}
+         Fl_Value_Slider voicevolume {
+           callback {pars->VoicePar[nvoice].PVolume=(int)o->value();}
+           tooltip Volume xywh {90 5 115 20} type {Horz Knob} box NO_BOX labelsize 8 align 5 maximum 127 step 1
+-          code0 {o->value(pars->VoicePar[nvoice].PVolume);}
++          code0 {voicelistitemgroup->osc=osc_i;voicelistitemgroup->pane_name=loc;}
++          code1 {o->value(pars->VoicePar[nvoice].PVolume);}
+         }
+         Fl_Check_Button voiceresonanceenabled {
+           callback {pars->VoicePar[nvoice].Presonance=(int)o->value();}
+@@ -84,7 +85,7 @@ class ADvoicelistitem {open : {public Fl_Group}
+         }
+         Fl_Value_Slider voicelfofreq {
+           tooltip {Frequency LFO amount} xywh {500 5 115 20} type {Horz Knob} box NO_BOX labelsize 8 align 5 maximum 127 step 1
+-          code0 {o->init(osc_i,  loc+"FreqLfo/Pintensity");}
++          code0 {o->init("FreqLfo/Pintensity");}
+           class Fl_Osc_Slider
+         }
+         Fl_Dial voicepanning {
+@@ -96,7 +97,7 @@ class ADvoicelistitem {open : {public Fl_Group}
+         Fl_Group voiceoscil {open
+           xywh {60 5 30 20} box THIN_DOWN_BOX color 32 selection_color 71 labelcolor 179
+           code0 {osc=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");}
+-          code1 {voiceoscil->osc=osc_i;voiceoscil->pane_name=loc+"oscil/";osc->init(false);}
++          code1 {osc->init(false, "oscil/");}
+           code2 {if (pars->VoicePar[nvoice].Pextoscil != -1) { osc->init(false);}}
+           class Fl_Osc_Group
+         } {}
+@@ -706,7 +707,7 @@ o->redraw();}
+           Fl_Group {} {
+             label {ADsynth Voice - Filter} open
+             xywh {250 30 275 75} box FLAT_BOX color 50 align 144
+-            code0 {o->init(pars->VoicePar[nvoice].VoiceFilter,NULL,NULL);}
++            code0 {o->init("", osc_i, loc + "VoiceFilter/");}
+             class FilterUI
+           } {}
+           Fl_Group voicefilterenvgroup {
+@@ -1019,7 +1020,8 @@ for (int i=0;i<NUM_VOICES;i++){
+         Fl_Group filterui {
+           label {ADsynth Global - Filter} open
+           xywh {255 35 275 75} box FLAT_BOX color 50 align 144
+-          code0 {o->init(pars->GlobalPar.GlobalFilter,&pars->GlobalPar.PFilterVelocityScale,&pars->GlobalPar.PFilterVelocityScaleFunction);}
++          code0 {o->init(loc + "global/PFilter",
++          osc, loc + "global/GlobalFilter/");}
+           class FilterUI
+         } {}
+       }
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index c2cdbcb8..d678bc64 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -45,6 +45,7 @@ add_library(zynaddsubfx_gui STATIC
+         Fl_Osc_Output.cpp
+         Fl_Osc_Counter.cpp
+         Fl_Resonance_Graph.cpp
++        FormantFilterGraph.cpp
+         EnvelopeFreeEdit.cpp
+         BankView.cpp
+         Connection.cpp
+diff --git a/src/UI/EffUI.fl b/src/UI/EffUI.fl
+index 07e32678..d54ed192 100644
+--- a/src/UI/EffUI.fl
++++ b/src/UI/EffUI.fl
+@@ -1271,7 +1271,7 @@ refresh(eff);}
+       Fl_Group {} {
+         label {DynFilter effect  - Filter}
+         xywh {5 5 275 75} box FLAT_BOX color 50 align 144
+-        code0 {o->init(eff->filterpars,NULL,NULL);}
++        code0 {o->init("",osc, loc + "Filter/");}
+         code1 {o->use_for_dynamic_filter();}
+         class FilterUI
+       } {}
+@@ -1282,8 +1282,10 @@ refresh(eff);}
+       }
+     }
+   }
+-  Function {init(EffectMgr *eff_)} {} {
++  Function {init(EffectMgr *eff_, Fl_Osc_Interface *osc_, std::string loc_)} {} {
+     code {eff=eff_;
++    osc = osc_;
++    loc = loc_;
+ 
+ make_null_window();
+ make_reverb_window();
+@@ -1470,6 +1472,8 @@ this->show();} {}
+   }
+   decl {EffectMgr *eff;} {}
+   decl {int eqband;} {}
++  decl {Fl_Osc_Interface *osc;} {}
++  decl {std::string loc;} {}
+ } 
+ 
+ class SimpleEffUI {open : {public Fl_Group,public PresetsUI_}
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index 0bae429e..8f1484ed 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -1,170 +1,71 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0110 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {} 
+-
+-decl {//License: GNU GPL version 2 or later} {} 
+-
+-decl {\#include "WidgetPDial.h"} {public
++decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
+ } 
+ 
+-decl {\#include <cmath>} {} 
+-
+-decl {\#include <stdio.h>} {global
++decl {//License: GNU GPL version 2 or later} {private local
+ } 
+ 
+-decl {\#include <stdlib.h>} {global
++decl {\#include "Fl_Osc_Dial.H"} {public local
+ } 
+ 
+-decl {\#include "../globals.h"} {public
++decl {\#include "Fl_Osc_Choice.H"} {public local
+ } 
+ 
+-decl {\#include <FL/Fl_Group.H>} {public
++decl {\#include "Fl_Osc_Check.H"} {public local
+ } 
+ 
+-decl {\#include "../Params/FilterParams.h"} {public
++decl {\#include "Fl_Osc_Counter.H"} {public local
+ } 
+ 
+-decl {\#include <FL/Fl_Box.H>} {public
++decl {\#include "Fl_Osc_Output.H"} {public local
+ } 
+ 
+-decl {\#include <FL/fl_draw.H>} {public
++decl {\#include "Fl_Osc_Slider.H"} {public local
+ } 
+ 
+-decl {\#include <FL/fl_ask.H>} {public
++decl {\#include <cmath>} {private local
+ } 
+ 
+-decl {\#include "PresetsUI.h"} {public
++decl {\#include <stdio.h>} {private global
+ } 
+ 
+-decl {\#include "common.H"} {public
++decl {\#include <stdlib.h>} {private global
+ } 
+ 
+-class FormantFilterGraph {open : {public Fl_Box}
+-} {
+-  Function {FormantFilterGraph(int x,int y, int w, int h, const char *label=0):Fl_Box(x,y,w,h,label)} {} {
+-    code {pars=NULL;
+-nvowel=NULL;
+-nformant=NULL;
+-graphpoints=NULL;} {}
+-  }
+-  Function {init(FilterParams *pars_,int *nvowel_,int *nformant_)} {} {
+-    code {pars=pars_;
+-nvowel=nvowel_;
+-nformant=nformant_;
+-oldx=-1;
+-graphpoints=new float [w()];} {}
+-  }
+-  Function {draw_freq_line(float freq,int type)} {} {
+-    code {float freqx=pars->getfreqpos(freq);
+-switch(type){
+-  case 0:fl_line_style(FL_SOLID);break;
+-  case 1:fl_line_style(FL_DOT);break;
+-  case 2:fl_line_style(FL_DASH);break;
+-}; 
+-
+-
+-if ((freqx>0.0)&&(freqx<1.0))
+-   fl_line(x()+(int) (freqx*w()),y(),
+-   x()+(int) (freqx*w()),y()+h());} {}
+-  }
+-  Function {draw()} {open
+-  } {
+-    code {int maxdB=30;
+-int ox=x(),oy=y(),lx=w(),ly=h(),i,oiy;
+-float freqx;
+-
+-fl_color(FL_BLACK);
+-fl_rectf(ox,oy,lx,ly);
+-
+-
+-//draw the lines
+-fl_color(FL_GRAY);
+-
+-fl_line_style(FL_SOLID);
+-//fl_line(ox+2,oy+ly/2,ox+lx-2,oy+ly/2);
+-
+-freqx=pars->getfreqpos(1000.0);
+-if ((freqx>0.0)&&(freqx<1.0))
+-   fl_line(ox+(int) (freqx*lx),oy,
+-    ox+(int) (freqx*lx),oy+ly);
+-
+-for (i=1;i<10;i++){
+-   if(i==1){
+-     draw_freq_line(i*100.0,0);
+-     draw_freq_line(i*1000.0,0);
+-   }else 
+-    if (i==5){
+-      draw_freq_line(i*100.0,2);
+-      draw_freq_line(i*1000.0,2);
+-    }else{
+-      draw_freq_line(i*100.0,1);
+-      draw_freq_line(i*1000.0,1);
+-    };
+-};
+-
+-draw_freq_line(10000.0,0);
+-draw_freq_line(20000.0,1);
+-
+-fl_line_style(FL_DOT);
+-int GY=10;if (ly<GY*3) GY=-1;
+-for (i=1;i<GY;i++){
+-   int tmp=(int)(ly/(float)GY*i);
+-   fl_line(ox+2,oy+tmp,ox+lx-2,oy+tmp);
+-};
+-
+-fl_color(FL_YELLOW);
+-fl_font(FL_HELVETICA,10);
+-if (*nformant<pars->Pnumformants){
+-   draw_freq_line(pars->getformantfreq(pars->Pvowels[*nvowel].formants[*nformant].freq),2);
++decl {\#include "../globals.h"} {public local
++} 
+ 
+-//show some information (like current formant frequency,amplitude)
+-   char tmpstr[20];
++decl {\#include <FL/Fl_Group.H>} {public local
++} 
+ 
+-   snprintf(tmpstr,20,"%.2f kHz",pars->getformantfreq(pars->Pvowels[*nvowel].formants[*nformant].freq)*0.001);
+-   fl_draw(tmpstr,ox+1,oy+1,40,12,FL_ALIGN_LEFT,NULL,0);
++decl {\#include "../Params/FilterParams.h"} {public local
++} 
+ 
+-   snprintf(tmpstr,20,"%d dB",(int)( rap2dB(1e-9 + pars->getformantamp(pars->Pvowels[*nvowel].formants[*nformant].amp)) + pars->getgain() ));
+-   fl_draw(tmpstr,ox+1,oy+15,40,12,FL_ALIGN_LEFT,NULL,0);
++decl {\#include <FL/Fl_Box.H>} {public local
++} 
+ 
+-};
++decl {\#include <FL/fl_draw.H>} {public local
++} 
+ 
+-//draw the data
++decl {\#include <FL/fl_ask.H>} {public local
++} 
+ 
+-fl_color(FL_RED);
+-fl_line_style(FL_SOLID);
++decl {\#include "PresetsUI.h"} {public local
++} 
+ 
+-pars->formantfilterH(*nvowel,lx,graphpoints);
++decl {\#include "common.H"} {public local
++} 
+ 
+-fl_line_style( FL_SOLID, 2 );
+-fl_begin_line();
+-oiy=(int) ((graphpoints[0]/maxdB+1.0)*ly/2.0);
+-for (i=1;i<lx;i++){
+-   double iy= ((graphpoints[i]/maxdB+1.0)*ly/2.0);
+-   if ((iy>=0)&&(oiy>=0)&&(iy<ly)&&(oiy<lx))
+-      fl_vertex(ox+i,oy+ly-iy);
+-   oiy=iy;
+-};
+-fl_end_line();
+-fl_line_style(FL_SOLID,0);} {}
+-  }
+-  Function {~FormantFilterGraph()} {} {
+-    code {delete [] graphpoints;} {}
+-  }
+-  decl {FilterParams *pars;} {}
+-  decl {int oldx,oldy;} {}
+-  decl {int *nvowel,*nformant;} {}
+-  decl {float *graphpoints;} {}
++decl {\#include "FormantFilterGraph.H"} {public local
+ } 
+ 
+ class FilterUI {open : {public Fl_Group,PresetsUI_}
+ } {
+   Function {FilterUI(int x,int y, int w, int h, const char *label=0):Fl_Group(x,y,w,h,label)} {} {
+-    code {pars=NULL;
+-velsnsamp=NULL;
+-velsns=NULL;
+-nvowel=0;nformant=0;nseqpos=0;} {}
++    code {nvowel=0;nformant=0;nseqpos=0;} {}
+   }
+   Function {~FilterUI()} {} {
+     code {filterui->hide();
+@@ -176,9 +77,16 @@ delete (formantparswindow);} {}
+   Function {make_window()} {open
+   } {
+     Fl_Window filterui {open
+-      xywh {498 346 275 70} type Double color 50 labelfont 1
+-      class Fl_Group visible
++      xywh {516 484 275 70} type Double color 50 labelfont 1
++      class Fl_Osc_Group visible
+     } {
++      Fl_Button {} {
++        label P
++        callback {/*presetsui->paste(pars,this);*/}
++        xywh {203 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++        code0 {filterui->osc = osc;}
++        code1 {filterui->pane_name = loc;}
++      }
+       Fl_Group filterparamswindow {
+         label {Filter Parameters}
+         xywh {0 0 275 75} box UP_FRAME color 183 labeltype ENGRAVED_LABEL labelsize 10 align 17
+@@ -186,10 +94,9 @@ delete (formantparswindow);} {}
+       } {
+         Fl_Choice analogfiltertypechoice {
+           label FilterType
+-          callback {pars->Ptype=(int)o->value();
+-pars->changed=true;}
+           tooltip {The Filter type} xywh {10 50 50 15} down_box BORDER_BOX labelsize 10 align 5 textsize 10
+-          code1 {o->value(pars->Ptype);}
++          code1 {o->init("Ptype");}
++          class Fl_Osc_Choice
+         } {
+           MenuItem {} {
+             label LPF1
+@@ -230,10 +137,9 @@ pars->changed=true;}
+         }
+         Fl_Choice svfiltertypechoice {
+           label FilterType
+-          callback {pars->Ptype=(int)o->value();
+-pars->changed=true;}
+           tooltip {The Filter type} xywh {10 50 50 15} down_box BORDER_BOX labelsize 10 align 5 textsize 10
+-          code1 {o->value(pars->Ptype);}
++          code1 {o->init("Ptype");}
++          class Fl_Osc_Choice
+         } {
+           MenuItem {} {
+             label 1LPF
+@@ -254,10 +160,10 @@ pars->changed=true;}
+         }
+         Fl_Choice filtertype {
+           label Category
+-          callback {switchcategory((int)o->value());
+-pars->changed=true;}
++          callback {refresh();}
+           tooltip {The Category of the Filter (Analog/Formantic/etc.)} xywh {10 20 60 15} down_box BORDER_BOX labelsize 10 align 5 textsize 10
+-          code0 {o->value(pars->Pcategory);}
++          code0 {o->init("Pcategory");}
++          class Fl_Osc_Choice
+         } {
+           MenuItem {} {
+             label Analog
+@@ -274,55 +180,51 @@ pars->changed=true;}
+         }
+         Fl_Dial cfreqdial {
+           label {C.Freq}
+-          callback {pars->Pfreq=(int)o->value();}
+           tooltip {Center Frequency of the Filter or the base position in the vowel's sequence} xywh {75 25 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(pars->Pfreq);}
+-          class WidgetPDial
++          code0 {o->init("Pfreq");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial qdial {
+           label Q
+-          callback {pars->Pq=(int)o->value();
+-formantfiltergraph->redraw();}
++          callback {formantfiltergraph->redraw();}
+           tooltip {Filter resonance or bandwidth} xywh {110 25 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(pars->Pq);}
+-          class WidgetPDial
++          code0 {o->init("Pq");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial freqtrdial {
+           label {freq.tr.}
+-          callback {pars->Pfreqtrack=(int) o->value();}
+           tooltip {Filter frequency tracking (left is negative, middle is 0, and right is positive)} xywh {215 25 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(pars->Pfreqtrack);}
+-          class WidgetPDial
++          code0 {o->init("Pfreqtrack");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial vsnsadial {
+           label {V.SnsA.}
+-          callback {if (velsnsamp!=NULL) *velsnsamp=(int)o->value();}
+           tooltip {Velocity sensing amount of the Filter} xywh {145 25 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {if(!alt_root.empty()) o->alt_init(alt_root, "VelocityScale");}
++          code1 {else {o->deactivate(); o->value(127);}}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial vsnsdial {
+           label {V.Sns.}
+-          callback {if (velsns!=NULL) *velsns=(int)o->value();}
+           tooltip {Velocity Sensing Function of the Filter} xywh {180 25 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {if(!alt_root.empty()) o->alt_init(alt_root, "VelocityScaleFunction");}
++          code1 {else {o->deactivate(); o->value(127);}}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial gaindial {
+           label gain
+-          callback {pars->Pgain=(int)o->value();
+-formantfiltergraph->redraw();
+-pars->changed=true;}
++          callback {formantfiltergraph->redraw();}
+           tooltip {Filter output gain/damp} xywh {250 35 20 20} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          code0 {o->value(pars->Pgain);}
+-          class WidgetPDial
++          code0 {o->init("Pgain");}
++          class Fl_Osc_Dial
+         }
+         Fl_Choice stcounter {
+           label St
+-          callback {pars->Pstages=(int)o->value();
+-formantfiltergraph->redraw();
+-pars->changed=true;} open
++          callback {formantfiltergraph->redraw();} open
+           tooltip {Filter stages (in order to increase dB/oct. value and the order of the filter)} xywh {235 5 35 15} down_box BORDER_BOX labelsize 10 textfont 1 textsize 10
+           code1 {for (int i=0;i<MAX_FILTER_STAGES;i++) {char tmp[10];snprintf(tmp,10,"%dx",i+1);o->add(tmp);};}
+-          code2 {o->value(pars->Pstages);}
++          code2 {o->init("Pstages");}
++          class Fl_Osc_Choice
+         } {}
+       }
+       Fl_Button editbutton {
+@@ -332,24 +234,28 @@ pars->changed=true;} open
+       }
+       Fl_Button {} {
+         label C
+-        callback {presetsui->copy(pars);}
++        callback {/*presetsui->copy(pars);*/}
+         xywh {186 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+       }
+-      Fl_Button {} {
+-        label P
+-        callback {presetsui->paste(pars,this);}
+-        xywh {203 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+-      }
+     }
+   }
+   Function {make_formant_window()} {open
+   } {
+     Fl_Window formantparswindow {
+-      label {Formant Filter Parameters} selected
+-      xywh {518 473 700 205} type Double visible
++      label {Formant Filter Parameters} open
++      xywh {536 611 700 205} type Double
++      class Fl_Osc_Window visible
+     } {
+-      Fl_Group {} {
++      Fl_Button {} {
++        label P
++        callback {/*presetsui->paste(pars,this,nvowel);*/}
++        xywh {665 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
++        code0 {formantparswindow->osc = osc;}
++        code1 {formantparswindow->pane_name = loc;}
++      }
++      Fl_Group {} {open
+         xywh {485 47 105 113} box THIN_UP_BOX
++        class Fl_Osc_Group
+       } {
+         Fl_Counter {} {
+           label {Formant }
+@@ -369,136 +275,131 @@ formantfiltergraph->redraw();}
+           code0 {o->bounds(0,FF_MAX_VOWELS-1);}
+           code1 {o->value(nvowel);}
+         }
+-        Fl_Group formantparsgroup {
++        Fl_Group formantparsgroup {open
+           xywh {490 105 95 50} box ENGRAVED_FRAME
++          class Fl_Osc_Group
+         } {
++          Fl_Box {} {
++            label dummy selected
++            xywh {515 130 35 16} hide deactivate
++            code0 {formantparsgroup->pane_name += "Pvowels0/Pformants0/";}
++          }
+           Fl_Dial formant_freq_dial {
+             label freq
+-            callback {pars->Pvowels[nvowel].formants[nformant].freq=(int) o->value();
+-formantfiltergraph->redraw();
+-pars->changed=true;}
++            callback {//pars->Pvowels[nvowel].formants[nformant].freq=(int) o->value();
++                formantfiltergraph->update();}
+             tooltip {Formant frequency} xywh {495 115 25 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-            class WidgetPDial
++            code0 {//TODO get widget renaming working here!!!}
++            code1 {o->init("freq");}
++            class Fl_Osc_Dial
+           }
+           Fl_Dial formant_q_dial {
+             label Q
+-            callback {pars->Pvowels[nvowel].formants[nformant].q=(int) o->value();
+-formantfiltergraph->redraw();
+-pars->changed=true;}
++            callback {//pars->Pvowels[nvowel].formants[nformant].q=(int) o->value();
++formantfiltergraph->update();}
+             tooltip {Formant's Q} xywh {525 115 24 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-            class WidgetPDial
++            code0 {o->init("q");}
++            class Fl_Osc_Dial
+           }
+           Fl_Dial formant_amp_dial {
+             label amp
+-            callback {pars->Pvowels[nvowel].formants[nformant].amp=(int) o->value();
+-formantfiltergraph->redraw();
+-pars->changed=true;}
++            callback {//pars->Pvowels[nvowel].formants[nformant].amp=(int) o->value();
++formantfiltergraph->update();}
+             tooltip {Formant amplitude} xywh {555 115 24 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-            class WidgetPDial
++            code0 {o->init("amp");}
++            class Fl_Osc_Dial
+           }
+         }
+       }
+-      Fl_Group {} {
++      Fl_Group {} {open
+         xywh {590 47 100 113} box THIN_UP_BOX
++        class Fl_Osc_Group
+       } {
+-        Fl_Counter {} {
++        Fl_Counter sequencesize {
+           label {Seq.Size}
+-          callback {pars->Psequencesize=(int) o->value();
+-update_formant_window();
+-pars->changed=true;}
++          callback {update_formant_window();}
+           xywh {595 62 55 20} type Simple labelfont 1 labelsize 10 align 5 minimum 0 maximum 127 step 1 textfont 1 textsize 11
+           code0 {o->bounds(1,FF_MAX_SEQUENCE-1);}
+-          code1 {o->value(pars->Psequencesize);}
++          code1 {o->init("Psequencesize");}
++          class Fl_Osc_Counter
+         }
+         Fl_Counter {} {
+           label {S.Pos.}
+-          callback {nseqpos=(int) o->value();
+-update_formant_window();
+-pars->changed=true;}
++          callback {nseqpos = o->value();update_formant_window();}
+           tooltip {Current position from the sequence} xywh {595 97 40 15} type Simple labelfont 1 labelsize 10 align 9 minimum 0 maximum 127 step 1 textsize 10
+           code0 {o->bounds(0,FF_MAX_SEQUENCE-2);}
+           code1 {o->value(nseqpos);}
+         }
+         Fl_Counter vowel_counter {
+           label Vowel
+-          callback {pars->Psequence[nseqpos].nvowel=(int) o->value();
+-pars->changed=true;}
++          callback {//pars->Psequence[nseqpos].nvowel=(int) o->value(); pars->changed=true;}
+           xywh {640 97 40 15} type Simple labelsize 10 align 1 minimum 0 maximum 127 step 1 textsize 10
+           code0 {o->bounds(0,FF_MAX_VOWELS-1);}
+         }
+         Fl_Check_Button {} {
+           label {Neg.Input}
+-          callback {pars->Psequencereversed=(int) o->value();
+-pars->changed=true;}
+           tooltip {Negate the input from LFO/envelopes/etc.} xywh {625 132 60 20} down_box DOWN_BOX labelsize 10
+-          code0 {o->value(pars->Psequencereversed);}
++          code0 {o->init("Psequencereversed");}
++          class Fl_Osc_Check
+         }
+         Fl_Dial strchdial {
+           label Strch
+-          callback {pars->Psequencestretch=(int) o->value();
+-pars->changed=true;}
+           tooltip {Sequence Stretch} xywh {595 130 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+-          code0 {o->value(pars->Psequencestretch);}
+-          class WidgetPDial
++          code0 {o->init("Psequencestretch");}
++          class Fl_Osc_Dial
+         }
+       }
+-      Fl_Counter {} {
++      Fl_Counter numformants {
+         label {Num.Formants}
+-        callback {pars->Pnumformants=(int) o->value();
+-update_formant_window();
+-pars->changed=true;
++        callback {update_formant_window();
+ formantfiltergraph->redraw();}
+         xywh {485 15 65 20} type Simple labelfont 1 labelsize 10 align 5 minimum 0 maximum 127 step 1
+         code0 {o->bounds(1,FF_MAX_FORMANTS);}
+-        code1 {o->value(pars->Pnumformants);}
++        code1 {o->init("Pnumformants");}
++        class Fl_Osc_Counter
+       }
+       Fl_Dial frsldial {
+         label {Fr.Sl.}
+-        callback {pars->Pformantslowness=(int) o->value();
+-pars->changed=true;}
+         tooltip {Formant's Slowness (Morphing)} xywh {565 15 25 25} box ROUND_UP_BOX labelfont 1 labelsize 10 align 1 maximum 127 step 1
+-        code0 {o->value(pars->Pformantslowness);}
+-        class WidgetPDial
++        code0 {o->init("Pformantslowness");}
++        class Fl_Osc_Dial
+       }
+       Fl_Value_Output centerfreqvo {
+         label {C.f.}
+-        callback {o->value(pars->getcenterfreq()/1000.0);}
++        callback {o->value(o->newvalue()/1000.0);}
+         tooltip {Center Frequency (kHz)} xywh {515 164 33 18} when 3 minimum 1 maximum 10 step 0.01 value 1 textfont 1
+-        code0 {o->value(pars->getcenterfreq()/1000.0);}
++        code0 {o->init("centerfreq");}
++        class Fl_Osc_Output
+       }
+       Fl_Value_Output octavesfreqvo {
+         label {Oct.}
+-        callback {o->value(pars->getoctavesfreq());}
++        callback {o->value(o->newvalue());}
+         tooltip {No. of octaves} xywh {515 182 33 18} when 3 minimum 1 maximum 127 step 1 value 5 textfont 1
+-        code0 {o->value(pars->getoctavesfreq());}
++        code0 {o->init("octavesfreq");}
++        class Fl_Osc_Output
+       }
+       Fl_Slider cfknob {
+-        callback {pars->Pcenterfreq=(int)o->value();
+-centerfreqvo->do_callback();
+-formantfiltergraph->redraw();
+-pars->changed=true;}
++        callback {/*formantfiltergraph->redraw();*/}
+         xywh {551 167 84 15} type {Horz Knob} box FLAT_BOX maximum 127
+-        code0 {o->value(pars->Pcenterfreq);}
++        code0 {o->init("Pcenterfreq", 'c');}
++        class Fl_Osc_Slider
+       }
+       Fl_Slider octknob {
+-        callback {pars->Poctavesfreq=(int)o->value();
+-octavesfreqvo->do_callback();
+-formantfiltergraph->redraw();}
++        callback {/*formantfiltergraph->redraw();*/}
+         xywh {551 185 84 15} type {Horz Knob} box FLAT_BOX maximum 127
+-        code0 {o->value(pars->Poctavesfreq);}
++        code0 {o->init("Poctavesfreq", 'c');}
++        class Fl_Osc_Slider
+       }
+       Fl_Box formantfiltergraph {
+         xywh {5 5 475 195} box BORDER_BOX
+-        code0 {o->init(pars,&nvowel,&nformant);}
++        code0 {o->init(&nvowel,&nformant);}
+         class FormantFilterGraph
+       }
+       Fl_Dial wvknob {
+         label {Vw.Cl.}
+-        callback {pars->Pvowelclearness=(int) o->value();
+-pars->changed=true;}
+         tooltip {Vowel "clearness" (how the mixed vowels are avoided)} xywh {600 15 25 25} box ROUND_UP_BOX labelfont 1 labelsize 10 align 1 maximum 127 step 1
+-        code0 {o->value(pars->Pvowelclearness);}
+-        class WidgetPDial
++        code0 {o->init("Pvowelclearness");}
++        class Fl_Osc_Dial
+       }
+       Fl_Button {} {
+         label Close
+@@ -507,14 +408,9 @@ pars->changed=true;}
+       }
+       Fl_Button {} {
+         label C
+-        callback {presetsui->copy(pars,nvowel);}
++        callback {/*presetsui->copy(pars,nvowel);*/}
+         xywh {635 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+       }
+-      Fl_Button {} {
+-        label P
+-        callback {presetsui->paste(pars,this,nvowel);}
+-        xywh {665 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+-      }
+       Fl_Box {} {
+         label Vowel
+         xywh {635 10 55 15}
+@@ -523,36 +419,29 @@ pars->changed=true;}
+   }
+   Function {update_formant_window()} {open
+   } {
+-    code {formant_freq_dial->value(pars->Pvowels[nvowel].formants[nformant].freq);
+-formant_q_dial->value(pars->Pvowels[nvowel].formants[nformant].q);
+-formant_amp_dial->value(pars->Pvowels[nvowel].formants[nformant].amp);
+-if (nformant<pars->Pnumformants) formantparsgroup->activate();
++    code {//formant_freq_dial->value(pars->Pvowels[nvowel].formants[nformant].freq);
++//formant_q_dial->value(pars->Pvowels[nvowel].formants[nformant].q);
++//formant_amp_dial->value(pars->Pvowels[nvowel].formants[nformant].amp);
++if (nformant<numformants->value()) formantparsgroup->activate();
+ 	else formantparsgroup->deactivate();
+ 
+-if (nseqpos<pars->Psequencesize) vowel_counter->activate();
++if (nseqpos<sequencesize->value()) vowel_counter->activate();
+ 	else vowel_counter->deactivate();
+ 
+ 
+-vowel_counter->value(pars->Psequence[nseqpos].nvowel);} {}
++//vowel_counter->value(pars->Psequence[nseqpos].nvowel);} {}
+   }
+-  Function {refresh()} {} {
++  Function {refresh()} {open
++  } {
+     code {update_formant_window();
+ formantfiltergraph->redraw();
++const int Pcategory = filtertype->value();
++const int Ptype     = analogfiltertypechoice->value();
+ 
+-if (pars->Pcategory==0) svfiltertypechoice->value(pars->Ptype);
+-if (pars->Pcategory==2) analogfiltertypechoice->value(pars->Ptype);
+-
+-filtertype->value(pars->Pcategory);
+-
+-cfreqdial->value(pars->Pfreq);
+-qdial->value(pars->Pq);
+-
+-freqtrdial->value(pars->Pfreqtrack);
+-gaindial->value(pars->Pgain);
++if (Pcategory==0) svfiltertypechoice->value(Ptype);
++if (Pcategory==2) analogfiltertypechoice->value(Ptype);
+ 
+-stcounter->value(pars->Pstages);
+-
+-int categ=pars->Pcategory;
++const int categ=Pcategory;
+ if ((categ==0)||(categ==2)) {
+ 	if (categ==0) {
+            analogfiltertypechoice->show();
+@@ -573,10 +462,12 @@ if ((categ==0)||(categ==2)) {
+ 
+ filterparamswindow->redraw();} {}
+   }
+-  Function {init(FilterParams *filterpars_,unsigned char *velsnsamp_,unsigned char *velsns_)} {} {
+-    code {pars=filterpars_;
+-velsnsamp=velsnsamp_;
+-velsns=velsns_;
++  Function {init(std::string alt_root_, Fl_Osc_Interface *osc_, std::string loc_)} {} {
++    code {alt_root = alt_root_;
++osc = osc_;
++loc = loc_;
++
++assert(osc);
+ 
+ make_window();
+ end();
+@@ -585,19 +476,7 @@ make_formant_window();
+ 
+ filterui->resize(this->x(),this->y(),this->w(),this->h());
+ 
+-
+-if (velsnsamp==NULL){
+-	vsnsadial->deactivate();
+-	vsnsadial->value(127);
+-   } else vsnsadial->value(*velsnsamp);
+-
+-if (velsns==NULL){
+-	vsnsdial->deactivate();
+-	vsnsdial->value(127);
+-   } else vsnsdial->value(*velsns);
+-
+-switchcategory(pars->Pcategory);
+-
++switchcategory(0);
+ 
+ formantparswindow->label(this->label());
+ 
+@@ -605,16 +484,8 @@ update_formant_window();} {}
+   }
+   Function {switchcategory(int newcat)} {open
+   } {
+-    code {if (pars->Pcategory!=newcat){
+-    pars->Pgain=64;
+-    gaindial->value(64);
+-    analogfiltertypechoice->value(0);
+-    analogfiltertypechoice->do_callback();
+-    svfiltertypechoice->value(0);
+-    svfiltertypechoice->do_callback();
+-};
+-pars->Pcategory=newcat;
+-
++    code {
++    //TODO update Pgain & filter type on switch Pgain=64;
+ refresh();} {}
+   }
+   Function {use_for_dynamic_filter()} {open
+@@ -632,7 +503,12 @@ formant_q_dial->when(0);
+ formant_amp_dial->when(0);
+ strchdial->when(0);} {}
+   }
+-  decl {FilterParams *pars;} {}
+-  decl {unsigned char *velsnsamp,*velsns;} {}
+-  decl {int nvowel,nformant,nseqpos;} {}
++  decl {std::string alt_root;} {private local
++  }
++  decl {int nvowel,nformant,nseqpos;} {private local
++  }
++  decl {Fl_Osc_Interface *osc;} {private local
++  }
++  decl {std::string loc;} {private local
++  }
+ } 
+diff --git a/src/UI/Fl_Osc_Choice.H b/src/UI/Fl_Osc_Choice.H
+index efaac9e5..944aa2df 100644
+--- a/src/UI/Fl_Osc_Choice.H
++++ b/src/UI/Fl_Osc_Choice.H
+@@ -10,6 +10,8 @@ class Fl_Osc_Choice:public Fl_Choice, Fl_Osc_Widget
+         Fl_Osc_Choice(int X, int Y, int W, int H, const char *label = NULL);
+         virtual ~Fl_Osc_Choice(void);
+         void init(const char *path);
++
++
+         //void OSC_value(float);
+         void OSC_value(char);
+ 
+@@ -19,7 +21,6 @@ class Fl_Osc_Choice:public Fl_Choice, Fl_Osc_Widget
+         
+         void cb(void);
+     private:
+-        std::string full_path;
+-        class Fl_Osc_Interface *osc;
++        std::string path;
+         std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/Fl_Osc_Choice.cpp b/src/UI/Fl_Osc_Choice.cpp
+index 2a551b06..c63c04fc 100644
+--- a/src/UI/Fl_Osc_Choice.cpp
++++ b/src/UI/Fl_Osc_Choice.cpp
+@@ -7,17 +7,6 @@
+ #include <cassert>
+ #include <sstream>
+ 
+-template<typename A, typename B>
+-B string_cast(const A &a)
+-{
+-    std::stringstream s;
+-    s.precision(3);
+-    B b;
+-    s << " " << a << " ";
+-    s >> b;
+-    return b;
+-}
+-
+ static Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w)
+ {
+     if(!w)
+@@ -35,29 +24,27 @@ static void callback_fn(Fl_Widget *w, void *v)
+ }
+ 
+ Fl_Osc_Choice::Fl_Osc_Choice(int X, int Y, int W, int H, const char *label)
+-    :Fl_Choice(X,Y,W,H, label), Fl_Osc_Widget(), osc(NULL), cb_data(NULL, NULL)
++    :Fl_Choice(X,Y,W,H, label), Fl_Osc_Widget(this), cb_data(NULL, NULL)
+ {
+     Fl_Choice::callback(callback_fn, NULL);
+ }
+ 
+-void Fl_Osc_Choice::init(const char *path)
++void Fl_Osc_Choice::init(const char *path_)
+ {
++    path = path_;
+     Fl_Osc_Pane *pane = fetch_osc_pane(this);
+     assert(pane);
++    assert(pane->osc);
+     osc = pane->osc;
+-    full_path = pane->pane_name + path;
+-    osc->createLink(full_path, this);
+-    osc->requestValue(full_path);
++    oscRegister(path_);
+ };
+ 
+ Fl_Osc_Choice::~Fl_Osc_Choice(void)
+-{
+-    if(osc)
+-        osc->removeLink(full_path, this);
+-}
++{}
+         
+ void Fl_Osc_Choice::callback(Fl_Callback *cb, void *p)
+ {
++    puts("Fl_Osc_Choice cb");
+     cb_data.first = cb;
+     cb_data.second = p;
+ }
+@@ -65,18 +52,12 @@ void Fl_Osc_Choice::callback(Fl_Callback *cb, void *p)
+ void Fl_Osc_Choice::OSC_value(char v)
+ {
+     value(v);
+-//    real_value = v;
+-//    const float val = Fl_Osc_Widget::inv_translate(v, metadata.c_str());
+-//    Fl_Dial::value(val);
+-//label_str = string_cast<int,string>(v);
+-//    label("                ");
+-//    label(label_str.c_str());
+ }
+ 
+ void Fl_Osc_Choice::cb(void)
+ {
+     assert(osc);
+-    osc->writeValue(full_path, (char)(value()));
++    oscWrite(path, "c", value());
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+ }
+@@ -84,6 +65,6 @@ void Fl_Osc_Choice::cb(void)
+ void Fl_Osc_Choice::update(void)
+ {
+     assert(osc);
+-    osc->requestValue(full_path);
++    oscWrite(path);
+ }
+ 
+diff --git a/src/UI/Fl_Osc_Counter.H b/src/UI/Fl_Osc_Counter.H
+index f15e7ef5..def1cb64 100644
+--- a/src/UI/Fl_Osc_Counter.H
++++ b/src/UI/Fl_Osc_Counter.H
+@@ -1,8 +1,22 @@
++#pragma once
+ #include <FL/Fl_Counter.H>
++#include "Fl_Osc_Widget.H"
++#include <string>
+ 
+-class Fl_Osc_Counter: public Fl_Counter
++class Fl_Osc_Counter: public Fl_Counter, Fl_Osc_Widget
+ {
+     public:
+         Fl_Osc_Counter(int x, int y, int w, int h, const char *label=0);
++        void init(const char *);
++        void OSC_value(char);
++        using Fl_Osc_Widget::OSC_value;
++        
++        //Refetch parameters
+         void update(void);
++        void callback(Fl_Callback *cb, void *p = NULL);
++
++        void cb(void);
++    private:
++        std::string path;
++        std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/Fl_Osc_Counter.cpp b/src/UI/Fl_Osc_Counter.cpp
+index 67696458..706b601f 100644
+--- a/src/UI/Fl_Osc_Counter.cpp
++++ b/src/UI/Fl_Osc_Counter.cpp
+@@ -1,10 +1,44 @@
+ #include "Fl_Osc_Counter.H"
+ 
++static void callback_fn(Fl_Widget *w, void *)
++{
++    ((Fl_Osc_Counter*)w)->cb();
++}
++
+ Fl_Osc_Counter::Fl_Osc_Counter(int x, int y, int w, int h, const char *label)
+-    :Fl_Counter(x,y,w,h,label)
+-{}
++    :Fl_Counter(x,y,w,h,label), Fl_Osc_Widget(this)
++{
++    Fl_Counter::callback(callback_fn);
++}
+ 
+ void Fl_Osc_Counter::update(void)
+ {
++    oscWrite(path);
++}
++
++void Fl_Osc_Counter::init(const char *path_)
++{
++    oscRegister(path_);
++    path = path_;
+ }
+ 
++void Fl_Osc_Counter::callback(Fl_Callback *cb, void *p)
++{
++    cb_data.first = cb;
++    cb_data.second = p;
++}
++
++void Fl_Osc_Counter::OSC_value(char v)
++{
++    value(v);
++}
++        
++void Fl_Osc_Counter::cb(void)
++{
++    assert(osc);
++
++    oscWrite(path, "c", (char)(value()));
++    
++    if(cb_data.first)
++        cb_data.first(this, cb_data.second);
++}
+diff --git a/src/UI/Fl_Osc_Dial.H b/src/UI/Fl_Osc_Dial.H
+index d4c00756..41a5bc36 100644
+--- a/src/UI/Fl_Osc_Dial.H
++++ b/src/UI/Fl_Osc_Dial.H
+@@ -10,6 +10,12 @@ class Fl_Osc_Dial:public WidgetPDial, Fl_Osc_Widget
+     public:
+         Fl_Osc_Dial(int X, int Y, int W, int H, const char *label = NULL);
+         virtual ~Fl_Osc_Dial(void);
++
++        //Hack to get non-local controls up and running
++        void alt_init(std::string base, std::string path_);
++
++
++        //Normal Initialization
+         void init(const char *path);
+         //void OSC_value(float);
+         void OSC_value(char);
+@@ -22,6 +28,6 @@ class Fl_Osc_Dial:public WidgetPDial, Fl_Osc_Widget
+         void cb(void);
+     private:
+         std::string full_path;
+-        class Fl_Osc_Interface *osc;
++        std::string path;
+         std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/Fl_Osc_Dial.cpp b/src/UI/Fl_Osc_Dial.cpp
+index 1325539d..d7fccd5c 100644
+--- a/src/UI/Fl_Osc_Dial.cpp
++++ b/src/UI/Fl_Osc_Dial.cpp
+@@ -7,18 +7,7 @@
+ #include <cassert>
+ #include <sstream>
+ 
+-template<typename A, typename B>
+-B string_cast(const A &a)
+-{
+-    std::stringstream s;
+-    s.precision(3);
+-    B b;
+-    s << " " << a << " ";
+-    s >> b;
+-    return b;
+-}
+-
+-static void callback_fn(Fl_Widget *w, void *v)
++static void callback_fn(Fl_Widget *w, void *)
+ {
+     ((Fl_Osc_Dial*)w)->cb();
+ }
+@@ -42,22 +31,32 @@ Fl_Osc_Dial::Fl_Osc_Dial(int X, int Y, int W, int H, const char *label)
+ }
+ 
+ 
+-void Fl_Osc_Dial::init(const char *path)
++void Fl_Osc_Dial::init(const char *path_)
+ {
+     Fl_Osc_Pane *pane = fetch_osc_pane(this);
+     assert(pane);
+     osc = pane->osc;
+     assert(osc);
++    loc = pane->pane_name;
++    path = path_;
+     full_path = pane->pane_name + path;
+-    osc->createLink(full_path, this);
+-    osc->requestValue(full_path);
++    oscRegister(path_);
+ };
+-
+-Fl_Osc_Dial::~Fl_Osc_Dial(void)
++        
++void Fl_Osc_Dial::alt_init(std::string base, std::string path_)
+ {
+-    osc->removeLink(full_path, this);
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    assert(pane);
++    osc = pane->osc;
++    assert(osc);
++    loc  = base;
++    full_path = loc + path_;
++    oscRegister(path_.c_str());
+ }
+ 
++Fl_Osc_Dial::~Fl_Osc_Dial(void)
++{}
++
+ void Fl_Osc_Dial::callback(Fl_Callback *cb, void *p)
+ {
+     cb_data.first = cb;
+@@ -67,12 +66,6 @@ void Fl_Osc_Dial::callback(Fl_Callback *cb, void *p)
+ void Fl_Osc_Dial::OSC_value(char v)
+ {
+     value(v+minimum());
+-//    real_value = v;
+-//    const float val = Fl_Osc_Widget::inv_translate(v, metadata.c_str());
+-//    Fl_Dial::value(val);
+-//label_str = string_cast<int,string>(v);
+-//    label("                ");
+-//    label(label_str.c_str());
+ }
+         
+ void Fl_Osc_Dial::update(void)
+@@ -84,11 +77,8 @@ void Fl_Osc_Dial::cb(void)
+ {
+     assert(osc);
+ 
+-    osc->writeValue(full_path, (char)(value()-minimum()));
++    oscWrite(path, "c", (char)(value()-minimum()));
+     
+     if(cb_data.first)
+         cb_data.first(this, cb_data.second);
+-//    label_str = string_cast<float,string>(val);
+-//    label("                ");
+-//    label(label_str.c_str());
+ }
+diff --git a/src/UI/Fl_Osc_Slider.H b/src/UI/Fl_Osc_Slider.H
+index 7591355f..84855df7 100644
+--- a/src/UI/Fl_Osc_Slider.H
++++ b/src/UI/Fl_Osc_Slider.H
+@@ -15,14 +15,19 @@ class Fl_Osc_Slider:public Fl_Slider, Fl_Osc_Widget
+ 
+         virtual ~Fl_Osc_Slider(void);
+         void OSC_value(float);
+-        void init(Fl_Osc_Interface *, std::string);
+-        void init(std::string);
++        void init(std::string, char type = 'f');
++
++        //Refetch parameter information
++        void update(void);
++        void callback(Fl_Callback *cb, void *p = NULL);
+ 
+         void cb(void);
+         static void _cb(Fl_Widget *w, void *);
+     private:
+         string label_str;
+         std::string full_path;
++        std::string path;
+         double real_value;
+-        class Fl_Osc_Interface *osc;
++        char osc_type;
++        std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index 3af9c68b..59132bfa 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -7,49 +7,22 @@
+ #include <cassert>
+ #include <sstream>
+ 
+-template<typename A, typename B>
+-B string_cast(const A &a)
+-{
+-    std::stringstream s;
+-    s.precision(3);
+-    B b;
+-    s << " " << a << " ";
+-    s >> b;
+-    return b;
+-}
+-
+ Fl_Osc_Slider::Fl_Osc_Slider(int X, int Y, int W, int H, const char *label)
+-    :Fl_Slider(X,Y,W,H,label), Fl_Osc_Widget(), osc(NULL)
++    :Fl_Slider(X,Y,W,H,label), Fl_Osc_Widget(this), cb_data(NULL, NULL)
+ {
+     //bounds(0.0f,1.0f);
+-    callback(Fl_Osc_Slider::_cb);
++    Fl_Slider::callback(Fl_Osc_Slider::_cb);
+ }
+ 
+-void Fl_Osc_Slider::init(std::string path)
++void Fl_Osc_Slider::init(std::string path_, char type_)
+ {
+-    Fl_Osc_Pane *pane = fetch_osc_pane(this);
+-    assert(pane);
+-    osc = pane->osc;
+-    init(osc,path);
++    osc_type = type_;
++    path = path_;
++    oscRegister(path.c_str());
+ }
+ 
+-void Fl_Osc_Slider::init(Fl_Osc_Interface *osc, std::string path)
+-{
+-    Fl_Osc_Pane *pane = fetch_osc_pane(this);
+-    assert(pane);
+-    full_path = pane->pane_name + path;
+-    this->osc = osc;
+-    osc->createLink(full_path, this);
+-    osc->requestValue(full_path);
+-};
+-
+ Fl_Osc_Slider::~Fl_Osc_Slider(void)
+-{
+-    if(osc)
+-        osc->removeLink(full_path, this);
+-    else
+-        fprintf(stderr, "Warning: Missing OSC link in " __FILE__ "\n");
+-}
++{}
+ 
+ void Fl_Osc_Slider::OSC_value(float v)
+ {
+@@ -59,8 +32,25 @@ void Fl_Osc_Slider::OSC_value(float v)
+ void Fl_Osc_Slider::cb(void)
+ {
+     const float val = Fl_Slider::value();
+-    osc->writeValue(full_path, val);
++    if(osc_type == 'f')
++        oscWrite(path, "f", val);
++    else
++        oscWrite(path, "c", (char) val);
+     //OSC_value(val);
++    
++    if(cb_data.first)
++        cb_data.first(this, cb_data.second);
++}
++
++void Fl_Osc_Slider::callback(Fl_Callback *cb, void *p)
++{
++    cb_data.first = cb;
++    cb_data.second = p;
++}
++
++void Fl_Osc_Slider::update(void)
++{
++    oscWrite(path, "");
+ }
+ 
+ void Fl_Osc_Slider::_cb(Fl_Widget *w, void *)
+diff --git a/src/UI/Fl_Osc_Widget.cpp b/src/UI/Fl_Osc_Widget.cpp
+index 28d196a3..3b6deb60 100644
+--- a/src/UI/Fl_Osc_Widget.cpp
++++ b/src/UI/Fl_Osc_Widget.cpp
+@@ -49,6 +49,11 @@ void Fl_Osc_Widget::oscWrite(std::string path, const char *args, ...)
+         osc->writeRaw(buffer);
+     else
+         puts("Dangerous Event ommision");
++    //Try to pretty print basic events
++    if(!strcmp(args, "c") || !strcmp(args, "i"))
++        printf("Args = ['%d']\n", rtosc_argument(buffer, 0).i);
++    if(!strcmp(args, "f"))
++        printf("Args = ['%f']\n", rtosc_argument(buffer, 0).f);
+ }
+ 
+ void Fl_Osc_Widget::oscWrite(std::string path)
+diff --git a/src/UI/Fl_Oscilloscope.h b/src/UI/Fl_Oscilloscope.h
+index 31264dc0..153a96c8 100644
+--- a/src/UI/Fl_Oscilloscope.h
++++ b/src/UI/Fl_Oscilloscope.h
+@@ -30,12 +30,12 @@ class Fl_Oscilloscope : public Fl_Box, Fl_Osc_Widget
+             osc->removeLink(loc, this);
+         }
+ 
+-        void init(bool base_waveform_p)
++        void init(bool base_waveform_p, std::string loc = "")
+         {
+             Fl_Osc_Pane *og  = fetch_osc_pane(this);
+             assert(og);
+ 
+-            loc = og->pane_name + (base_waveform_p ? "base-waveform": "waveform");
++            loc = og->pane_name + loc + (base_waveform_p ? "base-waveform": "waveform");
+             osc = og->osc;
+             assert(osc);
+ 
+diff --git a/src/UI/FormantFilterGraph.H b/src/UI/FormantFilterGraph.H
+new file mode 100644
+index 00000000..858cd1d6
+--- /dev/null
++++ b/src/UI/FormantFilterGraph.H
+@@ -0,0 +1,62 @@
++#pragma once
++
++#include <FL/Fl.H>
++#include "Fl_Osc_Widget.H"
++#include "WidgetPDial.h"
++#include "../globals.h"
++#include <FL/Fl_Group.H>
++#include "../Params/FilterParams.h"
++#include <FL/Fl_Box.H>
++#include <FL/fl_draw.H>
++#include <FL/fl_ask.H>
++#include "common.H"
++
++class FilterParams;
++
++class FormantFilterGraph : public Fl_Box, Fl_Osc_Widget {
++    public:
++        FormantFilterGraph(int x,int y, int w, int h, const char *label=0);
++        void init(int *nvowel_, int *nformant_);
++        void draw_freq_line(float freq,int type);
++        void draw();
++        virtual ~FormantFilterGraph(void);
++
++        void OSC_value(char x, const char *) override;
++        void OSC_value(unsigned x, void *v) override;
++
++        void updateVowel(int);
++        void updateFormant(int);
++
++        void update(void);
++
++    private:
++        int *nvowel,*nformant; 
++        float *graphpoints; 
++        
++        struct {
++            struct {
++                unsigned char freq, amp, q; //frequency,amplitude,Q
++            } formants[FF_MAX_FORMANTS];
++        } Pvowels[FF_MAX_VOWELS];
++
++        int Pnumformants;
++        int Pstages;
++        int Pcenterfreq;
++        int Pgain;
++
++        int Pq;
++        int Poctavesfreq;
++
++
++        float getfreqx(float);
++
++        float getfreqpos(float);
++        float getformantfreq(unsigned char);
++        float getformantamp(unsigned char);
++        float getoctavesfreq(void);
++        float getcenterfreq(void);
++        float getgain(void);
++        float getq(void);
++        float getformantq(unsigned char q);
++        void formantfilterH(int, int, float*);
++};
+diff --git a/src/UI/FormantFilterGraph.cpp b/src/UI/FormantFilterGraph.cpp
+new file mode 100644
+index 00000000..e4b0dd37
+--- /dev/null
++++ b/src/UI/FormantFilterGraph.cpp
+@@ -0,0 +1,325 @@
++#include "FormantFilterGraph.H"
++#include <cmath>
++#include <cstdio>
++#include <cstdlib>
++
++FormantFilterGraph::FormantFilterGraph(int x,int y, int w, int h, const char *label)
++:Fl_Box(x,y,w,h,label), Fl_Osc_Widget(this)
++{
++    memset(Pvowels, 0, sizeof(Pvowels));
++    Pnumformants = 0;
++    Pstages = 0;
++    Pgain = 0;
++    Pcenterfreq = 0;
++    Pq = 0;
++    Poctavesfreq = 0;
++    nvowel=NULL;
++    nformant=NULL;
++    graphpoints=NULL;
++}
++
++void FormantFilterGraph::init(int *nvowel_,int *nformant_)
++{
++    nvowel=nvowel_;
++    nformant=nformant_;
++    graphpoints=new float [w()];
++
++    oscRegister("Pvowels");
++    oscRegister("Pnumformants");
++    oscRegister("Pstages");
++    oscRegister("Pcenterfreq");
++    oscRegister("Poctavesfreq");
++    oscRegister("Pgain");
++    oscRegister("Pq");
++}
++
++void FormantFilterGraph::OSC_value(char x, const char *loc)
++{
++    if(strstr(loc, "Pnumformants"))
++        Pnumformants = x;
++    else if(strstr(loc, "Pstages"))
++        Pstages = x;
++    else if(strstr(loc, "Pcenterfreq"))
++        Pcenterfreq = x;
++    else if(strstr(loc, "Pgain"))
++        Pgain = x;
++    else if(strstr(loc, "Pq"))
++        Pq = x;
++    else if(strstr(loc, "Poctavesfreq"))
++        Poctavesfreq = x;
++
++    redraw();
++}
++void FormantFilterGraph::OSC_value(unsigned x, void *v)
++{
++    assert(x = sizeof(Pvowels));
++    memcpy(&Pvowels[0], v, x);
++    redraw();
++}
++
++void FormantFilterGraph::draw_freq_line(float freq,int type)
++{
++    const float freqx=getfreqpos(freq);
++    switch(type){
++        case 0:fl_line_style(FL_SOLID);break;
++        case 1:fl_line_style(FL_DOT);break;
++        case 2:fl_line_style(FL_DASH);break;
++    }; 
++
++
++    if ((freqx>0.0)&&(freqx<1.0))
++        fl_line(x()+(int) (freqx*w()),y(),
++                x()+(int) (freqx*w()),y()+h());
++}
++    
++void FormantFilterGraph::update(void)
++{
++    oscWrite("Pvowels");
++    oscWrite("Pnumformants");
++    oscWrite("Pstages");
++    oscWrite("Pcenterfreq");
++    oscWrite("Poctavesfreq");
++    oscWrite("Pgain");
++    oscWrite("Pq");
++}
++
++//TODO A good portion of this is copy/pasta from EnvelopUI's widget
++//     REFACTOR!
++void FormantFilterGraph::draw()
++{
++    const int maxdB=30;
++    const int ox=x(),oy=y(),lx=w(),ly=h();
++
++    fl_color(FL_BLACK);
++    fl_rectf(ox,oy,lx,ly);
++
++
++    //draw the lines
++    fl_color(FL_GRAY);
++
++    fl_line_style(FL_SOLID);
++    //fl_line(ox+2,oy+ly/2,ox+lx-2,oy+ly/2);
++
++    const float freqx = getfreqpos(1000.0);
++    if ((freqx>0.0)&&(freqx<1.0))
++        fl_line(ox+(int) (freqx*lx),oy,
++                ox+(int) (freqx*lx),oy+ly);
++
++    for(int i=1;i<10;i++){
++        if(i==1){
++            draw_freq_line(i*100.0,0);
++            draw_freq_line(i*1000.0,0);
++        }else 
++            if (i==5){
++                draw_freq_line(i*100.0,2);
++                draw_freq_line(i*1000.0,2);
++            }else{
++                draw_freq_line(i*100.0,1);
++                draw_freq_line(i*1000.0,1);
++            };
++    };
++
++    draw_freq_line(10000.0,0);
++    draw_freq_line(20000.0,1);
++
++    fl_line_style(FL_DOT);
++    int GY=10;if (ly<GY*3) GY=-1;
++    for (int i=1;i<GY;i++){
++        int tmp=(int)(ly/(float)GY*i);
++        fl_line(ox+2,oy+tmp,ox+lx-2,oy+tmp);
++    };
++
++    fl_color(FL_YELLOW);
++    fl_font(FL_HELVETICA,10);
++    if (*nformant < Pnumformants){
++        draw_freq_line(getformantfreq(Pvowels[*nvowel].formants[*nformant].freq),2);
++
++        //show some information (like current formant frequency,amplitude)
++        char tmpstr[20];
++
++        snprintf(tmpstr,20,"%.2f kHz",getformantfreq(Pvowels[*nvowel].formants[*nformant].freq)*0.001);
++        fl_draw(tmpstr,ox+1,oy+1,40,12,FL_ALIGN_LEFT,NULL,0);
++
++        snprintf(tmpstr,20,"%d dB",(int)( rap2dB(1e-9 +
++                        getformantamp(Pvowels[*nvowel].formants[*nformant].amp))
++                    + getgain()));
++        fl_draw(tmpstr,ox+1,oy+15,40,12,FL_ALIGN_LEFT,NULL,0);
++
++    };
++
++    //draw the data
++
++    fl_color(FL_RED);
++    fl_line_style(FL_SOLID);
++
++    formantfilterH(*nvowel,lx,graphpoints);
++
++    fl_line_style( FL_SOLID, 2 );
++    fl_begin_line();
++    int oiy=(int) ((graphpoints[0]/maxdB+1.0)*ly/2.0);
++    for(int i=1;i<lx;i++){
++        double iy= ((graphpoints[i]/maxdB+1.0)*ly/2.0);
++        if ((iy>=0)&&(oiy>=0)&&(iy<ly)&&(oiy<lx))
++            fl_vertex(ox+i,oy+ly-iy);
++        oiy=iy;
++    };
++    fl_end_line();
++    fl_line_style(FL_SOLID,0);
++}
++
++FormantFilterGraph::~FormantFilterGraph(void)
++{
++    delete [] graphpoints;
++}
++
++/*
++ * Parameter control
++ */
++float FormantFilterGraph::getgain()
++{
++    return (Pgain / 64.0f - 1.0f) * 30.0f; //-30..30dB
++}
++
++float FormantFilterGraph::getq()
++{
++    return expf(powf((float) Pq / 127.0f, 2) * logf(1000.0f)) - 0.9f;
++}
++
++/*
++ * Get the center frequency of the formant's graph
++ */
++float FormantFilterGraph::getcenterfreq()
++{
++    return 10000.0f * powf(10, -(1.0f - Pcenterfreq / 127.0f) * 2.0f);
++}
++
++/*
++ * Get the number of octave that the formant functions applies to
++ */
++float FormantFilterGraph::getoctavesfreq()
++{
++    return 0.25f + 10.0f * Poctavesfreq / 127.0f;
++}
++
++/*
++ * Get the frequency from x, where x is [0..1]
++ */
++float FormantFilterGraph::getfreqx(float x)
++{
++    if(x > 1.0f)
++        x = 1.0f;
++    float octf = powf(2.0f, getoctavesfreq());
++    return getcenterfreq() / sqrt(octf) * powf(octf, x);
++}
++
++/*
++ * Get the x coordinate from frequency (used by the UI)
++ */
++float FormantFilterGraph::getfreqpos(float freq)
++{
++    return (logf(freq) - logf(getfreqx(0.0f))) / logf(2.0f) / getoctavesfreq();
++}
++
++
++/*
++ * Get the freq. response of the formant filter
++ */
++void FormantFilterGraph::formantfilterH(int nvowel, int nfreqs, float *freqs)
++{
++    float c[3], d[3];
++
++    for(int i = 0; i < nfreqs; ++i)
++        freqs[i] = 0.0f;
++
++    //for each formant...
++    for(int nformant = 0; nformant < Pnumformants; ++nformant) {
++        //compute formant parameters(frequency,amplitude,etc.)
++        const float filter_freq = getformantfreq(Pvowels[nvowel].formants[nformant].freq);
++        float filter_q    = getformantq(Pvowels[nvowel].formants[nformant].q) * getq();
++        if(Pstages > 0)
++            filter_q = (filter_q > 1.0f ? powf(filter_q, 1.0f / (Pstages + 1)) : filter_q);
++
++        const float filter_amp = getformantamp(Pvowels[nvowel].formants[nformant].amp);
++
++        printf("NFORMANT %d\n", nformant);
++        printf("CHARACTERISTICS: FREQ %f Q %f AMP %f\n", filter_freq, filter_q, filter_amp);
++
++
++        if(filter_freq <= (synth->samplerate / 2 - 100.0f)) {
++            const float omega = 2 * PI * filter_freq / synth->samplerate_f;
++            const float sn    = sinf(omega);
++            const float cs    = cosf(omega);
++            const float alpha = sn / (2 * filter_q);
++            const float tmp   = 1 + alpha;
++            c[0] = alpha / tmp *sqrt(filter_q + 1);
++            c[1] = 0;
++            c[2] = -alpha / tmp *sqrt(filter_q + 1);
++            d[1] = -2 * cs / tmp * (-1);
++            d[2] = (1 - alpha) / tmp * (-1);
++        }
++        else
++            continue;
++
++
++        for(int i = 0; i < nfreqs; ++i) {
++            const float freq = getfreqx(i / (float) nfreqs);
++
++            //Discard frequencies above nyquist rate
++            if(freq > synth->samplerate / 2) {
++                for(int tmp = i; tmp < nfreqs; ++tmp)
++                    freqs[tmp] = 0.0f;
++                break;
++            }
++
++            //Convert to normalized frequency
++            const float fr = freq / synth->samplerate * PI * 2.0f;
++
++            //Evaluate Complex domain ratio
++            float x  = c[0], y = 0.0f;
++            for(int n = 1; n < 3; ++n) {
++                x += cosf(n * fr) * c[n];
++                y -= sinf(n * fr) * c[n];
++            }
++            float h = x * x + y * y;
++            x = 1.0f;
++            y = 0.0f;
++            for(int n = 1; n < 3; ++n) {
++                x -= cosf(n * fr) * d[n];
++                y += sinf(n * fr) * d[n];
++            }
++            h = h / (x * x + y * y);
++
++            freqs[i] += powf(h, (Pstages + 1.0f) / 2.0f) * filter_amp;
++        }
++    }
++
++    //Convert to logarithmic data ignoring points that are too small
++    for(int i = 0; i < nfreqs; ++i) {
++        if(freqs[i] > 0.000000001f)
++            freqs[i] = rap2dB(freqs[i]) + getgain();
++        else
++            freqs[i] = -90.0f;
++    }
++
++    for(int i = 0; i < nfreqs; ++i) {
++        printf("[%d] => %f\n", i, freqs[i]);
++    }
++}
++
++/*
++ * Transforms a parameter to the real value
++ */
++float FormantFilterGraph::getformantfreq(unsigned char freq)
++{
++    return getfreqx(freq / 127.0f);
++}
++
++float FormantFilterGraph::getformantamp(unsigned char amp)
++{
++    return powf(0.1f, (1.0f - amp / 127.0f) * 4.0f);
++}
++
++float FormantFilterGraph::getformantq(unsigned char q)
++{
++    return powf(25.0f, (q - 32.0f) / 64.0f);
++}
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index e8971d87..3b2f88d6 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -610,7 +610,7 @@ syseffectui->refresh(master->sysefx[nsyseff]);}
+             } {
+               Fl_Group syseffectui {
+                 xywh {10 208 380 95}
+-                code0 {o->init(master->sysefx[nsyseff]);}
++                code0 {o->init(master->sysefx[nsyseff], osc, "/SysEffect/");}
+                 class EffUI
+               } {}
+             }
+@@ -709,7 +709,7 @@ inseffectui->show();}
+             } {
+               Fl_Group inseffectui {
+                 xywh {10 210 380 90} box UP_FRAME
+-                code0 {o->init(master->insefx[ninseff]);}
++                code0 {o->init(master->insefx[ninseff], osc, "/InsEffect/");}
+                 code1 {if (master->Pinsparts[ninseff]== -1) o->deactivate();}
+                 class EffUI
+               } {}
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 845f5e40..75d0668d 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -788,7 +788,8 @@ hprofile->redraw();}
+             Fl_Group filterui {
+               label {PADsynth - Filter} open
+               xywh {250 55 275 75} box FLAT_BOX color 50 align 144
+-              code0 {o->init(pars->GlobalFilter,&pars->PFilterVelocityScale,&pars->PFilterVelocityScaleFunction);}
++              code0 {o->init(location + "PFilter",
++              osc_i, location + "GlobalFilter/");}
+               class FilterUI
+             } {}
+           }
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index b940dd41..cbe5a15a 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -716,7 +716,8 @@ inseffectui->refresh(part->partefx[ninseff]);}
+       } {
+         Fl_Group inseffectui {
+           xywh {5 5 380 95}
+-          code0 {o->init(part->partefx[ninseff]);}
++          code0 {o->init(part->partefx[ninseff],
++          osc, loc + "InsEffect/");}
+           class EffUI
+         } {}
+       }
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 6f3e395b..efe179ca 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -363,7 +363,7 @@ bandwidthsettingsui->redraw();}
+         Fl_Group filterui {
+           label {SUBsynthl - Filter} open
+           xywh {445 165 275 75} box FLAT_BOX color 50 align 144
+-          code0 {o->init(pars->GlobalFilter,&pars->PGlobalFilterVelocityScale,&pars->PGlobalFilterVelocityScaleFunction);}
++          code0 {o->init(loc + "PGlobalFilter" , osc, loc + "GlobalFilter/");}
+           class FilterUI
+         } {}
+       }
+-- 
+2.47.0
+

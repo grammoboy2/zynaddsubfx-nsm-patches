@@ -1,0 +1,542 @@
+From 80d8dd10c25b009a006452707b9981bcf472af68 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Aug 2015 11:40:25 -0400
+Subject: [PATCH 0534/1936] Fix Deglobalization Test Case Failures
+
+---
+ src/CMakeLists.txt             |  3 ++-
+ src/Misc/Allocator.h           | 12 +++++++-----
+ src/Output/DSSIaudiooutput.cpp |  6 +-----
+ src/Output/DSSIaudiooutput.h   |  5 +++--
+ src/Tests/AdNoteTest.h         | 12 +-----------
+ src/Tests/AllocatorTest.h      |  2 +-
+ src/Tests/EchoTest.h           |  2 +-
+ src/Tests/InstrumentStats.cpp  | 13 +++++--------
+ src/Tests/MicrotonalTest.h     |  8 +++++---
+ src/Tests/MiddlewareTest.h     | 16 ++++++++--------
+ src/Tests/OscilGenTest.h       |  7 -------
+ src/Tests/PadNoteTest.h        | 15 ++++-----------
+ src/Tests/PluginTest.h         |  9 ++-------
+ src/Tests/RandTest.h           |  2 --
+ src/Tests/SubNoteTest.h        |  9 +--------
+ src/Tests/UnisonTest.h         |  9 +--------
+ src/globals.cpp                |  7 +++++--
+ src/globals.h                  |  4 ++--
+ 18 files changed, 49 insertions(+), 92 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 3d0939ba..73c10f2d 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -348,6 +348,7 @@ add_subdirectory(DSP)
+ add_subdirectory(Nio)
+ 
+ add_library(zynaddsubfx_core STATIC
++    globals.cpp
+     ../tlsf/tlsf.c
+ 	${zynaddsubfx_dsp_SRCS}
+ 	${zynaddsubfx_effect_SRCS}
+@@ -369,7 +370,7 @@ if(CompileTests)
+ endif(CompileTests)
+ 
+ 
+-add_executable(zynaddsubfx main.cpp globals.cpp)
++add_executable(zynaddsubfx main.cpp)
+ 
+ #Warning: the required ordering of these to get proper linking depends upon the
+ #         phase of the moon
+diff --git a/src/Misc/Allocator.h b/src/Misc/Allocator.h
+index c002b2c9..1f0d0d34 100644
+--- a/src/Misc/Allocator.h
++++ b/src/Misc/Allocator.h
+@@ -86,12 +86,14 @@ class Allocator
+ //! the allocator for normal use
+ class AllocatorClass : public Allocator
+ {
+-    void *alloc_mem(size_t mem_size);
+-    void dealloc_mem(void *memory);
+-    void addMemory(void *, size_t mem_size);
+-    bool lowMemory(unsigned n, size_t chunk_size) const;
+-    using Allocator::Allocator;
++    public:
++        void *alloc_mem(size_t mem_size);
++        void dealloc_mem(void *memory);
++        void addMemory(void *, size_t mem_size);
++        bool lowMemory(unsigned n, size_t chunk_size) const;
++        using Allocator::Allocator;
+ };
++typedef AllocatorClass Alloc;
+ 
+ //! the dummy allocator, which does not allow any allocation
+ class DummyAllocator : public Allocator
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index f6953ef6..a8615faf 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -29,7 +29,6 @@
+ 
+ #include "DSSIaudiooutput.h"
+ #include "../Misc/Master.h"
+-#include "../Misc/Config.h"
+ #include "../Misc/Bank.h"
+ #include "../Misc/Util.h"
+ #include <rtosc/thread-link.h>
+@@ -611,12 +610,9 @@ DSSIaudiooutput::DSSIaudiooutput(unsigned long sampleRate)
+     config.init();
+ 
+     sprng(time(NULL));
+-    denormalkillbuf = new float [synth.buffersize];
+-    for(int i = 0; i < synth.buffersize; i++)
+-        denormalkillbuf[i] = (RND - 0.5f) * 1e-16;
+ 
+     synth.alias();
+-    middleware = new MiddleWare(synth);
++    middleware = new MiddleWare(std::move(synth), &config);
+     initBanks();
+     loadThread = new std::thread([this]() {
+             while(middleware) {
+diff --git a/src/Output/DSSIaudiooutput.h b/src/Output/DSSIaudiooutput.h
+index a17222c8..3b4c0dc4 100644
+--- a/src/Output/DSSIaudiooutput.h
++++ b/src/Output/DSSIaudiooutput.h
+@@ -25,6 +25,7 @@
+ #include <thread>
+ 
+ #include "../globals.h"
++#include "../Misc/Config.h"
+ #include "../Misc/MiddleWare.h"
+ 
+ #include <dssi.h>
+@@ -117,8 +118,8 @@ class DSSIaudiooutput
+          */
+         bool banksInited;
+ 
+-        static
+-        long bankNoToMap;
++        static long bankNoToMap;
++        Config config;
+ };
+ 
+ #endif
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index f4b223df..b18db4f6 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -42,15 +42,13 @@ using namespace std;
+ class AdNoteTest:public CxxTest::TestSuite
+ {
+     public:
+-
+         ADnote       *note;
+         Master       *master;
+         FFTwrapper   *fft;
+         Controller   *controller;
+-        Allocator     memory;
++        Alloc         memory;
+         unsigned char testnote;
+ 
+-
+         float *outR, *outL;
+ 
+         void setUp() {
+@@ -65,13 +63,6 @@ class AdNoteTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 *(outR + i) = 0;
+ 
+-            //next the bad global variables that for some reason have not been properly placed in some
+-            //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-            denormalkillbuf = new float[synth->buffersize];
+-            for(int i = 0; i < synth->buffersize; ++i)
+-                denormalkillbuf[i] = 0;
+-
+-            //phew, glad to get thouse out of my way. took me a lot of sweat and gdb to get this far...
+ 
+             fft = new FFTwrapper(synth->oscilsize);
+             //prepare the default settings
+@@ -118,7 +109,6 @@ class AdNoteTest:public CxxTest::TestSuite
+             delete fft;
+             delete [] outL;
+             delete [] outR;
+-            delete [] denormalkillbuf;
+             FFT_cleanup();
+             delete synth;
+         }
+diff --git a/src/Tests/AllocatorTest.h b/src/Tests/AllocatorTest.h
+index e5bc4b99..aeb9c079 100644
+--- a/src/Tests/AllocatorTest.h
++++ b/src/Tests/AllocatorTest.h
+@@ -37,7 +37,7 @@ class AllocatorTest:public CxxTest::TestSuite
+         vector<void*> data;
+ 
+         void setUp() {
+-            memory_ = new Allocator();
++            memory_ = new AllocatorClass();
+         }
+ 
+         void tearDown() {
+diff --git a/src/Tests/EchoTest.h b/src/Tests/EchoTest.h
+index f85b928c..cbd208ce 100644
+--- a/src/Tests/EchoTest.h
++++ b/src/Tests/EchoTest.h
+@@ -125,5 +125,5 @@ class EchoTest:public CxxTest::TestSuite
+         Stereo<float *> *input;
+         float *outR, *outL;
+         Echo  *testFX;
+-        Allocator alloc;
++        Alloc alloc;
+ };
+diff --git a/src/Tests/InstrumentStats.cpp b/src/Tests/InstrumentStats.cpp
+index af1b88d8..7e525cf0 100644
+--- a/src/Tests/InstrumentStats.cpp
++++ b/src/Tests/InstrumentStats.cpp
+@@ -24,9 +24,10 @@ enum RunMode {
+ 
+ RunMode mode;
+ 
++int compress = 0;
+ float *outL, *outR;
+-Allocator  alloc;
+-Microtonal microtonal;
++Alloc      alloc;
++Microtonal microtonal(compress);
+ FFTwrapper fft(1024);
+ Part *p;
+ 
+@@ -45,6 +46,7 @@ double toc()
+     return tic();
+ }
+ 
++int interp=1;
+ void setup() {
+     synth = new SYNTH_T;
+     synth->buffersize = 256;
+@@ -60,12 +62,7 @@ void setup() {
+     for(int i = 0; i < synth->buffersize; ++i)
+         outR[i] = 0.0f;
+ 
+-    //next the bad global variables that for some reason have not been properly placed in some
+-    //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-    denormalkillbuf = new float[synth->buffersize];
+-    for(int i = 0; i < synth->buffersize; ++i)
+-        denormalkillbuf[i] = 0;
+-    p = new Part(alloc, *synth, &microtonal, &fft);
++    p = new Part(alloc, *synth, compress, interp, &microtonal, &fft);
+ }
+ 
+ void xml(string s)
+diff --git a/src/Tests/MicrotonalTest.h b/src/Tests/MicrotonalTest.h
+index 0c49000d..eec2e26d 100644
+--- a/src/Tests/MicrotonalTest.h
++++ b/src/Tests/MicrotonalTest.h
+@@ -34,9 +34,11 @@ using namespace std;
+ class MicrotonalTest:public CxxTest::TestSuite
+ {
+     public:
++        int compression;
+         void setUp() {
+-            synth     = new SYNTH_T;
+-            testMicro = new Microtonal();
++            compression = 0;
++            synth       = new SYNTH_T;
++            testMicro   = new Microtonal(compression);
+         }
+ 
+         void tearDown() {
+@@ -85,7 +87,7 @@ class MicrotonalTest:public CxxTest::TestSuite
+             xml.endbranch();
+ 
+             char *tmp = xml.getXMLdata();
+-            Microtonal other;
++            Microtonal other(compression);
+ 
+             other.Penabled = 1;
+             strcpy((char *)other.Pname, "Myname"); //will be nicer with strings
+diff --git a/src/Tests/MiddlewareTest.h b/src/Tests/MiddlewareTest.h
+index 1cc873a6..2b7d79bf 100644
+--- a/src/Tests/MiddlewareTest.h
++++ b/src/Tests/MiddlewareTest.h
+@@ -42,6 +42,7 @@ char *instance_name=(char*)"";
+ class PluginTest:public CxxTest::TestSuite
+ {
+     public:
++        Config config;
+         void setUp() {
+             synth = new SYNTH_T;
+             synth->buffersize = 256;
+@@ -55,14 +56,14 @@ class PluginTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 outR[i] = 0.0f;
+ 
+-            //next the bad global variables that for some reason have not been properly placed in some
+-            //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-            denormalkillbuf = new float[synth->buffersize];
+-            for(int i = 0; i < synth->buffersize; ++i)
+-                denormalkillbuf[i] = 0;
+-
++            delete synth;
++            synth = NULL;
+             for(int i = 0; i < 16; ++i) {
+-                middleware[i] = new MiddleWare(*synth);
++                synth = new SYNTH_T;
++                synth->buffersize = 256;
++                synth->samplerate = 48000;
++                synth->alias();
++                middleware[i] = new MiddleWare(std::move(*synth), &config);
+                 master[i] = middleware[i]->spawnMaster();
+             }
+         }
+@@ -73,7 +74,6 @@ class PluginTest:public CxxTest::TestSuite
+ 
+             delete[] outL;
+             delete[] outR;
+-            delete[] denormalkillbuf;
+             delete synth;
+         }
+ 
+diff --git a/src/Tests/OscilGenTest.h b/src/Tests/OscilGenTest.h
+index 731837fd..22358547 100644
+--- a/src/Tests/OscilGenTest.h
++++ b/src/Tests/OscilGenTest.h
+@@ -49,12 +49,6 @@ class OscilGenTest:public CxxTest::TestSuite
+             memset(outL, 0, sizeof(float) * synth->oscilsize);
+             memset(outR, 0, sizeof(float) * synth->oscilsize);
+ 
+-            //next the bad global variables that for some reason have not been properly placed in some
+-            //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-            denormalkillbuf = new float[synth->buffersize];
+-            for(int i = 0; i < synth->buffersize; ++i)
+-                denormalkillbuf[i] = 0;
+-
+             //prepare the default settings
+             fft   = new FFTwrapper(synth->oscilsize);
+             oscil = new OscilGen(*synth, fft, NULL);
+@@ -88,7 +82,6 @@ class OscilGenTest:public CxxTest::TestSuite
+             delete fft;
+             delete[] outL;
+             delete[] outR;
+-            delete[] denormalkillbuf;
+             FFT_cleanup();
+             delete synth;
+         }
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index e9a46a0c..94f94bf8 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -54,12 +54,14 @@ class PadNoteTest:public CxxTest::TestSuite
+         FFTwrapper   *fft;
+         Controller   *controller;
+         unsigned char testnote;
+-        Allocator     memory;
++        Alloc         memory;
++        int           interpolation;
+ 
+ 
+         float *outR, *outL;
+ 
+         void setUp() {
++            interpolation = 0;
+             synth = new SYNTH_T;
+             //First the sensible settings and variables that have to be set:
+             synth->buffersize = 256;
+@@ -71,13 +73,6 @@ class PadNoteTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 *(outR + i) = 0;
+ 
+-            //next the bad global variables that for some reason have not been properly placed in some
+-            //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-            denormalkillbuf = new float[synth->buffersize];
+-            for(int i = 0; i < synth->buffersize; ++i)
+-                denormalkillbuf[i] = 0;
+-
+-            //phew, glad to get thouse out of my way. took me a lot of sweat and gdb to get this far...
+ 
+             fft = new FFTwrapper(synth->oscilsize);
+             //prepare the default settings
+@@ -116,7 +111,7 @@ class PadNoteTest:public CxxTest::TestSuite
+             float freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+             SynthParams pars_{memory, *controller, *synth, freq, 120, 0, testnote, false};
+ 
+-            note = new PADnote(pars, pars_);
++            note = new PADnote(pars, pars_, interpolation);
+         }
+ 
+         void tearDown() {
+@@ -125,7 +120,6 @@ class PadNoteTest:public CxxTest::TestSuite
+             delete fft;
+             delete [] outL;
+             delete [] outR;
+-            delete [] denormalkillbuf;
+             delete pars;
+             FFT_cleanup();
+             delete synth;
+@@ -135,7 +129,6 @@ class PadNoteTest:public CxxTest::TestSuite
+             fft = NULL;
+             outL = NULL;
+             outR = NULL;
+-            denormalkillbuf = NULL;
+             pars = NULL;
+             synth = NULL;
+         }
+diff --git a/src/Tests/PluginTest.h b/src/Tests/PluginTest.h
+index 48d5859c..b51783b9 100644
+--- a/src/Tests/PluginTest.h
++++ b/src/Tests/PluginTest.h
+@@ -43,6 +43,7 @@ MiddleWare *middleware;
+ class PluginTest:public CxxTest::TestSuite
+ {
+     public:
++        Config config;
+         void setUp() {
+             synth = new SYNTH_T;
+             synth->buffersize = 256;
+@@ -56,14 +57,8 @@ class PluginTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 outR[i] = 0.0f;
+ 
+-            //next the bad global variables that for some reason have not been properly placed in some
+-            //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-            denormalkillbuf = new float[synth->buffersize];
+-            for(int i = 0; i < synth->buffersize; ++i)
+-                denormalkillbuf[i] = 0;
+-
+             for(int i = 0; i < 16; ++i)
+-                master[i] = new Master(*synth);
++                master[i] = new Master(*synth, &config);
+         }
+ 
+         void tearDown() {
+diff --git a/src/Tests/RandTest.h b/src/Tests/RandTest.h
+index 2a51e952..fdb196dd 100644
+--- a/src/Tests/RandTest.h
++++ b/src/Tests/RandTest.h
+@@ -21,8 +21,6 @@
+ */
+ 
+ #include "../Misc/Util.h"
+-SYNTH_T *synth;
+-
+ #include <cstdlib>
+ #include <cstdio>
+ #include <cxxtest/TestSuite.h>
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index d9533fad..a1b05021 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -46,7 +46,7 @@ class SubNoteTest:public CxxTest::TestSuite
+         Master       *master;
+         Controller   *controller;
+         unsigned char testnote;
+-        Allocator     memory;
++        Alloc         memory;
+ 
+ 
+         float *outR, *outL;
+@@ -63,12 +63,6 @@ class SubNoteTest:public CxxTest::TestSuite
+             for(int i = 0; i < synth->buffersize; ++i)
+                 *(outR + i) = 0;
+ 
+-            //next the bad global variables that for some reason have not been properly placed in some
+-            //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-            denormalkillbuf = new float[synth->buffersize];
+-            for(int i = 0; i < synth->buffersize; ++i)
+-                denormalkillbuf[i] = 0;
+-
+             //prepare the default settings
+             SUBnoteParameters *defaultPreset = new SUBnoteParameters();
+             XMLwrapper *wrap = new XMLwrapper();
+@@ -99,7 +93,6 @@ class SubNoteTest:public CxxTest::TestSuite
+             delete note;
+             delete [] outL;
+             delete [] outR;
+-            delete [] denormalkillbuf;
+             delete synth;
+         }
+ 
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.h
+index 2bc61a7c..589ca904 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.h
+@@ -49,7 +49,7 @@ class AdNoteTest:public CxxTest::TestSuite
+         Controller   *controller;
+         unsigned char testnote;
+         ADnoteParameters *params;
+-        Allocator memory;
++        Alloc         memory;
+         float freq;
+ 
+ 
+@@ -63,11 +63,6 @@ class AdNoteTest:public CxxTest::TestSuite
+             memset(outL,0,sizeof(outL));
+             memset(outR,0,sizeof(outR));
+ 
+-            //next the bad global variables that for some reason have not been properly placed in some
+-            //initialization routine, but rather exist as cryptic oneliners in main.cpp:
+-            denormalkillbuf = new float[BUF];
+-            memset(denormalkillbuf, 0, sizeof(float)*BUF);
+-
+             fft = new FFTwrapper(BUF);
+             //prepare the default settings
+             params = new ADnoteParameters(*synth, fft);
+@@ -80,14 +75,12 @@ class AdNoteTest:public CxxTest::TestSuite
+             //lets go with.... 50! as a nice note
+             testnote = 50;
+             freq = 440.0f * powf(2.0f, (testnote - 69.0f) / 12.0f);
+-
+         }
+ 
+         void tearDown() {
+             delete note;
+             delete controller;
+             delete fft;
+-            delete [] denormalkillbuf;
+             FFT_cleanup();
+             delete synth;
+             delete params;
+diff --git a/src/globals.cpp b/src/globals.cpp
+index 9e80eb19..14a161be 100644
+--- a/src/globals.cpp
++++ b/src/globals.cpp
+@@ -24,7 +24,7 @@
+ #include "Misc/Util.h"
+ #include "globals.h"
+ 
+-void SYNTH_T::alias()
++void SYNTH_T::alias(bool randomize)
+ {
+     halfsamplerate_f = (samplerate_f = samplerate) / 2.0f;
+     buffersize_f     = buffersize;
+@@ -36,5 +36,8 @@ void SYNTH_T::alias()
+     // for deleting the buffers and also call it in the dtor
+     denormalkillbuf.resize(buffersize);
+     for(int i = 0; i < buffersize; ++i)
+-        denormalkillbuf[i] = (RND - 0.5f) * 1e-16;
++        if(randomize)
++            denormalkillbuf[i] = (RND - 0.5f) * 1e-16;
++        else
++            denormalkillbuf[i] = 0;
+ }
+diff --git a/src/globals.h b/src/globals.h
+index 8c1dadaa..a2953037 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -280,7 +280,7 @@ struct SYNTH_T {
+     SYNTH_T(void)
+         :samplerate(44100), buffersize(256), oscilsize(1024)
+     {
+-        alias();
++        alias(false);
+     }
+ 
+     SYNTH_T(const SYNTH_T& ) = delete;
+@@ -320,7 +320,7 @@ struct SYNTH_T {
+     {
+         return buffersize_f / samplerate_f;
+     }
+-    void alias(void);
++    void alias(bool randomize=true);
+     static float numRandom(void); //defined in Util.cpp for now
+ };
+ #endif
+-- 
+2.47.0
+

@@ -1,0 +1,50 @@
+From f9c4f84bc9c147541b6d720f3ec66ac8f4654079 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 23 Feb 2015 19:11:17 -0500
+Subject: [PATCH 0359/1936] UI: Fix Apple Support
+
+---
+ src/UI/MasterUI.fl | 4 ++--
+ src/globals.h      | 5 +++++
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 847b0e72..756bf3eb 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1485,11 +1485,11 @@ configui=new ConfigUI();
+ make_window();
+ fl_open_display();
+ 
+-#ifndef __APPLE__
++\#ifndef __APPLE__
+ Pixmap p = XCreateBitmapFromData(fl_display, DefaultRootWindow(fl_display),
+                                  (char*)zynaddsubfx_bits, zynaddsubfx_width, zynaddsubfx_height);
+ masterwindow->icon((char *)p);
+-#endif
++\#endif
+ presetsui=new PresetsUI();
+ setfilelabel(NULL);
+ swapefftype=0;
+diff --git a/src/globals.h b/src/globals.h
+index 4fe54779..fb56a0a6 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -64,9 +64,14 @@ class  Controller;
+ class  Master;
+ class  Part;
+ 
++#ifdef __APPLE__
++#include <complex>
++#else
+ namespace std {
+     template<class T> struct complex;
+ };
++#endif
++
+ typedef double fftw_real;
+ typedef std::complex<fftw_real> fft_t;
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,261 @@
+From 66a05966b386c6c5570d37fde961a1c1b6e9ebd9 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 4 May 2015 22:25:51 -0400
+Subject: [PATCH 0434/1936] Tidy Things Up For Oscprompt Usage
+
+---
+ src/Misc/Config.cpp          | 26 +++++++++++-----------
+ src/Misc/Master.cpp          |  6 ++++++
+ src/Misc/MiddleWare.cpp      | 34 ++++++++++++-----------------
+ src/Misc/PresetExtractor.cpp | 42 ++++++++++++++++++++++++++++++++++++
+ src/Misc/PresetExtractor.h   |  2 ++
+ 5 files changed, 77 insertions(+), 33 deletions(-)
+
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index ed219f0e..bbdfcd1c 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -49,14 +49,14 @@
+ static rtosc::Ports ports = {
+     //rString(cfg.LinuxOSSWaveOutDev),
+     //rString(cfg.LinuxOSSSeqInDev),
+-    rParamI(cfg.SampleRate),
+-    rParamI(cfg.SoundBufferSize),
+-    rParamI(cfg.OscilSize),
+-    rToggle(cfg.SwapStereo),
+-    rToggle(cfg.BankUIAutoClose),
+-    rParamI(cfg.GzipCompression),
+-    rParamI(cfg.Interpolation),
+-    {"cfg.presetsDirList", 0, 0,
++    rParamI(cfg.SampleRate, "samples of audio per second"),
++    rParamI(cfg.SoundBufferSize, "Size of processed audio buffer"),
++    rParamI(cfg.OscilSize, "Size Of Oscillator Wavetable"),
++    rToggle(cfg.SwapStereo, "Swap Left And Right Channels"),
++    rToggle(cfg.BankUIAutoClose, "Automatic Closing of BackUI After Patch Selection"),
++    rParamI(cfg.GzipCompression, "Level of Gzip Compression For Save Files"),
++    rParamI(cfg.Interpolation, "Level of Interpolation, Linear/Cubic"),
++    {"cfg.presetsDirList", rProp(parameter) rDoc("list of preset search directories"), 0,
+         [](const char *msg, rtosc::RtData &d)
+         {
+             Config &c = *(Config*)d.obj;
+@@ -81,7 +81,7 @@ static rtosc::Ports ports = {
+             rtosc_amessage(buffer, sizeof(buffer), d.loc, types, args);
+             d.reply(buffer);
+         }},
+-    {"cfg.bankRootDirList", 0, 0,
++    {"cfg.bankRootDirList", rProp(parameter) rDoc("list of bank search directories"), 0,
+         [](const char *msg, rtosc::RtData &d)
+         {
+             Config &c = *(Config*)d.obj;
+@@ -110,10 +110,10 @@ static rtosc::Ports ports = {
+     //rArrayS(cfg.bankRootDirList,MAX_BANK_ROOT_DIRS),
+     //rString(cfg.currentBankDir),
+     //rArrayS(cfg.presetsDirList,MAX_BANK_ROOT_DIRS),
+-    rToggle(cfg.CheckPADsynth),
+-    rToggle(cfg.IgnoreProgramChange),
+-    rParamI(cfg.UserInterfaceMode),
+-    rParamI(cfg.VirKeybLayout),
++    rToggle(cfg.CheckPADsynth, "Old Check For PADsynth functionality within a patch"),
++    rToggle(cfg.IgnoreProgramChange, "Ignore MIDI Program Change Events"),
++    rParamI(cfg.UserInterfaceMode,   "Beginner/Advanced Mode Select"),
++    rParamI(cfg.VirKeybLayout,       "Keyboard Layout For Virtual Piano Keyboard"),
+     //rParamS(cfg.LinuxALSAaudioDev),
+     //rParamS(cfg.nameTag)
+ };
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 6894d7d9..b24a3150 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -30,6 +30,7 @@
+ #include "../DSP/FFTwrapper.h"
+ #include "../Misc/Allocator.h"
+ #include "../Nio/Nio.h"
++#include "PresetExtractor.h"
+ 
+ #include <rtosc/ports.h>
+ #include <rtosc/port-sugar.h>
+@@ -216,6 +217,11 @@ static const Ports master_ports = {
+         {d.reply("/undo_pause", "");}},
+     {"undo_resume",0,0,[](const char *, rtosc::RtData &d)
+         {d.reply("/undo_resume", "");}},
++    {"config/", 0, &Config::ports, [](const char *, rtosc::RtData &){}},
++    {"presets/", 0, &preset_ports, rBOIL_BEGIN
++        SNIP
++            preset_ports.dispatch(msg, data);
++        rBOIL_END},
+ };
+ const Ports &Master::ports = master_ports;
+ 
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 159e751d..0f591109 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -126,10 +126,9 @@ static int handler_function(const char *path, const char *types, lo_arg **argv,
+     memset(buffer, 0, sizeof(buffer));
+     size_t size = 2048;
+     lo_message_serialise(msg, path, buffer, &size);
+-    printf("Liblo<%s>\n", buffer);
+     if(!strcmp(buffer, "/path-search") && !strcmp("ss", rtosc_argument_string(buffer))) {
+         path_search(buffer, mw->activeUrl().c_str());
+-    } else
++    } else if(buffer[0]=='/')
+         mw->transmitMsg(buffer);
+ 
+     return 0;
+@@ -251,8 +250,8 @@ void bankPos(Bank &bank, Fl_Osc_Interface *osc)
+ class DummyDataObj:public rtosc::RtData
+ {
+     public:
+-        DummyDataObj(char *loc_, size_t loc_size_, void *obj_, cb_t cb_, void *ui_,
+-                Fl_Osc_Interface *osc_, rtosc::ThreadLink *uToB_)
++        DummyDataObj(char *loc_, size_t loc_size_, void *obj_, MiddleWareImpl *mwi_,
++                rtosc::ThreadLink *uToB_)
+         {
+             memset(loc_, 0, sizeof(loc_size_));
+             buffer = new char[4*4096];
+@@ -260,9 +259,7 @@ class DummyDataObj:public rtosc::RtData
+             loc      = loc_;
+             loc_size = loc_size_;
+             obj      = obj_;
+-            cb       = cb_;
+-            ui       = ui_;
+-            osc      = osc_;
++            mwi      = mwi_;
+             uToB     = uToB_;
+         }
+         ~DummyDataObj(void)
+@@ -291,20 +288,12 @@ class DummyDataObj:public rtosc::RtData
+             }
+             va_end(va);
+         }
+-        virtual void reply(const char *msg)
+-        {
+-            //DEBUG
+-            //printf("reply used for '%s'\n", msg);
+-            osc->tryLink(msg);
+-            cb(ui, msg);
+-        }
++        virtual void reply(const char *msg);
+         //virtual void broadcast(const char *path, const char *args, ...){(void)path;(void)args;};
+         //virtual void broadcast(const char *msg){(void)msg;};
+     private:
+         char *buffer;
+-        cb_t cb;
+-        void *ui;
+-        Fl_Osc_Interface *osc;
++        MiddleWareImpl   *mwi;
+         rtosc::ThreadLink *uToB;
+ };
+ 
+@@ -700,7 +689,7 @@ public:
+             return true;
+         char buffer[1024];
+         memset(buffer, 0, sizeof(buffer));
+-        DummyDataObj d(buffer, 1024, v, cb, ui, osc, uToB);
++        DummyDataObj d(buffer, 1024, v, this, uToB);
+         strcpy(buffer, path.c_str());
+ 
+         PADnoteParameters::ports.dispatch(msg, d);
+@@ -718,7 +707,7 @@ public:
+     {
+         char buffer[1024];
+         memset(buffer, 0, sizeof(buffer));
+-        DummyDataObj d(buffer, 1024, (void*)&config, cb, ui, osc, uToB);
++        DummyDataObj d(buffer, 1024, (void*)&config, this, uToB);
+         strcpy(buffer, "/config/");
+ 
+         Config::ports.dispatch(msg+8, d);
+@@ -831,6 +820,11 @@ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, int prefered_port)
+             handleMsg(buf);
+             });
+ }
++        
++void DummyDataObj::reply(const char *msg)
++{
++    mwi->bToUhandle(msg);
++}
+ MiddleWareImpl::~MiddleWareImpl(void)
+ {
+     remove(get_tmp_nam().c_str());
+@@ -973,7 +967,7 @@ bool MiddleWareImpl::handleOscil(string path, const char *msg, void *v)
+     printf("handleOscil...\n");
+     char buffer[1024];
+     memset(buffer, 0, sizeof(buffer));
+-    DummyDataObj d(buffer, 1024, v, cb, ui, osc, uToB);
++    DummyDataObj d(buffer, 1024, v, this, uToB);
+     strcpy(buffer, path.c_str());
+     if(!v)
+         return true;
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index 44f4604d..b744b8b3 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -21,10 +21,52 @@
+ #include "../Params/SUBnoteParameters.h"
+ #include "../Misc/MiddleWare.h"
+ #include "PresetExtractor.h"
++#include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
+ #include <string>
+ using std::string;
+ 
+ 
++const rtosc::Ports preset_ports
++{
++    {"find-presets:s", rDoc("Find associated presets with a given type"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            d.reply(d.loc, "s", "No Presets Found...");
++        }},
++    {"add-preset:ss", rDoc("Add a preset <1> with associated name <2>"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            d.reply("/alert", "s", "Preset Could Not Be added...");
++        }},
++    {"delete-preset:s", rDoc("Add a preset <1> with associated name <2>"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            d.reply("/alert", "s", "Preset Could Not Be added...");
++        }},
++    {"clipboard-type:", rDoc("Current Preset Type In the Clipboard"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            d.reply("/alert", "s", "Unknown clipboard type...");
++        }},
++    {"clipboard-value:", rDoc("Current Value In the Clipboard"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            d.reply("/alert", "s", "Unknown clipboard type...");
++        }},
++    {"apply-preset:ss", rDoc("Apply preset file or 'clipboard' to the given OSC path"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            d.reply("/alert", "s", "Mismatched Clipboard Type...");
++        }},
++    {"set-clipboard:ss", rDoc("Set the current data in the clipboard"), 0,
++        [](const char *msg, rtosc::RtData &d) {
++            d.reply("/alert", "s", "Clipboard is unusable...");
++        }},
++};
++
++//Translate newer symbols to old preset types
++std::vector<string> translate_preset_types(std::string metatype)
++{
++    std::vector<string> results;
++    return results;
++}
++
++
+ /*****************************************************************************
+  *                     Implementation Methods                                *
+  *****************************************************************************/
+diff --git a/src/Misc/PresetExtractor.h b/src/Misc/PresetExtractor.h
+index b58ee4fb..595e042d 100644
+--- a/src/Misc/PresetExtractor.h
++++ b/src/Misc/PresetExtractor.h
+@@ -1,6 +1,8 @@
+ #pragma once
+ #include <string>
++#include <rtosc/ports.h>
+ 
++extern const rtosc::Ports preset_ports;
+ struct Clipboard {
+     std::string data;
+     std::string type;
+-- 
+2.47.0
+

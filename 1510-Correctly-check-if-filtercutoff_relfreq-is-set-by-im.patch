@@ -1,0 +1,48 @@
+From d8b0f45e5f167f23a2554dc425141d9a7bee17b7 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 4 Apr 2020 11:52:47 +0200
+Subject: [PATCH 1510/1936] Correctly check if filtercutoff_relfreq is set by
+ implementing isSet() function in smooth_float class.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/SynthNote.cpp | 6 ++----
+ src/globals.h           | 3 +++
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/Synth/SynthNote.cpp b/src/Synth/SynthNote.cpp
+index 8df66998..b20f3968 100644
+--- a/src/Synth/SynthNote.cpp
++++ b/src/Synth/SynthNote.cpp
+@@ -184,12 +184,10 @@ void SynthNote::setFilterCutoff(float value)
+ 
+ float SynthNote::getFilterCutoffRelFreq(void)
+ {
+-    const float value = filtercutoff_relfreq;
+-
+-    if (value == 0.0f)
++    if (filtercutoff_relfreq.isSet() == false)
+         return (ctl.filtercutoff.relfreq);
+     else
+-        return (value);
++        return (filtercutoff_relfreq);
+ }
+ 
+ float SynthNote::getRandomFloat() {
+diff --git a/src/globals.h b/src/globals.h
+index 3955f041..98ff638b 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -374,6 +374,9 @@ public:
+           init = true;
+       }
+     };
++    bool isSet() const {
++        return (init);
++    };
+ };
+ 
+ }
+-- 
+2.47.0
+

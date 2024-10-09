@@ -1,0 +1,24 @@
+From d8011326dbeb7b2901bfc41aa5154bd81348917e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 6 Mar 2015 17:02:12 -0500
+Subject: [PATCH 0389/1936] SUBnoteUI: Refresh Harmonics On Paste
+
+---
+ src/UI/SUBnoteUI.fl | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 40f266a8..92e22753 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -493,6 +493,7 @@ globalfiltergroup->redraw();}
+   Function {refresh()} {} {
+     code {
+ SUBparameters->update();
++for (int i=0;i<MAX_SUB_HARMONICS;i++) h[i]->refresh();
+ //globalfiltergroup->redraw();
+ //ampenv->refresh();
+ //bandwidthenvelopegroup->refresh();
+-- 
+2.47.0
+

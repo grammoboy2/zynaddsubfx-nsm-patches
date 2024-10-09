@@ -1,0 +1,829 @@
+From 76b335e0f3af50eae6078098a5d7e854047832d8 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sun, 16 Apr 2017 12:05:59 +0200
+Subject: [PATCH 1132/1936] Implement most metadata and an incomplete test
+
+---
+ .gitmodules                      |  1 +
+ src/Misc/Config.cpp              | 22 ++++----
+ src/Misc/Master.cpp              | 14 ++---
+ src/Misc/Microtonal.cpp          | 30 +++++------
+ src/Misc/Part.cpp                | 54 +++++++++----------
+ src/Params/ADnoteParameters.cpp  | 90 ++++++++++++++++----------------
+ src/Params/Controller.cpp        | 52 +++++++++---------
+ src/Params/EnvelopeParams.cpp    | 17 +++---
+ src/Params/LFOParams.cpp         |  4 +-
+ src/Params/PADnoteParameters.cpp | 75 ++++++++++++++------------
+ src/Params/SUBnoteParameters.cpp | 58 +++++++++++---------
+ src/Tests/CMakeLists.txt         |  4 ++
+ src/Tests/load_omz.cpp           | 71 +++++++++++++++++++++++++
+ 13 files changed, 292 insertions(+), 200 deletions(-)
+ create mode 100644 src/Tests/load_omz.cpp
+
+diff --git a/.gitmodules b/.gitmodules
+index 677dd880..7c4c1e96 100644
+--- a/.gitmodules
++++ b/.gitmodules
+@@ -4,6 +4,7 @@
+ [submodule "rtosc"]
+ 	path = rtosc
+ 	url = https://github.com/fundamental/rtosc
++	branch = default_values
+ [submodule "DPF"]
+ 	path = DPF
+ 	url = git://github.com/DISTRHO/DPF
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index 069ce9a7..c560848e 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -43,13 +43,13 @@ namespace zyn {
+ static const rtosc::Ports ports = {
+     //rString(cfg.LinuxOSSWaveOutDev),
+     //rString(cfg.LinuxOSSSeqInDev),
+-    rParamI(cfg.SampleRate, "samples of audio per second"),
+-    rParamI(cfg.SoundBufferSize, "Size of processed audio buffer"),
+-    rParamI(cfg.OscilSize, "Size Of Oscillator Wavetable"),
+-    rToggle(cfg.SwapStereo, "Swap Left And Right Channels"),
+-    rToggle(cfg.BankUIAutoClose, "Automatic Closing of BackUI After Patch Selection"),
+-    rParamI(cfg.GzipCompression, "Level of Gzip Compression For Save Files"),
+-    rParamI(cfg.Interpolation, "Level of Interpolation, Linear/Cubic"),
++    rParamI(cfg.SampleRate, rDefault(44100), "samples of audio per second"),
++    rParamI(cfg.SoundBufferSize, rDefault(256), "Size of processed audio buffer"),
++    rParamI(cfg.OscilSize, rDefault(1024), "Size Of Oscillator Wavetable"),
++    rToggle(cfg.SwapStereo, rDefault(false), "Swap Left And Right Channels"),
++    rToggle(cfg.BankUIAutoClose, rDefault(false), "Automatic Closing of BackUI After Patch Selection"),
++    rParamI(cfg.GzipCompression, rDefault(3), "Level of Gzip Compression For Save Files"),
++    rParamI(cfg.Interpolation, rDefault(0), "Level of Interpolation, Linear/Cubic"),
+     {"cfg.presetsDirList", rDoc("list of preset search directories"), 0,
+         [](const char *msg, rtosc::RtData &d)
+         {
+@@ -120,10 +120,10 @@ static const rtosc::Ports ports = {
+     //rArrayS(cfg.bankRootDirList,MAX_BANK_ROOT_DIRS),
+     //rString(cfg.currentBankDir),
+     //rArrayS(cfg.presetsDirList,MAX_BANK_ROOT_DIRS),
+-    rToggle(cfg.CheckPADsynth, "Old Check For PADsynth functionality within a patch"),
+-    rToggle(cfg.IgnoreProgramChange, "Ignore MIDI Program Change Events"),
+-    rParamI(cfg.UserInterfaceMode,   "Beginner/Advanced Mode Select"),
+-    rParamI(cfg.VirKeybLayout,       "Keyboard Layout For Virtual Piano Keyboard"),
++    rToggle(cfg.CheckPADsynth, rDefault(true), "Old Check For PADsynth functionality within a patch"),
++    rToggle(cfg.IgnoreProgramChange, rDefault(false), "Ignore MIDI Program Change Events"),
++    rParamI(cfg.UserInterfaceMode,   rDefault(0), "Beginner/Advanced Mode Select"),
++    rParamI(cfg.VirKeybLayout,       rDefault(1), "Keyboard Layout For Virtual Piano Keyboard"),
+     //rParamS(cfg.LinuxALSAaudioDev),
+     //rParamS(cfg.nameTag)
+     {"cfg.OscilPower::i", rProp(parameter) rDoc("Size Of Oscillator Wavetable"), 0,
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 4de05824..bb8f097b 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -116,14 +116,14 @@ static const Ports master_ports = {
+     rRecursp(part, 16, "Part"),//NUM_MIDI_PARTS
+     rRecursp(sysefx, 4, "System Effect"),//NUM_SYS_EFX
+     rRecursp(insefx, 8, "Insertion Effect"),//NUM_INS_EFX
+-    rRecur(microtonal, "Micrtonal Mapping Functionality"),
++    rRecur(microtonal, "Microtonal Mapping Functionality"),
+     rRecur(ctl, "Controller"),
+-    rArrayI(Pinsparts, NUM_INS_EFX, rOpt(-2, Master), rOpt(-1, Off)
+-            rOptions(Part1, Part2, Part3, Part4,  Part5, Part6,
++    rArrayI(Pinsparts, NUM_INS_EFX, rOpt(-2, Master), rOpt(-1, Off),
++            rOptions(Part1, Part2, Part3, Part4, Part5, Part6,
+                  Part7, Part8, Part9, Part10, Part11, Part12,
+-                 Part13, Part14, Part15, Part16),
++                 Part13, Part14, Part15, Part16) rDefault(Off),
+                 "Part to insert part onto"),
+-    {"Pkeyshift::i", rShort("key shift") rProp(parameter) rLinear(0,127) rDoc("Global Key Shift"), 0, [](const char *m, RtData&d) {
++    {"Pkeyshift::i", rShort("key shift") rProp(parameter) rLinear(0,127) rDefault(64) rDoc("Global Key Shift"), 0, [](const char *m, RtData&d) {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "i", ((Master*)d.obj)->Pkeyshift);
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
+@@ -172,14 +172,14 @@ static const Ports master_ports = {
+             keys[i] = m->activeNotes[i] ? 'T' : 'F';
+         d.broadcast(d.loc, keys);
+         rEnd},
+-    {"Pvolume::i", rShort("volume") rProp(parameter) rLinear(0,127) rDoc("Master Volume"), 0,
++    {"Pvolume::i", rShort("volume") rProp(parameter) rLinear(0,127) rDefault(80) rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "i", ((Master*)d.obj)->Pvolume);
+         } else if(rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
+             ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
+             d.broadcast(d.loc, "i", ((Master*)d.obj)->Pvolume);}}},
+-    {"volume::i", rShort("volume") rProp(parameter) rLinear(0,127) rDoc("Master Volume"), 0,
++    {"volume::i", rShort("volume") rProp(parameter) rLinear(0,127) rDefault(80) rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "i", ((Master*)d.obj)->Pvolume);
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 496669fc..0c0afe07 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -42,25 +42,25 @@ namespace zyn {
+  * A good lookup table should be a good finalization of this
+  */
+ const rtosc::Ports Microtonal::ports = {
+-    rToggle(Pinvertupdown, rShort("inv."), "key mapping inverse"),
+-    rParamZyn(Pinvertupdowncenter, rShort("center"), "center of the inversion"),
+-    rToggle(Penabled, rShort("enable"), "Enable for microtonal mode"),
+-    rParamZyn(PAnote, rShort("1/1 midi note"), "The note for 'A'"),
+-    rParamF(PAfreq,   rShort("ref freq"), "Frequency of the 'A' note"),
+-    rParamZyn(Pscaleshift, rShort("shift"), "UNDOCUMENTED"),
+-    rParamZyn(Pfirstkey, rShort("first key"), "First key to retune"),
+-    rParamZyn(Plastkey,  rShort("last key"), "Last key to retune"),
+-    rParamZyn(Pmiddlenote, rShort("middle"), "Scale degree 0 note"),
++    rToggle(Pinvertupdown, rShort("inv."), rDefault(false), "key mapping inverse"),
++    rParamZyn(Pinvertupdowncenter, rShort("center"), rDefault(60), "center of the inversion"),
++    rToggle(Penabled, rShort("enable"), rDefault(false), "Enable for microtonal mode"),
++    rParamZyn(PAnote, rShort("1/1 midi note"), rDefault(69), "The note for 'A'"),
++    rParamF(PAfreq,   rShort("ref freq"), rDefault(440.0f), "Frequency of the 'A' note"),
++    rParamZyn(Pscaleshift, rShort("shift"), rDefault(64), "UNDOCUMENTED"),
++    rParamZyn(Pfirstkey, rShort("first key"), rDefault(0), "First key to retune"),
++    rParamZyn(Plastkey,  rShort("last key"), rDefault(127), "Last key to retune"),
++    rParamZyn(Pmiddlenote, rShort("middle"), rDefault(60), "Scale degree 0 note"),
+ 
+     //TODO check to see if this should be exposed
+-    rParamZyn(Pmapsize, "Size of key map"),
+-    rToggle(Pmappingenabled, "Mapping Enable"),
++    rParamZyn(Pmapsize, rDefault(12), "Size of key map"),
++    rToggle(Pmappingenabled, rDefault(false), "Mapping Enable"),
+ 
+-    rParams(Pmapping, 128, "Mapping of keys"),
+-    rParamZyn(Pglobalfinedetune, rShort("fine"), "Fine detune for all notes"),
++    rParams(Pmapping, 128, rDefault("form:i"), "Mapping of keys"),
++    rParamZyn(Pglobalfinedetune, rShort("fine"), rDefault(64), "Fine detune for all notes"),
+ 
+-    rString(Pname, MICROTONAL_MAX_NAME_LEN,    rShort("name"), "Microtonal Name"),
+-    rString(Pcomment, MICROTONAL_MAX_NAME_LEN, rShort("comment"), "Microtonal comments"),
++    rString(Pname, MICROTONAL_MAX_NAME_LEN,    rShort("name"), rDefault(""), "Microtonal Name"),
++    rString(Pcomment, MICROTONAL_MAX_NAME_LEN, rShort("comment"), rDefault(""), "Microtonal comments"),
+ 
+     {"octavesize:", rDoc("Get octave size"), 0, [](const char*, RtData &d)
+         {
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 07a56305..b590b3e5 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -47,39 +47,39 @@ static const Ports partPorts = {
+     rRecurs(kit, 16, "Kit"),//NUM_KIT_ITEMS
+     rRecursp(partefx, 3, "Part Effect"),
+     rRecur(ctl,       "Controller"),
+-    rToggle(Penabled, rShort("enable"), "Part enable"),
++    rToggle(Penabled, rShort("enable") rDefault(0), "Part enable"),
+ #undef rChangeCb
+ #define rChangeCb obj->setPvolume(obj->Pvolume);
+-    rParamZyn(Pvolume, rShort("Vol"), "Part Volume"),
++    rParamZyn(Pvolume, rShort("Vol"), rDefault(96),"Part Volume"),
+ #undef rChangeCb
+ #define rChangeCb obj->setPpanning(obj->Ppanning);
+-    rParamZyn(Ppanning, rShort("pan"), "Set Panning"),
++    rParamZyn(Ppanning, rShort("pan"), rDefault(64), "Set Panning"),
+ #undef rChangeCb
+ #define rChangeCb obj->setkeylimit(obj->Pkeylimit);
+-    rParamI(Pkeylimit, rShort("limit"), rProp(parameter), rMap(min,0), rMap(max, POLYPHONY), "Key limit per part"),
++    rParamI(Pkeylimit, rShort("limit"), rProp(parameter), rMap(min,0), rMap(max, POLYPHONY), rDefault(15), "Key limit per part"),
+ #undef rChangeCb
+ #define rChangeCb
+-    rParamZyn(Pminkey, rShort("min"), "Min Used Key"),
+-    rParamZyn(Pmaxkey, rShort("max"), "Max Used Key"),
+-    rParamZyn(Pkeyshift, rShort("shift"), "Part keyshift"),
++    rParamZyn(Pminkey, rShort("min"), rDefault(0), "Min Used Key"),
++    rParamZyn(Pmaxkey, rShort("max"), rDefault(127), "Max Used Key"),
++    rParamZyn(Pkeyshift, rShort("shift"), rDefault(64), "Part keyshift"),
+     rParamZyn(Prcvchn, rOptions(ch1, ch2, ch3, ch4, ch5, ch6, ch7, ch8, ch9, ch10, ch11, ch12, ch13, ch14, ch15, ch16),
+-                "Active MIDI channel"),
+-    rParamZyn(Pvelsns,   rShort("sense"), "Velocity sensing"),
+-    rParamZyn(Pveloffs,  rShort("offset"), "Velocity offset"),
+-    rToggle(Pnoteon,  "If the channel accepts note on events"),
+-    rOption(Pkitmode, rOptions(Off, Multi-Kit, Single-Kit), "Kit mode/enable\n"
++                rDefault(ch1), "Active MIDI channel"),
++    rParamZyn(Pvelsns,   rShort("sense"), rDefault(64), "Velocity sensing"),
++    rParamZyn(Pveloffs,  rShort("offset"), rDefault(64),"Velocity offset"),
++    rToggle(Pnoteon, rDefault(1), "If the channel accepts note on events"), // TODO:true?
++    rOption(Pkitmode, rOptions(Off, Multi-Kit, Single-Kit), rDefault(Off), "Kit mode/enable\n"
+             "Off        - Only the first kit is ever utilized\n"
+             "Multi-kit  - Every applicable kit is run for a note\n"
+             "Single-kit - The first applicable kit is run for a given note"),
+-    rToggle(Pdrummode, "Drum mode enable\n"
++    rToggle(Pdrummode, rDefault(0), "Drum mode enable\n"
+             "When drum mode is enabled all keys are mapped to 12tET and legato is disabled"),
+-    rToggle(Ppolymode,  "Polyphony mode"),
+-    rToggle(Plegatomode, "Legato mode"),
+-    rParamZyn(info.Ptype, "Class of Instrument"),
+-    rString(info.Pauthor, MAX_INFO_TEXT_SIZE, "Instrument author"),
+-    rString(info.Pcomments, MAX_INFO_TEXT_SIZE, "Instrument comments"),
+-    rString(Pname, PART_MAX_NAME_LEN, "User specified label"),
+-    rArrayI(Pefxroute, NUM_PART_EFX,
++    rToggle(Ppolymode, rDefault(1), "Polyphony mode"),
++    rToggle(Plegatomode, rDefault(0), "Legato mode"),
++    rParamZyn(info.Ptype, rDefault(0), "Class of Instrument"),
++    rString(info.Pauthor, MAX_INFO_TEXT_SIZE, rDefault(), "Instrument author"),
++    rString(info.Pcomments, MAX_INFO_TEXT_SIZE, rDefault(), "Instrument comments"),
++    rString(Pname, PART_MAX_NAME_LEN, rDefault(), "User specified label"),
++    rArrayI(Pefxroute, NUM_PART_EFX, rDefault(Next Effect),
+             rOptions(Next Effect,Part Out,Dry Out), "Effect Routing"),
+     rArrayT(Pefxbypass, NUM_PART_EFX, "If an effect is bypassed"),
+     {"captureMin:", rDoc("Capture minimum valid note"), NULL,
+@@ -162,16 +162,16 @@ static const Ports kitPorts = {
+     rRecurp(adpars, "Adnote parameters"),
+     rRecurp(subpars, "Adnote parameters"),
+     rToggle(Penabled, "Kit item enable"),
+-    rToggle(Pmuted,   "Kit item mute"),
+-    rParamZyn(Pminkey,   "Kit item min key"),
+-    rParamZyn(Pmaxkey,   "Kit item max key"),
++    rToggle(Pmuted,  rDefault(false), "Kit item mute"),
++    rParamZyn(Pminkey, rDefault(0),  "Kit item min key"),
++    rParamZyn(Pmaxkey, rDefault(127)  "Kit item max key"),
+     rToggle(Padenabled, "ADsynth enable"),
+-    rToggle(Psubenabled, "SUBsynth enable"),
+-    rToggle(Ppadenabled, "PADsynth enable"),
++    rToggle(Psubenabled, rDefault(false), "SUBsynth enable"),
++    rToggle(Ppadenabled, rDefault(false), "PADsynth enable"),
+     rParamZyn(Psendtoparteffect,
+-            rOptions(FX1, FX2, FX3, Off),
++            rOptions(FX1, FX2, FX3, Off), rDefault(FX1),
+             "Effect Levels"),
+-    rString(Pname, PART_MAX_NAME_LEN, "Kit User Specified Label"),
++    rString(Pname, PART_MAX_NAME_LEN, rDefault(""), "Kit User Specified Label"),
+     {"captureMin:", rDoc("Capture minimum valid note"), NULL,
+         [](const char *, RtData &r)
+         {Part::Kit *p = (Part::Kit*)r.obj; p->Pminkey = p->parent->lastnote;}},
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 8d48f795..38f18639 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -71,18 +71,18 @@ static const Ports voicePorts = {
+     rRecurp(VoiceFilter,    "Optional Voice Filter"),
+ 
+     rToggle(Enabled,       rShort("enable"), "Voice Enable"),
+-    rParamI(Unison_size, rShort("size"), rMap(min, 0), rMap(max, 50), "Number of subvoices"),
+-    rParamZyn(Unison_phase_randomness, rShort("ph.rnd."), "Phase Randomness"),
+-    rParamZyn(Unison_frequency_spread, rShort("detune"),  "Subvoice detune"),
+-    rParamZyn(Unison_stereo_spread,    rShort("spread"),
++    rParamI(Unison_size, rShort("size"), rMap(min, 0), rMap(max, 50), rDefault(1), "Number of subvoices"),
++    rParamZyn(Unison_phase_randomness, rShort("ph.rnd."), rDefault(127), "Phase Randomness"),
++    rParamZyn(Unison_frequency_spread, rShort("detune"), rDefault(60),  "Subvoice detune"),
++    rParamZyn(Unison_stereo_spread,    rShort("spread"), rDefault(64),
+             "Subvoice L/R Separation"),
+-    rParamZyn(Unison_vibratto,         rShort("vib."),    "Subvoice vibratto"),
+-    rParamZyn(Unison_vibratto_speed,   rShort("speed"),
++    rParamZyn(Unison_vibratto,         rShort("vib."), rDefault(64),   "Subvoice vibratto"),
++    rParamZyn(Unison_vibratto_speed,   rShort("speed"), rDefault(64),
+             "Subvoice vibratto speed"),
+-    rOption(Unison_invert_phase,       rShort("inv."),
++    rOption(Unison_invert_phase,       rShort("inv."), rDefault(0),
+             rOptions(none, random, 50%, 33%, 25%), "Subvoice Phases"),
+-    rOption(Type,            rShort("type"), rOptions(Sound,White,Pink,DC), "Type of Sound"),
+-    rParamZyn(PDelay,        rShort("delay"), "Voice Startup Delay"),
++    rOption(Type,            rShort("type"), rOptions(Sound,White,Pink,DC), rDefault(Sound), "Type of Sound"),
++    rParamZyn(PDelay,        rShort("delay"), rDefault(0), "Voice Startup Delay"),
+     rToggle(Presonance,      rShort("enable"), "Resonance Enable"),
+     rParamI(Pextoscil,       rShort("ext."),
+             rMap(min, -1), rMap(max, 16), "External Oscillator Selection"),
+@@ -109,37 +109,38 @@ static const Ports voicePorts = {
+ 
+     //Amplitude Stuff
+     rParamZyn(PPanning,                  rShort("pan."), "Panning"),
+-    rParamZyn(PVolume,                   rShort("vol."), "Volume"),
+-    rToggle(PVolumeminus,                rShort("inv."), "Signal Inverter"), //do we really need this??
+-    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), "Velocity Sensing"),
+-    rToggle(PAmpEnvelopeEnabled, rShort("enable"), "Amplitude Envelope Enable"),
+-    rToggle(PAmpLfoEnabled,      rShort("enable"), "Amplitude LFO Enable"),
++    rParamZyn(PVolume,                   rShort("vol."), rDefault(100), "Volume"),
++    rToggle(PVolumeminus,                rShort("inv."), rDefault(false), "Signal Inverter"), //do we really need this??
++    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), rDefault(127), "Velocity Sensing"),
++    rToggle(PAmpEnvelopeEnabled, rShort("enable"), rDefault(false), "Amplitude Envelope Enable"),
++    rToggle(PAmpLfoEnabled,      rShort("enable"), rDefault(false), "Amplitude LFO Enable"),
+ 
+     //Filter Stuff
+-    rToggle(PFilterEnabled,         rShort("enable"), "Filter Enable"),
+-    rToggle(PFilterEnvelopeEnabled, rShort("enable"), "Filter Envelope Enable"),
+-    rToggle(PFilterLfoEnabled,      rShort("enable"), "Filter LFO Enable"),
+-    rParamZyn(PFilterVelocityScale,         rShort("v.scale"), "Filter Velocity Magnitude"),
+-    rParamZyn(PFilterVelocityScaleFunction, rShort("v.sense"), "Filter Velocity Function Shape"),
++    rToggle(PFilterEnabled,         rShort("enable"), rDefault(false), "Filter Enable"),
++    rToggle(PFilterEnvelopeEnabled, rShort("enable"), rDefault(false), "Filter Envelope Enable"),
++    rToggle(PFilterLfoEnabled,      rShort("enable"), rDefault(false), "Filter LFO Enable"),
++    rParamZyn(PFilterVelocityScale,         rShort("v.scale"), rDefault(0),  "Filter Velocity Magnitude"),
++    rParamZyn(PFilterVelocityScaleFunction, rShort("v.sense"), rDefault(64), "Filter Velocity Function Shape"),
+ 
+ 
+     //Modulator Stuff
+     rOption(PFMEnabled, rShort("mode"), rOptions(none, morph, ring, phase,
+-                frequency, pulse), "Modulator mode"),
+-    rParamI(PFMVoice,                   rShort("voice"),  "Modulator Oscillator Selection"),
+-    rParamZyn(PFMVolume,                rShort("vol."),   "Modulator Magnitude"),
+-    rParamZyn(PFMVolumeDamp,            rShort("damp."),  "Modulator HF dampening"),
+-    rParamZyn(PFMVelocityScaleFunction, rShort("sense"),  "Modulator Velocity Function"),
++                frequency, pulse), rDefault(false), "Modulator mode"),
++    rParamI(PFMVoice,                   rShort("voice"), rDefault(-1), "Modulator Oscillator Selection"),
++    rParamZyn(PFMVolume,                rShort("vol."),  rDefault(90), "Modulator Magnitude"),
++    rParamZyn(PFMVolumeDamp,            rShort("damp."), rDefault(64), "Modulator HF dampening"),
++    rParamZyn(PFMVelocityScaleFunction, rShort("sense"), rDefault(64), "Modulator Velocity Function"),
+     //nominally -8192..8191
+     rParamI(PFMDetune,                  rShort("fine"),
+-            rLinear(0, 16383), "Modulator Fine Detune"),
+-    rParamI(PFMCoarseDetune,            rShort("coarse"), "Modulator Coarse Detune"),
++            rLinear(0, 16383), rDefault(8192), "Modulator Fine Detune"),
++    rParamI(PFMCoarseDetune,            rShort("coarse"), rDefault(0), "Modulator Coarse Detune"),
+     rParamZyn(PFMDetuneType,            rShort("type"),
+             rOptions(L35cents, L10cents, E100cents, E1200cents),
++	    rDefault(L35cents),
+             "Modulator Detune Magnitude"),
+-    rToggle(PFMFixedFreq,               rShort("fixed"),  "Modulator Frequency Fixed"),
+-    rToggle(PFMFreqEnvelopeEnabled,  rShort("enable"), "Modulator Frequency Envelope"),
+-    rToggle(PFMAmpEnvelopeEnabled,   rShort("enable"), "Modulator Amplitude Envelope"),
++    rToggle(PFMFixedFreq,               rShort("fixed"),  rDefault(false), "Modulator Frequency Fixed"),
++    rToggle(PFMFreqEnvelopeEnabled,  rShort("enable"), rDefault(false), "Modulator Frequency Envelope"),
++    rToggle(PFMAmpEnvelopeEnabled,   rShort("enable"), rDefault(false), "Modulator Amplitude Envelope"),
+ 
+ 
+     //weird stuff for PCoarseDetune
+@@ -250,36 +251,37 @@ static const Ports globalPorts = {
+     rRecurp(FilterEnvelope, "Frequency Envelope"),
+     rRecurp(GlobalFilter, "Filter"),
+ 
+-    rToggle(PStereo, rShort("stereo"), "Mono/Stereo Enable"),
++    rToggle(PStereo, rShort("stereo"), rDefault(true), "Mono/Stereo Enable"),
+ 
+     //Frequency
+     //nominally -8192..8191
+     rParamI(PDetune,              rShort("fine"),
+-            rLinear(0, 16383), "Fine Detune"),
+-    rParamI(PCoarseDetune,   rShort("coarse"), "Coarse Detune"),
++            rLinear(0, 16383), rDefault(8192), "Fine Detune"),
++    rParamI(PCoarseDetune,   rShort("coarse"), rDefault(0), "Coarse Detune"),
+     rParamZyn(PDetuneType,   rShort("type"),
+             rOptions(L35cents, L10cents, E100cents, E1200cents),
++	    rDefault(L10cents),
+             "Detune Scaling Type"),
+-    rParamZyn(PBandwidth,    rShort("bw."),    "Relative Fine Detune Gain"),
++    rParamZyn(PBandwidth,    rShort("bw."), rDefault(64), "Relative Fine Detune Gain"),
+ 
+     //Amplitude
+-    rParamZyn(PPanning, rShort("pan"), "Panning of ADsynth (0 random, 1 left, 127 right)"),
+-    rParamZyn(PVolume,  rShort("vol"), "volume control"),
+-    rParamZyn(PAmpVelocityScaleFunction, rShort("scale"), "Volume Velocity Control"),
++    rParamZyn(PPanning, rShort("pan"), rDefault(64), "Panning of ADsynth (0 random, 1 left, 127 right)"),
++    rParamZyn(PVolume,  rShort("vol"), rDefault(90), "volume control"),
++    rParamZyn(PAmpVelocityScaleFunction, rShort("scale"), rDefault(64), "Volume Velocity Control"),
+ 
+-    rParamZyn(Fadein_adjustment, "Adjustment for anti-pop strategy."),
+-    rParamZyn(PPunchStrength, rShort("strength"),     "Punch Strength"),
+-    rParamZyn(PPunchTime,     rShort("time"),         "Length of Punch"),
+-    rParamZyn(PPunchStretch,  rShort("stretch"),      "How Punch changes with note frequency"),
+-    rParamZyn(PPunchVelocitySensing, rShort("v.sns"), "Punch Velocity control"),
++    rParamZyn(Fadein_adjustment, rDefault(FADEIN_ADJUSTMENT_SCALE), "Adjustment for anti-pop strategy."),
++    rParamZyn(PPunchStrength, rShort("strength"),     rDefault(0),  "Punch Strength"),
++    rParamZyn(PPunchTime,     rShort("time"),         rDefault(60), "Length of Punch"),
++    rParamZyn(PPunchStretch,  rShort("stretch"),      rDefault(64), "How Punch changes with note frequency"),
++    rParamZyn(PPunchVelocitySensing, rShort("v.sns"), rDefault(72), "Punch Velocity control"),
+ 
+     //Filter
+-    rParamZyn(PFilterVelocityScale,         rShort("scale"), "Filter Velocity Magnitude"),
+-    rParamZyn(PFilterVelocityScaleFunction, rShort("sense"), "Filter Velocity Function Shape"),
++    rParamZyn(PFilterVelocityScale,         rShort("scale"), rDefault(64), "Filter Velocity Magnitude"),
++    rParamZyn(PFilterVelocityScaleFunction, rShort("sense"), rDefault(64), "Filter Velocity Function Shape"),
+ 
+ 
+     //Resonance
+-    rToggle(Hrandgrouping, "How randomness is applied to multiple voices using the same oscil"),
++    rToggle(Hrandgrouping, rDefault(false), "How randomness is applied to multiple voices using the same oscil"),
+ 
+     //weird stuff for PCoarseDetune
+     {"detunevalue:", rMap(unit,cents) rDoc("Get detune in cents"), NULL,
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index 42cd0f37..c51c31f5 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -29,33 +29,33 @@ namespace zyn {
+ #undef rChangeCb
+ #define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ const rtosc::Ports Controller::ports = {
+-    rParamZyn(panning.depth,       rShort("pan.d"), "Depth of Panning MIDI Control"),
+-    rParamZyn(filtercutoff.depth,  rShort("fc.d"), "Depth of Filter Cutoff MIDI Control"),
+-    rParamZyn(filterq.depth,       rShort("fq.d"), "Depth of Filter Q MIDI Control"),
+-    rParamZyn(bandwidth.depth,     rShort("bw.d"), "Depth of Bandwidth MIDI Control"),
+-    rToggle(bandwidth.exponential, rShort("bw.exp"), "Bandwidth Exponential Mode"),
+-    rParamZyn(modwheel.depth,      rShort("mdw.d"), "Depth of Modwheel MIDI Control"),
+-    rToggle(modwheel.exponential,  rShort("mdw.exp"), "Modwheel Exponential Mode"),
+-    rToggle(pitchwheel.is_split,   "If PitchWheel Has unified bendrange or not"),
+-    rParamI(pitchwheel.bendrange,  rShort("pch.d"), "Range of MIDI Pitch Wheel"),
+-    rParamI(pitchwheel.bendrange_down, "Lower Range of MIDI Pitch Wheel"),
+-    rToggle(expression.receive, rShort("exp.rcv"), "Expression MIDI Receive"),
+-    rToggle(fmamp.receive,      rShort("fma.rcv"), "FM amplitude MIDI Receive"),
+-    rToggle(volume.receive,     rShort("vol.rcv"), "Volume MIDI Receive"),
+-    rToggle(sustain.receive,    rShort("sus.rcv"), "Sustain MIDI Receive"),
+-    rToggle(portamento.receive, rShort("prt.rcv"), "Portamento MIDI Receive"),
+-    rToggle(portamento.portamento, "Portamento Enable"),
+-    rParamZyn(portamento.time,          rShort("time"), "Portamento Length"),
+-    rToggle(portamento.proportional,    rShort("propt."), "Whether the portamento time is proportional"
++    rParamZyn(panning.depth,       rShort("pan.d"), rDefault(64), "Depth of Panning MIDI Control"),
++    rParamZyn(filtercutoff.depth,  rShort("fc.d"), rDefault(64), "Depth of Filter Cutoff MIDI Control"),
++    rParamZyn(filterq.depth,       rShort("fq.d"), rDefault(64), "Depth of Filter Q MIDI Control"),
++    rParamZyn(bandwidth.depth,     rShort("bw.d"), rDefault(64), "Depth of Bandwidth MIDI Control"),
++    rToggle(bandwidth.exponential, rShort("bw.exp"), rDefault(false), "Bandwidth Exponential Mode"),
++    rParamZyn(modwheel.depth,      rShort("mdw.d"), rDefault(80), "Depth of Modwheel MIDI Control"),
++    rToggle(modwheel.exponential,  rShort("mdw.exp"), rDefault(false), "Modwheel Exponential Mode"),
++    rToggle(pitchwheel.is_split,   rDefault(false), rDefault(false), "If PitchWheel Has unified bendrange or not"),
++    rParamI(pitchwheel.bendrange,  rShort("pch.d"), rDefault(200), "Range of MIDI Pitch Wheel"),
++    rParamI(pitchwheel.bendrange_down, rDefault(0), "Lower Range of MIDI Pitch Wheel"),
++    rToggle(expression.receive, rShort("exp.rcv"), rDefault(true), "Expression MIDI Receive"),
++    rToggle(fmamp.receive,      rShort("fma.rcv"), rDefault(true), "FM amplitude MIDI Receive"),
++    rToggle(volume.receive,     rShort("vol.rcv"), rDefault(true), "Volume MIDI Receive"),
++    rToggle(sustain.receive,    rShort("sus.rcv"), rDefault(true), "Sustain MIDI Receive"),
++    rToggle(portamento.receive, rShort("prt.rcv"), rDefault(true), "Portamento MIDI Receive"),
++    rToggle(portamento.portamento, rDefault(false), "Portamento Enable"),
++    rParamZyn(portamento.time,          rShort("time"), rDefault(64), "Portamento Length"),
++    rToggle(portamento.proportional,    rShort("propt."), rDefault(false), "Whether the portamento time is proportional"
+             "to the size of the interval between two notes."),
+-    rParamZyn(portamento.propRate,      rShort("scale"), "Portamento proportional scale"),
+-    rParamZyn(portamento.propDepth,     rShort("depth"), "Portamento proportional depth"),
+-    rParamZyn(portamento.pitchthresh,   rShort("thresh"), "Threshold for portamento"),
+-    rToggle(portamento.pitchthreshtype, rShort("tr.type"), "Type of threshold"),
+-    rParamZyn(portamento.updowntimestretch, rShort("up/dwn"), "Relative length of glide up vs glide down"),
+-    rParamZyn(resonancecenter.depth,    rShort("rfc.d"), "Resonance Center MIDI Depth"),
+-    rParamZyn(resonancebandwidth.depth, rShort("rbw.d"), "Resonance Bandwidth MIDI Depth"),
+-    rToggle(NRPN.receive, "NRPN MIDI Enable"),
++    rParamZyn(portamento.propRate,      rShort("scale"), rDefault(80), "Portamento proportional scale"),
++    rParamZyn(portamento.propDepth,     rShort("depth"), rDefault(90), "Portamento proportional depth"),
++    rParamZyn(portamento.pitchthresh,   rShort("thresh"), rDefault(3), "Threshold for portamento"),
++    rToggle(portamento.pitchthreshtype, rShort("tr.type"), rDefault(1), "Type of threshold"),
++    rParamZyn(portamento.updowntimestretch, rShort("up/dwn"), rDefault(64), "Relative length of glide up vs glide down"),
++    rParamZyn(resonancecenter.depth,    rShort("rfc.d"), rDefault(64), "Resonance Center MIDI Depth"),
++    rParamZyn(resonancebandwidth.depth, rShort("rbw.d"), rDefault(64), "Resonance Bandwidth MIDI Depth"),
++    rToggle(NRPN.receive, rDefault(true), "NRPN MIDI Enable"),
+     rAction(defaults),
+ };
+ #undef rChangeCb
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index bf290b10..62c56ec7 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -37,7 +37,7 @@ static const rtosc::Ports localPorts = {
+ #undef  rChangeCb
+ #define rChangeCb if(!obj->Pfreemode) obj->converttofree(); if (obj->time) { \
+         obj->last_update_timestamp = obj->time->time(); }
+-    rToggle(Pfreemode, "Complex Envelope Definitions"),
++    rToggle(Pfreemode, rDefault(false), "Complex Envelope Definitions"),
+ #undef  rChangeCb
+ #define rChangeCb if(!obj->Pfreemode) obj->converttofree(); \
+                   if(obj->time) { obj->last_update_timestamp = obj->time->time(); }
+@@ -51,13 +51,14 @@ static const rtosc::Ports localPorts = {
+             "Force Envelope to fully evaluate"),
+     rToggle(Plinearenvelope, rShort("lin/log"),
+             "Linear or Logarithmic Envelopes"),
+-    rParamZyn(PA_dt,  rShort("a.dt"),  "Attack Time"),
+-    rParamZyn(PA_val, rShort("a.val"), "Attack Value"),
+-    rParamZyn(PD_dt,  rShort("d.dt"),  "Decay Time"),
+-    rParamZyn(PD_val, rShort("d.val"), "Decay Value"),
+-    rParamZyn(PS_val, rShort("s.val"), "Sustain Value"),
+-    rParamZyn(PR_dt,  rShort("r.dt"),  "Release Time"),
+-    rParamZyn(PR_val, rShort("r.val"), "Release Value"),
++    rParamZyn(PA_dt,  rShort("a.dt"),
++              rDefaultDepends(Envmode), rMap(default 1, 0 /*TODO*/) "Attack Time"),
++    rParamZyn(PA_val, rShort("a.val"), rDefaultDepends(Envmode), "Attack Value"),
++    rParamZyn(PD_dt,  rShort("d.dt"),  rDefaultDepends(Envmode), "Decay Time"),
++    rParamZyn(PD_val, rShort("d.val"), rDefaultDepends(Envmode), "Decay Value"),
++    rParamZyn(PS_val, rShort("s.val"), rDefaultDepends(Envmode), "Sustain Value"),
++    rParamZyn(PR_dt,  rShort("r.dt"),  rDefaultDepends(Envmode), "Release Time"),
++    rParamZyn(PR_val, rShort("r.val"),  "Release Value"),
+ 
+     {"Envmode:", rDoc("Envelope variant type"), NULL,
+         rBegin;
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 45334680..73504e85 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -42,12 +42,12 @@ static const rtosc::Ports _ports = {
+                 exp1, exp2), "Shape of LFO"),
+     rParamZyn(Prandomness, rShort("a.r."), rSpecial(disable),
+             "Amplitude Randomness (calculated uniformly at each cycle)"),
+-    rParamZyn(Pfreqrand, rShort("f.r."), rSpecial(disable),
++    rParamZyn(Pfreqrand, rShort("f.r."), rSpecial(disable), rDefault(0),
+             "Frequency Randomness (calculated uniformly at each cycle)"),
+     rParamZyn(Pdelay, rShort("delay"), rSpecial(disable), "Delay before LFO start\n"
+             "0..4 second delay"),
+     rToggle(Pcontinous, rShort("c"), "Enable for global operation"),
+-    rParamZyn(Pstretch, rShort("str"), rCentered, "Note frequency stretch"),
++    rParamZyn(Pstretch, rShort("str"), rCentered, rDefault(64), "Note frequency stretch"),
+ 
+     //Float valued aliases
+     {"delay::f", rProp(parameter) rMap(units, ms) rLog(0,4000), 0,
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index fb164c97..be08f9c0 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -41,33 +41,33 @@ static const rtosc::Ports realtime_ports =
+     rRecurp(GlobalFilter, "Post Filter"),
+ 
+     //Volume
+-    rToggle(PStereo,    rShort("stereo"), "Stereo/Mono Mode"),
+-    rParamZyn(PPanning, rShort("panning"), "Left Right Panning"),
+-    rParamZyn(PVolume,  rShort("vol"), "Synth Volume"),
+-    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), "Amplitude Velocity Sensing function"),
++    rToggle(PStereo,    rShort("stereo"), rDefault(true), "Stereo/Mono Mode"),
++    rParamZyn(PPanning, rShort("panning"), rDefault(64), "Left Right Panning"),
++    rParamZyn(PVolume,  rShort("vol"), rDefault(90), "Synth Volume"),
++    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), rDefault(64), "Amplitude Velocity Sensing function"),
+ 
+-    rParamZyn(Fadein_adjustment, rShort("a.pop."), "Adjustment for anti-pop strategy."),
++    rParamZyn(Fadein_adjustment, rShort("a.pop."), rDefault(FADEIN_ADJUSTMENT_SCALE), "Adjustment for anti-pop strategy."),
+ 
+     //Punch
+-    rParamZyn(PPunchStrength, rShort("strength"), "Punch Strength"),
+-    rParamZyn(PPunchTime,     rShort("time"),     "Length of punch"),
+-    rParamZyn(PPunchStretch,  rShort("stretch"), "How Punch changes with note frequency"),
+-    rParamZyn(PPunchVelocitySensing, rShort("sense"), "Punch Velocity control"),
++    rParamZyn(PPunchStrength, rShort("strength"), rDefault(0), "Punch Strength"),
++    rParamZyn(PPunchTime,     rShort("time"),     rDefault(60), "Length of punch"),
++    rParamZyn(PPunchStretch,  rShort("stretch"), rDefault(64), "How Punch changes with note frequency"),
++    rParamZyn(PPunchVelocitySensing, rShort("sense"), rDefault(72), "Punch Velocity control"),
+ 
+     //Filter
+-    rParamZyn(PFilterVelocityScale,         rShort("scale"), "Filter Velocity Magnitude"),
+-    rParamZyn(PFilterVelocityScaleFunction, rShort("sense"), "Filter Velocity Function Shape"),
++    rParamZyn(PFilterVelocityScale,         rShort("scale"), rDefault(64), "Filter Velocity Magnitude"),
++    rParamZyn(PFilterVelocityScaleFunction, rShort("sense"), rDefault(64), "Filter Velocity Function Shape"),
+ 
+     //Freq
+-    rToggle(Pfixedfreq,     rShort("fixed"),  "Base frequency fixed frequency enable"),
+-    rParamZyn(PfixedfreqET, rShort("f.ET"),   "Equal temeperate control for fixed frequency operation"),
+-    rParamZyn(PBendAdjust,          "Pitch bend adjustment"),
+-    rParamZyn(POffsetHz,    rShort("offset"), "Voice constant offset"),
+-    rParamI(PDetune,        rShort("fine"), rLinear(0, 16383), "Fine Detune"),
+-    rParamI(PCoarseDetune,  rShort("coarse"), "Coarse Detune"),
++    rToggle(Pfixedfreq,     rShort("fixed"),  rDefault(false), "Base frequency fixed frequency enable"),
++    rParamZyn(PfixedfreqET, rShort("f.ET"),   rDefault(0), "Equal temeperate control for fixed frequency operation"),
++    rParamZyn(PBendAdjust,          rDefault(88), "Pitch bend adjustment"),
++    rParamZyn(POffsetHz,    rShort("offset"), rDefault(64), "Voice constant offset"),
++    rParamI(PDetune,        rShort("fine"), rLinear(0, 16383), rDefault(8192), "Fine Detune"),
++    rParamI(PCoarseDetune,  rShort("coarse"), rDefault(0), "Coarse Detune"),
+     rParamZyn(PDetuneType,  rShort("type"),
+             rOptions(L35cents, L10cents, E100cents, E1200cents),
+-            "Magnitude of Detune"),
++            rDefault(L10cents), "Magnitude of Detune"),
+ 
+     {"sample#64:ifb", rProp(internal) rDoc("Nothing to see here"), 0,
+         [](const char *m, rtosc::RtData &d)
+@@ -143,25 +143,27 @@ static const rtosc::Ports non_realtime_ports =
+ 
+     //Harmonic Shape
+     rOption(Pmode, rMap(min, 0), rMap(max, 2), rShort("distribution"), rOptions(bandwidth,discrete,continious),
+-            "Harmonic Distribution Model"),
++            rDefault(bandwidth),
++	    "Harmonic Distribution Model"),
+     rOption(Php.base.type, rOptions(Gaussian, Rectanglar, Double Exponential), rShort("shape"),
++            rDefault(Gaussian),
+             "Harmonic profile shape"),
+-    rParamZyn(Php.base.par1, rShort("warp"),       "Harmonic shape distribution parameter"),
+-    rParamZyn(Php.freqmult,  rShort("clone"),     "Frequency multiplier on distribution"),
+-    rParamZyn(Php.modulator.par1, rShort("p1"),   "Distribution modulator parameter"),
+-    rParamZyn(Php.modulator.freq, rShort("freq"), "Frequency of modulator parameter"),
+-    rParamZyn(Php.width,     rShort("bandwidth"), "Width of base harmonic"),
++    rParamZyn(Php.base.par1, rShort("warp"),      rDefault(80),  "Harmonic shape distribution parameter"),
++    rParamZyn(Php.freqmult,  rShort("clone"),     rDefault(0),   "Frequency multiplier on distribution"),
++    rParamZyn(Php.modulator.par1, rShort("p1"),   rDefault(0),   "Distribution modulator parameter"),
++    rParamZyn(Php.modulator.freq, rShort("freq"), rDefault(30),  "Frequency of modulator parameter"),
++    rParamZyn(Php.width,     rShort("bandwidth"), rDefault(127), "Width of base harmonic"),
+     rOption(Php.amp.mode,    rShort("mode"),      rOptions(Sum, Mult, Div1, Div2),
+-            "Amplitude harmonic multiplier type"),
++            rDefault(0), "Amplitude harmonic multiplier type"),
+ 
+     //Harmonic Modulation
+     rOption(Php.amp.type, rShort("mult"), rOptions(Off, Gauss, Sine, Flat),
+-            "Type of amplitude multipler"),
+-    rParamZyn(Php.amp.par1, rShort("p1"),   "Amplitude multiplier parameter"),
+-    rParamZyn(Php.amp.par2, rShort("p2"),   "Amplitude multiplier parameter"),
+-    rToggle(Php.autoscale,  rShort("auto"), "Autoscaling Harmonics"),
++            rDefault(0), "Type of amplitude multipler"),
++    rParamZyn(Php.amp.par1, rShort("p1"), rDefault(80),  "Amplitude multiplier parameter"),
++    rParamZyn(Php.amp.par2, rShort("p2"), rDefault(60),  "Amplitude multiplier parameter"),
++    rToggle(Php.autoscale,  rShort("auto"), rDefault(true), "Autoscaling Harmonics"),
+     rOption(Php.onehalf, rShort("side"),
+-            rOptions(Full, Upper Half, Lower Half),
++            rOptions(Full, Upper Half, Lower Half), rDefault(Full)
+             "Harmonic cutoff model"),
+ 
+     //Harmonic Bandwidth
+@@ -170,30 +172,35 @@ static const rtosc::Ports non_realtime_ports =
+               EqualHz, Quater,
+               Half, 75%, 150%,
+               Double, Inv. Half),
++	    rDefault(Normal),
+             "Bandwidth scaling"),
+ 
+     //Harmonic Position Modulation
+     rOption(Phrpos.type,
+             rOptions(Harmonic, ShiftU, ShiftL, PowerU, PowerL, Sine,
+                 Power, Shift),
++            rDefault(Harmonic)
+             "Harmonic Overtone shifting mode"),
+-    rParamI(Phrpos.par1, rShort("p1"), rLinear(0,255), "Harmonic position parameter"),
+-    rParamI(Phrpos.par2, rShort("p2"), rLinear(0,255), "Harmonic position parameter"),
+-    rParamI(Phrpos.par3, rShort("force h."), rLinear(0,255), "Harmonic position parameter"),
++    rParamI(Phrpos.par1, rShort("p1"), rLinear(0,255), rDefault(0), "Harmonic position parameter"),
++    rParamI(Phrpos.par2, rShort("p2"), rLinear(0,255), rDefault(0), "Harmonic position parameter"),
++    rParamI(Phrpos.par3, rShort("force h."), rLinear(0,255), rDefault(0), "Harmonic position parameter"),
+ 
+     //Quality
+     rOption(Pquality.samplesize, rShort("quality"),
+             rOptions(16k (Tiny), 32k, 64k (Small), 128k,
+               256k (Normal), 512k, 1M (Big)),
++	    rDefault(128k),
+             "Size of each wavetable element"),
+     rOption(Pquality.basenote, rShort("basenote"),
+             rOptions(C-2, G-2, C-3, G-3, C-4,
+                 G-4, C-5, G-5, G-6,),
++	    rDefault(C-4),
+             "Base note for wavetable"),
+     rOption(Pquality.smpoct, rShort("smp/oct"),
+             rOptions(0.5, 1, 2, 3, 4, 6, 12),
++	    rDefault(2),
+             "Samples per octave"),
+-    rParamI(Pquality.oct, rShort("octaves"), rLinear(0,7),
++    rParamI(Pquality.oct, rShort("octaves"), rLinear(0,7), rDefault(3),
+             "Number of octaves to sample (above the first sample"),
+ 
+     {"Pbandwidth::i", rShort("bandwidth") rProp(parameter) rLinear(0,1000) rDoc("Bandwith Of Harmonics"), NULL,
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index f88d564d..884b5d39 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -37,52 +37,58 @@ namespace zyn {
+ static const rtosc::Ports SUBnotePorts = {
+     rSelf(SUBnoteParameters),
+     rPaste,
+-    rToggle(Pstereo,    rShort("stereo"), "Stereo Enable"),
+-    rParamZyn(PVolume,  rShort("volume"), "Volume"),
+-    rParamZyn(PPanning, rShort("panning"), "Left Right Panning"),
+-    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), "Amplitude Velocity Sensing function"),
+-    rParamI(PDetune,       rShort("detune"), rLinear(0, 16383), "Detune in detune type units"),
+-    rParamI(PCoarseDetune, rShort("cdetune"), "Coarse Detune"),
++    rToggle(Pstereo,    rShort("stereo"), rDefault(true), "Stereo Enable"),
++    rParamZyn(PVolume,  rShort("volume"), rDefault(96), "Volume"),
++    rParamZyn(PPanning, rShort("panning"), rDefault(64), "Left Right Panning"),
++    rParamZyn(PAmpVelocityScaleFunction, rShort("sense"), rDefault(90), "Amplitude Velocity Sensing function"),
++    rParamI(PDetune,       rShort("detune"), rLinear(0, 16383), rDefault(8192), "Detune in detune type units"),
++    rParamI(PCoarseDetune, rShort("cdetune"), rDefault(0), "Coarse Detune"),
+     //Real values needed
+     rOption(PDetuneType,               rShort("det. scl."),
+-            rOptions(L35 cents, L10 cents, E100 cents, E1200 cents), "Detune Scale"),
+-    rToggle(PFreqEnvelopeEnabled,      rShort("enable"), "Enable for Frequency Envelope"),
+-    rToggle(PBandWidthEnvelopeEnabled, rShort("enable"), "Enable for Bandwidth Envelope"),
+-    rToggle(PGlobalFilterEnabled,                 rShort("enable"), "Enable for Global Filter"),
+-    rParamZyn(PGlobalFilterVelocityScale,         rShort("scale"), "Filter Velocity Magnitude"),
+-    rParamZyn(PGlobalFilterVelocityScaleFunction, rShort("sense"), "Filter Velocity Function Shape"),
++            rOptions(L35 cents, L10 cents, E100 cents, E1200 cents), rDefault(L10 cents), "Detune Scale"),
++    rToggle(PFreqEnvelopeEnabled,      rShort("enable"), rDefault(false), "Enable for Frequency Envelope"),
++    rToggle(PBandWidthEnvelopeEnabled, rShort("enable"), rDefault(false), "Enable for Bandwidth Envelope"),
++    rToggle(PGlobalFilterEnabled,                 rShort("enable"), rDefault(false), "Enable for Global Filter"),
++    rParamZyn(PGlobalFilterVelocityScale,         rShort("scale"), rDefault(64), "Filter Velocity Magnitude"),
++    rParamZyn(PGlobalFilterVelocityScaleFunction, rShort("sense"), rDefault(64), "Filter Velocity Function Shape"),
+     //rRecur(FreqEnvelope, EnvelopeParams),
+     //rToggle(),//continue
+-    rToggle(Pfixedfreq,     rShort("fixed freq"), "Base frequency fixed frequency enable"),
+-    rParamZyn(PfixedfreqET, rShort("fixed ET"),   "Equal temeperate control for fixed frequency operation"),
+-    rParamZyn(PBendAdjust,  rShort("bend"),       "Pitch bend adjustment"),
+-    rParamZyn(POffsetHz,    rShort("+ Hz"),       "Voice constant offset"),
++    rToggle(Pfixedfreq,     rShort("fixed freq"), rDefault(false), "Base frequency fixed frequency enable"),
++    rParamZyn(PfixedfreqET, rShort("fixed ET"),   rDefault(0),     "Equal temeperate control for fixed frequency operation"),
++    rParamZyn(PBendAdjust,  rShort("bend"),       rDefault(88),    "Pitch bend adjustment"),
++    rParamZyn(POffsetHz,    rShort("+ Hz"),       rDefault(64),    "Voice constant offset"),
+ #undef rChangeCb
+ #define rChangeCb obj->updateFrequencyMultipliers(); if (obj->time) { \
+     obj->last_update_timestamp = obj->time->time(); }
+     rParamI(POvertoneSpread.type, rMap(min, 0), rMap(max, 7), rShort("spread type")
+             rOptions(Harmonic, ShiftU, ShiftL, PowerU, PowerL, Sine, Power, Shift),
++	    rDefault(Harmonic)
+             "Spread of harmonic frequencies"),
+     rParamI(POvertoneSpread.par1, rMap(min, 0), rMap(max, 255), rShort("p1"),
+-            "Overtone Parameter"),
++	    rDefault(0), "Overtone Parameter"),
+     rParamI(POvertoneSpread.par2, rMap(min, 0), rMap(max, 255), rShort("p2"),
+-            "Overtone Parameter"),
++            rDefault(0), "Overtone Parameter"),
+     rParamI(POvertoneSpread.par3, rMap(min, 0), rMap(max, 255), rShort("forceH"),
+-            "Force Overtones To Harmonics"),
++            rDefault(0), "Force Overtones To Harmonics"),
+ #undef rChangeCb
+ #define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+-    rParamI(Pnumstages, rShort("stages"), rMap(min, 1), rMap(max, 5), "Number of filter stages"),
+-    rParamZyn(Pbandwidth, rShort("bandwidth"), "Bandwidth of filters"),
+-    rParamZyn(Phmagtype,  rShort("mag. type"), rOptions(linear, -40dB, -60dB, -80dB, -100dB), "Magnitude scale"),
+-    rArray(Phmag, MAX_SUB_HARMONICS, "Harmonic magnitudes"),
+-    rArray(Phrelbw, MAX_SUB_HARMONICS, "Relative bandwidth"),
+-    rParamZyn(Pbwscale, rShort("stretch"), "Bandwidth scaling with frequency"),
++    rParamI(Pnumstages, rShort("stages"), rMap(min, 1), rMap(max, 5),
++            rDefault(2), "Number of filter stages"),
++    rParamZyn(Pbandwidth, rShort("bandwidth"), rDefault(40), "Bandwidth of filters"),
++    rParamZyn(Phmagtype,  rShort("mag. type"), rOptions(linear, -40dB, -60dB, -80dB, -100dB),
++              rDefault(linear), "Magnitude scale"),
++    rArray(Phmag, MAX_SUB_HARMONICS, rDefault(0),
++           "Harmonic magnitudes"),
++    rArray(Phrelbw, MAX_SUB_HARMONICS, rDefault(64),
++           "Relative bandwidth"),
++    rParamZyn(Pbwscale, rShort("stretch"), rDefault(64), "Bandwidth scaling with frequency"),
+     rRecurp(AmpEnvelope,          "Amplitude envelope"),
+     rRecurp(FreqEnvelope,         "Frequency Envelope"),
+     rRecurp(BandWidthEnvelope,    "Bandwidth Envelope"),
+     rRecurp(GlobalFilterEnvelope, "Post Filter Envelope"),
+     rRecurp(GlobalFilter,         "Post Filter"),
+-    rOption(Pstart, rShort("initial"), rOptions(zero, random, ones), "How harmonics are initialized"),
++    rOption(Pstart, rShort("initial"), rOptions(zero, random, ones), rDefault(random),
++            "How harmonics are initialized"),
+ 
+     {"clear:", rDoc("Reset all harmonics to equal bandwidth/zero amplitude"), NULL,
+         rBegin;
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index ccba326e..c3715944 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -63,5 +63,9 @@ target_link_libraries(EffectTest ${test_lib})
+ add_executable(ins-test InstrumentStats.cpp)
+ target_link_libraries(ins-test ${test_lib} rt)
+ 
++# add_executable(load_omz load_omz.cpp)
++# target_link_libraries(load-omz ${test_lib})
++
++
+ #message(STATUS "Plugin Test ${GUI_LIBRARIES} ${NIO_LIBRARIES} ${AUDIO_LIBRARIES}")
+ 
+diff --git a/src/Tests/load_omz.cpp b/src/Tests/load_omz.cpp
+new file mode 100644
+index 00000000..4cafb0b3
+--- /dev/null
++++ b/src/Tests/load_omz.cpp
+@@ -0,0 +1,71 @@
++#include "../Misc/Master.h"
++
++#include <cassert>
++
++void check_files_are_equal(const char* lfilename, const char* rfilename)
++{
++    const int BUFFER_SIZE = 16 * 1024;
++
++    std::ifstream lFile(lfilename);
++    std::ifstream rFile(rfilename);
++    assert(lFile.is_open());
++    assert(rFile.is_open());
++
++    char lBuffer[BUFFER_SIZE];
++    char rBuffer[BUFFER_SIZE];
++    do {
++        lFile.read(lBuffer, BUFFER_SIZE);
++        rFile.read(rBuffer, BUFFER_SIZE);
++        numberOfRead = lFile.gcount();//I check the files with the same size
++        assert(numberOfRead == rFile.gcount());
++
++        if (memcmp(lBuffer, rBuffer, numberOfRead) != 0)
++        {
++//            memset(lBuffer,0,numberOfRead);
++//            memset(rBuffer,0,numberOfRead);
++            return false;
++        }
++    } while (lFile.good() || rFile.good());
++}
++
++int main()
++{
++    assert(argc == 2);
++    const char *filename = argv[1];
++
++    const char* tmp_omz = "/tmp/zynaddsubfx_test_master.omz";
++    const char* tmp_xmz = "/tmp/zynaddsubfx_test_master.xmz";
++
++    {
++        Master master;
++
++        int tmp = master.loadXML(filename);
++        if(tmp < 0) {
++            cerr << "ERROR: Could not load master file " << filename
++                 << "." << endl;
++            exit(1);
++        }
++
++        master.saveOSC(tmp_omz);
++    }
++
++    {
++        Master master;
++
++        master.loadOSC(tmp_omz);
++
++        master.saveXML(tmp_xmz);
++        if(tmp < 0) {
++            cerr << "ERROR: Could not save master file " << tmp_xmz
++                 << "." << endl;
++            exit(1);
++        }
++
++    }
++
++    if(check_files_are_equal(filename, tmp_xmz))
++        return 0;
++    else
++        return 1;
++
++}
+-- 
+2.47.0
+

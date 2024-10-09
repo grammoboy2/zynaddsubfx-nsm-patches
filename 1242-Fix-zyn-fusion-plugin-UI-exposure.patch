@@ -1,0 +1,38 @@
+From f340d637569353a54d27a3a0de854f24eebd3e19 Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Fri, 5 Jan 2018 01:55:14 +0100
+Subject: [PATCH 1242/1936] Fix zyn-fusion plugin-UI exposure
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+index 0124bc45..b7d01b3c 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+@@ -208,7 +208,6 @@ if(!oscPort)
+         }
+ 
+         z.zest_draw(z.zest);
+-        repaint();
+     }
+ 
+     bool onKeyboard(const KeyboardEvent &ev)
+@@ -223,8 +222,11 @@ if(!oscPort)
+ 
+     void uiIdle(void) override
+     {
+-        if(z.zest)
+-            z.zest_tick(z.zest);
++        if(z.zest) {
++            if (z.zest_tick(z.zest)) {
++                repaint();
++            }
++        }
+     }
+ 
+     void uiReshape(uint width, uint height)
+-- 
+2.47.0
+

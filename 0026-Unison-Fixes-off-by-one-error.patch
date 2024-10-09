@@ -1,0 +1,38 @@
+From d1302ad4c598c439a5a8f704b3e057b385870049 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 20 Jun 2012 15:46:27 -0400
+Subject: [PATCH 0026/1936] Unison: Fixes off by one error
+
+Previously Unison could read an element off the end of its buffer, generating
+noise in part of the output. This affected reverb and possibly unison enabled
+notes in adsynth.
+---
+ src/DSP/Unison.cpp | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/DSP/Unison.cpp b/src/DSP/Unison.cpp
+index f2bef69b..72c4e4fb 100644
+--- a/src/DSP/Unison.cpp
++++ b/src/DSP/Unison.cpp
+@@ -140,13 +140,14 @@ void Unison::process(int bufsize, float *inbuf, float *outbuf)
+             float pos  = (float)(delay_k + max_delay) - vpos - 1.0f;
+             int   posi;
+             F2I(pos, posi); //optimize!
++            int posi_next = posi + 1;
+             if(posi >= max_delay)
+                 posi -= max_delay;
++            if(posi_next >= max_delay)
++                posi_next -= max_delay;
+             float posf = pos - floorf(pos);
+-            out +=
+-                ((1.0f
+-                  - posf) * delay_buffer[posi] + posf
+-                 * delay_buffer[posi + 1]) * sign;
++            out += ((1.0f - posf) * delay_buffer[posi] + posf
++                 * delay_buffer[posi_next]) * sign;
+             sign = -sign;
+         }
+         outbuf[i] = out * volume;
+-- 
+2.47.0
+

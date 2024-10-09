@@ -1,0 +1,85 @@
+From c3d0d560718c507897a3b64f12562c66468953a4 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 10 Mar 2019 12:35:28 -0400
+Subject: [PATCH 1327/1936] Update copyright year and version number
+
+---
+ CMakeLists.txt              | 2 +-
+ src/Tests/guitar-adnote.xmz | 2 +-
+ src/UI/MasterUI.fl          | 4 ++--
+ src/main.cpp                | 4 ++--
+ 4 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 9f62b3da..fd83d24d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -3,7 +3,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+ set(VERSION_MAJOR "3")
+ set(VERSION_MINOR "0")
+-set(VERSION_REVISION "3")
++set(VERSION_REVISION "4")
+ 
+ #Set data directory, if any
+ if(DEFINED ZYN_DATADIR)
+diff --git a/src/Tests/guitar-adnote.xmz b/src/Tests/guitar-adnote.xmz
+index 138ad4e5..ef9c0596 100644
+--- a/src/Tests/guitar-adnote.xmz
++++ b/src/Tests/guitar-adnote.xmz
+@@ -2,7 +2,7 @@
+ <?xml version="1.0f" encoding="UTF-8"?>
+ <!DOCTYPE ZynAddSubFX-data>
+ <ZynAddSubFX-data version-major="3" version-minor="0"
+-version-revision="3" ZynAddSubFX-author="Nasca Octavian Paul">
++version-revision="4" ZynAddSubFX-author="Nasca Octavian Paul">
+ <INFORMATION>
+ <par_bool name="PADsynth_used" value="yes" />
+ </INFORMATION>
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index abfbf628..93dc5553 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -2,7 +2,7 @@
+ version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2009 Nasca Octavian Paul - (c) 2009-2017 Mark McCurry} {private local
++decl {//Copyright (c) 2002-2009 Nasca Octavian Paul - (c) 2009-2019 Mark McCurry} {private local
+ } 
+ 
+ decl {//License: GNU GPL version 2 or later} {private local
+@@ -869,7 +869,7 @@ panelwindow->show();}
+       xywh {411 344 365 280} type Double hide
+     } {
+       Fl_Box {} {
+-        label {Copyright (c) 2002-2009 Nasca O. PAUL, 2009-2017 Mark McCurry, and others. Please read AUTHORS.txt}
++        label {Copyright (c) 2002-2009 Nasca O. PAUL, 2009-2019 Mark McCurry, and others. Please read AUTHORS.txt}
+         xywh {15 35 335 55} labeltype EMBOSSED_LABEL labelsize 15 align 208
+       }
+       Fl_Box {} {
+diff --git a/src/main.cpp b/src/main.cpp
+index 33f7ae8b..2ff509a2 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -3,7 +3,7 @@
+ 
+   main.cpp  -  Main file of the synthesizer
+   Copyright (C) 2002-2005 Nasca Octavian Paul
+-  Copyright (C) 2012-2017 Mark McCurry
++  Copyright (C) 2012-2019 Mark McCurry
+ 
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
+     << "\nZynAddSubFX - Copyright (c) 2002-2013 Nasca Octavian Paul and others"
+     << endl;
+     cerr
+-    << "                Copyright (c) 2009-2017 Mark McCurry [active maintainer]"
++    << "                Copyright (c) 2009-2019 Mark McCurry [active maintainer]"
+     << endl;
+     cerr << "This program is free software (GNU GPL v2 or later) and \n";
+     cerr << "it comes with ABSOLUTELY NO WARRANTY.\n" << endl;
+-- 
+2.47.0
+

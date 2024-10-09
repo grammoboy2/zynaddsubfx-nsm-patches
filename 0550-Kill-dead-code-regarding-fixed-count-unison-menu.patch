@@ -1,0 +1,80 @@
+From 68747f42682217c40a48af65d6b957c36c96cc3e Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <oliver@onion.private>
+Date: Fri, 2 Oct 2015 13:17:55 -0400
+Subject: [PATCH 0550/1936] Kill dead code regarding fixed count unison menu
+
+---
+ src/Params/ADnoteParameters.cpp | 34 ---------------------------------
+ src/Params/ADnoteParameters.h   |  4 ----
+ 2 files changed, 38 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 405fdc92..a4fb263d 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -524,40 +524,6 @@ ADnoteParameters::~ADnoteParameters()
+         KillVoice(nvoice);
+ }
+ 
+-int ADnoteParameters::get_unison_size_index(int nvoice) const
+-{
+-    int index = 0;
+-    if(nvoice >= NUM_VOICES)
+-        return 0;
+-    int unison = VoicePar[nvoice].Unison_size;
+-
+-    while(1) {
+-        if(ADnote_unison_sizes[index] >= unison)
+-            return index;
+-
+-        if(ADnote_unison_sizes[index] == 0)
+-            return index - 1;
+-
+-        index++;
+-    }
+-    return 0;
+-}
+-
+-void ADnoteParameters::set_unison_size_index(int nvoice, int index) {
+-    int unison = 1;
+-    for(int i = 0; i <= index; ++i) {
+-        unison = ADnote_unison_sizes[i];
+-        if(unison == 0) {
+-            unison = ADnote_unison_sizes[i - 1];
+-            break;
+-        }
+-    }
+-
+-    VoicePar[nvoice].Unison_size = unison;
+-}
+-
+-
+-
+ void ADnoteParameters::add2XMLsection(XMLwrapper *xml, int n)
+ {
+     int nvoice = n;
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index 75544875..c68c69c5 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -29,8 +29,6 @@
+ enum FMTYPE {
+     NONE, MORPH, RING_MOD, PHASE_MOD, FREQ_MOD, PITCH_MOD
+ };
+-static const int ADnote_unison_sizes[] =
+-{1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 0};
+ 
+ /*****************************************************************/
+ /*                    GLOBAL PARAMETERS                          */
+@@ -306,8 +304,6 @@ class ADnoteParameters:public PresetsArray
+ 
+         float getBandwidthDetuneMultiplier() const;
+         float getUnisonFrequencySpreadCents(int nvoice) const;
+-        int get_unison_size_index(int nvoice) const;
+-        void set_unison_size_index(int nvoice, int index);
+         static const rtosc::Ports &ports;
+         void defaults(int n); //n is the nvoice
+         void add2XMLsection(XMLwrapper *xml, int n);
+-- 
+2.47.0
+

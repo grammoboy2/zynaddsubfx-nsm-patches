@@ -1,0 +1,19 @@
+From e28c988dfbd29ec6e3d388d377d5c9d1d11ec25a Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 8 Nov 2020 11:14:12 +0100
+Subject: [PATCH 1649/1936] Update submodule rtosc
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 6a3c6186..d96267be 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 6a3c6186da3e8b92b6e64d9daa4b5ebedafd95ea
++Subproject commit d96267be0c34bd3f37966cf86e0e0eec948ca3c1
+-- 
+2.47.0
+

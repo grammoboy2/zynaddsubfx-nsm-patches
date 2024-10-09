@@ -1,0 +1,19 @@
+From f2045f6ee4d06466f04067b2bccae4357d45fc8d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 2 Sep 2014 01:06:41 -0400
+Subject: [PATCH 0228/1936] Update rtosc submodule with BSD Fix
+
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 44ba4f94..76c93eb0 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 44ba4f9455c925958f6de38171c0d9b317e58c19
++Subproject commit 76c93eb0b4992c3cfc658bfa9b87c8e447fde875
+-- 
+2.47.0
+

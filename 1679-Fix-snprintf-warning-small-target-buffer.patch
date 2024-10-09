@@ -1,0 +1,34 @@
+From 03652fe9f02a1e030e8c0a91438a6345670b8a51 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Tue, 15 Dec 2020 19:28:19 +0100
+Subject: [PATCH 1679/1936] Fix snprintf warning (small target buffer)
+
+Compiler raises issues if it knows that for `snprintf`, the target
+buffer may be too small for the format string. This would not lead to
+memory issues, but information could get lost by truncation.
+
+Using `strncpy` eliminates the warning.
+---
+ src/Misc/Microtonal.cpp | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index ce154f06..02925f6b 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -637,8 +637,10 @@ int Microtonal::loadscl(SclInfo &scl, const char *filename)
+         if(tmp[i] < 32)
+             tmp[i] = 0;
+ 
+-    snprintf(scl.Pname,    MICROTONAL_MAX_NAME_LEN, "%s", tmp);
+-    snprintf(scl.Pcomment, MICROTONAL_MAX_NAME_LEN, "%s", tmp);
++    strncpy(scl.Pname,    tmp, MICROTONAL_MAX_NAME_LEN);
++    strncpy(scl.Pcomment, tmp, MICROTONAL_MAX_NAME_LEN);
++    scl.Pname[MICROTONAL_MAX_NAME_LEN-1] = 0;
++    scl.Pcomment[MICROTONAL_MAX_NAME_LEN-1] = 0;
+ 
+     //loads the number of the notes
+     if(loadline(file, &tmp[0]) != 0)
+-- 
+2.47.0
+

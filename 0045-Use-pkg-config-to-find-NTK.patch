@@ -1,0 +1,109 @@
+From 672042908baca5e9ea8edf650ea5641c3083c03e Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Mon, 12 Nov 2012 18:08:41 -0800
+Subject: [PATCH 0045/1936] Use pkg-config to find NTK.
+
+---
+ cmake/FindNTK.cmake | 45 ---------------------------------------------
+ src/CMakeLists.txt  | 18 +++++++-----------
+ 2 files changed, 7 insertions(+), 56 deletions(-)
+ delete mode 100644 cmake/FindNTK.cmake
+
+diff --git a/cmake/FindNTK.cmake b/cmake/FindNTK.cmake
+deleted file mode 100644
+index 8a1fe06c..00000000
+--- a/cmake/FindNTK.cmake
++++ /dev/null
+@@ -1,45 +0,0 @@
+-# The CMake supplied FindNTK delivers NTK_LIBRARIES as a full list of
+-# static and shared libs, with full paths. We really want just a list of
+-# the lib names. This slight perversion defines
+-#  NTK_FOUND       true or false
+-#  NTK_CONFIG      ntk-config executable
+-#  NTK_FLUID_EXECUTABLE    fluid executable
+-#  NTK_LDFLAGS   a list of libs required for linking
+-#
+-
+-if (NTK_LDFLAGS)
+-  # in cache already
+-  set(NTK_FOUND TRUE)
+-else (NTK_LDFLAGS)
+-    find_program (NTK_CONFIG ntk-config)
+-    if (NTK_CONFIG)
+-        execute_process (COMMAND ${NTK_CONFIG} --use-images --ldflags OUTPUT_VARIABLE NTK_LDFLAGS)
+-        execute_process (COMMAND ${NTK_CONFIG} --use-images --includedir OUTPUT_VARIABLE NTK_INCLUDE_DIR)
+-    string(STRIP ${NTK_LDFLAGS} NTK_LIBS)
+-    string(REPLACE "-l" "" NTK_LIBS ${NTK_LIBS})
+-    string(REPLACE " " "; " NTK_LIBS ${NTK_LIBS})
+-    #list(APPEND NTK_LIBS ${NTK_LINK_LIBS})
+-    find_program (FLTK_FLUID_EXECUTABLE ntk-fluid)
+-        if (FLTK_FLUID_EXECUTABLE)
+-#            mark_as_advanced(NTK_CONFIG)
+-#            mark_as_advanced(NTK_EXECUTABLE)
+-#            mark_as_advanced(NTK_LIBRARIES)
+-            set(NTK_FOUND TRUE)
+-            set(NTK_WRAP_UI 1)
+-        endif(FLTK_FLUID_EXECUTABLE)
+-    endif (NTK_CONFIG)
+-endif (NTK_LDFLAGS)
+-
+-# message("NTK_LDFLAGS: ${NTK_LDFLAGS}")
+-# message("NTK_WRAP_UI: ${NTK_WRAP_UI}")
+-
+-if (NTK_FOUND)
+-    if (NOT NTK_FIND_QUIETLY)
+-        message(STATUS "found ${NTK_CONFIG}")
+-        # message(STATUS "found ${NTK_FLUID_EXECUTABLE}")
+-    endif (NOT NTK_FIND_QUIETLY)
+-else (NTK_FOUND)
+-    if (NTK_FIND_REQUIRED)
+-      message(FATAL_ERROR "could not find NTK, aborting.")
+-    endif (NTK_FIND_REQUIRED)
+-endif (NTK_FOUND)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 0899ba0e..c648be20 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -13,7 +13,8 @@ find_package(Alsa)
+ pkg_check_modules(JACK jack)
+ pkg_check_modules(PORTAUDIO portaudio-2.0>=19)
+ set(FLTK_SKIP_OPENGL true)
+-find_package(NTK)
++pkg_check_modules(NTK ntk)
++pkg_check_modules(NTK_IMAGES ntk_images)
+ find_package(FLTK)
+ find_package(OpenGL) #for FLTK
+ find_package(CxxTest)
+@@ -255,24 +256,19 @@ if(FltkGui)
+ endif()
+ 
+ if(NtkGui)
+-	#UGLY WORKAROUND
+-	find_program (NTK_CONFIG ntk-config)
+-	if (NTK_CONFIG)
+-		execute_process (COMMAND ${NTK_CONFIG} --use-images --ldflags OUTPUT_VARIABLE NTK_LDFLAGS)
+-		string(STRIP ${NTK_LDFLAGS} NTK_LIBRARIES)
+-	endif()
+-
+-	message(STATUS ${NTK_LDFLAGS})
+ 
++        find_program( FLTK_FLUID_EXECUTABLE ntk-fluid)
++        
++	message(STATUS ${NTK_LDFLAGS} ${NTK_IMAGES_LDFLAGS})
+ 
+-	set(GUI_LIBRARIES ${NTK_LIBRARIES} ${NTK_LIBRARIES} ${OPENGL_LIBRARIES} zynaddsubfx_gui)
++	set(GUI_LIBRARIES ${NTK_LIBRARIES} ${NTK_IMAGES_LIBRARIES} ${OPENGL_LIBRARIES} zynaddsubfx_gui)
+ 
+ 	add_definitions(-DNTK_GUI)
+ 
+ 	message(STATUS "Will build NTK gui")
+ 
+ 	include_directories(
+-			${NTK_INCLUDE_DIR}
++			${NTK_INCLUDE_DIRS}
+ 			"${CMAKE_CURRENT_SOURCE_DIR}/UI"
+ 			"${CMAKE_CURRENT_BINARY_DIR}/UI"
+ 			)
+-- 
+2.47.0
+

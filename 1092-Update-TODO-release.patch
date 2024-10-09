@@ -1,0 +1,24 @@
+From 5fc204ab97802817507837006c8d5061d00d9b55 Mon Sep 17 00:00:00 2001
+From: Olivier Humbert <trebmuh@users.noreply.github.com>
+Date: Tue, 22 Nov 2016 00:22:22 +0100
+Subject: [PATCH 1092/1936] Update TODO-release
+
+---
+ TODO-release | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/TODO-release b/TODO-release
+index d25a1258..e7821b8a 100644
+--- a/TODO-release
++++ b/TODO-release
+@@ -1,6 +1,7 @@
+ This is a list of things to do when releasing a new version.
+ 
+ - Update version number in CMakeLists.txt
++- Update version number in src/Tests/guitar-adnote.xmz
+ - Update date of the new version in HISTORY.txt
+ - Update Copyright (mainly YEAR) info in src/UI/MasterUI.fl (note this is mentionned 2 times on line 5 and line 872)
+ - Check and update (if needed) the manpage file : doc/zynaddsubfx.1.txt
+-- 
+2.47.0
+

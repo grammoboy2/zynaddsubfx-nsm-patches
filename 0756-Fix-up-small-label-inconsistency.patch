@@ -1,0 +1,25 @@
+From 343f8565f484a5b3404c8924e84646df9dceedc7 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sun, 22 Nov 2015 22:58:52 -0500
+Subject: [PATCH 0756/1936] Fix up small label inconsistency
+
+---
+ src/UI/PADnoteUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 4909b2d6..e771d35e 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -710,7 +710,7 @@ cbwidget->do_callback();}
+               class Fl_Osc_Choice
+             } {}
+             Fl_Dial bendadjustdial {
+-              label {Bend}
++              label {Bend Adj.}
+               tooltip {How the frequency varies according to the pitch wheel} xywh {60 278 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
+               code0 {o->init("PBendAdjust");}
+               class Fl_Osc_Dial
+-- 
+2.47.0
+

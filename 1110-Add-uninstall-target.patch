@@ -1,0 +1,56 @@
+From f5103c5b88f7c016de3ce7713b4455d392456691 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Wed, 28 Dec 2016 17:36:44 +0100
+Subject: [PATCH 1110/1936] Add uninstall target.
+
+---
+ CMakeLists.txt                 |  9 +++++++++
+ cmake/cmake_uninstall.cmake.in | 19 +++++++++++++++++++
+ 2 files changed, 28 insertions(+)
+ create mode 100644 cmake/cmake_uninstall.cmake.in
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 96057b27..0eea1b1d 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -44,3 +44,12 @@ install(DIRECTORY instruments/examples
+     DESTINATION share/zynaddsubfx)
+ install(DIRECTORY instruments/ZynAddSubFX.lv2presets
+     DESTINATION ${PluginLibDir}/lv2)
++
++## uninstall target
++configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
++               "${CMAKE_CURRENT_BINARY_DIR}/cmake/cmake_uninstall.cmake"
++               IMMEDIATE @ONLY)
++add_custom_target(uninstall
++                  "${CMAKE_COMMAND}" -P
++                  "${CMAKE_CURRENT_BINARY_DIR}/cmake/cmake_uninstall.cmake")
++
+diff --git a/cmake/cmake_uninstall.cmake.in b/cmake/cmake_uninstall.cmake.in
+new file mode 100644
+index 00000000..9b922b17
+--- /dev/null
++++ b/cmake/cmake_uninstall.cmake.in
+@@ -0,0 +1,19 @@
++if(NOT EXISTS "@CMAKE_CURRENT_BINARY_DIR@/install_manifest.txt")
++  message(FATAL_ERROR "Cannot find install manifest: " @CMAKE_CURRENT_BINARY_DIR@/install_manifest.txt "")
++endif(NOT EXISTS "@CMAKE_CURRENT_BINARY_DIR@/install_manifest.txt")
++
++file(READ "@CMAKE_CURRENT_BINARY_DIR@/install_manifest.txt" files)
++string(REGEX REPLACE "\n" ";" files "${files}")
++foreach(file ${files})
++  message(STATUS "Uninstalling " $ENV{DESTDIR}${file} "")
++  if(IS_SYMLINK "$ENV{DESTDIR}${file}" OR EXISTS "$ENV{DESTDIR}${file}")
++    exec_program("@CMAKE_COMMAND@" ARGS "-E remove \"$ENV{DESTDIR}${file}\""
++                  OUTPUT_VARIABLE rm_out
++                  RETURN_VALUE rm_retval)
++    if(NOT "${rm_retval}" STREQUAL 0)
++      message(FATAL_ERROR "Problem when removing " $ENV{DESTDIR}${file} "")
++    endif(NOT "${rm_retval}" STREQUAL 0)
++  else(EXISTS "$ENV{DESTDIR}${file}")
++    message(STATUS "File " $ENV{DESTDIR}${file} " does not exist.")
++  endif(IS_SYMLINK "$ENV{DESTDIR}${file}" OR EXISTS "$ENV{DESTDIR}${file}")
++endforeach(file)
+-- 
+2.47.0
+

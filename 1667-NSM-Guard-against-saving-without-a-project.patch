@@ -1,0 +1,28 @@
+From 052df4b3e620ced210230993ae5c7200b5701a97 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 8 Dec 2020 21:19:22 -0500
+Subject: [PATCH 1667/1936] NSM: Guard against saving without a project
+
+This feels like it should be out of spec, but it's the only thing
+I can see which would result in the crash described in:
+https://github.com/zynaddsubfx/zyn-fusion-issues/issues/252
+---
+ src/UI/NSM.C | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index 9aa524a9..1c2d66b7 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -59,6 +59,8 @@ NSM_Client::command_save(char **out_msg)
+ {
+     (void) out_msg;
+     int r = ERR_OK;
++    if(!project_filename)
++        return ERR_NO_SESSION_OPEN;
+ 
+     middleware->transmitMsg("/save_xmz", "s", project_filename);
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,128 @@
+From e863c194b2551beb47e1ac837d366b44ec351ec7 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 1 Aug 2016 17:24:03 -0400
+Subject: [PATCH 0992/1936] Windows Workarounds
+
+---
+ src/Misc/MiddleWare.cpp               | 12 +++++---
+ src/Plugin/ZynAddSubFX/CMakeLists.txt | 40 ++++++++++++++++-----------
+ 2 files changed, 32 insertions(+), 20 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index efb06603..4bc873fc 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -17,6 +17,7 @@
+ #include <fstream>
+ #include <iostream>
+ #include <dirent.h>
++#include <sys/stat.h>
+ 
+ #include <rtosc/undo-history.h>
+ #include <rtosc/thread-link.h>
+@@ -851,9 +852,12 @@ static std::vector<std::string> getFiles(const char *folder, int mask)
+     struct dirent *fn;
+     std::vector<string> files;
+ 
+-    while((fn = readdir(dir)))
+-        if(fn->d_type == mask)
++    while((fn = readdir(dir))) {
++        struct stat s;
++        stat(fn->d_name, &s);
++        if((s.st_mode & S_IFMT) == mask)
+             files.push_back(fn->d_name);
++    }
+ 
+     closedir(dir);
+     return files;
+@@ -1204,7 +1208,7 @@ static rtosc::Ports middwareSnoopPorts = {
+         rBegin;
+         const char *folder = rtosc_argument(msg, 0).s;
+ 
+-        auto files = getFiles(folder, DT_REG);
++        auto files = getFiles(folder, S_IFREG);
+ 
+         const int N = files.size();
+         rtosc_arg_t *args  = new rtosc_arg_t[N];
+@@ -1223,7 +1227,7 @@ static rtosc::Ports middwareSnoopPorts = {
+         rBegin;
+         const char *folder = rtosc_argument(msg, 0).s;
+ 
+-        auto files = getFiles(folder, DT_DIR);
++        auto files = getFiles(folder, S_IFDIR);
+ 
+         const int N = files.size();
+         rtosc_arg_t *args  = new rtosc_arg_t[N];
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 3ec7fa5f..21f84c09 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -73,11 +73,11 @@ add_library(ZynAddSubFX_vst SHARED
+ else()
+ 
+ # UI Disabled
+-add_library(ZynAddSubFX_lv2 SHARED
+-    ${CMAKE_SOURCE_DIR}/src/globals.cpp
+-    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
+-    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
+-    ZynAddSubFX.cpp)
++#add_library(ZynAddSubFX_lv2 SHARED
++#    ${CMAKE_SOURCE_DIR}/src/globals.cpp
++#    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
++#    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
++#    ZynAddSubFX.cpp)
+ 
+ add_library(ZynAddSubFX_vst SHARED
+     ${CMAKE_SOURCE_DIR}/src/globals.cpp
+@@ -87,29 +87,37 @@ add_library(ZynAddSubFX_vst SHARED
+ 
+ endif()
+ 
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES OUTPUT_NAME "ZynAddSubFX")
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES PREFIX "")
++#set_target_properties(ZynAddSubFX_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++#set_target_properties(ZynAddSubFX_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++#set_target_properties(ZynAddSubFX_lv2 PROPERTIES OUTPUT_NAME "ZynAddSubFX")
++#set_target_properties(ZynAddSubFX_lv2 PROPERTIES PREFIX "")
+ 
+ set_target_properties(ZynAddSubFX_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES OUTPUT_NAME "ZynAddSubFX")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES PREFIX "")
+ 
+-target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+-    ${PLATFORM_LIBRARIES})
++if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
++    set(PLATFORM_LIBRARIES ws2_32
++            winmm
++            wsock32
++            "-static" iphlpapi
++            "-static" winpthread)
++endif()
++
++#target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
++#    ${PLATFORM_LIBRARIES})
+ target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+     ${PLATFORM_LIBRARIES}
+     X11
+     GL)
+ 
+-install(TARGETS ZynAddSubFX_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
+-install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
++#install(TARGETS ZynAddSubFX_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
++#install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+ 
+-add_custom_command(TARGET ZynAddSubFX_lv2 POST_BUILD
+-    COMMAND ../../lv2-ttl-generator $<TARGET_FILE:ZynAddSubFX_lv2>
+-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lv2)
++#add_custom_command(TARGET ZynAddSubFX_lv2 POST_BUILD
++#    COMMAND ../../lv2-ttl-generator $<TARGET_FILE:ZynAddSubFX_lv2>
++#    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lv2)
+ 
+ install(FILES
+     ${CMAKE_CURRENT_BINARY_DIR}/lv2/manifest.ttl
+-- 
+2.47.0
+

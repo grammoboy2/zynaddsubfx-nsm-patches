@@ -1,0 +1,47 @@
+From 530bb88a74000f9fbd5760be6a86fdeab2a79f85 Mon Sep 17 00:00:00 2001
+From: friedolino78 <mkirchn@gmx.de>
+Date: Wed, 17 Jul 2024 09:59:49 +0200
+Subject: [PATCH 1935/1936] fix and cleanup interpolation in Util.cpp
+
+---
+ src/Misc/Util.cpp | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index 24934458..afd452aa 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -221,20 +221,20 @@ float SYNTH_T::numRandom()
+ 
+ float interpolate(const float *data, size_t len, float pos)
+ {
+-    assert(len > (size_t)pos + 1);
+-    const int l_pos      = (int)pos,
+-              r_pos      = l_pos + 1;
+-    const float leftness = pos - l_pos;
+-    return data[l_pos] * leftness + data[r_pos] * (1.0f - leftness);
++    assert(len > (size_t)pos + 1 && pos >= 0);
++    const unsigned int l_pos      = (int)pos;
++    const unsigned int r_pos      = l_pos + 1;
++    const float rightness = pos - (float)l_pos;
++    return data[l_pos] + (data[r_pos] - data[l_pos]) * rightness;
+ }
+ 
+ float cinterpolate(const float *data, size_t len, float pos)
+ {
+-    const unsigned int i_pos = pos,
+-                       l_pos = i_pos % len,
+-                       r_pos = l_pos + 1 < len ? l_pos + 1 : 0;
+-    const float leftness = pos - i_pos;
+-    return data[l_pos] * leftness + data[r_pos] * (1.0f - leftness);
++    const unsigned int i_pos = (int)pos;
++    const unsigned int l_pos = i_pos % len;
++    const unsigned int r_pos = (l_pos + 1) < len ? l_pos + 1 : 0;
++    const float rightness = pos - (float)i_pos;
++    return data[l_pos] + (data[r_pos] - data[l_pos]) * rightness;
+ }
+ 
+ char *rtosc_splat(const char *path, std::set<std::string> v)
+-- 
+2.47.0
+

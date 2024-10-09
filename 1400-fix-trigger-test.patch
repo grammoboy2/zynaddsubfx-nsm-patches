@@ -1,0 +1,54 @@
+From 42f4baa50abf0cd0ee73eac18aab0ba219803a24 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Tue, 23 Jul 2019 00:30:12 +0300
+Subject: [PATCH 1400/1936] fix trigger test
+
+---
+ src/Synth/WatchPoint.cpp | 1 +
+ src/Tests/TriggerTest.h  | 7 +++----
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index 404b11ca..b20daa3e 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -155,6 +155,7 @@ bool WatchManager::trigger_active(const char *id) const
+     for(int i=0; i<MAX_WATCH; ++i)
+         if(!strcmp(active_list[i], id))
+             return trigger[i];
++    return false;
+ }
+ 
+ int WatchManager::samples(const char *id) const
+diff --git a/src/Tests/TriggerTest.h b/src/Tests/TriggerTest.h
+index 7a9ac60d..2225534d 100644
+--- a/src/Tests/TriggerTest.h
++++ b/src/Tests/TriggerTest.h
+@@ -123,21 +123,20 @@ class TriggerTest:public CxxTest::TestSuite
+             TS_ASSERT(!tr->hasNext());
+             w->add_watch("noteout");
+             w->add_watch("noteout1");
++            TS_ASSERT(!w->trigger_active("noteout"));
++            TS_ASSERT(!w->trigger_active("noteout1"));
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            w->tick();
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            w->tick();
+             TS_ASSERT(w->trigger_active("noteout1"));
+             TS_ASSERT(w->trigger_active("noteout"));
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+-            w->tick();
+-            TS_ASSERT_EQUALS(string("noteout1"), tr->read());
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             w->tick();
++            TS_ASSERT_EQUALS(string("noteout1"), tr->read());
+             
+             while(!note->finished()) {
+                 note->noteout(outL, outR);
+-- 
+2.47.0
+

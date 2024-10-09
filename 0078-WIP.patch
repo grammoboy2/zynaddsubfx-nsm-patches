@@ -1,0 +1,69 @@
+From d522516a687e138aa0c475cf0c0e73239175dcf2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 7 May 2013 17:20:22 -0400
+Subject: [PATCH 0078/1936] WIP
+
+---
+ src/Nio/JackMultiEngine.cpp |  8 ++++----
+ src/main.cpp                | 15 ++++++++-------
+ 2 files changed, 12 insertions(+), 11 deletions(-)
+
+diff --git a/src/Nio/JackMultiEngine.cpp b/src/Nio/JackMultiEngine.cpp
+index 04eeea80..ae5e844a 100644
+--- a/src/Nio/JackMultiEngine.cpp
++++ b/src/Nio/JackMultiEngine.cpp
+@@ -96,14 +96,14 @@ bool JackMultiEngine::Start(void)
+         JACK_DEFAULT_AUDIO_TYPE, JackPortIsOutput | JackPortIsTerminal, 0)
+     //Create the master wet port
+ 
+-    impl->ports[0] = JACK_REGISTER("wet_l");
+-    impl->ports[1] = JACK_REGISTER("wet_r");
++    impl->ports[0] = JACK_REGISTER("out-L");
++    impl->ports[1] = JACK_REGISTER("out-R");
+ 
+     //Create all part's outputs
+     for(int i = 0; i < NUM_MIDI_PARTS * 2; i += 2) {
+-        snprintf(portName, 19, "part_%dl", i / 2);
++        snprintf(portName, 19, "part%d/out-L", i / 2);
+         impl->ports[2 + i] = JACK_REGISTER(portName);
+-        snprintf(portName, 19, "part_%dr", i / 2);
++        snprintf(portName, 19, "part%d/out-R", i / 2);
+         impl->ports[3 + i] = JACK_REGISTER(portName);
+     }
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index cfc6031b..bf497f1a 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -125,13 +125,6 @@ set_module_parameters ( Fl_Widget *o )
+  */
+ void initprogram(void)
+ {
+-    cerr.precision(1);
+-    cerr << std::fixed;
+-    cerr << "\nSample Rate = \t\t" << synth->samplerate << endl;
+-    cerr << "Sound Buffer Size = \t" << synth->buffersize << " samples" << endl;
+-    cerr << "Internal latency = \t" << synth->buffersize_f * 1000.0f
+-    / synth->samplerate_f << " ms" << endl;
+-    cerr << "ADsynth Oscil.Size = \t" << synth->oscilsize << " samples" << endl;
+ 
+ 
+     master = &Master::getInstance();
+@@ -425,6 +418,14 @@ int main(int argc, char *argv[])
+ 
+     //Run the Nio system
+     bool ioGood = Nio::start();
++    
++    cerr.precision(1);
++    cerr << std::fixed;
++    cerr << "\nSample Rate = \t\t" << synth->samplerate << endl;
++    cerr << "Sound Buffer Size = \t" << synth->buffersize << " samples" << endl;
++    cerr << "Internal latency = \t" << synth->buffersize_f * 1000.0f
++    / synth->samplerate_f << " ms" << endl;
++    cerr << "ADsynth Oscil.Size = \t" << synth->oscilsize << " samples" << endl;
+ 
+     if(!execAfterInit.empty()) {
+         cout << "Executing user supplied command: " << execAfterInit << endl;
+-- 
+2.47.0
+

@@ -1,0 +1,81 @@
+From f69790dd0eb96ba5c343254c80a3795dbc8b5d8c Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Tue, 22 Mar 2022 22:49:10 +0100
+Subject: [PATCH 1840/1936] Part, NotePool: Use correct method to release keys
+ (#346)
+
+Use the correct NotePool method to release keys, which set the
+released keys in the RELEASED state, rather than bypassing the
+note pool and directly calling the releasekey() method for the
+engine(s).
+---
+ src/Containers/NotePool.cpp | 11 +++++++++++
+ src/Containers/NotePool.h   |  1 +
+ src/Misc/Part.cpp           | 10 ++--------
+ 3 files changed, 14 insertions(+), 8 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 02ebd2e6..36e75635 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -465,6 +465,17 @@ void NotePool::releasePlayingNotes(void)
+     }
+ }
+ 
++void NotePool::releaseSustainingNotes(void)
++{
++    for(auto &d:activeDesc()) {
++        if(d.sustained()) {
++            d.setStatus(KEY_RELEASED);
++            for(auto s:activeNotes(d))
++                s.note->releasekey();
++        }
++    }
++}
++
+ void NotePool::release(NoteDescriptor &d)
+ {
+     d.setStatus(KEY_RELEASED);
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index f2808cf3..55132ba3 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -146,6 +146,7 @@ class NotePool
+         void limitVoice(int preferred_note);
+ 
+         void releasePlayingNotes(void);
++        void releaseSustainingNotes(void);
+         void releaseNote(note_t note);
+         void release(NoteDescriptor &d);
+         void latch(NoteDescriptor &d);
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index c62af581..4d0105bd 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -873,10 +873,7 @@ void Part::ReleaseSustainedKeys()
+         if(monomemBack() != lastnote) // Sustain controller manipulation would cause repeated same note respawn without this check.
+             MonoMemRenote();  // To play most recent still held note.
+ 
+-    for(auto &d:notePool.activeDesc())
+-        if(d.sustained())
+-            for(auto &s:notePool.activeNotes(d))
+-                s.note->releasekey();
++    notePool.releaseSustainingNotes();
+ }
+ 
+ /*
+@@ -885,10 +882,7 @@ void Part::ReleaseSustainedKeys()
+ 
+ void Part::ReleaseAllKeys()
+ {
+-    for(auto &d:notePool.activeDesc())
+-        if(!d.released())
+-            for(auto &s:notePool.activeNotes(d))
+-                s.note->releasekey();
++    notePool.releasePlayingNotes();
+ }
+ 
+ // Call NoteOn(...) with the most recent still held key as new note
+-- 
+2.47.0
+

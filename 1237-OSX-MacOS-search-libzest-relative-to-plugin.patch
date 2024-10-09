@@ -1,0 +1,26 @@
+From 87b668ffe4cf3cc615a095c98f40c59093bf0675 Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Thu, 4 Jan 2018 15:48:44 +0100
+Subject: [PATCH 1237/1936] OSX/MacOS: search libzest relative to plugin
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+index 6be6a402..a97b860c 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+@@ -60,6 +60,9 @@ public:
+             handle = LoadLibrary("./libzest.dll");
+         if(!handle)
+             handle = LoadLibrary("libzest.dll");
++#elif defined __APPLE__
++        if(!handle)
++            handle = dlopen("@loader_path/libzest.dylib", RTLD_LAZY);
+ #else
+         handle = dlopen("./libzest.so", RTLD_LAZY);
+         if(!handle)
+-- 
+2.47.0
+

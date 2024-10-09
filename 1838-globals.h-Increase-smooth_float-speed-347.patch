@@ -1,0 +1,28 @@
+From 0110249ed22ad6d538d268b32f4cc9b75efd0816 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Mon, 14 Mar 2022 00:45:25 +0100
+Subject: [PATCH 1838/1936] globals.h: Increase smooth_float speed (#347)
+
+Increase the rate of smooth_float changes to make filter parameters
+appear less sluggish. Otherwise it can take several seconds for
+a parameter to reach the value set by a knob.
+---
+ src/globals.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/globals.h b/src/globals.h
+index 81eef126..1be8c6a2 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -368,7 +368,7 @@ public:
+         next_value = curr_value = value;
+     };
+     operator float() {
+-        const float delta = (next_value - curr_value) / 128.0f;
++        const float delta = (next_value - curr_value) / 32.0f;
+         curr_value += delta;
+         return (curr_value);
+     };
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From 9aba24c1e676d9df025aee0abdea0d43617e77f0 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 30 May 2015 13:16:47 -0400
+Subject: [PATCH 0481/1936] Travis: Add Pixmap Dependency
+
+---
+ .travis.yml | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/.travis.yml b/.travis.yml
+index 5b1d3c34..a07630e8 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -12,7 +12,7 @@ before_install:
+     - sudo apt-get -qq install gcc-4.8
+     - sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 90
+     - sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 90
+-    - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev
++    - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev libxpm-dev
+     - sudo apt-get install --force-yes cxxtest
+     - wget http://downloads.sourceforge.net/liblo/liblo-0.28.tar.gz
+     - tar xvf liblo-0.28.tar.gz && cd liblo-0.28
+-- 
+2.47.0
+

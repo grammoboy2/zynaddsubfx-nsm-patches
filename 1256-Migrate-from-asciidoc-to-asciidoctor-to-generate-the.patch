@@ -1,0 +1,45 @@
+From 466b29a76dfc3868fd91c3f6e17985d479dff451 Mon Sep 17 00:00:00 2001
+From: Joseph Herlant <herlantj@gmail.com>
+Date: Wed, 14 Mar 2018 16:08:25 -0700
+Subject: [PATCH 1256/1936] Migrate from asciidoc to asciidoctor to generate
+ the documentation
+
+---
+ doc/Makefile | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/doc/Makefile b/doc/Makefile
+index ce0a6c40..a81b571e 100644
+--- a/doc/Makefile
++++ b/doc/Makefile
+@@ -8,12 +8,12 @@ gen-files:
+ 
+ 
+ xhtml: zynaddsubfx.txt envelope.txt intro.txt lfo.txt
+-	asciidoc -a numbered -a toc -b html5 \
++	asciidoctor -a numbered -a toc -b html5 \
+ 		-a latexmath \
+ 		zynaddsubfx.txt
+ 
+ chunked:
+-	asciidoc --doctype=article   -b docbook \
++	asciidoctor --doctype=article   -b docbook5 \
+ 	          zynaddsubfx.txt
+ 	rm -rf ./zynaddsubfx.chunked
+ 	mkdir ./zynaddsubfx.chunked
+@@ -30,10 +30,10 @@ chunked:
+ 		 "./zynaddsubfx.xml" \
+ 
+ pdf:
+-	a2x -f pdf zynaddsubfx.txt
++	asciidoctor-pdf zynaddsubfx.txt
+ 
+ man: zynaddsubfx.1.txt
+-	a2x -f manpage zynaddsubfx.1.txt
++	asciidoctor -b manpage zynaddsubfx.1.txt
+ 
+ clean:
+ 	rm -f *~ *html *pdf *xml *tex *log zynaddsubfx.chunked/images
+-- 
+2.47.0
+

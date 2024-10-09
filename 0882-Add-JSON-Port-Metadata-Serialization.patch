@@ -1,0 +1,360 @@
+From c9c9bda8091d0b49e12751c1924b09a49bc323e6 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 7 Mar 2016 12:38:12 -0500
+Subject: [PATCH 0882/1936] Add JSON Port Metadata Serialization
+
+This interface provides a more lightweight serialization than the
+xml oscdoc and it better matches underlying metadata.
+This representation is being used in the 3.0.0 UI to avoid
+duplication of specifications in the UI code (which is painfully
+easy to get out-of-sync with the core engine code)
+---
+ rtosc                    |   2 +-
+ src/Misc/CMakeLists.txt  |   1 +
+ src/Misc/Part.cpp        |  10 +-
+ src/Misc/Schema.cpp      | 191 +++++++++++++++++++++++++++++++++++++++
+ src/Params/LFOParams.cpp |  21 +++--
+ src/main.cpp             |  16 +++-
+ 6 files changed, 224 insertions(+), 17 deletions(-)
+ create mode 100644 src/Misc/Schema.cpp
+
+diff --git a/rtosc b/rtosc
+index f483c042..ed48ff37 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit f483c042464d2b4e82a3dd0e3b5d8d9d1ef05cc9
++Subproject commit ed48ff379f38b5959d53fc5385ade3d20220cd3f
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index dd7b42c5..18a6c07e 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -15,6 +15,7 @@ set(zynaddsubfx_misc_SRCS
+     Misc/PresetExtractor.cpp
+     Misc/Allocator.cpp
+     Misc/CallbackRepeater.cpp
++    Misc/Schema.cpp
+ )
+ 
+ 
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 9a1732d6..c4067296 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -44,10 +44,10 @@ static const Ports partPorts = {
+     rRecurs(kit, 16, "Kit"),//NUM_KIT_ITEMS
+     rRecursp(partefx, 3, "Part Effect"),
+     rRecur(ctl,       "Controller"),
+-    rToggle(Penabled, "Part enable"),
++    rToggle(Penabled, rShort("enable"), "Part enable"),
+ #undef rChangeCb
+ #define rChangeCb obj->setPvolume(obj->Pvolume);
+-    rParamZyn(Pvolume, "Part Volume"),
++    rParamZyn(Pvolume, rShort("Vol"), "Part Volume"),
+ #undef rChangeCb
+ #define rChangeCb obj->setPpanning(obj->Ppanning);
+     rParamZyn(Ppanning, "Set Panning"),
+@@ -56,9 +56,9 @@ static const Ports partPorts = {
+     rParamI(Pkeylimit, rProp(parameter), rMap(min,0), rMap(max, POLYPHONY), "Key limit per part"),
+ #undef rChangeCb
+ #define rChangeCb
+-    rParamZyn(Pminkey, "Min Used Key"),
+-    rParamZyn(Pmaxkey, "Max Used Key"),
+-    rParamZyn(Pkeyshift, "Part keyshift"),
++    rParamZyn(Pminkey, rShort("min"), "Min Used Key"),
++    rParamZyn(Pmaxkey, rShort("max"), "Max Used Key"),
++    rParamZyn(Pkeyshift, rShort("shift"), "Part keyshift"),
+     rParamZyn(Prcvchn,  "Active MIDI channel"),
+     rParamZyn(Pvelsns,   "Velocity sensing"),
+     rParamZyn(Pveloffs,  "Velocity offset"),
+diff --git a/src/Misc/Schema.cpp b/src/Misc/Schema.cpp
+new file mode 100644
+index 00000000..2b23675a
+--- /dev/null
++++ b/src/Misc/Schema.cpp
+@@ -0,0 +1,191 @@
++#include <ostream>
++#include <rtosc/ports.h>
++using namespace rtosc;
++/*
++ * root :
++ *   - 'parameters' : [parameter...]
++ *   - 'actions'    : [action...]
++ * parameter :
++ *   - 'path'      : path-id
++ *   - 'name'      : string
++ *   - 'shortname' : string [OPTIONAL]
++ *   - 'tooltip'   : string [OPTIONAL]
++ *   - 'type'      : type
++ *   - 'domain'    : range [OPTIONAL]
++ * type : {'int', 'float', 'boolean'}
++ * action :
++ *   - 'path' : path-id
++ *   - 'args' : [arg...]
++ * arg :
++ *   - 'type'   : type
++ *   - 'domain' : range [OPTIONAL]
++ */
++
++void walk_ports2(const rtosc::Ports *base,
++                 char         *name_buffer,
++                 size_t        buffer_size,
++                 void         *data,
++                 rtosc::port_walker_t walker);
++
++
++using std::ostream;
++using std::string;
++static int enum_min(Port::MetaContainer meta)
++{
++    int min = 0;
++    for(auto m:meta)
++        if(strstr(m.title, "map "))
++            min = atoi(m.title+4);
++
++    for(auto m:meta)
++        if(strstr(m.title, "map "))
++            min = min>atoi(m.title+4) ? atoi(m.title+4) : min;
++
++    return min;
++}
++
++static int enum_max(Port::MetaContainer meta)
++{
++    int max = 0;
++    for(auto m:meta)
++        if(strstr(m.title, "map "))
++            max = atoi(m.title+4);
++
++    for(auto m:meta)
++        if(strstr(m.title, "map "))
++            max = max<atoi(m.title+4) ? atoi(m.title+4) : max;
++
++    return max;
++}
++
++static ostream &add_options(ostream &o, Port::MetaContainer meta)
++{
++    string sym_names = "xyzabcdefghijklmnopqrstuvw";
++    int sym_idx = 0;
++    bool has_options = false;
++    for(auto m:meta)
++        if(strstr(m.title, "map "))
++            has_options = true;
++    for(auto m:meta)
++        if(strcmp(m.title, "documentation") &&
++                strcmp(m.title, "parameter") &&
++                strcmp(m.title, "max") &&
++                strcmp(m.title, "min"))
++        printf("m.title = <%s>\n", m.title);
++
++    if(!has_options)
++        return o;
++
++    o << "    <hints>\n";
++    for(auto m:meta) {
++        if(strstr(m.title, "map ")) {
++            o << "      <point symbol=\"" << sym_names[sym_idx++] << "\" value=\"";
++            o << m.title+4 << "\">" << m.value << "</point>\n";
++        }
++    }
++    o << "    </hints>\n";
++
++    return o;
++}
++
++/*
++ * parameter :
++ *   - 'path'      : path-id
++ *   - 'name'      : string
++ *   - 'shortname' : string [OPTIONAL]
++ *   - 'tooltip'   : string [OPTIONAL]
++ *   - 'type'      : type
++ *   - 'domain'    : range [OPTIONAL]
++ */
++static bool first = true;
++void dump_param_cb(const rtosc::Port *p, const char *name, void *v)
++{
++    std::ostream &o  = *(std::ostream*)v;
++    auto meta        = p->meta();
++    const char *args = strchr(p->name, ':');
++    auto mparameter  = meta.find("parameter");
++    auto mdoc        = meta.find("documentation");
++    auto msname      = meta.find("shortname");
++    string doc;
++
++    //Escape Characters
++    if(mdoc != p->meta().end()) {
++        while(*mdoc.value) {
++            if(*mdoc.value == '\n')
++                doc += "\\n";
++            else if(*mdoc.value == '\"')
++                doc += "\\\"";
++            else
++                doc += *mdoc.value;
++            mdoc.value++;
++        }
++    }
++    if(meta.find("internal") != meta.end())
++        return;
++
++    char type = 0;
++    if(mparameter != p->meta().end()) {
++        if(args) {
++            if(strchr(args, 'f'))
++                type = 'f';
++            else if(strchr(args, 'i'))
++                type = 'i';
++            else if(strchr(args, 'c'))
++                type = 'c';
++            else if(strchr(args, 'T'))
++                type = 't';
++            else if(strchr(args, 's'))
++                type = 's';
++        }
++
++        if(!type) {
++            fprintf(stderr, "rtosc port dumper: Cannot handle '%s'\n", name);
++            fprintf(stderr, "    args = <%s>\n", args);
++            return;
++        }
++    } else {
++        //fprintf(stderr, "Skipping \"%s\"\n", name);
++        //if(args) {
++        //    fprintf(stderr, "    type = %s\n", args);
++        //}
++        return;
++    }
++
++    const char *min = meta["min"];
++    const char *max = meta["max"];
++
++    if(!first)
++        o << ",\n";
++    else
++        first = false;
++
++    o << "    {\n";
++    o << "        \"path\"     : \"" << name << "\",\n";
++    if(msname != meta.end())
++        o << "        \"shortname\": \"" << msname.value << "\",\n";
++    o << "        \"name\"     : \"" << p->name << "\",\n";
++    o << "        \"tooltip\"  : \"" << doc  << "\",\n";
++    o << "        \"type\"     : \"" << type  << "\"";
++    if(min && max)
++    o << ",\n        \"range\"    : [" << min << "," << max << "]\n";
++    else
++        o << "\n";
++    o << "    }";
++}
++
++void dump_json(std::ostream &o, const rtosc::Ports &p)
++{
++    first = true;
++    o << "{\n";
++    o << "    \"parameter\" : [\n";
++    char buffer[1024];
++    memset(buffer, 0, sizeof(buffer));
++    walk_ports2(&p, buffer, 1024, &o, dump_param_cb);
++    o << "\n    ],\n";
++    o << "    \"actions\" : [\n";
++    //walk_ports2(formatter.p, buffer, 1024, &o, dump_action_cb);
++    o << "    ]\n";
++    o << "}";
++}
++
++
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 32c2c864..be8a1716 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -16,6 +16,7 @@
+ #include "../globals.h"
+ #include "../Misc/Util.h"
+ #include "../Misc/XMLwrapper.h"
++#include "../Misc/Time.h"
+ #include "LFOParams.h"
+ 
+ #include <rtosc/port-sugar.h>
+@@ -29,19 +30,21 @@ using namespace rtosc;
+ static const rtosc::Ports _ports = {
+     rSelf(LFOParams),
+     rPaste,
+-    rParamF(Pfreq, rLinear(0.0,1.0), "frequency of LFO\n"
++    rParamF(Pfreq, rShort("freq"), rLinear(0.0,1.0), "frequency of LFO\n"
+             "lfo frequency = (2^(10*Pfreq)-1)/12 * stretch\n"
+             "true frequency is [0,85.33] Hz"),
+-    rParamZyn(Pintensity, "Intensity of LFO"),
+-    rParamZyn(Pstartphase, rSpecial(random), "Starting Phase"),
+-    rOption(PLFOtype, rOptions(sine, triangle, square, ramp-up, ramp-down,
++    rParamZyn(Pintensity, rShort("depth"), "Intensity of LFO"),
++    rParamZyn(Pstartphase, rShort("start"), rSpecial(random), "Starting Phase"),
++    rOption(PLFOtype, rShort("type"), rOptions(sine, triangle, square, ramp-up, ramp-down,
+                 exponential-down1, exponential-down2), "Shape of LFO"),
+-    rParamZyn(Prandomness, rSpecial(disable), "Amplitude Randomness (calculated uniformly at each cycle)"),
+-    rParamZyn(Pfreqrand, rSpecial(disable), "Frequency Randomness (calculated uniformly at each cycle)"),
+-    rParamZyn(Pdelay, rSpecial(disable), "Delay before LFO start\n"
++    rParamZyn(Prandomness, rShort("a.r."), rSpecial(disable),
++            "Amplitude Randomness (calculated uniformly at each cycle)"),
++    rParamZyn(Pfreqrand, rShort("f.r."), rSpecial(disable),
++            "Frequency Randomness (calculated uniformly at each cycle)"),
++    rParamZyn(Pdelay, rShort("delay"), rSpecial(disable), "Delay before LFO start\n"
+             "0..4 second delay"),
+-    rToggle(Pcontinous, "Enable for global operation"),
+-    rParamZyn(Pstretch, rCentered, "Note frequency stretch"),
++    rToggle(Pcontinous, rShort("c"), "Enable for global operation"),
++    rParamZyn(Pstretch, rShort("str"), rCentered, "Note frequency stretch"),
+ };
+ #undef rChangeCb
+ 
+diff --git a/src/main.cpp b/src/main.cpp
+index a1ad9f1b..9e8bb3a9 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -168,7 +168,7 @@ int main(int argc, char *argv[])
+             "swap", 2, NULL, 'S'
+         },
+         {
+-            "no-gui", 2, NULL, 'U'
++            "no-gui", 0, NULL, 'U'
+         },
+         {
+             "dummy", 2, NULL, 'Y'
+@@ -206,6 +206,9 @@ int main(int argc, char *argv[])
+         {
+             "dump-oscdoc", 2, NULL, 'd'
+         },
++        {
++            "dump-json-schema", 2, NULL, 'D'
++        },
+         {
+             "ui-title", 1, NULL, 'u'
+         },
+@@ -226,7 +229,7 @@ int main(int argc, char *argv[])
+         /**\todo check this process for a small memory leak*/
+         opt = getopt_long(argc,
+                           argv,
+-                          "l:L:r:b:o:I:O:N:e:P:A:u:hvapSDUY",
++                          "l:L:r:b:o:I:O:N:e:P:A:u:D:hvapSDUY",
+                           opts,
+                           &option_index);
+         char *optarguments = optarg;
+@@ -338,6 +341,15 @@ int main(int argc, char *argv[])
+                     outfile << s;
+                 }
+                 break;
++            case 'D':
++                if(optarguments)
++                {
++                    ofstream outfile(optarguments);
++                    void dump_json(std::ostream &o,
++                            const rtosc::Ports &p);
++                    dump_json(outfile, Master::ports);
++                }
++                break;
+             case 'u':
+                 if(optarguments)
+                     ui_title = optarguments;
+-- 
+2.47.0
+

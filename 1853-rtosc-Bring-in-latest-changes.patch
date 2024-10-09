@@ -1,0 +1,20 @@
+From d32eda769d1fe77378d3bd318c12c0135b5cba9f Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Mon, 9 May 2022 00:36:49 +0200
+Subject: [PATCH 1853/1936] rtosc: Bring in latest changes
+
+In particular, the read lookahead feature.
+---
+ rtosc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/rtosc b/rtosc
+index 2499e094..885fc96e 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 2499e094e759fe1e4532cc7fe67037ed5da20fba
++Subproject commit 885fc96e784fb82700b06c978a3e057465f12166
+-- 
+2.47.0
+

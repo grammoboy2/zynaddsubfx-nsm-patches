@@ -1,0 +1,271 @@
+From 6d404799125e5aaab82638005a24866c8fe3e8cc Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Wed, 13 Dec 2017 19:08:18 +0100
+Subject: [PATCH 1233/1936] Let rArray not use the 'c' type
+
+Details:
+
+* Let rArray not use the 'c' type
+* Add missing default values
+---
+ TODO-default-values.txt          | 18 +++++++++++-------
+ rtosc                            |  2 +-
+ src/Misc/Master.cpp              |  2 +-
+ src/Misc/Microtonal.cpp          |  2 +-
+ src/Params/SUBnoteParameters.cpp |  4 ++--
+ src/Synth/Resonance.cpp          |  2 +-
+ src/Tests/SaveOSC.cpp            | 12 ++++++++++++
+ src/UI/EnvelopeFreeEdit.cpp      | 12 ++++++------
+ src/UI/Fl_Resonance_Graph.cpp    |  2 +-
+ src/UI/SUBnoteUI.fl              | 12 ++++++------
+ 10 files changed, 42 insertions(+), 26 deletions(-)
+
+diff --git a/TODO-default-values.txt b/TODO-default-values.txt
+index 0e0bed1a..cd6fa610 100644
+--- a/TODO-default-values.txt
++++ b/TODO-default-values.txt
+@@ -1,12 +1,16 @@
+ TODOs for default values:
+-* use b (or #?) for bundles, not a
+-* code for random port ("init() to random")
+-* remove rDefaultMissing if possible
+-* auto range-print
++* use # for bundles, not a
++* 1 ... 7 => 1 2 ... 7
++* also after scanning?
++
+ move code:
+-ports.cpp => default_values.cpp
+-rtosc.cpp => ...cmp.cpp?
++* ports.cpp => default_values.cpp
++* rtosc.cpp => ...cmp.cpp?
++
+ test:
+ * zyn fx (all presets)
+ * rtosc arg val maths
+-fix all new todos
++
++finally:
++* remove rDefaultMissing if possible
++* fix all TODOs from default_values
+diff --git a/rtosc b/rtosc
+index d9731558..b06764cf 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit d9731558ff4ae3ac14893aa90866061df6e5baee
++Subproject commit b06764cf2b4700f323b1db1c30bf419fcaec51b9
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 6041a2a8..0cff94b0 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -428,7 +428,7 @@ static const Ports master_ports = {
+             ((Master*)d.obj)->setPvolume(limit<char>(rtosc_argument(m,0).i,0,127));
+             d.broadcast(d.loc, "i", ((Master*)d.obj)->Pvolume);}}},
+     {"volume::i", rShort("volume") rProp(parameter) rLinear(0,127)
+-        rDefault(80) rDoc("Master Volume"), 0,
++        rDoc("Master Volume"), 0,
+         [](const char *m, rtosc::RtData &d) {
+         if(rtosc_narguments(m)==0) {
+             d.reply(d.loc, "i", ((Master*)d.obj)->Pvolume);
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 41f58a7a..7fcff3e3 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -65,7 +65,7 @@ const rtosc::Ports Microtonal::ports = {
+     rParamZyn(Pmapsize, rDefault(12), "Size of key map"),
+     rToggle(Pmappingenabled, rDefault(false), "Mapping Enable"),
+ 
+-    rParams(Pmapping, 128, rDefaultMissing, "Mapping of keys"),
++    rParams(Pmapping, 128, rDefault([0 1 ...]), "Mapping of keys"),
+     rParamZyn(Pglobalfinedetune, rShort("fine"), rDefault(64),
+         "Fine detune for all notes"),
+ 
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 33ac51e5..7c225df7 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -91,9 +91,9 @@ static const rtosc::Ports SUBnotePorts = {
+     rParamZyn(Phmagtype,  rShort("mag. type"),
+               rOptions(linear, -40dB, -60dB, -80dB, -100dB),
+               rDefault(linear), "Magnitude scale"),
+-    rArray(Phmag, MAX_SUB_HARMONICS, rDefaultMissing,
++    rArray(Phmag, MAX_SUB_HARMONICS, rDefault([127 0 0 ...]),
+            "Harmonic magnitudes"),
+-    rArray(Phrelbw, MAX_SUB_HARMONICS, rDefaultMissing,
++    rArray(Phrelbw, MAX_SUB_HARMONICS, rDefault([64 ...]),
+            "Relative bandwidth"),
+     rParamZyn(Pbwscale, rShort("stretch"), rDefault(64),
+               "Bandwidth scaling with frequency"),
+diff --git a/src/Synth/Resonance.cpp b/src/Synth/Resonance.cpp
+index 0bb35157..267ef14a 100644
+--- a/src/Synth/Resonance.cpp
++++ b/src/Synth/Resonance.cpp
+@@ -33,7 +33,7 @@ const rtosc::Ports Resonance::ports = {
+             "resonance enable"),
+     rToggle(Pprotectthefundamental, rShort("p.fund."), rDefault(false),
+             "Disable resonance filter on first harmonic"),
+-    rParams(Prespoints, N_RES_POINTS, rDefaultMissing,
++    rParams(Prespoints, N_RES_POINTS, rDefault([64 ...]),
+             "Resonance data points"),
+     rParamZyn(PmaxdB,      rShort("max"), rDefault(20),
+               "how many dB the signal may be amplified"),
+diff --git a/src/Tests/SaveOSC.cpp b/src/Tests/SaveOSC.cpp
+index e2fa3ded..aecade89 100644
+--- a/src/Tests/SaveOSC.cpp
++++ b/src/Tests/SaveOSC.cpp
+@@ -32,7 +32,9 @@ class SaveOSCTest
+                  * Once after the loading
+                  * Twice for the temporary exchange during saving
+              */
++#ifdef SAVE_OSC_DEBUG
+             printf("Changing master from %p (%p) to %p...\n", master, &master, m);
++#endif
+             master = m;
+             master->setMasterChangedCallback(__masterChangedCallback, this);
+         }
+@@ -55,7 +57,9 @@ class SaveOSCTest
+         }
+ 
+         void tearDown() {
++#ifdef SAVE_OSC_DEBUG
+             printf("Master at the end: %p\n", master);
++#endif
+             delete mw;
+             delete synth;
+         }
+@@ -112,12 +116,18 @@ class SaveOSCTest
+             if(!strcmp(msg, "/save_osc") || !strcmp(msg, "/load_xmz"))
+             {
+                 mutex_guard guard(cb_mutex);
++#ifdef SAVE_OSC_DEBUG
+                 fprintf(stderr, "Received message \"%s\".\n", msg);
++#endif
+                 recent.operation = msg;
+                 recent.file = rtosc_argument(msg, 0).s;
+                 recent.stamp = rtosc_argument(msg, 1).t;
+                 recent.status = rtosc_argument(msg, 2).T;
+             }
++            else if(!strcmp(msg, "/damage"))
++            {
++                // (ignore)
++            }
+             else
+                 fprintf(stderr, "Unknown message \"%s\", ignoring...\n", msg);
+         }
+@@ -176,7 +186,9 @@ class SaveOSCTest
+                         continue;
+                     }
+                     const char *msg = master->uToB->read();
++#ifdef SAVE_OSC_DEBUG
+                     printf("Master %p: handling <%s>\n", master, msg);
++#endif
+                     master->applyOscEvent(msg, false);
+                 }});
+         }
+diff --git a/src/UI/EnvelopeFreeEdit.cpp b/src/UI/EnvelopeFreeEdit.cpp
+index 967eb088..14336b96 100644
+--- a/src/UI/EnvelopeFreeEdit.cpp
++++ b/src/UI/EnvelopeFreeEdit.cpp
+@@ -55,12 +55,12 @@ void EnvelopeFreeEdit::OSC_raw(const char *msg)
+         rtosc_blob_t b = rtosc_argument(msg, 0).b;
+         assert(b.len == MAX_ENVELOPE_POINTS);
+         memcpy(Penvval, b.data, MAX_ENVELOPE_POINTS);
+-    } else if(strstr(msg, "Penvval") && !strcmp(args, "c")) {
++    } else if(strstr(msg, "Penvval") && !strcmp(args, "i")) {
+         const char *str = strstr(msg, "Penvval");
+         int id = atoi(str+7);
+         assert(0 <= id && id < MAX_ENVELOPE_POINTS);
+         Penvval[id] = rtosc_argument(msg, 0).i;
+-    } else if(strstr(msg, "Penvdt") && !strcmp(args, "c")) {
++    } else if(strstr(msg, "Penvdt") && !strcmp(args, "i")) {
+         const char *str = strstr(msg, "Penvdt");
+         int id = atoi(str+6);
+         assert(0 <= id && id < MAX_ENVELOPE_POINTS);
+@@ -270,13 +270,13 @@ int EnvelopeFreeEdit::handle(int event)
+                   int ny = Penvval[lastpoint] - delta;
+                   ny = ny < 0 ? 0 : ny > 127 ? 127 : ny;
+                   Penvval[lastpoint] = ny;
+-                  oscWrite(to_s("Penvval")+to_s(lastpoint), "c", ny);
++                  oscWrite(to_s("Penvval")+to_s(lastpoint), "i", ny);
+                   oscWrite("Penvval","");
+               } else if (lastpoint > 0) {
+                   int newdt = Penvdt[lastpoint] - delta;
+                   newdt = newdt < 0 ? 0 : newdt > 127 ? 127 : newdt;
+                   Penvdt[lastpoint] = newdt;
+-                  oscWrite(to_s("Penvdt")+to_s(lastpoint),  "c", newdt);
++                  oscWrite(to_s("Penvdt")+to_s(lastpoint),  "i", newdt);
+                   oscWrite("Penvdt","");
+               }
+               redraw();
+@@ -300,7 +300,7 @@ int EnvelopeFreeEdit::handle(int event)
+                   const int newval=limit(cpval+dy, 0, 127);
+ 
+                   Penvval[currentpoint]=newval;
+-                  oscWrite(to_s("Penvval")+to_s(currentpoint), "c", newval);
++                  oscWrite(to_s("Penvval")+to_s(currentpoint), "i", newval);
+                   oscWrite("Penvval","");
+               }
+ 
+@@ -312,7 +312,7 @@ int EnvelopeFreeEdit::handle(int event)
+                       Penvdt[currentpoint]=newdt;
+                   else
+                       Penvdt[currentpoint]=0;
+-                  oscWrite(to_s("Penvdt")+to_s(currentpoint),  "c", newdt);
++                  oscWrite(to_s("Penvdt")+to_s(currentpoint),  "i", newdt);
+                   oscWrite("Penvdt","");
+               }
+ 
+diff --git a/src/UI/Fl_Resonance_Graph.cpp b/src/UI/Fl_Resonance_Graph.cpp
+index a3bd8acc..d6f865eb 100644
+--- a/src/UI/Fl_Resonance_Graph.cpp
++++ b/src/UI/Fl_Resonance_Graph.cpp
+@@ -253,6 +253,6 @@ float Fl_Resonance_Graph::getoctavesfreq() const
+ void Fl_Resonance_Graph::setPoint(int idx, int val)
+ {
+     Prespoints[idx] = val;
+-    oscWrite(std::string("Prespoints")+to_s(idx), "c", val);
++    oscWrite(std::string("Prespoints")+to_s(idx), "i", val);
+     redraw();
+ }
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 0744ced3..67faa28a 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -49,7 +49,7 @@ class SUBSlider {: {public Fl_Osc_TSlider}
+   Function {SUBSlider(int x,int y, int w, int h, const char *label=0)
+   :Fl_Osc_TSlider(x,y,w,h,label)} {open
+   } { code {} {}}
+-   Function {OSC_value(char c)} {open return_type void
++   Function {OSC_value(int c)} {open return_type void
+    } { code {
+        value(127-c);
+        selection_color(value() == reset_value ? 0 : 222);	
+@@ -58,7 +58,7 @@ class SUBSlider {: {public Fl_Osc_TSlider}
+   } {
+     code {
+ 	selection_color(value() == reset_value ? 0 : 222);	
+-	oscWrite(ext, "c", (int)(127-Fl_Slider::value()));
++	oscWrite(ext, "i", (int)(127-Fl_Slider::value()));
+ 	if(cb_data.first)
+ 	    cb_data.first(this, cb_data.second);
+ } {}
+@@ -332,11 +332,11 @@ freqsettingsui->redraw();}
+         label Clear
+         callback {o->oscWrite("clear");
+         for (int i=1;i<MAX_SUB_HARMONICS;i++){
+-    h[i]->mag->oscWrite(h[i]->mag->ext, "c", 0);
+-    h[i]->bw->oscWrite(h[i]->bw->ext, "c", 64);
++    h[i]->mag->oscWrite(h[i]->mag->ext, "i", 0);
++    h[i]->bw->oscWrite(h[i]->bw->ext, "i", 64);
+ };
+-h[0]->mag->oscWrite(h[0]->mag->ext, "c", 127);
+-h[0]->bw->oscWrite(h[0]->bw->ext, "c", 64);
++h[0]->mag->oscWrite(h[0]->mag->ext, "i", 127);
++h[0]->bw->oscWrite(h[0]->bw->ext, "i", 64);
+ SUBparameters->redraw();}
+         tooltip {Clear the harmonics} xywh {445 446 70 25} box THIN_UP_BOX
+         class Fl_Osc_Button
+-- 
+2.47.0
+

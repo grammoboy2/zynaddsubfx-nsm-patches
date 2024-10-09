@@ -1,0 +1,19 @@
+From 8135306cb8f1e768c0a3ebbbcb5faf2f36fdd122 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 3 Aug 2017 21:27:09 -0400
+Subject: [PATCH 1198/1936] Update DPF's Plugin Key Handling
+
+---
+ DPF | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/DPF b/DPF
+index fa547505..5ec4e3ac 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit fa54750583225c2e6aa5cda9baf9c18eb722daee
++Subproject commit 5ec4e3ac3b3b186f8ba006e0104eb901cad059c3
+-- 
+2.47.0
+

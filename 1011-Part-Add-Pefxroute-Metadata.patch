@@ -1,0 +1,26 @@
+From 6c4654f8977c80bb46d4c41f52a1021b304efd97 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 30 Aug 2016 18:43:12 -0400
+Subject: [PATCH 1011/1936] Part: Add Pefxroute Metadata
+
+---
+ src/Misc/Part.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 82c6d7bb..17b448cf 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -77,7 +77,8 @@ static const Ports partPorts = {
+     rString(info.Pauthor, MAX_INFO_TEXT_SIZE, "Instrument author"),
+     rString(info.Pcomments, MAX_INFO_TEXT_SIZE, "Instrument comments"),
+     rString(Pname, PART_MAX_NAME_LEN, "User specified label"),
+-    rArrayI(Pefxroute, NUM_PART_EFX,  "Effect Routing"),
++    rArrayI(Pefxroute, NUM_PART_EFX,
++            rOptions(Next Effect,Part Out,Dry Out), "Effect Routing"),
+     rArrayT(Pefxbypass, NUM_PART_EFX, "If an effect is bypassed"),
+     {"captureMin:", rDoc("Capture minimum valid note"), NULL,
+         [](const char *, RtData &r)
+-- 
+2.47.0
+

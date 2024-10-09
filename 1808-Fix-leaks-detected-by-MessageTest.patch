@@ -1,0 +1,303 @@
+From 0107eb2112c6e1395cfdc0c3d020ca8648b859b9 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Tue, 4 Jan 2022 07:28:44 +0100
+Subject: [PATCH 1808/1936] Fix leaks detected by MessageTest
+
+Most of these leaks are due the RT objects which do not reply "/free"
+after receiving a "/paste" or similar messages. Non-RT objects, on
+the other side, did not delete the paste objects either. This commit
+thus splits `rPaste` into `rPaste` and `rPasteRt`.
+
+Fixes #160 (and much more).
+---
+ src/Misc/Master.cpp              |  4 ++++
+ src/Misc/MiddleWare.cpp          | 25 +++++++++++++++++++++++++
+ src/Misc/PresetExtractor.cpp     |  3 +++
+ src/Misc/Util.h                  | 27 ++++++++++++++++++++++-----
+ src/Params/ADnoteParameters.cpp  |  4 ++--
+ src/Params/EnvelopeParams.cpp    |  2 +-
+ src/Params/FilterParams.cpp      |  4 ++--
+ src/Params/LFOParams.cpp         |  2 +-
+ src/Params/PADnoteParameters.cpp |  4 +++-
+ src/Params/SUBnoteParameters.cpp |  2 +-
+ src/Synth/Resonance.cpp          |  2 +-
+ src/Tests/MessageTest.cpp        | 12 ++++++++++++
+ 12 files changed, 77 insertions(+), 14 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 85bf9ec1..294ed51c 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -365,6 +365,10 @@ static const Ports automate_ports = {
+                     std::swap(aa.map.control_points[k], ab.map.control_points[k]);
+             }
+         }
++        {
++            rtosc::AutomationMgr* ptr = &b;
++            d.reply("/free", "sb", "rtosc::AutomationMgr", sizeof(rtosc::AutomationMgr*), &ptr);
++        }
+         rEnd},
+ };
+ 
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 7d9511f9..36614c2b 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -42,6 +42,11 @@
+ #include "PresetExtractor.h"
+ #include "../Containers/MultiPseudoStack.h"
+ #include "../Params/PresetsStore.h"
++#include "../Params/EnvelopeParams.h"
++#include "../Params/LFOParams.h"
++#include "../Params/FilterParams.h"
++#include "../Effects/EffectMgr.h"
++#include "../Synth/Resonance.h"
+ #include "../Params/ADnoteParameters.h"
+ #include "../Params/SUBnoteParameters.h"
+ #include "../Params/PADnoteParameters.h"
+@@ -197,6 +202,26 @@ void deallocate(const char *str, void *v)
+         delete (SclInfo*)v;
+     else if(!strcmp(str, "Microtonal"))
+         delete (Microtonal*)v;
++    else if(!strcmp(str, "ADnoteParameters"))
++        delete (ADnoteParameters*)v;
++    else if(!strcmp(str, "SUBnoteParameters"))
++        delete (SUBnoteParameters*)v;
++    else if(!strcmp(str, "PADnoteParameters"))
++        delete (PADnoteParameters*)v;
++    else if(!strcmp(str, "EffectMgr"))
++        delete (EffectMgr*)v;
++    else if(!strcmp(str, "EnvelopeParams"))
++        delete (EnvelopeParams*)v;
++    else if(!strcmp(str, "FilterParams"))
++        delete (FilterParams*)v;
++    else if(!strcmp(str, "LFOParams"))
++        delete (LFOParams*)v;
++    else if(!strcmp(str, "OscilGen"))
++        delete (OscilGen*)v;
++    else if(!strcmp(str, "Resonance"))
++        delete (Resonance*)v;
++    else if(!strcmp(str, "rtosc::AutomationMgr"))
++        delete (rtosc::AutomationMgr*)v;
+     else if(!strcmp(str, "PADsample"))
+         delete[] (float*)v;
+     else
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index d509425d..e54df12d 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -227,7 +227,10 @@ void doPaste(MiddleWare &mw, string url, string type, XMLwrapper &xml, Ts&&... a
+         type = "Plfo";
+ 
+     if(xml.enterbranch(type) == 0)
++    {
++        delete t;
+         return;
++    }
+ 
+     t->getfromXML(xml);
+ 
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 97a20287..86f26bbe 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -172,23 +172,40 @@ char *rtosc_splat(const char *path, std::set<std::string>);
+         rObject *obj = (rObject*)d.obj; \
+         d.reply(d.loc, "s", obj->type);}}
+ 
+-#define rPaste \
++// let only realtime pastes reply,
++// because non-realtime pastes need the free on non-realtime side (same thread)
++#define rPasteInternal(isRt) \
+ rPresetType, \
+ {"paste:b", rProp(internal) rDoc("paste port"), 0, \
+     [](const char *m, rtosc::RtData &d){ \
+         printf("rPaste...\n"); \
+         rObject &paste = **(rObject **)rtosc_argument(m,0).b.data; \
+         rObject &o = *(rObject*)d.obj;\
+-        o.paste(paste);}}
+-
+-#define rArrayPaste \
++        o.paste(paste);\
++        rObject* ptr = &paste;\
++        if(isRt)\
++            d.reply("/free", "sb", STRINGIFY(rObject), sizeof(rObject*), &ptr);\
++        else \
++            delete ptr;}}
++
++#define rArrayPasteInternal(isRt) \
+ {"paste-array:bi", rProp(internal) rDoc("array paste port"), 0, \
+     [](const char *m, rtosc::RtData &d){ \
+         printf("rArrayPaste...\n"); \
+         rObject &paste = **(rObject **)rtosc_argument(m,0).b.data; \
+         int field = rtosc_argument(m,1).i; \
+         rObject &o = *(rObject*)d.obj;\
+-        o.pasteArray(paste,field);}}
++        o.pasteArray(paste,field);\
++        rObject* ptr = &paste;\
++        if(isRt)\
++            d.reply("/free", "sb", STRINGIFY(rObject), sizeof(rObject*), &ptr);\
++        else\
++            delete ptr;}}
++
++#define rPaste rPasteInternal(false)
++#define rPasteRt rPasteInternal(true)
++#define rArrayPaste rArrayPasteInternal(false)
++#define rArrayPasteRt rArrayPasteInternal(true)
+ 
+ }
+ 
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index d601af36..68f50539 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -444,8 +444,8 @@ static const Ports globalPorts = {
+ #define rChangeCb obj->last_update_timestamp = obj->time->time();
+ static const Ports adPorts = {//XXX 16 should not be hard coded
+     rSelf(ADnoteParameters),
+-    rPaste,
+-    rArrayPaste,
++    rPasteRt,
++    rArrayPasteRt,
+     rRecurs(VoicePar, NUM_VOICES),
+     {"VoicePar#" STRINGIFY(NUM_VOICES) "/Enabled::T:F",
+      rProp(parameter) rShort("enable") rDoc("Voice Enable")
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index d0af6ef6..0dd9f3db 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -74,7 +74,7 @@ rArrayDT(name, length, __VA_ARGS__), \
+ 
+ static const rtosc::Ports localPorts = {
+     rSelf(EnvelopeParams),
+-    rPaste,
++    rPasteRt,
+ #undef  rChangeCb
+ #define rChangeCb if(!obj->Pfreemode) obj->converttofree(); if (obj->time) { \
+         obj->last_update_timestamp = obj->time->time(); }
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index dbe52560..05587e1f 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -63,8 +63,8 @@ static const rtosc::Ports subports = {
+     obj->last_update_timestamp = obj->time->time(); } } while(false)
+ const rtosc::Ports FilterParams::ports = {
+     rSelf(FilterParams),
+-    rPaste,
+-    rArrayPaste,
++    rPasteRt,
++    rArrayPasteRt,
+     rOption(loc, rProp(internal),
+             rOptions(ad_global_filter, ad_voice_filter, sub_filter, in_effect),
+             "location of the filter"),
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index dda281d8..433ffba1 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -33,7 +33,7 @@ namespace zyn {
+ 
+ static const rtosc::Ports _ports = {
+     rSelf(LFOParams),
+-    rPaste,
++    rPasteRt,
+     rOption(loc, rProp(internal),
+             rOptions(ad_global_amp, ad_global_freq, ad_global_filter,
+                      ad_voice_amp, ad_voice_freq, ad_voice_filter, unspecified),
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index ed0985ed..c01582e4 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -149,7 +149,9 @@ static const rtosc::Ports realtime_ports =
+     [](const char *m, rtosc::RtData &d){
+         rObject &paste = **(rObject **)rtosc_argument(m,0).b.data;
+         rObject &o = *(rObject*)d.obj;
+-        o.pasteRT(paste);}}
++        o.pasteRT(paste);
++        rObject* ptr = &paste;\
++        d.reply("/free", "sb", STRINGIFY(rObject), sizeof(rObject*), &ptr);}}
+ 
+ };
+ static const rtosc::Ports non_realtime_ports =
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 128f935d..4857d631 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -36,7 +36,7 @@ namespace zyn {
+ #define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ static const rtosc::Ports SUBnotePorts = {
+     rSelf(SUBnoteParameters),
+-    rPaste,
++    rPasteRt,
+     rToggle(Pstereo,    rShort("stereo"), rDefault(true), "Stereo Enable"),
+     rParamF(Volume,  rShort("volume"), rDefault(0), rUnit(dB), rLinear(-60.0f,20.0f), "Volume"),
+     rParamZyn(PPanning, rShort("panning"), rDefault(64), "Left Right Panning"),
+diff --git a/src/Synth/Resonance.cpp b/src/Synth/Resonance.cpp
+index 05d27441..ca7c23ef 100644
+--- a/src/Synth/Resonance.cpp
++++ b/src/Synth/Resonance.cpp
+@@ -28,7 +28,7 @@ namespace zyn {
+ 
+ const rtosc::Ports Resonance::ports = {
+     rSelf(Resonance),
+-    rPaste,
++    rPasteRt,
+     rToggle(Penabled,      rShort("enable"), rDefault(false),
+             "resonance enable"),
+     rToggle(Pprotectthefundamental, rShort("p.fund."), rDefault(false),
+diff --git a/src/Tests/MessageTest.cpp b/src/Tests/MessageTest.cpp
+index 779bdaff..a9f6a85e 100644
+--- a/src/Tests/MessageTest.cpp
++++ b/src/Tests/MessageTest.cpp
+@@ -60,9 +60,13 @@ class MessageTest
+             TS_ASSERT(ms->uToB->hasNext());
+             msg = ms->uToB->read();
+             TS_ASSERT_EQUAL_STR("/part0/kit0/subpars-data", msg);
++            TS_ASSERT_EQUAL_INT(rtosc_narguments(msg), 1U);
++            TS_ASSERT_EQUAL_INT(sizeof(SUBnoteParameters*), rtosc_argument(msg, 0).b.len);
++            SUBnoteParameters* ptr = *(SUBnoteParameters**)rtosc_argument(msg, 0).b.data;
+             TS_ASSERT(ms->uToB->hasNext());
+             msg = ms->uToB->read();
+             TS_ASSERT_EQUAL_STR("/part0/kit0/Psubenabled", msg);
++            delete ptr;
+         }
+ 
+         void testBankCapture(void)
+@@ -130,6 +134,8 @@ class MessageTest
+             stop_realtime();
+             TS_ASSERT_EQUAL_INT(osc_dst.Pbasefuncpar, 32);
+             TS_ASSERT_EQUAL_INT(osc_oth.Pbasefuncpar, 32);
++
++            mw->tick(); // Let MW handle all "/free" messages
+         }
+ 
+ 
+@@ -244,6 +250,8 @@ class MessageTest
+ 
+             //Verify automation table is restored
+             TS_ASSERT_EQUAL_INT(ms->Pkeyshift, 28);
++
++            mw->tick(); // Let MW handle all "/free" messages
+         }
+ 
+         void testLfoPaste(void)
+@@ -263,6 +271,8 @@ class MessageTest
+             stop_realtime();
+ 
+             TS_ASSERT_EQUAL_INT(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 32);
++
++            mw->tick(); // Let MW handle all "/free" messages
+         }
+ 
+         void testPadPaste(void)
+@@ -293,6 +303,8 @@ class MessageTest
+ 
+             TS_ASSERT_EQUAL_INT(field1, 32);
+             TS_ASSERT_EQUAL_INT(field2, 35);
++
++            mw->tick(); // Let MW handle all "/free" messages
+         }
+ 
+         void testFilterDepricated(void)
+-- 
+2.47.0
+

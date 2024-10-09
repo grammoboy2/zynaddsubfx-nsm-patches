@@ -1,0 +1,254 @@
+From 78498ef321679debe6fbc2b0c348bd71eec581e3 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 28 Jul 2016 09:48:52 -0400
+Subject: [PATCH 0983/1936] WIP
+
+---
+ src/CMakeLists.txt                            |  20 ++--
+ src/Plugin/ZynAddSubFX/CMakeLists.txt         |  32 +++++-
+ src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h    |   2 +
+ .../ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp       | 104 ++++++++++++++++++
+ 4 files changed, 148 insertions(+), 10 deletions(-)
+ create mode 100644 src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index b3fcba8b..4edb5d3f 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -73,11 +73,11 @@ execute_process(COMMAND echo fistpl 0
+ # file, but either in in CMakeCache.txt before compile, or by passing
+ # parameters directly into cmake using the -D flag.
+ if(NTK_FOUND)
+-  SET (GuiModule ntk CACHE STRING "GUI module, either fltk, ntk or off")
++  SET (GuiModule ntk  CACHE STRING "GUI module, either fltk, ntk, zest, or off")
+ elseif(FLTK_FOUND)
+-  SET (GuiModule fltk CACHE STRING "GUI module, either fltk, ntk or off")
++  SET (GuiModule fltk CACHE STRING "GUI module, either fltk, ntk, zest, or off")
+ else()
+-  SET (GuiModule off CACHE STRING "GUI module, either fltk, ntk or off")
++  SET (GuiModule off  CACHE STRING "GUI module, either fltk, ntk, zest, or off")
+ endif()
+ SET (CompileTests ${CXXTEST_FOUND} CACHE BOOL "whether tests should be compiled in or not")
+ SET (AlsaEnable ${ALSA_FOUND} CACHE BOOL
+@@ -152,16 +152,16 @@ endif()
+ 
+ 
+ 
+-if (GuiModule STREQUAL qt AND QT_FOUND)
+-	set (QtGui TRUE)
+-elseif(GuiModule STREQUAL ntk AND NTK_FOUND)
++if(GuiModule STREQUAL ntk AND NTK_FOUND)
+ 	set (NtkGui TRUE)
+ elseif(GuiModule STREQUAL fltk AND FLTK_FOUND)
+ 	set (FltkGui TRUE)
++elseif(GuiModule  STREQUAL zest)
++    set (ZestGui TRUE)
+ elseif(GuiModule STREQUAL off)
+         add_definitions(-DDISABLE_GUI)
+ else  ()
+-        set (GuiModule off CACHE STRING "GUI module, either fltk, qt or off")
++        set (GuiModule off CACHE STRING "GUI module, either fltk, ntk, zest, or off")
+         add_definitions(-DDISABLE_GUI)
+ 	message(STATUS "GUI module defaulting to off")
+ endif()
+@@ -375,6 +375,10 @@ if(NtkGui)
+ 	add_subdirectory(UI)
+ endif()
+ 
++if(ZestGui)
++    add_definitions(-DZEST_GUI)
++endif()
++
+ if(NOT FltkGui AND NOT NtkGui)
+     set(NSM_WORKAROUND UI/NSM.C UI/NSM/Client.C)
+     add_library(zynaddsubfx_gui_bridge STATIC UI/ConnectionDummy.cpp ${NSM_WORKAROUND})
+@@ -386,7 +390,7 @@ endif()
+ # of module-specific variables
+ 
+ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/zyn-version.h.in
+-	${CMAKE_CURRENT_BINARY_DIR}/zyn-version.h)
++    ${CMAKE_CURRENT_SOURCE_DIR}/zyn-version.h)
+ 
+ link_directories(${AUDIO_LIBRARY_DIRS} ${ZLIB_LIBRARY_DIRS} ${FFTW_LIBRARY_DIRS} ${MXML_LIBRARY_DIRS} ${FLTK_LIBRARY_DIRS} ${NTK_LIBRARY_DIRS})
+ 
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index c101f664..64d4d6b0 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -1,5 +1,7 @@
+ 
+-include_directories(${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/DPF/distrho .)
++include_directories(${CMAKE_CURRENT_BINARY_DIR}
++    ${CMAKE_SOURCE_DIR}/DPF/distrho .
++    ${CMAKE_SOURCE_DIR}/DPF/dgl/src)
+ 
+ if(NtkGui)
+ 
+@@ -42,6 +44,30 @@ add_library(ZynAddSubFX_vst SHARED
+     ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
+     ZynAddSubFX.cpp)
+ 
++elseif(ZestGui)
++# UI Enabled using Zest: internal only
++add_library(ZynAddSubFX_lv2 SHARED
++    ${CMAKE_SOURCE_DIR}/src/globals.cpp
++    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
++    ZynAddSubFX.cpp)
++
++add_library(ZynAddSubFX_lv2_ui SHARED
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoUIMain.cpp
++    ZynAddSubFX-UI-Zest.cpp)
++
++add_library(ZynAddSubFX_vst SHARED
++    ${CMAKE_SOURCE_DIR}/src/globals.cpp
++    ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoPluginMain.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoUIMain.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/dgl/src/Geometry.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/dgl/src/Widget.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/dgl/src/Window.cpp
++    ${CMAKE_SOURCE_DIR}/DPF/dgl/src/Application.cpp
++    ZynAddSubFX.cpp
++    ZynAddSubFX-UI-Zest.cpp)
++
+ else()
+ 
+ # UI Disabled
+@@ -72,7 +98,9 @@ set_target_properties(ZynAddSubFX_vst PROPERTIES PREFIX "")
+ target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+     ${PLATFORM_LIBRARIES})
+ target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+-    ${PLATFORM_LIBRARIES})
++    ${PLATFORM_LIBRARIES}
++    X11
++    GL)
+ 
+ install(TARGETS ZynAddSubFX_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
+ install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+index e8224628..aa6d4af0 100644
+--- a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
++++ b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+@@ -26,6 +26,8 @@
+  #define DISTRHO_PLUGIN_HAS_UI          1
+  #define DISTRHO_PLUGIN_HAS_EMBED_UI    0
+  #define DISTRHO_PLUGIN_HAS_EXTERNAL_UI 1
++#elif defined(ZEST_GUI)
++ #define DISTRHO_PLUGIN_HAS_UI          1
+ #else
+  #define DISTRHO_PLUGIN_HAS_UI          0
+ #endif
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+new file mode 100644
+index 00000000..2205e208
+--- /dev/null
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+@@ -0,0 +1,104 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  ZynAddSubFX-UI.cpp - DPF + ZynAddSubFX External UI
++  Copyright (C) 2015-2016 Filipe Coelho
++  Author: Filipe Coelho
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++// DPF includes
++#include "DistrhoUI.hpp"
++#include "../../../DPF/dgl/Window.hpp"
++#include "../../../DPF/dgl/Application.hpp"
++
++/* ------------------------------------------------------------------------------------------------------------
++ * ZynAddSubFX UI class */
++
++class ZynAddSubFXUI : public UI
++{
++public:
++    ZynAddSubFXUI(const intptr_t wid, const char* const bpath)
++        : UI(390, 525),
++          win(app),
++          oscPort(0)
++    {
++        setTitle("ZynAddSubFX");
++        printf("[INFO] Opened the zynaddsubfx UI...\n");
++
++        win.setSize(100,200);
++        win.show();
++
++        (void) wid;
++        (void) bpath;
++    }
++
++    ~ZynAddSubFXUI() override
++    {
++    }
++
++    Window win;
++    Application app;
++protected:
++   /* --------------------------------------------------------------------------------------------------------
++    * DSP/Plugin Callbacks */
++
++   /**
++      A parameter has changed on the plugin side.
++      This is called by the host to inform the UI about parameter changes.
++    */
++    void parameterChanged(uint32_t index, float value) override
++    {
++        switch (index)
++        {
++        case kParamOscPort: {
++            const int port = int(value+0.5f);
++
++            if (oscPort != port)
++            {
++                oscPort = port;
++            }
++        } break;
++        }
++    }
++
++   /**
++      A program has been loaded on the plugin side.
++      This is called by the host to inform the UI about program changes.
++    */
++    void programLoaded(uint32_t index) override
++    {
++    }
++
++   /**
++      A state has changed on the plugin side.
++      This is called by the host to inform the UI about state changes.
++    */
++    void stateChanged(const char* key, const char* value) override
++    {
++    }
++
++private:
++    int oscPort;
++
++
++    DISTRHO_DECLARE_NON_COPY_CLASS(ZynAddSubFXUI)
++};
++
++/* ------------------------------------------------------------------------------------------------------------
++ * Create UI, entry point */
++
++START_NAMESPACE_DISTRHO
++
++UI* createUI()
++{
++    const char* const bundlePath = 0;
++
++    return new ZynAddSubFXUI(0, bundlePath);
++}
++
++END_NAMESPACE_DISTRHO
+-- 
+2.47.0
+

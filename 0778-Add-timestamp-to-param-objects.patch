@@ -1,0 +1,1238 @@
+From d2750ab5aecdfadc47b94a44522bacef1fd1585c Mon Sep 17 00:00:00 2001
+From: Olivier Jolly <olivier@pcedev.com>
+Date: Thu, 3 Dec 2015 21:36:41 +0100
+Subject: [PATCH 0778/1936] Add timestamp to param objects
+
+When a parameter changes via OSC callback or via pasting,
+a timestamp in the param object is set to the current
+time.
+---
+ src/Effects/DynamicFilter.cpp    |  4 +-
+ src/Effects/DynamicFilter.h      |  2 +-
+ src/Effects/EffectMgr.cpp        |  6 ++-
+ src/Effects/EffectMgr.h          |  4 +-
+ src/Misc/Master.cpp              |  8 ++--
+ src/Misc/Master.h                |  2 +-
+ src/Misc/MiddleWare.cpp          |  8 ++--
+ src/Misc/Part.cpp                | 18 ++++----
+ src/Params/ADnoteParameters.cpp  | 75 ++++++++++++++++++++++----------
+ src/Params/ADnoteParameters.h    | 19 ++++++--
+ src/Params/Controller.cpp        | 10 +++--
+ src/Params/Controller.h          |  7 ++-
+ src/Params/EnvelopeParams.cpp    | 14 ++++--
+ src/Params/EnvelopeParams.h      |  6 ++-
+ src/Params/FilterParams.cpp      | 28 ++++++++++--
+ src/Params/FilterParams.h        | 14 +++++-
+ src/Params/LFOParams.cpp         | 12 ++++-
+ src/Params/LFOParams.h           |  9 +++-
+ src/Params/PADnoteParameters.cpp | 30 +++++++++----
+ src/Params/PADnoteParameters.h   |  6 ++-
+ src/Params/SUBnoteParameters.cpp | 27 ++++++++----
+ src/Params/SUBnoteParameters.h   |  6 ++-
+ src/Tests/AdNoteTest.h           |  4 +-
+ src/Tests/ControllerTest.h       |  5 ++-
+ src/Tests/MemoryStressTest.h     |  4 +-
+ src/Tests/PadNoteTest.h          |  4 +-
+ src/Tests/SubNoteTest.h          |  4 +-
+ src/Tests/UnisonTest.h           |  4 +-
+ 28 files changed, 241 insertions(+), 99 deletions(-)
+
+diff --git a/src/Effects/DynamicFilter.cpp b/src/Effects/DynamicFilter.cpp
+index 2afc8762..e9d48ebc 100644
+--- a/src/Effects/DynamicFilter.cpp
++++ b/src/Effects/DynamicFilter.cpp
+@@ -26,7 +26,7 @@
+ #include "../DSP/Filter.h"
+ #include "../Misc/Allocator.h"
+ 
+-DynamicFilter::DynamicFilter(EffectParams pars)
++DynamicFilter::DynamicFilter(EffectParams pars, const AbsTime *time)
+     :Effect(pars),
+       lfo(pars.srate, pars.bufsize),
+       Pvolume(110),
+@@ -37,7 +37,7 @@ DynamicFilter::DynamicFilter(EffectParams pars)
+       filterl(NULL),
+       filterr(NULL)
+ {
+-    filterpars = memory.alloc<FilterParams>(0,0,0);
++    filterpars = memory.alloc<FilterParams>(0,0,0,time);
+     setpreset(Ppreset);
+     cleanup();
+ }
+diff --git a/src/Effects/DynamicFilter.h b/src/Effects/DynamicFilter.h
+index a52d187d..09447934 100644
+--- a/src/Effects/DynamicFilter.h
++++ b/src/Effects/DynamicFilter.h
+@@ -30,7 +30,7 @@
+ class DynamicFilter:public Effect
+ {
+     public:
+-        DynamicFilter(EffectParams pars);
++        DynamicFilter(EffectParams pars, const AbsTime *time = nullptr);
+         ~DynamicFilter();
+         void out(const Stereo<float *> &smp);
+ 
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 621a94a3..0ad8d259 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -135,13 +135,15 @@ static const rtosc::Ports local_ports = {
+ 
+ const rtosc::Ports &EffectMgr::ports = local_ports;
+ 
+-EffectMgr::EffectMgr(Allocator &alloc, const SYNTH_T &synth_, const bool insertion_)
++EffectMgr::EffectMgr(Allocator &alloc, const SYNTH_T &synth_,
++                     const bool insertion_, const AbsTime *time_)
+     :insertion(insertion_),
+       efxoutl(new float[synth_.buffersize]),
+       efxoutr(new float[synth_.buffersize]),
+       filterpars(NULL),
+       nefx(0),
+       efx(NULL),
++      time(time_),
+       dryonly(false),
+       memory(alloc),
+       synth(synth_)
+@@ -203,7 +205,7 @@ void EffectMgr::changeeffectrt(int _nefx, bool avoidSmash)
+                 efx = memory.alloc<EQ>(pars);
+                 break;
+             case 8:
+-                efx = memory.alloc<DynamicFilter>(pars);
++                efx = memory.alloc<DynamicFilter>(pars, time);
+                 break;
+             //put more effect here
+             default:
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index 02a150fd..29497c85 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -36,7 +36,8 @@ class Allocator;
+ class EffectMgr:public Presets
+ {
+     public:
+-        EffectMgr(Allocator &alloc, const SYNTH_T &synth, const bool insertion_);
++        EffectMgr(Allocator &alloc, const SYNTH_T &synth, const bool insertion_,
++              const AbsTime *time_ = nullptr);
+         ~EffectMgr();
+ 
+         void paste(EffectMgr &e);
+@@ -77,6 +78,7 @@ class EffectMgr:public Presets
+         static const rtosc::Ports &ports;
+         int     nefx;
+         Effect *efx;
++        const AbsTime *time;
+     private:
+ 
+         //Parameters Prior to initialization
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index f64df62b..40f328ff 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -301,10 +301,10 @@ vuData::vuData(void)
+ {}
+ 
+ Master::Master(const SYNTH_T &synth_, Config* config)
+-    :HDDRecorder(synth_), ctl(synth_),
++    :HDDRecorder(synth_), time(synth_), ctl(synth_, &time),
+     microtonal(config->cfg.GzipCompression), bank(config),
+     frozenState(false), pendingMemory(false),
+-    synth(synth_), time(synth), gzip_compression(config->cfg.GzipCompression)
++    synth(synth_), gzip_compression(config->cfg.GzipCompression)
+ {
+     bToU = NULL;
+     uToB = NULL;
+@@ -335,11 +335,11 @@ Master::Master(const SYNTH_T &synth_, Config* config)
+ 
+     //Insertion Effects init
+     for(int nefx = 0; nefx < NUM_INS_EFX; ++nefx)
+-        insefx[nefx] = new EffectMgr(*memory, synth, 1);
++        insefx[nefx] = new EffectMgr(*memory, synth, 1, &time);
+ 
+     //System Effects init
+     for(int nefx = 0; nefx < NUM_SYS_EFX; ++nefx)
+-        sysefx[nefx] = new EffectMgr(*memory, synth, 0);
++        sysefx[nefx] = new EffectMgr(*memory, synth, 0, &time);
+ 
+ 
+     defaults();
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 4d60dc28..4fb5f626 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -149,6 +149,7 @@ class Master
+         float vuoutpeakpart[NUM_MIDI_PARTS];
+         unsigned char fakepeakpart[NUM_MIDI_PARTS]; //this is used to compute the "peak" when the part is disabled
+ 
++        AbsTime  time;
+         Controller ctl;
+         bool       swaplr; //if L and R are swapped
+ 
+@@ -174,7 +175,6 @@ class Master
+         rtosc::ThreadLink *uToB;
+         bool pendingMemory;
+         const SYNTH_T &synth;
+-        AbsTime  time;
+         const int& gzip_compression; //!< value from config
+     private:
+         float  sysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index d70e5b48..85318dc4 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -1338,15 +1338,17 @@ void MiddleWareImpl::kitEnable(int part, int kit, int type)
+     string url = "/part"+to_s(part)+"/kit"+to_s(kit)+"/";
+     void *ptr = NULL;
+     if(type == 0 && kits.add[part][kit] == NULL) {
+-        ptr = kits.add[part][kit] = new ADnoteParameters(synth, master->fft);
++        ptr = kits.add[part][kit] = new ADnoteParameters(synth, master->fft,
++                                                         &master->time);
+         url += "adpars-data";
+         obj_store.extractAD(kits.add[part][kit], part, kit);
+     } else if(type == 1 && kits.pad[part][kit] == NULL) {
+-        ptr = kits.pad[part][kit] = new PADnoteParameters(synth, master->fft);
++        ptr = kits.pad[part][kit] = new PADnoteParameters(synth, master->fft,
++                                                          &master->time);
+         url += "padpars-data";
+         obj_store.extractPAD(kits.pad[part][kit], part, kit);
+     } else if(type == 2 && kits.sub[part][kit] == NULL) {
+-        ptr = kits.sub[part][kit] = new SUBnoteParameters();
++        ptr = kits.sub[part][kit] = new SUBnoteParameters(&master->time);
+         url += "subpars-data";
+     }
+ 
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 0f291580..04080544 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -210,7 +210,7 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+     Plegatomode(false),
+     partoutl(new float[synth_.buffersize]),
+     partoutr(new float[synth_.buffersize]),
+-    ctl(synth_),
++    ctl(synth_, &time_),
+     microtonal(microtonal_),
+     fft(fft_),
+     memory(alloc),
+@@ -229,11 +229,11 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+         kit[n].padpars = nullptr;
+     }
+ 
+-    kit[0].adpars  = new ADnoteParameters(synth, fft);
++    kit[0].adpars  = new ADnoteParameters(synth, fft, &time);
+ 
+     //Part's Insertion Effects init
+     for(int nefx = 0; nefx < NUM_PART_EFX; ++nefx) {
+-        partefx[nefx]    = new EffectMgr(memory, synth, 1);
++        partefx[nefx]    = new EffectMgr(memory, synth, 1, &time);
+         Pefxbypass[nefx] = false;
+     }
+     assert(partefx[0]);
+@@ -847,9 +847,9 @@ void Part::setkititemstatus(unsigned kititem, bool Penabled_)
+     else {
+         //All parameters must be NULL in this case
+         assert(!(kkit.adpars || kkit.subpars || kkit.padpars));
+-        kkit.adpars  = new ADnoteParameters(synth, fft);
+-        kkit.subpars = new SUBnoteParameters();
+-        kkit.padpars = new PADnoteParameters(synth, fft);
++        kkit.adpars  = new ADnoteParameters(synth, fft, &time);
++        kkit.subpars = new SUBnoteParameters(&time);
++        kkit.padpars = new PADnoteParameters(synth, fft, &time);
+     }
+ }
+ 
+@@ -1082,7 +1082,7 @@ void Part::getfromXMLinstrument(XMLwrapper& xml)
+                                                 kit[i].Padenabled);
+             if(xml.enterbranch("ADD_SYNTH_PARAMETERS")) {
+                 if(!kit[i].adpars)
+-                    kit[i].adpars = new ADnoteParameters(synth, fft);
++                    kit[i].adpars = new ADnoteParameters(synth, fft, &time);
+                 kit[i].adpars->getfromXML(xml);
+                 xml.exitbranch();
+             }
+@@ -1091,7 +1091,7 @@ void Part::getfromXMLinstrument(XMLwrapper& xml)
+                                                  kit[i].Psubenabled);
+             if(xml.enterbranch("SUB_SYNTH_PARAMETERS")) {
+                 if(!kit[i].subpars)
+-                    kit[i].subpars = new SUBnoteParameters();
++                    kit[i].subpars = new SUBnoteParameters(&time);
+                 kit[i].subpars->getfromXML(xml);
+                 xml.exitbranch();
+             }
+@@ -1100,7 +1100,7 @@ void Part::getfromXMLinstrument(XMLwrapper& xml)
+                                                  kit[i].Ppadenabled);
+             if(xml.enterbranch("PAD_SYNTH_PARAMETERS")) {
+                 if(!kit[i].padpars)
+-                    kit[i].padpars = new PADnoteParameters(synth, fft);
++                    kit[i].padpars = new PADnoteParameters(synth, fft, &time);
+                 kit[i].padpars->getfromXML(xml);
+                 xml.exitbranch();
+             }
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index e2b8a1ea..a18f0484 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -41,6 +41,8 @@ using rtosc::RtData;
+ #define EXPAND(x) x
+ #define rObject ADnoteVoiceParam
+ 
++#undef rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ static const Ports voicePorts = {
+     //Send Messages To Oscillator Realtime Table
+     {"OscilSmp/", rDoc("Primary Oscillator"),
+@@ -221,10 +223,12 @@ static const Ports voicePorts = {
+             d.reply(d.loc, "f", obj->getUnisonFrequencySpreadCents());
+         }},
+ };
++#undef rChangeCb
+ 
+ #undef  rObject
+ #define rObject ADnoteGlobalParam
+ 
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ static const Ports globalPorts = {
+     rRecurp(Reson, "Resonance"),
+     rRecurp(FreqLfo, "Frequency LFO"),
+@@ -298,9 +302,12 @@ static const Ports globalPorts = {
+         }},
+ 
+ };
++#undef rChangeCb
+ 
+ #undef  rObject
+ #define rObject ADnoteParameters
++
++#define rChangeCb obj->last_update_timestamp = obj->time.time();
+ static const Ports adPorts = {//XXX 16 should not be hard coded
+     rSelf(ADnoteParameters),
+     rPaste,
+@@ -308,13 +315,14 @@ static const Ports adPorts = {//XXX 16 should not be hard coded
+     rRecurs(VoicePar, NUM_VOICES),
+     rRecur(GlobalPar, "Adnote Parameters"),
+ };
+-
++#undef rChangeCb
+ const Ports &ADnoteParameters::ports  = adPorts;
+ const Ports &ADnoteVoiceParam::ports  = voicePorts;
+ const Ports &ADnoteGlobalParam::ports = globalPorts;
+ 
+-ADnoteParameters::ADnoteParameters(const SYNTH_T &synth, FFTwrapper *fft_)
+-    :PresetsArray()
++ADnoteParameters::ADnoteParameters(const SYNTH_T &synth, FFTwrapper *fft_,
++                                   const AbsTime *time_)
++    :PresetsArray(), GlobalPar(time_), time(time_)
+ {
+     setpresettype("Padsynth");
+     fft = fft_;
+@@ -322,26 +330,27 @@ ADnoteParameters::ADnoteParameters(const SYNTH_T &synth, FFTwrapper *fft_)
+ 
+     for(int nvoice = 0; nvoice < NUM_VOICES; ++nvoice) {
+         VoicePar[nvoice].GlobalPDetuneType = &GlobalPar.PDetuneType;
+-        EnableVoice(synth, nvoice);
++        VoicePar[nvoice].time = time_;
++        EnableVoice(synth, nvoice, time_);
+     }
+ 
+     defaults();
+ }
+ 
+-ADnoteGlobalParam::ADnoteGlobalParam()
++ADnoteGlobalParam::ADnoteGlobalParam(const AbsTime *time_): time(time_)
+ {
+-    FreqEnvelope = new EnvelopeParams(0, 0);
++    FreqEnvelope = new EnvelopeParams(0, 0, time_);
+     FreqEnvelope->ASRinit(64, 50, 64, 60);
+-    FreqLfo = new LFOParams(70, 0, 64, 0, 0, 0, 0, 0);
++    FreqLfo = new LFOParams(70, 0, 64, 0, 0, 0, 0, 0, time_);
+ 
+-    AmpEnvelope = new EnvelopeParams(64, 1);
++    AmpEnvelope = new EnvelopeParams(64, 1, time_);
+     AmpEnvelope->ADSRinit_dB(0, 40, 127, 25);
+-    AmpLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 1);
++    AmpLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 1, time_);
+ 
+-    GlobalFilter   = new FilterParams(2, 94, 40);
+-    FilterEnvelope = new EnvelopeParams(0, 1);
++    GlobalFilter   = new FilterParams(2, 94, 40, time_);
++    FilterEnvelope = new EnvelopeParams(0, 1, time_);
+     FilterEnvelope->ADSRinit_filter(64, 40, 64, 70, 60, 64);
+-    FilterLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 2);
++    FilterLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 2, time_);
+     Reson     = new Resonance();
+ }
+ 
+@@ -474,32 +483,34 @@ void ADnoteVoiceParam::defaults()
+ /*
+  * Init the voice parameters
+  */
+-void ADnoteParameters::EnableVoice(const SYNTH_T &synth, int nvoice)
++void ADnoteParameters::EnableVoice(const SYNTH_T &synth, int nvoice,
++                                   const AbsTime *time)
+ {
+-    VoicePar[nvoice].enable(synth, fft, GlobalPar.Reson);
++    VoicePar[nvoice].enable(synth, fft, GlobalPar.Reson, time);
+ }
+ 
+-void ADnoteVoiceParam::enable(const SYNTH_T &synth, FFTwrapper *fft, Resonance *Reson)
++void ADnoteVoiceParam::enable(const SYNTH_T &synth, FFTwrapper *fft,
++                              Resonance *Reson, const AbsTime *time)
+ {
+     OscilSmp = new OscilGen(synth, fft, Reson);
+     FMSmp    = new OscilGen(synth, fft, NULL);
+ 
+-    AmpEnvelope = new EnvelopeParams(64, 1);
++    AmpEnvelope = new EnvelopeParams(64, 1, time);
+     AmpEnvelope->ADSRinit_dB(0, 100, 127, 100);
+-    AmpLfo = new LFOParams(90, 32, 64, 0, 0, 30, 0, 1);
++    AmpLfo = new LFOParams(90, 32, 64, 0, 0, 30, 0, 1, time);
+ 
+-    FreqEnvelope = new EnvelopeParams(0, 0);
++    FreqEnvelope = new EnvelopeParams(0, 0, time);
+     FreqEnvelope->ASRinit(30, 40, 64, 60);
+-    FreqLfo = new LFOParams(50, 40, 0, 0, 0, 0, 0, 0);
++    FreqLfo = new LFOParams(50, 40, 0, 0, 0, 0, 0, 0, time);
+ 
+-    VoiceFilter    = new FilterParams(2, 50, 60);
+-    FilterEnvelope = new EnvelopeParams(0, 0);
++    VoiceFilter    = new FilterParams(2, 50, 60, time);
++    FilterEnvelope = new EnvelopeParams(0, 0, time);
+     FilterEnvelope->ADSRinit_filter(90, 70, 40, 70, 10, 40);
+-    FilterLfo = new LFOParams(50, 20, 64, 0, 0, 0, 0, 2);
++    FilterLfo = new LFOParams(50, 20, 64, 0, 0, 0, 0, 2, time);
+ 
+-    FMFreqEnvelope = new EnvelopeParams(0, 0);
++    FMFreqEnvelope = new EnvelopeParams(0, 0, time);
+     FMFreqEnvelope->ASRinit(20, 90, 40, 80);
+-    FMAmpEnvelope = new EnvelopeParams(64, 1);
++    FMAmpEnvelope = new EnvelopeParams(64, 1, time);
+     FMAmpEnvelope->ADSRinit(80, 90, 127, 100);
+ }
+ 
+@@ -919,6 +930,10 @@ void ADnoteParameters::paste(ADnoteParameters &a)
+     this->GlobalPar.paste(a.GlobalPar);
+     for(int i=0; i<NUM_VOICES; ++i)
+         this->VoicePar[i].paste(a.VoicePar[i]);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ 
+ void ADnoteParameters::pasteArray(ADnoteParameters &a, int nvoice)
+@@ -927,6 +942,10 @@ void ADnoteParameters::pasteArray(ADnoteParameters &a, int nvoice)
+         return;
+ 
+     VoicePar[nvoice].paste(a.VoicePar[nvoice]);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ 
+ #define copy(x) this->x = a.x
+@@ -1015,6 +1034,10 @@ void ADnoteVoiceParam::paste(ADnoteVoiceParam &a)
+     RCopy(FMFreqEnvelope);
+ 
+     RCopy(FMSmp);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ 
+ void ADnoteGlobalParam::paste(ADnoteGlobalParam &a)
+@@ -1050,6 +1073,10 @@ void ADnoteGlobalParam::paste(ADnoteGlobalParam &a)
+     RCopy(FilterEnvelope);
+     RCopy(FilterLfo);
+     RCopy(Reson);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ #undef copy
+ #undef RCopy
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index a9015c61..6ac5d852 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -35,7 +35,7 @@ enum FMTYPE {
+ /*****************************************************************/
+ 
+ struct ADnoteGlobalParam {
+-    ADnoteGlobalParam();
++    ADnoteGlobalParam(const AbsTime* time_ = nullptr);
+     ~ADnoteGlobalParam();
+     void defaults();
+     void add2XML(XMLwrapper& xml);
+@@ -106,6 +106,9 @@ struct ADnoteGlobalParam {
+     //how the randomness is applied to the harmonics on more voices using the same oscillator
+     unsigned char Hrandgrouping;
+ 
++    const AbsTime *time;
++    int64_t last_update_timestamp;
++
+     static const rtosc::Ports &ports;
+ };
+ 
+@@ -119,7 +122,8 @@ struct ADnoteVoiceParam {
+     void add2XML(XMLwrapper& xml, bool fmoscilused);
+     void paste(ADnoteVoiceParam &p);
+     void defaults(void);
+-    void enable(const SYNTH_T &synth, FFTwrapper *fft, Resonance *Reson);
++    void enable(const SYNTH_T &synth, FFTwrapper *fft, Resonance *Reson,
++                const AbsTime *time);
+     void kill(void);
+     float getUnisonFrequencySpreadCents(void) const;
+     /** If the voice is enabled */
+@@ -302,13 +306,17 @@ struct ADnoteVoiceParam {
+ 
+     unsigned char *GlobalPDetuneType;
+ 
++    const AbsTime *time;
++    int64_t last_update_timestamp;
++
+     static const rtosc::Ports &ports;
+ };
+ 
+ class ADnoteParameters:public PresetsArray
+ {
+     public:
+-        ADnoteParameters(const SYNTH_T &synth, FFTwrapper *fft_);
++        ADnoteParameters(const SYNTH_T &synth, FFTwrapper *fft_,
++                         const AbsTime *time_ = nullptr);
+         ~ADnoteParameters();
+ 
+         ADnoteGlobalParam GlobalPar;
+@@ -330,9 +338,12 @@ class ADnoteParameters:public PresetsArray
+         void getfromXMLsection(XMLwrapper& xml, int n);
+     private:
+ 
+-        void EnableVoice(const SYNTH_T &synth, int nvoice);
++        void EnableVoice(const SYNTH_T &synth, int nvoice, const AbsTime* time);
+         void KillVoice(int nvoice);
+         FFTwrapper *fft;
++
++        const AbsTime *time;
++        int64_t last_update_timestamp;
+ };
+ 
+ #endif
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index 2a608ce8..6af532fa 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include "Controller.h"
+ #include "../Misc/Util.h"
++#include "../Misc/Time.h"
+ #include "../Misc/XMLwrapper.h"
+ #include <cmath>
+ #include <cstdio>
+@@ -31,6 +32,9 @@
+ using namespace rtosc;
+ 
+ #define rObject Controller
++
++#undef rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ const rtosc::Ports Controller::ports = {
+     rParamZyn(panning.depth, "Depth of Panning MIDI Control"),
+     rParamZyn(filtercutoff.depth, "Depth of Filter Cutoff MIDI Control"),
+@@ -60,10 +64,10 @@ const rtosc::Ports Controller::ports = {
+     rToggle(NRPN.receive, "NRPN MIDI Enable"),
+     rAction(defaults),
+ };
++#undef rChangeCb
+ 
+-
+-Controller::Controller(const SYNTH_T &synth_)
+-    :synth(synth_)
++Controller::Controller(const SYNTH_T &synth_, const AbsTime *time_)
++    :time(time_), synth(synth_)
+ {
+     defaults();
+     resetall();
+diff --git a/src/Params/Controller.h b/src/Params/Controller.h
+index 0e7a8fbf..51fa20ab 100644
+--- a/src/Params/Controller.h
++++ b/src/Params/Controller.h
+@@ -24,13 +24,14 @@
+ #ifndef CONTROLLER_H
+ #define CONTROLLER_H
+ 
++#include <stdint.h>
+ #include "../globals.h"
+ 
+ /**(Midi) Controllers implementation*/
+ class Controller
+ {
+     public:
+-        Controller(const SYNTH_T &synth);
++        Controller(const SYNTH_T &synth, const AbsTime *time = nullptr);
+         Controller&operator=(const Controller &c);
+         ~Controller();
+         void resetall();
+@@ -215,6 +216,10 @@ class Controller
+             unsigned char receive; //this is saved to disk by Master
+         } NRPN;
+ 
++
++        const AbsTime *time;
++        int64_t last_update_timestamp;
++
+         static const rtosc::Ports ports;
+     private:
+         const SYNTH_T &synth;
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index dd06b55d..7095df00 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -28,6 +28,7 @@
+ 
+ #include "EnvelopeParams.h"
+ #include "../Misc/Util.h"
++#include "../Misc/Time.h"
+ 
+ #define rObject EnvelopeParams
+ using namespace rtosc;
+@@ -36,10 +37,11 @@ static const rtosc::Ports localPorts = {
+     rSelf(EnvelopeParams),
+     rPaste,
+ #undef  rChangeCb
+-#define rChangeCb if(!obj->Pfreemode) obj->converttofree();
++#define rChangeCb if(!obj->Pfreemode) obj->converttofree(); if (obj->time) { \
++        obj->last_update_timestamp = obj->time->time(); }
+     rToggle(Pfreemode, "Complex Envelope Definitions"),
+ #undef  rChangeCb
+-#define rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+     rParamZyn(Penvpoints, rProp(internal), "Number of points in complex definition"),
+     rParamZyn(Penvsustain, rProp(internal), "Location of the sustain point"),
+     rParams(Penvdt,  MAX_ENVELOPE_POINTS, "Envelope Delay Times"),
+@@ -94,11 +96,13 @@ static const rtosc::Ports localPorts = {
+ 
+         }},
+ };
++#undef  rChangeCb
+ 
+ const rtosc::Ports &EnvelopeParams::ports = localPorts;
+ 
+ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+-        unsigned char Pforcedrelease_)
++                               unsigned char Pforcedrelease_,
++                               const AbsTime *time_): time(time_)
+ {
+     PA_dt  = 10;
+     PD_dt  = 10;
+@@ -149,6 +153,10 @@ void EnvelopeParams::paste(const EnvelopeParams &ep)
+     COPY(PD_val);
+     COPY(PS_val);
+     COPY(PR_val);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ #undef COPY
+ 
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index 7fbb1748..e6497c34 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -31,7 +31,8 @@ class EnvelopeParams:public Presets
+ {
+     public:
+         EnvelopeParams(unsigned char Penvstretch_=64,
+-                       unsigned char Pforcedrelease_=0);
++                       unsigned char Pforcedrelease_=0,
++                       const AbsTime *time_ = nullptr);
+         ~EnvelopeParams();
+         void paste(const EnvelopeParams &ep);
+         void ADSRinit(char A_dt, char D_dt, char S_val, char R_dt);
+@@ -74,6 +75,9 @@ class EnvelopeParams:public Presets
+                      // 4 for ADSR_filter parameters (filter parameters)
+                      // 5 for ASR_bw parameters (bandwidth parameters)
+ 
++        const AbsTime *time;
++        int64_t last_update_timestamp;
++
+         static const rtosc::Ports &ports;
+     private:
+         void store2defaults();
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 9c5aa7fb..82c244ee 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -22,6 +22,7 @@
+ 
+ #include "FilterParams.h"
+ #include "../Misc/Util.h"
++#include "../Misc/Time.h"
+ #include <cmath>
+ #include <cstdio>
+ #include <cstdlib>
+@@ -36,11 +37,15 @@ using namespace rtosc;
+ constexpr int sizeof_pvowels = sizeof(FilterParams::Pvowels);
+ 
+ #define rObject FilterParams::Pvowels_t::formants_t
++
++#undef rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ static const rtosc::Ports subsubports = {
+     rParamZyn(freq, "Formant frequency"),
+     rParamZyn(amp,  "Strength of formant"),
+     rParamZyn(q,    "Quality Factor"),
+ };
++#undef rChangeCb
+ #undef rObject
+ 
+ static const rtosc::Ports subports = {
+@@ -54,12 +59,14 @@ static const rtosc::Ports subports = {
+             FilterParams::Pvowels_t *obj = (FilterParams::Pvowels_t *) d.obj;
+             d.obj = (void*) &obj->formants[idx];
+             subsubports.dispatch(msg, d);
++            if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+         }},
+ };
+ 
+ #define rObject FilterParams
+ #undef  rChangeCb
+-#define rChangeCb obj->changed = true;
++#define rChangeCb obj->changed = true; if ( obj->time) { \
++    obj->last_update_timestamp = obj->time->time(); }
+ const rtosc::Ports FilterParams::ports = {
+     rSelf(FilterParams),
+     rPaste,
+@@ -127,13 +134,14 @@ const rtosc::Ports FilterParams::ports = {
+ 
+ 
+ 
+-FilterParams::FilterParams()
+-    :FilterParams(0,64,64)
++FilterParams::FilterParams(const AbsTime *time_)
++    :FilterParams(0,64,64, time_)
+ {
+ }
+ FilterParams::FilterParams(unsigned char Ptype_,
+                            unsigned char Pfreq_,
+-                           unsigned char Pq_)
++                           unsigned char Pq_,
++                           const AbsTime *time_): time(time_)
+ {
+     setpresettype("Pfilter");
+     Dtype = Ptype_;
+@@ -179,10 +187,14 @@ void FilterParams::defaults()
+ void FilterParams::defaults(int n)
+ {
+     int j = n;
++
++    Pvowels[j].time = time;
++
+     for(int i = 0; i < FF_MAX_FORMANTS; ++i) {
+         Pvowels[j].formants[i].freq = (int)(RND * 127.0f); //some random freqs
+         Pvowels[j].formants[i].q    = 64;
+         Pvowels[j].formants[i].amp  = 127;
++        Pvowels[j].formants[i].time = time;
+     }
+ }
+ 
+@@ -455,6 +467,10 @@ void FilterParams::paste(FilterParams &x)
+         this->Psequence[i] = x.Psequence[i];
+ 
+     COPY(changed);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ #undef COPY
+ 
+@@ -468,4 +484,8 @@ void FilterParams::pasteArray(FilterParams &x, int nvowel)
+         self.amp  = update.amp;
+         self.q    = update.q;
+     }
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+diff --git a/src/Params/FilterParams.h b/src/Params/FilterParams.h
+index 2fdbe889..086afbfc 100644
+--- a/src/Params/FilterParams.h
++++ b/src/Params/FilterParams.h
+@@ -30,10 +30,11 @@
+ class FilterParams:public PresetsArray
+ {
+     public:
+-        FilterParams();
++        FilterParams(const AbsTime *time_ = nullptr);
+         FilterParams(unsigned char Ptype_,
+                      unsigned char Pfreq,
+-                     unsigned char Pq_);
++                     unsigned char Pq_,
++                     const AbsTime *time_ = nullptr);
+         ~FilterParams();
+ 
+         void add2XML(XMLwrapper& xml);
+@@ -69,7 +70,13 @@ class FilterParams:public PresetsArray
+         struct Pvowels_t {
+             struct formants_t {
+                 unsigned char freq, amp, q; //frequency,amplitude,Q
++
++                const AbsTime *time;
++                int64_t last_update_timestamp;
+             } formants[FF_MAX_FORMANTS];
++
++            const AbsTime *time;
++            int64_t last_update_timestamp;
+         } Pvowels[FF_MAX_VOWELS];
+ 
+ 
+@@ -94,6 +101,9 @@ class FilterParams:public PresetsArray
+ 
+         bool changed;
+ 
++        const AbsTime *time;
++        int64_t last_update_timestamp;
++
+         static const rtosc::Ports ports;
+     private:
+ 
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 225a1d0a..e60a2545 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -33,6 +33,8 @@ using namespace rtosc;
+ 
+ 
+ #define rObject LFOParams
++#undef rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ static const rtosc::Ports _ports = {
+     rSelf(LFOParams),
+     rPaste,
+@@ -50,10 +52,11 @@ static const rtosc::Ports _ports = {
+     rToggle(Pcontinous, "Enable for global operation"),
+     rParamZyn(Pstretch, rCentered, "Note frequency stretch"),
+ };
++#undef rChangeCb
+ 
+ const rtosc::Ports &LFOParams::ports = _ports;
+ 
+-LFOParams::LFOParams()
++LFOParams::LFOParams(const AbsTime *time_) : time(time_)
+ {
+     Dfreq       = 64;
+     Dintensity  = 0;
+@@ -74,7 +77,8 @@ LFOParams::LFOParams(char Pfreq_,
+                      char Prandomness_,
+                      char Pdelay_,
+                      char Pcontinous_,
+-                     char fel_)
++                     char fel_,
++                     const AbsTime *time_) : time(time_)
+ {
+     switch(fel_) {
+         case 0:
+@@ -154,5 +158,9 @@ void LFOParams::paste(LFOParams &x)
+     COPY(Pdelay);
+     COPY(Pcontinous);
+     COPY(Pstretch);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ #undef COPY
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index 3dd4f579..5bb120e9 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -23,6 +23,7 @@
+ #ifndef LFO_PARAMS_H
+ #define LFO_PARAMS_H
+ 
++#include <Misc/Time.h>
+ #include <rtosc/ports.h>
+ #include "Presets.h"
+ 
+@@ -40,7 +41,7 @@ class XMLwrapper;
+ class LFOParams:public Presets
+ {
+     public:
+-        LFOParams();
++        LFOParams(const AbsTime* time_ = nullptr);
+         LFOParams(char Pfreq_,
+                   char Pintensity_,
+                   char Pstartphase_,
+@@ -48,7 +49,8 @@ class LFOParams:public Presets
+                   char Prandomness_,
+                   char Pdelay_,
+                   char Pcontinous,
+-                  char fel_);
++                  char fel_,
++                  const AbsTime* time_ = nullptr);
+         ~LFOParams();
+ 
+         void add2XML(XMLwrapper& xml);
+@@ -70,6 +72,9 @@ class LFOParams:public Presets
+ 
+         int fel; //what kind is the LFO (0 - frequency, 1 - amplitude, 2 - filter)
+ 
++        const AbsTime *time;
++        int64_t last_update_timestamp;
++
+         static const rtosc::Ports &ports;
+     private:
+         /* Default parameters */
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 14e5d9b9..309d7816 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -35,6 +35,8 @@ using namespace rtosc;
+ 
+ 
+ #define rObject PADnoteParameters
++#undef rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ static const rtosc::Ports realtime_ports =
+ {
+     rRecurp(FreqLfo, "Frequency LFO"),
+@@ -237,6 +239,7 @@ static const rtosc::Ports non_realtime_ports =
+     {"needPrepare:", rDoc("Unimplemented Stub"),
+         NULL, [](const char *, rtosc::RtData&) {}},
+ };
++#undef rChangeCb
+ 
+ const rtosc::Ports &PADnoteParameters::non_realtime_ports = ::non_realtime_ports;
+ const rtosc::Ports &PADnoteParameters::realtime_ports     = ::realtime_ports;
+@@ -249,8 +252,9 @@ const rtosc::MergePorts PADnoteParameters::ports =
+ };
+ 
+ 
+-PADnoteParameters::PADnoteParameters(const SYNTH_T &synth_, FFTwrapper *fft_)
+-    :Presets(), synth(synth_)
++PADnoteParameters::PADnoteParameters(const SYNTH_T &synth_, FFTwrapper *fft_,
++                                     const AbsTime *time_)
++        : Presets(), time(time_), synth(synth_)
+ {
+     setpresettype("Ppadsynth");
+ 
+@@ -260,18 +264,18 @@ PADnoteParameters::PADnoteParameters(const SYNTH_T &synth_, FFTwrapper *fft_)
+     oscilgen  = new OscilGen(synth, fft_, resonance);
+     oscilgen->ADvsPAD = true;
+ 
+-    FreqEnvelope = new EnvelopeParams(0, 0);
++    FreqEnvelope = new EnvelopeParams(0, 0, time_);
+     FreqEnvelope->ASRinit(64, 50, 64, 60);
+-    FreqLfo = new LFOParams(70, 0, 64, 0, 0, 0, 0, 0);
++    FreqLfo = new LFOParams(70, 0, 64, 0, 0, 0, 0, 0, time_);
+ 
+-    AmpEnvelope = new EnvelopeParams(64, 1);
++    AmpEnvelope = new EnvelopeParams(64, 1, time_);
+     AmpEnvelope->ADSRinit_dB(0, 40, 127, 25);
+-    AmpLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 1);
++    AmpLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 1, time_);
+ 
+-    GlobalFilter   = new FilterParams(2, 94, 40);
+-    FilterEnvelope = new EnvelopeParams(0, 1);
++    GlobalFilter   = new FilterParams(2, 94, 40, time_);
++    FilterEnvelope = new EnvelopeParams(0, 1, time_);
+     FilterEnvelope->ADSRinit_filter(64, 40, 64, 70, 60, 64);
+-    FilterLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 2);
++    FilterLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 2, time_);
+ 
+     for(int i = 0; i < PAD_MAX_SAMPLES; ++i)
+         sample[i].smp = NULL;
+@@ -1176,6 +1180,10 @@ void PADnoteParameters::paste(PADnoteParameters &x)
+ 
+     oscilgen->paste(*x.oscilgen);
+     resonance->paste(*x.resonance);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ 
+ void PADnoteParameters::pasteRT(PADnoteParameters &x)
+@@ -1215,5 +1223,9 @@ void PADnoteParameters::pasteRT(PADnoteParameters &x)
+ 
+     FilterEnvelope->paste(*x.FilterEnvelope);
+     FilterLfo->paste(*x.FilterLfo);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ #undef COPY
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index c530c77f..2cbf68e4 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -42,7 +42,8 @@
+ class PADnoteParameters:public Presets
+ {
+     public:
+-        PADnoteParameters(const SYNTH_T &synth_, FFTwrapper *fft_);
++        PADnoteParameters(const SYNTH_T &synth_, FFTwrapper *fft_,
++                          const AbsTime *time_ = nullptr);
+         ~PADnoteParameters();
+ 
+         void defaults();
+@@ -173,6 +174,9 @@ class PADnoteParameters:public Presets
+         void sampleGenerator(PADnoteParameters::callback cb,
+                              std::function<bool()> do_abort);
+ 
++        const AbsTime *time;
++        int64_t last_update_timestamp;
++
+         static const rtosc::MergePorts ports;
+         static const rtosc::Ports     &non_realtime_ports;
+         static const rtosc::Ports     &realtime_ports;
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index efcad3d5..85b35a10 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -25,6 +25,7 @@
+ #include "EnvelopeParams.h"
+ #include "FilterParams.h"
+ #include "../Misc/Util.h"
++#include "../Misc/Time.h"
+ #include <cstdio>
+ #include <cmath>
+ 
+@@ -33,6 +34,9 @@
+ 
+ #define rObject SUBnoteParameters
+ using namespace rtosc;
++
++#undef rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+ static const rtosc::Ports SUBnotePorts = {
+     rSelf(SUBnoteParameters),
+     rPaste,
+@@ -56,7 +60,8 @@ static const rtosc::Ports SUBnotePorts = {
+     rParamZyn(PBendAdjust,          "Pitch bend adjustment"),
+     rParamZyn(POffsetHz,            "Voice constant offset"),
+ #undef rChangeCb
+-#define rChangeCb obj->updateFrequencyMultipliers();
++#define rChangeCb obj->updateFrequencyMultipliers(); if (obj->time) { \
++    obj->last_update_timestamp = obj->time->time(); }
+     rParamI(POvertoneSpread.type, rMap(min, 0), rMap(max, 7),
+             "Spread of harmonic frequencies"),
+     rParamI(POvertoneSpread.par1, rMap(min, 0), rMap(max, 255),
+@@ -66,7 +71,7 @@ static const rtosc::Ports SUBnotePorts = {
+     rParamI(POvertoneSpread.par3, rMap(min, 0), rMap(max, 255),
+             "Overtone Parameter"),
+ #undef rChangeCb
+-#define rChangeCb
++#define rChangeCb if (obj->time) { obj->last_update_timestamp = obj->time->time(); }
+     rParamZyn(Pnumstages, rMap(min, 1), rMap(max, 5), "Number of filter stages"),
+     rParamZyn(Pbandwidth, "Bandwidth of filters"),
+     rParamZyn(Phmagtype, "How the magnitudes are computed (0=linear,1=-60dB,2=-60dB)"),
+@@ -125,21 +130,23 @@ static const rtosc::Ports SUBnotePorts = {
+         }},
+ 
+ };
++#undef rChangeCb
+ 
+ const rtosc::Ports &SUBnoteParameters::ports = SUBnotePorts;
+ 
+-SUBnoteParameters::SUBnoteParameters():Presets()
++SUBnoteParameters::SUBnoteParameters(const AbsTime *time_)
++        : Presets(), time(time_)
+ {
+     setpresettype("Psubsynth");
+-    AmpEnvelope = new EnvelopeParams(64, 1);
++    AmpEnvelope = new EnvelopeParams(64, 1, time_);
+     AmpEnvelope->ADSRinit_dB(0, 40, 127, 25);
+-    FreqEnvelope = new EnvelopeParams(64, 0);
++    FreqEnvelope = new EnvelopeParams(64, 0, time_);
+     FreqEnvelope->ASRinit(30, 50, 64, 60);
+-    BandWidthEnvelope = new EnvelopeParams(64, 0);
++    BandWidthEnvelope = new EnvelopeParams(64, 0, time_);
+     BandWidthEnvelope->ASRinit_bw(100, 70, 64, 60);
+ 
+-    GlobalFilter = new FilterParams(2, 80, 40);
+-    GlobalFilterEnvelope = new EnvelopeParams(0, 1);
++    GlobalFilter = new FilterParams(2, 80, 40, time_);
++    GlobalFilterEnvelope = new EnvelopeParams(0, 1, time_);
+     GlobalFilterEnvelope->ADSRinit_filter(64, 40, 64, 70, 60, 64);
+ 
+     defaults();
+@@ -395,6 +402,10 @@ void SUBnoteParameters::paste(SUBnoteParameters &sub)
+ 
+     doPaste(Pbwscale);
+     doPaste(Pstart);
++
++    if ( time ) {
++        last_update_timestamp = time->time();
++    }
+ }
+ 
+ void SUBnoteParameters::getfromXML(XMLwrapper& xml)
+diff --git a/src/Params/SUBnoteParameters.h b/src/Params/SUBnoteParameters.h
+index 4294cd87..0059fc53 100644
+--- a/src/Params/SUBnoteParameters.h
++++ b/src/Params/SUBnoteParameters.h
+@@ -23,13 +23,14 @@
+ #ifndef SUB_NOTE_PARAMETERS_H
+ #define SUB_NOTE_PARAMETERS_H
+ 
++#include <stdint.h>
+ #include "../globals.h"
+ #include "Presets.h"
+ 
+ class SUBnoteParameters:public Presets
+ {
+     public:
+-        SUBnoteParameters();
++        SUBnoteParameters(const AbsTime *time_ = nullptr);
+         ~SUBnoteParameters();
+ 
+         void add2XML(XMLwrapper& xml);
+@@ -105,6 +106,9 @@ class SUBnoteParameters:public Presets
+         //how the harmonics start("0"=0,"1"=random,"2"=1)
+         unsigned char Pstart;
+ 
++        const AbsTime *time;
++        int64_t last_update_timestamp;
++
+         static const rtosc::Ports &ports;
+ };
+ 
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index 75d4d9c1..18d4e8fe 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -69,7 +69,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             fft = new FFTwrapper(synth->oscilsize);
+             //prepare the default settings
+-            defaultPreset = new ADnoteParameters(*synth, fft);
++            defaultPreset = new ADnoteParameters(*synth, fft, time);
+ 
+             //Assert defaults
+             TS_ASSERT(!defaultPreset->VoicePar[1].Enabled);
+@@ -93,7 +93,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+ 
+ 
+-            controller = new Controller(*synth);
++            controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+             testnote = 50;
+diff --git a/src/Tests/ControllerTest.h b/src/Tests/ControllerTest.h
+index f70f638e..683ac88a 100644
+--- a/src/Tests/ControllerTest.h
++++ b/src/Tests/ControllerTest.h
+@@ -23,6 +23,8 @@
+ #include <iostream>
+ #include "../Params/Controller.h"
+ #include "../globals.h"
++#include "../Misc/Time.h"
++
+ SYNTH_T *synth;
+ 
+ class ControllerTest:public CxxTest::TestSuite
+@@ -30,7 +32,8 @@ class ControllerTest:public CxxTest::TestSuite
+     public:
+         void setUp() {
+             synth   = new SYNTH_T;
+-            testCtl = new Controller(*synth);
++            AbsTime time(*synth);
++            testCtl = new Controller(*synth, &time);
+         }
+ 
+         void tearDown() {
+diff --git a/src/Tests/MemoryStressTest.h b/src/Tests/MemoryStressTest.h
+index 56de42ed..5be0ab55 100644
+--- a/src/Tests/MemoryStressTest.h
++++ b/src/Tests/MemoryStressTest.h
+@@ -55,7 +55,7 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             fft = new FFTwrapper(synth->oscilsize);
+             //prepare the default settings
+-            defaultPreset = new ADnoteParameters(*synth, fft);
++            defaultPreset = new ADnoteParameters(*synth, fft, time);
+ 
+             //Assert defaults
+             TS_ASSERT(!defaultPreset->VoicePar[1].Enabled);
+@@ -76,7 +76,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             //verify xml was loaded
+             TS_ASSERT(defaultPreset->VoicePar[1].Enabled);
+ 
+-            controller = new Controller(*synth);
++            controller = new Controller(*synth, time);
+ 
+         }
+ 
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index 53f43537..d1d8241a 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -78,7 +78,7 @@ class PadNoteTest:public CxxTest::TestSuite
+ 
+             fft = new FFTwrapper(synth->oscilsize);
+             //prepare the default settings
+-            pars = new PADnoteParameters(*synth, fft);
++            pars = new PADnoteParameters(*synth, fft, time);
+ 
+ 
+             //Assert defaults
+@@ -106,7 +106,7 @@ class PadNoteTest:public CxxTest::TestSuite
+ 
+ 
+ 
+-            controller = new Controller(*synth);
++            controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+             testnote = 50;
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index 3d481157..edb78a1f 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -66,7 +66,7 @@ class SubNoteTest:public CxxTest::TestSuite
+                 *(outR + i) = 0;
+ 
+             //prepare the default settings
+-            SUBnoteParameters *defaultPreset = new SUBnoteParameters();
++            SUBnoteParameters *defaultPreset = new SUBnoteParameters(time);
+             XMLwrapper wrap;
+             wrap.loadXMLfile(string(SOURCE_DIR)
+                               + string("/guitar-adnote.xmz"));
+@@ -78,7 +78,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             TS_ASSERT(wrap.enterbranch("SUB_SYNTH_PARAMETERS"));
+             defaultPreset->getfromXML(wrap);
+ 
+-            controller = new Controller(*synth);
++            controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+             testnote = 50;
+diff --git a/src/Tests/UnisonTest.h b/src/Tests/UnisonTest.h
+index 9be69a35..70bc2b9f 100644
+--- a/src/Tests/UnisonTest.h
++++ b/src/Tests/UnisonTest.h
+@@ -68,12 +68,12 @@ class AdNoteTest:public CxxTest::TestSuite
+ 
+             fft = new FFTwrapper(BUF);
+             //prepare the default settings
+-            params = new ADnoteParameters(*synth, fft);
++            params = new ADnoteParameters(*synth, fft, time);
+ 
+             //sawtooth to make things a bit more interesting
+             params->VoicePar[0].OscilSmp->Pcurrentbasefunc = 3;
+ 
+-            controller = new Controller(*synth);
++            controller = new Controller(*synth, time);
+ 
+             //lets go with.... 50! as a nice note
+             testnote = 50;
+-- 
+2.47.0
+

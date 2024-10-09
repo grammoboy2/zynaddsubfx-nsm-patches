@@ -1,0 +1,462 @@
+From 4c448a09b707600c36069a79cf71a092880afdbe Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Sat, 22 Feb 2020 10:09:19 +0100
+Subject: [PATCH 1467/1936] Use fabsf() instead of fabs() because ZynAddSubFX
+ is using float for its computations.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Effects/Alienwah.cpp            |  6 +++---
+ src/Misc/Master.cpp                 | 16 ++++++++--------
+ src/Misc/Util.cpp                   | 16 ++++++++--------
+ src/Misc/WaveShapeSmps.cpp          | 18 +++++++++---------
+ src/Params/ADnoteParameters.cpp     |  2 +-
+ src/Params/PADnoteParameters.cpp    |  2 +-
+ src/Synth/ADnote.cpp                |  4 ++--
+ src/Synth/Envelope.cpp              |  2 +-
+ src/Synth/LFO.cpp                   |  4 ++--
+ src/Synth/OscilGen.cpp              | 20 ++++++++++----------
+ src/Synth/PADnote.cpp               |  4 ++--
+ src/Tests/MiddlewareTest.h          |  2 +-
+ src/Tests/PluginTest.h              |  2 +-
+ src/UI/Fl_OscilSpectrum.h           |  2 +-
+ src/UI/Fl_Oscilloscope.h            |  4 ++--
+ src/UI/Fl_PADnoteOvertonePosition.h |  2 +-
+ src/globals.h                       |  4 ++--
+ 17 files changed, 55 insertions(+), 55 deletions(-)
+
+diff --git a/src/Effects/Alienwah.cpp b/src/Effects/Alienwah.cpp
+index 8deac284..dc648dea 100644
+--- a/src/Effects/Alienwah.cpp
++++ b/src/Effects/Alienwah.cpp
+@@ -102,7 +102,7 @@ void Alienwah::out(const Stereo<float *> &smp)
+         complex<float> tmp = clfol * x + oldclfol * x1;
+ 
+         complex<float> out = tmp * oldl[oldk];
+-        out += (1 - fabs(fb)) * smp.l[i] * pangainL;
++        out += (1 - fabsf(fb)) * smp.l[i] * pangainL;
+ 
+         oldl[oldk] = out;
+         float l = out.real() * 10.0f * (fb + 0.1f);
+@@ -111,7 +111,7 @@ void Alienwah::out(const Stereo<float *> &smp)
+         tmp = clfor * x + oldclfor * x1;
+ 
+         out = tmp * oldr[oldk];
+-        out += (1 - fabs(fb)) * smp.r[i] * pangainR;
++        out += (1 - fabsf(fb)) * smp.r[i] * pangainR;
+ 
+         oldr[oldk] = out;
+         float r = out.real() * 10.0f * (fb + 0.1f);
+@@ -149,7 +149,7 @@ void Alienwah::setdepth(unsigned char _Pdepth)
+ void Alienwah::setfb(unsigned char _Pfb)
+ {
+     Pfb = _Pfb;
+-    fb  = fabs((Pfb - 64.0f) / 64.1f);
++    fb  = fabsf((Pfb - 64.0f) / 64.1f);
+     fb  = sqrtf(fb);
+     if(fb < 0.4f)
+         fb = 0.4f;
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index e6980948..d2ae7c10 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1029,10 +1029,10 @@ void Master::vuUpdate(const float *outr, const float *outl)
+     vu.outpeakl = 1e-12;
+     vu.outpeakr = 1e-12;
+     for(int i = 0; i < synth.buffersize; ++i) {
+-        if(fabs(outl[i]) > vu.outpeakl)
+-            vu.outpeakl = fabs(outl[i]);
+-        if(fabs(outr[i]) > vu.outpeakr)
+-            vu.outpeakr = fabs(outr[i]);
++        if(fabsf(outl[i]) > vu.outpeakl)
++            vu.outpeakl = fabsf(outl[i]);
++        if(fabsf(outr[i]) > vu.outpeakr)
++            vu.outpeakr = fabsf(outr[i]);
+     }
+     if((vu.outpeakl > 1.0f) || (vu.outpeakr > 1.0f))
+         vu.clipped = 1;
+@@ -1059,10 +1059,10 @@ void Master::vuUpdate(const float *outr, const float *outl)
+             float *outr = part[npart]->partoutl,
+             *outl = part[npart]->partoutr;
+             for(int i = 0; i < synth.buffersize; ++i) {
+-                if (fabs(outl[i]) > vuoutpeakpartl[npart])
+-                    vuoutpeakpartl[npart] = fabs(outl[i]);
+-                if (fabs(outr[i]) > vuoutpeakpartr[npart])
+-                    vuoutpeakpartr[npart] = fabs(outr[i]);
++                if (fabsf(outl[i]) > vuoutpeakpartl[npart])
++                    vuoutpeakpartl[npart] = fabsf(outl[i]);
++                if (fabsf(outr[i]) > vuoutpeakpartr[npart])
++                    vuoutpeakpartr[npart] = fabsf(outr[i]);
+             }
+         }
+         else
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index 6f2d77e1..dd5caa65 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -85,22 +85,22 @@ float getdetune(unsigned char type,
+     switch(type) {
+ //	case 1: is used for the default (see below)
+         case 2:
+-            cdet   = fabs(cdetune * 10.0f);
+-            findet = fabs(fdetune / 8192.0f) * 10.0f;
++            cdet   = fabsf(cdetune * 10.0f);
++            findet = fabsf(fdetune / 8192.0f) * 10.0f;
+             break;
+         case 3:
+-            cdet   = fabs(cdetune * 100.0f);
+-            findet = powf(10, fabs(fdetune / 8192.0f) * 3.0f) / 10.0f - 0.1f;
++            cdet   = fabsf(cdetune * 100.0f);
++            findet = powf(10, fabsf(fdetune / 8192.0f) * 3.0f) / 10.0f - 0.1f;
+             break;
+         case 4:
+-            cdet   = fabs(cdetune * 701.95500087f); //perfect fifth
++            cdet   = fabsf(cdetune * 701.95500087f); //perfect fifth
+             findet =
+-                (powf(2, fabs(fdetune / 8192.0f) * 12.0f) - 1.0f) / 4095 * 1200;
++                (powf(2, fabsf(fdetune / 8192.0f) * 12.0f) - 1.0f) / 4095 * 1200;
+             break;
+         //case ...: need to update N_DETUNE_TYPES, if you'll add more
+         default:
+-            cdet   = fabs(cdetune * 50.0f);
+-            findet = fabs(fdetune / 8192.0f) * 35.0f; //almost like "Paul's Sound Designer 2"
++            cdet   = fabsf(cdetune * 50.0f);
++            findet = fabsf(fdetune / 8192.0f) * 35.0f; //almost like "Paul's Sound Designer 2"
+             break;
+     }
+     if(finedetune < 8192)
+diff --git a/src/Misc/WaveShapeSmps.cpp b/src/Misc/WaveShapeSmps.cpp
+index 85ddc6d2..29372ce1 100644
+--- a/src/Misc/WaveShapeSmps.cpp
++++ b/src/Misc/WaveShapeSmps.cpp
+@@ -26,9 +26,9 @@ float polyblampres(float smp, float ws, float dMax)
+     // [0, T] d^5/40 − d^4/12 + d^2/3 − d/2 + 7/30
+     // [T, 2T] −d^5/120 + d^4/24 − d^3/12 + d^2/12 − d/24 + 1/120
+ 
+-    float dist = fabs(smp) - ws;
++    float dist = fabsf(smp) - ws;
+     float res, d1, d2, d3, d4, d5;
+-    if (fabs(dist) < dMax) {
++    if (fabsf(dist) < dMax) {
+         if (dist < -dMax/2.0f) {
+             d1 = (dist + dMax)/dMax*2;   // [-dMax ... -dMax/2] -> [0 ... 1]
+             res = powf(d1, 5.0f) / 120.0f;
+@@ -100,7 +100,7 @@ void waveShapeSmps(int n,
+             ws = ws * ws * ws * 20.0f + 0.0001f; //Pow
+             for(i = 0; i < n; ++i) {
+                 smps[i] *= ws;
+-                if(fabs(smps[i]) < 1.0f) {
++                if(fabsf(smps[i]) < 1.0f) {
+                     smps[i] = (smps[i] - powf(smps[i], 3.0f)) * 3.0f;
+                     if(ws < 1.0f)
+                         smps[i] /= ws;
+@@ -262,8 +262,8 @@ void waveShapeSmps(int n,
+             for(i = 0; i < n; ++i) {
+                 smps[i] *= ws;// multiply signal to drive it in the saturation of the function
+                 smps[i] += offs; // add dc offset
+-                smps[i] = smps[i] / powf(1+powf(fabs(smps[i]), par), 1/par);
+-                smps[i] -= offs / powf(1+powf(fabs(offs), par), 1/par);
++                smps[i] = smps[i] / powf(1+powf(fabsf(smps[i]), par), 1/par);
++                smps[i] -= offs / powf(1+powf(fabsf(offs), par), 1/par);
+             }
+             break;
+         case 16:
+@@ -274,7 +274,7 @@ void waveShapeSmps(int n,
+             for(i = 0; i < n; ++i) {
+                 smps[i] *= ws; // multiply signal to drive it in the saturation of the function
+                 smps[i] += offs; // add dc offset
+-                if(fabs(smps[i]) < 1.0f)
++                if(fabsf(smps[i]) < 1.0f)
+                     smps[i] = 1.5 * (smps[i] - (powf(smps[i], 3.0) / 3.0) );
+                 else
+                     smps[i] = (smps[i] > 0 ? 1.0f : -1.0f);
+@@ -289,12 +289,12 @@ void waveShapeSmps(int n,
+             for(i = 0; i < n; ++i) {
+                 smps[i] *= ws; // multiply signal to drive it in the saturation of the function
+                 smps[i] += offs; // add dc offset
+-                if(fabs(smps[i]) < 1.0f)
+-                    smps[i] = smps[i]*(2-fabs(smps[i]));
++                if(fabsf(smps[i]) < 1.0f)
++                    smps[i] = smps[i]*(2-fabsf(smps[i]));
+                 else
+                     smps[i] = (smps[i] > 0 ? 1.0f : -1.0f);
+                 //substract offset with distorsion function applied
+-                smps[i] -= offs*(2-fabs(offs));
++                smps[i] -= offs*(2-fabsf(offs));
+             }
+             break;
+     }
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 96173641..0dd9c166 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -661,7 +661,7 @@ void ADnoteVoiceParam::enable(const SYNTH_T &synth, FFTwrapper *fft,
+ float ADnoteParameters::getBandwidthDetuneMultiplier() const
+ {
+     float bw = (GlobalPar.PBandwidth - 64.0f) / 64.0f;
+-    bw = powf(2.0f, bw * powf(fabs(bw), 0.2f) * 5.0f);
++    bw = powf(2.0f, bw * powf(fabsf(bw), 0.2f) * 5.0f);
+ 
+     return bw;
+ }
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 8a555d4c..2d035c82 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -505,7 +505,7 @@ float PADnoteParameters::getprofile(float *smp, int size)
+                     f = 1.0f;
+                 break;
+             case 2:
+-                f = expf(-(fabs(x)) * sqrt(basepar));
++                f = expf(-(fabsf(x)) * sqrt(basepar));
+                 break;
+             default:
+                 f = expf(-(x * x) * basepar);
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index ce3b42db..4a8989d7 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -1033,7 +1033,7 @@ void ADnote::compute_unison_freq_rap(int nvoice) {
+ void ADnote::setfreq(int nvoice, float in_freq)
+ {
+     for(int k = 0; k < unison_size[nvoice]; ++k) {
+-        float freq  = fabs(in_freq) * unison_freq_rap[nvoice][k];
++        float freq  = fabsf(in_freq) * unison_freq_rap[nvoice][k];
+         float speed = freq * synth.oscilsize_f / synth.samplerate_f;
+         if(speed > synth.oscilsize_f)
+             speed = synth.oscilsize_f;
+@@ -1050,7 +1050,7 @@ void ADnote::setfreq(int nvoice, float in_freq)
+ void ADnote::setfreqFM(int nvoice, float in_freq)
+ {
+     for(int k = 0; k < unison_size[nvoice]; ++k) {
+-        float freq  = fabs(in_freq) * unison_freq_rap[nvoice][k];
++        float freq  = fabsf(in_freq) * unison_freq_rap[nvoice][k];
+         float speed = freq * synth.oscilsize_f / synth.samplerate_f;
+         if(speed > synth.samplerate_f)
+             speed = synth.samplerate_f;
+diff --git a/src/Synth/Envelope.cpp b/src/Synth/Envelope.cpp
+index 74b678e4..bdc35a83 100644
+--- a/src/Synth/Envelope.cpp
++++ b/src/Synth/Envelope.cpp
+@@ -54,7 +54,7 @@ Envelope::Envelope(EnvelopeParams &pars, float basefreq, float bufferdt,
+             case 3:
+                 envval[i] =
+                     (powf(2, 6.0f
+-                          * fabs(pars.Penvval[i]
++                          * fabsf(pars.Penvval[i]
+                                  - 64.0f) / 64.0f) - 1.0f) * 100.0f;
+                 if(pars.Penvval[i] < 64)
+                     envval[i] = -envval[i];
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index 768f6fb4..916fbc4f 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -39,7 +39,7 @@ LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManage
+     const float lfostretch = powf(basefreq / 440.0f, (stretch - 64.0f) / 63.0f);
+ 
+     const float lfofreq = lfopars.freq * lfostretch;
+-    phaseInc = fabs(lfofreq) * t.dt();
++    phaseInc = fabsf(lfofreq) * t.dt();
+ 
+     if(!lfopars.Pcontinous) {
+         if(lfopars.Pstartphase == 0)
+@@ -129,7 +129,7 @@ float LFO::lfoout()
+ 
+         float lfofreq = lfopars_.freq * lfostretch;
+ 
+-        phaseInc = fabs(lfofreq) * dt_;
++        phaseInc = fabsf(lfofreq) * dt_;
+ 
+         switch(lfopars_.fel) {
+             case consumer_location_type_t::amp:
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 4f76c46f..44c00725 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -602,8 +602,8 @@ inline void normalize(float *smps, size_t N)
+     //Find max
+     float max = 0.0f;
+     for(size_t i = 0; i < N; ++i)
+-        if(max < fabs(smps[i]))
+-            max = fabs(smps[i]);
++        if(max < fabsf(smps[i]))
++            max = fabsf(smps[i]);
+     if(max < 0.00001f)
+         max = 1.0f;
+ 
+@@ -829,7 +829,7 @@ void OscilGen::prepare(fft_t *freqs)
+         hphase[i] = (Phphase[i] - 64.0f) / 64.0f * PI / (i + 1);
+ 
+     for(int i = 0; i < MAX_AD_HARMONICS; ++i) {
+-        const float hmagnew = 1.0f - fabs(Phmag[i] / 64.0f - 1.0f);
++        const float hmagnew = 1.0f - fabsf(Phmag[i] / 64.0f - 1.0f);
+         switch(Phmagtype) {
+             case 1:
+                 hmag[i] = expf(hmagnew * logf(0.01f));
+@@ -1058,7 +1058,7 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+ 
+     clearAll(outoscilFFTfreqs, synth.oscilsize);
+ 
+-    int nyquist = (int)(0.5f * synth.samplerate_f / fabs(freqHz)) + 2;
++    int nyquist = (int)(0.5f * synth.samplerate_f / fabsf(freqHz)) + 2;
+     if(ADvsPAD)
+         nyquist = (int)(synth.oscilsize / 2);
+     if(nyquist > synth.oscilsize / 2)
+@@ -1110,7 +1110,7 @@ short int OscilGen::get(float *smps, float freqHz, int resonance)
+                 power = powf(15.0f, power) * 2.0f;
+                 float rndfreq = 2 * PI * RND;
+                 for(int i = 1; i < nyquist - 1; ++i)
+-                    outoscilFFTfreqs[i] *= powf(fabs(sinf(i * rndfreq)), power)
++                    outoscilFFTfreqs[i] *= powf(fabsf(sinf(i * rndfreq)), power)
+                                            * normalize;
+                 break;
+         }
+@@ -1329,7 +1329,7 @@ void OscilGen::add2XML(XMLwrapper& xml)
+         for(int i = 1; i < synth.oscilsize / 2; ++i) {
+             float xc = basefuncFFTfreqs[i].real();
+             float xs = basefuncFFTfreqs[i].imag();
+-            if((fabs(xs) > 1e-6f) || (fabs(xc) > 1e-6f)) {
++            if((fabsf(xs) > 1e-6f) || (fabsf(xc) > 1e-6f)) {
+                 xml.beginbranch("BF_HARMONIC", i);
+                 xml.addparreal("cos", xc);
+                 xml.addparreal("sin", xs);
+@@ -1544,7 +1544,7 @@ FUNC(stretchsine)
+     if(a > 0.0f)
+         a *= 2;
+     a = powf(3.0f, a);
+-    float b = powf(fabs(x), a);
++    float b = powf(fabsf(x), a);
+     if(x < 0)
+         b = -b;
+     return -sinf(b * PI);
+@@ -1565,7 +1565,7 @@ FUNC(absstretchsine)
+     x = fmod(x + 0.5f, 1) * 2.0f - 1.0f;
+     a = (a - 0.5f) * 9;
+     a = powf(3.0f, a);
+-    float b = powf(fabs(x), a);
++    float b = powf(fabsf(x), a);
+     if(x < 0)
+         b = -b;
+     return -powf(sinf(b * PI), 2);
+@@ -1723,7 +1723,7 @@ FILTER(hp2)
+ 
+ FILTER(bp2)
+ {
+-    return (fabs(powf(2,
++    return (fabsf(powf(2,
+                       (1.0f
+                        - par)
+                       * 7)
+@@ -1732,7 +1732,7 @@ FILTER(bp2)
+ 
+ FILTER(bs2)
+ {
+-    return (fabs(powf(2,
++    return (fabsf(powf(2,
+                       (1.0f
+                        - par)
+                       * 7)
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 08af217b..81fd3763 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -85,12 +85,12 @@ void PADnote::setup(float freq,
+ 
+     //find out the closest note
+     float logfreq = logf(basefreq * powf(2.0f, NoteGlobalPar.Detune / 1200.0f));
+-    float mindist = fabs(logfreq - logf(pars.sample[0].basefreq + 0.0001f));
++    float mindist = fabsf(logfreq - logf(pars.sample[0].basefreq + 0.0001f));
+     nsample = 0;
+     for(int i = 1; i < PAD_MAX_SAMPLES; ++i) {
+         if(pars.sample[i].smp == NULL)
+             break;
+-        float dist = fabs(logfreq - logf(pars.sample[i].basefreq + 0.0001f));
++        float dist = fabsf(logfreq - logf(pars.sample[i].basefreq + 0.0001f));
+ 
+         if(dist < mindist) {
+             nsample = i;
+diff --git a/src/Tests/MiddlewareTest.h b/src/Tests/MiddlewareTest.h
+index 8f24abae..a696900f 100644
+--- a/src/Tests/MiddlewareTest.h
++++ b/src/Tests/MiddlewareTest.h
+@@ -92,7 +92,7 @@ class PluginTest:public CxxTest::TestSuite
+ 
+             float sum = 0.0f;
+             for(int i = 0; i < synth->buffersize; ++i)
+-                sum += fabs(outL[i]);
++                sum += fabsf(outL[i]);
+ 
+             TS_ASSERT_LESS_THAN(0.1f, sum);
+         }
+diff --git a/src/Tests/PluginTest.h b/src/Tests/PluginTest.h
+index dc6c8731..b0f473b7 100644
+--- a/src/Tests/PluginTest.h
++++ b/src/Tests/PluginTest.h
+@@ -209,7 +209,7 @@ class PluginTest:public CxxTest::TestSuite
+ 
+             float sum = 0.0f;
+             for(int i = 0; i < synth->buffersize; ++i)
+-                sum += fabs(outL[i]);
++                sum += fabsf(outL[i]);
+ 
+             TS_ASSERT_LESS_THAN(0.1f, sum);
+         }
+diff --git a/src/UI/Fl_OscilSpectrum.h b/src/UI/Fl_OscilSpectrum.h
+index 44ee02cb..872d8c40 100644
+--- a/src/UI/Fl_OscilSpectrum.h
++++ b/src/UI/Fl_OscilSpectrum.h
+@@ -63,7 +63,7 @@ class Fl_OscilSpectrum : public Fl_Box, public Fl_Osc_Widget
+             //normalize
+             float max=0;
+             for (unsigned i=0; i<nsamples; i++){
+-                float x=fabs(spc[i]);
++                float x=fabsf(spc[i]);
+                 if (max<x) max=x;
+             }
+             if (max<0.000001) max=1.0;
+diff --git a/src/UI/Fl_Oscilloscope.h b/src/UI/Fl_Oscilloscope.h
+index ee571128..8f85d2a4 100644
+--- a/src/UI/Fl_Oscilloscope.h
++++ b/src/UI/Fl_Oscilloscope.h
+@@ -77,8 +77,8 @@ class Fl_Oscilloscope : public Fl_Box, public Fl_Osc_Widget
+             //normalize
+             float max=0;
+             for (int i=0;i<oscilsize;i++)
+-                if(max<fabs(smps[i]))
+-                    max=fabs(smps[i]);
++                if(max<fabsf(smps[i]))
++                    max=fabsf(smps[i]);
+             if (max<0.00001) max=1.0;
+             max *= -1.05;
+ 
+diff --git a/src/UI/Fl_PADnoteOvertonePosition.h b/src/UI/Fl_PADnoteOvertonePosition.h
+index 1ef50ff3..cf2a94ee 100644
+--- a/src/UI/Fl_PADnoteOvertonePosition.h
++++ b/src/UI/Fl_PADnoteOvertonePosition.h
+@@ -119,7 +119,7 @@ class PADnoteOvertonePosition: public Fl_Box, public Fl_Osc_Widget
+             //normalize
+             float max=0;
+             for (unsigned i=0; i<nsamples; i++){
+-                const float x=fabs(data[i]);
++                const float x=fabsf(data[i]);
+                 if (max<x) max=x;
+             }
+             if (max<0.000001) max=1.0;
+diff --git a/src/globals.h b/src/globals.h
+index 1d4eb362..79361704 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -201,8 +201,8 @@ typedef std::complex<fftw_real> fft_t;
+ /*
+  * How the amplitude threshold is computed
+  */
+-#define ABOVE_AMPLITUDE_THRESHOLD(a, b) ((2.0f * fabs((b) - (a)) \
+-                                          / (fabs((b) + (a) \
++#define ABOVE_AMPLITUDE_THRESHOLD(a, b) ((2.0f * fabsf((b) - (a)) \
++                                          / (fabsf((b) + (a) \
+                                                   + 0.0000000001f))) > \
+                                          AMPLITUDE_INTERPOLATION_THRESHOLD)
+ 
+-- 
+2.47.0
+

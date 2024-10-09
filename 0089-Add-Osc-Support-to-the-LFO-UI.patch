@@ -1,0 +1,1212 @@
+From 009fc5afd6e71370c7eb5d0ef2725cafc51eb481 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 14 Jul 2013 16:18:35 -0400
+Subject: [PATCH 0089/1936] Add Osc Support to the LFO UI
+
+- The frequency input is acting up, there might be a regression there
+- Some random debug info was altered (some sort of proper logging system should
+  be put into place)
+- With envelopes and a few minor controls changed large swaths of pointers
+  can be killed off
+---
+ rtosc                            |   2 +-
+ src/Misc/MiddleWare.cpp          |  42 +++++++++--
+ src/Params/ADnoteParameters.cpp  |   8 +-
+ src/Params/LFOParams.cpp         |  20 +++++
+ src/Params/LFOParams.h           |   3 +
+ src/Params/PADnoteParameters.cpp |   3 +
+ src/UI/ADnoteUI.fl               |  61 ++++++++-------
+ src/UI/CMakeLists.txt            |   4 +
+ src/UI/Fl_Osc_Button.H           |  25 +++++++
+ src/UI/Fl_Osc_Button.cpp         |  57 ++++++++++++++
+ src/UI/Fl_Osc_Check.H            |  27 +++++++
+ src/UI/Fl_Osc_Check.cpp          |  53 +++++++++++++
+ src/UI/Fl_Osc_DialF.H            |  25 +++++++
+ src/UI/Fl_Osc_DialF.cpp          |  88 ++++++++++++++++++++++
+ src/UI/Fl_Osc_Slider.H           |  28 +++++++
+ src/UI/Fl_Osc_Slider.cpp         |  69 +++++++++++++++++
+ src/UI/LFOUI.fl                  | 124 +++++++++++++++++--------------
+ src/UI/PADnoteUI.fl              |  24 +++---
+ 18 files changed, 560 insertions(+), 103 deletions(-)
+ create mode 100644 src/UI/Fl_Osc_Button.H
+ create mode 100644 src/UI/Fl_Osc_Button.cpp
+ create mode 100644 src/UI/Fl_Osc_Check.H
+ create mode 100644 src/UI/Fl_Osc_Check.cpp
+ create mode 100644 src/UI/Fl_Osc_DialF.H
+ create mode 100644 src/UI/Fl_Osc_DialF.cpp
+ create mode 100644 src/UI/Fl_Osc_Slider.H
+ create mode 100644 src/UI/Fl_Osc_Slider.cpp
+
+diff --git a/rtosc b/rtosc
+index fd4de4b3..fae283ad 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit fd4de4b3480e4ad03e1cd5cd429c1bd3e2bed827
++Subproject commit fae283ad5f438535b942ee0fb5e117d05948804b
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 42670384..be5f1444 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -139,7 +139,7 @@ void osc_check(cb_t cb, void *ui)
+     lo_server_recv_noblock(server, 0);
+     while(bToU->hasNext()) {
+         const char *rtmsg = bToU->read();
+-        printf("return: got a '%s'\n", rtmsg);
++        //printf("return: got a '%s'\n", rtmsg);
+         if(!strcmp(rtmsg, "/echo")
+                 && !strcmp(rtosc_argument_string(rtmsg),"ss")
+                 && !strcmp(rtosc_argument(rtmsg,0).s, "OSC_URL"))
+@@ -296,10 +296,14 @@ struct MiddleWareImpl
+ 
+     ~MiddleWareImpl(void)
+     {
++        warnMemoryLeaks();
++
+         delete master;
+         delete osc;
+     }
+ 
++    void warnMemoryLeaks(void);
++
+     void loadPart(const char *msg, Master *master)
+     {
+         fprintf(stderr, "loading a part!!\n");
+@@ -393,9 +397,9 @@ struct MiddleWareImpl
+     void handleMsg(const char *msg)
+     {
+         assert(!strstr(msg,"free"));
+-        fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 6 + 30, 0 + 40);
+-        fprintf(stdout, "middleware: '%s'\n", msg);
+-        fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++        //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 6 + 30, 0 + 40);
++        //fprintf(stdout, "middleware: '%s'\n", msg);
++        //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+         const char *last_path = rindex(msg, '/');
+         if(!last_path)
+             return;
+@@ -516,9 +520,18 @@ class UI_Interface:public Fl_Osc_Interface
+             fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+             impl->write(s.c_str(), "c", c);
+         }
++        
++        void writeValue(string s, float f) override
++        {
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 4 + 30, 0 + 40);
++            fprintf(stderr, "writevalue<float>(%s,%f)\n", s.c_str(),f);
++            fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++            impl->write(s.c_str(), "f", f);
++        }
+ 
+         void createLink(string s, class Fl_Osc_Widget*w) override
+         {
++            assert(s.length() != 0);
+             Fl_Osc_Interface::createLink(s,w);
+             map.insert(std::pair<string,Fl_Osc_Widget*>(s,w));
+         }
+@@ -537,7 +550,7 @@ class UI_Interface:public Fl_Osc_Interface
+         void tryLink(const char *msg) override
+         {
+ 
+-            printf("trying the link for a '%s'\n", msg);
++            //printf("trying the link for a '%s'\n", msg);
+             const char *handle = rindex(msg,'/');
+             if(handle)
+                 ++handle;
+@@ -557,15 +570,34 @@ class UI_Interface:public Fl_Osc_Interface
+                         //fprintf(stderr, "tossing char to %p\n", pair.second);
+                         pair.second->OSC_value((char)rtosc_argument(msg,0).i,
+                                 handle);
++                    } else if(!strcmp(arg_str, "f")) {
++                        //printf("'%s' => '%d'\n", msg, rtosc_argument(msg,0).i);
++                        //fprintf(stderr, "tossing char to %p\n", pair.second);
++                        pair.second->OSC_value((float)rtosc_argument(msg,0).f,
++                                handle);
+                     }
+                 }
+             }
+         };
+ 
++        void dumpLookupTable(void)
++        {
++            for(auto i = map.begin(); i != map.end(); ++i) {
++                printf("Known control  '%s' (%p)...\n", i->first.c_str(), i->second);
++            }
++        }
++
++
+     private:
+         std::multimap<string,Fl_Osc_Widget*> map;
+         MiddleWareImpl *impl;
+ };
++    
++void MiddleWareImpl::warnMemoryLeaks(void)
++{
++    UI_Interface *o = (UI_Interface*)osc;
++    o->dumpLookupTable();
++}
+ 
+ Fl_Osc_Interface *genOscInterface(struct MiddleWareImpl *impl)
+ {
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 69feea4a..b118c955 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -42,10 +42,16 @@ using rtosc::RtData;
+ static Ports voicePorts = {
+     RECURP(ADnoteVoiceParam, OscilGen, oscil,     OscilSmp, "Primary Oscillator"),
+     RECURP(ADnoteVoiceParam, OscilGen, mod-oscil, FMSmp,    "Modulating Oscillator"),
++    RECURP(ADnoteVoiceParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
++    RECURP(ADnoteVoiceParam, LFOParams, AmpLfo, AmpLfo, "Amplitude LFO"),
++    RECURP(ADnoteVoiceParam, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
+ };
+ 
+ static Ports globalPorts = {
+-    PARAMC(ADnoteGlobalParam, PPanning, panning, "Panning (0 random, 1 left, 127 right)")
++    PARAMC(ADnoteGlobalParam, PPanning, panning, "Panning (0 random, 1 left, 127 right)"),
++    RECURP(ADnoteGlobalParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
++    RECURP(ADnoteGlobalParam, LFOParams, AmpLfo, AmpLfo, "Amplitude LFO"),
++    RECURP(ADnoteGlobalParam, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
+ };
+ 
+ static Ports adPorts = {//XXX 16 should not be hard coded
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 72f2269d..0d8847e5 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -25,6 +25,26 @@
+ #include "../globals.h"
+ #include "LFOParams.h"
+ 
++#include <rtosc/port-sugar.h>
++#include <rtosc/ports.h>
++using namespace rtosc;
++
++
++#define rObject LFOParams
++static rtosc::Ports _ports = {
++    rParamF(Pfreq, "frequency of LFO"),
++    rParam(Pintensity, "Intensity of LFO"),
++    rParam(Pstartphase, rSpecial(random), "Starting Phase"),
++    rOption(PLFOtype,"Shape of LFO"),
++    rParam(Prandomness, rSpecial(disable), "Amplitude Randomness"),
++    rParam(Pfreqrand, rSpecial(disable), "Frequency Randomness"),
++    rParam(Pdelay, rSpecial(disable), "Delay before LFO start"),
++    rToggle(Pcontinous, "Enable for global operation"),
++    rParam(Pstretch, rCentered, "Note frequency stretch"),
++};
++
++rtosc::Ports &LFOParams::ports = _ports;
++
+ int LFOParams::time;
+ 
+ LFOParams::LFOParams(char Pfreq_,
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index 6ca30719..51f267b3 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -57,6 +57,9 @@ class LFOParams:public Presets
+ 
+         int fel; //what kind is the LFO (0 - frequency, 1 - amplitude, 2 - filter)
+         static int time; //is used by Pcontinous parameter
++
++        static rtosc::Ports &ports;
++
+     private:
+         /* Default parameters */
+         unsigned char Dfreq;
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index e68d1ed3..063a3e22 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -43,6 +43,9 @@ void simpleset(const char *m, rtosc::RtData &d)
+ static rtosc::Ports localPorts =
+ {
+     RECURP(PADnoteParameters, OscilGen, oscil, oscilgen, "Oscillator"),
++    RECURP(PADnoteParameters, LFOParams, FreqLfo,   FreqLfo, "Frequency LFO"),
++    RECURP(PADnoteParameters, LFOParams, AmpLfo,    AmpLfo,   "Amplitude LFO"),
++    RECURP(PADnoteParameters, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
+     PARAMC(PADnoteParameters, Pmode, mode,
+             "0 - bandwidth, 1 - discrete 2 - continious"),
+     PC(hp.base.type),
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 424add29..35b7fe48 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -1,5 +1,5 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0300 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+ decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
+@@ -20,6 +20,9 @@ decl {\#include "../Misc/Master.h"} {public local
+ decl {\#include "ResonanceUI.h"} {public local
+ } 
+ 
++decl {\#include "Fl_Osc_Slider.H"} {public local
++} 
++
+ decl {\#include <FL/Fl_Box.H>} {public local
+ } 
+ 
+@@ -64,12 +67,13 @@ class ADvoicelistitem {open : {public Fl_Group}
+   Function {make_window()} {open private
+   } {
+     Fl_Window ADnoteVoiceListItem {open
+-      private xywh {319 881 615 100} type Double box UP_FRAME
++      private xywh {334 881 615 100} type Double box UP_FRAME
+       class Fl_Group visible
+     } {
+       Fl_Group voicelistitemgroup {open
+         private xywh {50 0 570 25}
+         code0 {if (pars->VoicePar[nvoice].Enabled==0) o->deactivate();}
++        class Fl_Osc_Group
+       } {
+         Fl_Value_Slider voicevolume {
+           callback {pars->VoicePar[nvoice].PVolume=(int)o->value();}
+@@ -82,9 +86,9 @@ class ADvoicelistitem {open : {public Fl_Group}
+           code0 {o->value(pars->VoicePar[nvoice].Presonance);}
+         }
+         Fl_Value_Slider voicelfofreq {
+-          callback {pars->VoicePar[nvoice].FreqLfo->Pintensity=(int)o->value();}
+           tooltip {Frequency LFO amount} xywh {500 5 115 20} type {Horz Knob} box NO_BOX labelsize 8 align 5 maximum 127 step 1
+-          code0 {o->value(pars->VoicePar[nvoice].FreqLfo->Pintensity);}
++          code0 {o->init(osc_i,  loc+"FreqLfo/Pintensity");}
++          class Fl_Osc_Slider
+         }
+         Fl_Dial voicepanning {
+           callback {pars->VoicePar[nvoice].PPanning=(int) o->value();}
+@@ -95,7 +99,7 @@ class ADvoicelistitem {open : {public Fl_Group}
+         Fl_Group voiceoscil {open
+           xywh {60 5 30 20} box THIN_DOWN_BOX color 32 selection_color 71 labelcolor 179
+           code0 {osc=new Fl_Oscilloscope(o->x(),o->y(),o->w(),o->h(),"");}
+-          code1 {voiceoscil->osc=osc_i;voiceoscil->pane_name=loc;osc->init(false);//osc->init(pars->VoicePar[nvoice].OscilSmp,0,pars->VoicePar[nvoice].Poscilphase,master);}
++          code1 {voiceoscil->osc=osc_i;voiceoscil->pane_name=loc+"oscil/";osc->init(false);//osc->init(pars->VoicePar[nvoice].OscilSmp,0,pars->VoicePar[nvoice].Poscilphase,master);}
+           code2 {if (pars->VoicePar[nvoice].Pextoscil != -1) {/*osc->init(pars->VoicePar[pars->VoicePar[nvoice].Pextoscil].OscilSmp,master);*/ osc->init(false);}}
+           class Fl_Osc_Group
+         } {}
+@@ -169,7 +173,7 @@ voiceresonanceenabled->value(pars->VoicePar[nvoice].Presonance);
+ voicevolume->value(pars->VoicePar[nvoice].PVolume);
+ voicedetune->value(pars->VoicePar[nvoice].PDetune-8192);
+ voicepanning->value(pars->VoicePar[nvoice].PPanning);
+-voicelfofreq->value(pars->VoicePar[nvoice].FreqLfo->Pintensity);
++//voicelfofreq->value(pars->VoicePar[nvoice].FreqLfo->Pintensity);
+ if (pars->VoicePar[nvoice].Pextoscil != -1) {
+   //osc->init(pars->VoicePar[pars->VoicePar[nvoice].Pextoscil].OscilSmp,0,pars->VoicePar[nvoice].Poscilphase,master);
+   osc->init(false);
+@@ -201,13 +205,12 @@ ADnoteVoiceListItem->redraw();} {}
+   }
+ } 
+ 
+-class ADvoiceUI {open : {public Fl_Group}
++class ADvoiceUI {: {public Fl_Group}
+ } {
+-  Function {make_window()} {open
+-  } {
++  Function {make_window()} {} {
+     Fl_Window ADnoteVoiceParameters {
+       label Voice open
+-      xywh {511 391 765 590} type Double box NO_BOX
++      xywh {512 391 765 590} type Double box NO_BOX
+       class Fl_Group visible
+     } {
+       Fl_Group voiceparametersgroup {open
+@@ -350,7 +353,7 @@ int nv=nvoice;
+ if (pars->VoicePar[nvoice].PextFMoscil>=0)
+     nv=pars->VoicePar[nvoice].PextFMoscil;
+ 
+-oscedit=new OscilEditor(true, loc+"mod-oscil/", osc_i);} selected
++oscedit=new OscilEditor(true, loc+"mod-oscil/", osc_i);}
+                 xywh {700 380 55 15} box THIN_UP_BOX labelfont 1 labelsize 11
+                 code0 {if (pars->VoicePar[nvoice].PextFMoscil>=0) o->labelcolor(FL_BLUE);}
+               }
+@@ -434,7 +437,7 @@ o->redraw();}
+             }
+           }
+           Fl_Group {} {
+-            label FREQUENCY
++            label FREQUENCY open
+             xywh {5 265 525 120} box UP_FRAME labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 17
+           } {
+             Fl_Group voicefreqenvgroup {
+@@ -456,7 +459,7 @@ o->redraw();}
+             Fl_Group voicefreqlfogroup {
+               label {Frequency LFO     } open
+               xywh {220 305 230 70} box FLAT_BOX color 47 align 144
+-              code0 {o->init(pars->VoicePar[nvoice].FreqLfo);}
++              code0 {o->init(osc_i, loc+"FreqLfo/");}
+               code1 {if (pars->VoicePar[nvoice].PFreqLfoEnabled==0) o->deactivate();}
+               class LFOUI
+             } {}
+@@ -683,7 +686,7 @@ o->redraw();}
+           Fl_Group voiceamplfogroup {
+             label {Amplitude LFO     } open
+             xywh {10 180 230 75} box FLAT_BOX color 47 align 144
+-            code0 {o->init(pars->VoicePar[nvoice].AmpLfo);}
++            code0 {o->init(osc_i, loc + "AmpLfo/");}
+             code1 {if (pars->VoicePar[nvoice].PAmpLfoEnabled==0) o->deactivate();}
+             class LFOUI
+           } {}
+@@ -733,7 +736,7 @@ o->redraw();}
+           Fl_Group voicefilterlfogroup {
+             label {Filter LFO     } open
+             xywh {250 190 230 70} box FLAT_BOX color 47 align 144
+-            code0 {o->init(pars->VoicePar[nvoice].FilterLfo);}
++            code0 {o->init(osc_i, loc + "FilterLfo/");}
+             code1 {if (pars->VoicePar[nvoice].PFilterLfoEnabled==0) o->deactivate();}
+             class LFOUI
+           } {}
+@@ -864,7 +867,7 @@ class ADnoteUI {open : {public PresetsUI_}
+   } {
+     Fl_Window ADnoteGlobalParameters {
+       label {ADsynth Global Parameters of the Instrument} open
+-      xywh {514 551 540 430} type Double visible
++      xywh {676 551 540 430} type Double visible
+     } {
+       Fl_Group {} {
+         label FREQUENCY open
+@@ -900,7 +903,7 @@ pars->GlobalPar.PCoarseDetune = k+
+         Fl_Group freqlfo {
+           label {Frequency LFO     } open
+           xywh {220 320 230 70} box FLAT_BOX color 47 align 144
+-          code0 {o->init(pars->GlobalPar.FreqLfo);}
++          code0 {o->init(osc, loc + "global/FreqLfo/");}
+           class LFOUI
+         } {}
+         Fl_Slider freq {
+@@ -938,7 +941,7 @@ for (int i=0;i<NUM_VOICES;i++){
+         }
+       }
+       Fl_Group {} {
+-        label AMPLITUDE
++        label AMPLITUDE open
+         xywh {5 5 240 260} box UP_FRAME labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 17
+       } {
+         Fl_Value_Slider volume {
+@@ -997,7 +1000,7 @@ for (int i=0;i<NUM_VOICES;i++){
+         Fl_Group amplfo {
+           label {Amplitude LFO          } open
+           xywh {10 150 230 70} box FLAT_BOX color 47 align 144
+-          code0 {o->init(pars->GlobalPar.AmpLfo);}
++          code0 {o->init(osc, loc + "global/AmpLfo/");}
+           class LFOUI
+         } {}
+         Fl_Check_Button rndgrp {
+@@ -1020,7 +1023,7 @@ for (int i=0;i<NUM_VOICES;i++){
+         Fl_Group filterlfo {
+           label {Filter LFO} open
+           xywh {255 195 230 70} box FLAT_BOX color 47 align 144
+-          code0 {o->init(pars->GlobalPar.FilterLfo);}
++          code0 {o->init(osc, loc + "global/FilterLfo/");}
+           class LFOUI
+         } {}
+         Fl_Group filterui {
+@@ -1073,11 +1076,11 @@ resui->resonancewindow->show();}
+     }
+     Fl_Window ADnoteVoice {
+       label {ADsynth Voice Parameters} open
+-      xywh {315 361 765 620} type Double visible
++      xywh {36 321 765 620} type Double visible
+     } {
+       Fl_Group advoice {open
+         xywh {0 0 765 585}
+-        code0 {o->init(pars,nvoice,master,loc+"voice"+to_s(nvoice)+"/", osc);}
++        code0 {o->init(pars,nvoice,master,loc+"voice"+to_s(nvoice)+"/", osc);/*Here*/}
+         code1 {o->show();}
+         class ADvoiceUI
+       } {}
+@@ -1149,7 +1152,7 @@ ADnoteVoice->redraw();}
+       } {
+         Fl_Pack {} {open
+           xywh {0 20 620 210}
+-          code0 {for (int i=0;i<NUM_VOICES;i++){voicelistitem[i]=new ADvoicelistitem(0,0,620,25,"");voicelistitem[i]->init(pars,i,master,loc+"voice"+to_s(i)+"/oscil/",osc);}}
++          code0 {for (int i=0;i<NUM_VOICES;i++){voicelistitem[i]=new ADvoicelistitem(0,0,620,25,"");voicelistitem[i]->init(pars,i,master,loc+"voice"+to_s(i)+"/",osc);}}
+         } {}
+       }
+     }
+@@ -1167,14 +1170,16 @@ loc=loc_;
+ osc=osc_;
+ make_window();} {}
+   }
+-  Function {~ADnoteUI()} {} {
++  Function {~ADnoteUI()} {open
++  } {
+     code {ADnoteVoiceList->hide();
+ ADnoteGlobalParameters->hide();
+ ADnoteVoice->hide();
+-delete(ADnoteVoiceList);
+-delete(ADnoteGlobalParameters);
+-delete(ADnoteVoice);
+-delete(resui);} {}
++delete ADnoteVoiceList;
++delete ADnoteGlobalParameters;
++delete ADnoteVoice;
++delete resui;} {selected
++    }
+   }
+   Function {refresh()} {open
+   } {
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index a34a5872..910bde9d 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -35,6 +35,10 @@ add_library(zynaddsubfx_gui STATIC
+         NioUI.cpp
+         WidgetPDial.cpp
+         Fl_Osc_Dial.cpp
++        Fl_Osc_DialF.cpp
++        Fl_Osc_Slider.cpp
++        Fl_Osc_Button.cpp
++        Fl_Osc_Check.cpp
+         Fl_Osc_Choice.cpp
+         Connection.cpp
+ 	)
+diff --git a/src/UI/Fl_Osc_Button.H b/src/UI/Fl_Osc_Button.H
+new file mode 100644
+index 00000000..e0df0e49
+--- /dev/null
++++ b/src/UI/Fl_Osc_Button.H
+@@ -0,0 +1,25 @@
++#pragma once
++#include <FL/Fl_Button.H>
++#include "Fl_Osc_Widget.H"
++#include <string>
++
++using std::string; //yes this is bad form FIXME
++
++class Fl_Osc_Button:public Fl_Button, Fl_Osc_Widget
++{
++
++    public:
++        Fl_Osc_Button(int X, int Y, int W, int H, const char *label);
++
++        virtual ~Fl_Osc_Button(void);
++        virtual void OSC_value(bool);
++
++        void init(Fl_Osc_Interface *, std::string);
++        void init(std::string);
++
++        void cb(void);
++        static void _cb(Fl_Widget *w, void *);
++    private:
++        class Fl_Osc_Interface *osc;
++        std::string full_path;
++};
+diff --git a/src/UI/Fl_Osc_Button.cpp b/src/UI/Fl_Osc_Button.cpp
+new file mode 100644
+index 00000000..5cfd4d42
+--- /dev/null
++++ b/src/UI/Fl_Osc_Button.cpp
+@@ -0,0 +1,57 @@
++#include "Fl_Osc_Button.H"
++#include "Fl_Osc_Interface.h"
++#include "Fl_Osc_Pane.H"
++#include <cstdlib>
++#include <cstring>
++#include <cmath>
++#include <cassert>
++#include <sstream>
++
++Fl_Osc_Button::Fl_Osc_Button(int X, int Y, int W, int H, const char *label)
++    :Fl_Button(X,Y,W,H,label), Fl_Osc_Widget()
++{
++    callback(Fl_Osc_Button::_cb);
++
++    Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(parent());
++    assert(pane);
++    osc = pane->osc;
++    assert(osc);
++    osc->createLink(full_path, this);
++    osc->requestValue(full_path);
++}
++
++Fl_Osc_Button::~Fl_Osc_Button(void)
++{
++    osc->removeLink(full_path, this);
++}
++
++void Fl_Osc_Button::OSC_value(bool v)
++{
++    Fl_Button::value(v);
++}
++
++void Fl_Osc_Button::init(std::string path)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    assert(pane);
++    osc = pane->osc;
++    init(osc,path);
++}
++
++void Fl_Osc_Button::init(Fl_Osc_Interface *osc, std::string path)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    full_path = pane->pane_name + path;
++    osc->createLink(full_path, this);
++    osc->requestValue(full_path);
++}
++
++void Fl_Osc_Button::cb(void)
++{
++    osc->writeValue(full_path, (bool) value());
++}
++
++void Fl_Osc_Button::_cb(Fl_Widget *w, void *)
++{
++    static_cast<Fl_Osc_Button*>(w)->cb();
++}
+diff --git a/src/UI/Fl_Osc_Check.H b/src/UI/Fl_Osc_Check.H
+new file mode 100644
+index 00000000..bfdddaa3
+--- /dev/null
++++ b/src/UI/Fl_Osc_Check.H
+@@ -0,0 +1,27 @@
++#pragma once
++#include <FL/Fl_Check_Button.H>
++#include "Fl_Osc_Widget.H"
++#include <string>
++
++using std::string; //yes this is bad form FIXME
++
++class Fl_Osc_Check:public Fl_Check_Button, public Fl_Osc_Widget
++{
++
++    public:
++        Fl_Osc_Check(int X, int Y, int W, int H, const char *label = NULL);
++        //string name,
++        //        const char *metadata);
++
++        virtual ~Fl_Osc_Check(void);
++        virtual void OSC_value(bool);
++
++        void init(Fl_Osc_Interface *osc, std::string loc);
++        void init(std::string loc);
++        void update(void);
++        void cb(void);
++        static void _cb(Fl_Widget *w, void *);
++    private:
++        class Fl_Osc_Interface *osc;
++        std::string full_path;
++};
+diff --git a/src/UI/Fl_Osc_Check.cpp b/src/UI/Fl_Osc_Check.cpp
+new file mode 100644
+index 00000000..b90c5c40
+--- /dev/null
++++ b/src/UI/Fl_Osc_Check.cpp
+@@ -0,0 +1,53 @@
++#include "Fl_Osc_Check.H"
++#include "Fl_Osc_Interface.h"
++#include "Fl_Osc_Pane.H"
++#include <cstdlib>
++#include <cstring>
++#include <cmath>
++#include <cassert>
++#include <sstream>
++
++Fl_Osc_Check::Fl_Osc_Check(int X, int Y, int W, int H, const char *label)
++    :Fl_Check_Button(X,Y,W,H,label), Fl_Osc_Widget()
++{
++    callback(Fl_Osc_Check::_cb);
++}
++
++Fl_Osc_Check::~Fl_Osc_Check(void)
++{
++    osc->removeLink(full_path, this);
++}
++
++void Fl_Osc_Check::OSC_value(bool v)
++{
++    Fl_Check_Button::value(v);
++}
++
++void Fl_Osc_Check::init(std::string path)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    assert(pane);
++    osc = pane->osc;
++    init(osc,path);
++}
++
++void Fl_Osc_Check::init(Fl_Osc_Interface *osc, std::string path)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    full_path = pane->pane_name + path;
++    osc->createLink(full_path, this);
++    osc->requestValue(full_path);
++}
++
++void Fl_Osc_Check::cb(void)
++{
++    osc->writeValue(full_path, (bool) value());
++}
++
++void Fl_Osc_Check::update(void)
++{}
++
++void Fl_Osc_Check::_cb(Fl_Widget *w, void *)
++{
++    static_cast<Fl_Osc_Check*>(w)->cb();
++}
+diff --git a/src/UI/Fl_Osc_DialF.H b/src/UI/Fl_Osc_DialF.H
+new file mode 100644
+index 00000000..ed9a050d
+--- /dev/null
++++ b/src/UI/Fl_Osc_DialF.H
+@@ -0,0 +1,25 @@
++#pragma once
++#include <FL/Fl_Dial.H>
++#include "WidgetPDial.h"
++#include "Fl_Osc_Widget.H"
++#include <string>
++
++class Fl_Osc_DialF:public WidgetPDial, Fl_Osc_Widget
++{
++
++    public:
++        Fl_Osc_DialF(int X, int Y, int W, int H, const char *label = NULL);
++        virtual ~Fl_Osc_DialF(void);
++        void init(const char *path);
++        void OSC_value(float);
++
++        //Refetch parameter information
++        void update(void);
++        void callback(Fl_Callback *cb, void *p = NULL);
++
++        void cb(void);
++    private:
++        std::string full_path;
++        class Fl_Osc_Interface *osc;
++        std::pair<Fl_Callback*, void*> cb_data;
++};
+diff --git a/src/UI/Fl_Osc_DialF.cpp b/src/UI/Fl_Osc_DialF.cpp
+new file mode 100644
+index 00000000..f5f5725e
+--- /dev/null
++++ b/src/UI/Fl_Osc_DialF.cpp
+@@ -0,0 +1,88 @@
++#include "Fl_Osc_DialF.H"
++#include "Fl_Osc_Interface.h"
++#include "Fl_Osc_Pane.H"
++#include <cstdlib>
++#include <cstring>
++#include <cmath>
++#include <cassert>
++#include <sstream>
++
++template<typename A, typename B>
++B string_cast(const A &a)
++{
++    std::stringstream s;
++    s.precision(3);
++    B b;
++    s << " " << a << " ";
++    s >> b;
++    return b;
++}
++
++static void callback_fn(Fl_Widget *w, void *v)
++{
++    ((Fl_Osc_DialF*)w)->cb();
++}
++
++static Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w)
++{
++    if(!w)
++        return NULL;
++
++    Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(w->parent());
++    if(pane)
++        return pane;
++    return fetch_osc_pane(w->parent());
++}
++
++Fl_Osc_DialF::Fl_Osc_DialF(int X, int Y, int W, int H, const char *label)
++    :WidgetPDial(X,Y,W,H, label), Fl_Osc_Widget()
++{
++    //bounds(0.0, 127.0f);
++    WidgetPDial::callback(callback_fn);
++}
++
++
++void Fl_Osc_DialF::init(const char *path)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    assert(pane);
++    osc = pane->osc;
++    full_path = pane->pane_name + path;
++    osc->createLink(full_path, this);
++    osc->requestValue(full_path);
++};
++
++Fl_Osc_DialF::~Fl_Osc_DialF(void)
++{
++    osc->removeLink(full_path, this);
++}
++
++void Fl_Osc_DialF::callback(Fl_Callback *cb, void *p)
++{
++    cb_data.first = cb;
++    cb_data.second = p;
++}
++
++void Fl_Osc_DialF::OSC_value(float v)
++{
++    printf("Got a value of floating %f\n", v);
++    value(v);
++}
++        
++void Fl_Osc_DialF::update(void)
++{
++    osc->requestValue(full_path);
++}
++
++void Fl_Osc_DialF::cb(void)
++{
++    assert(osc);
++
++    osc->writeValue(full_path, (float)value());
++    
++    if(cb_data.first)
++        cb_data.first(this, cb_data.second);
++//    label_str = string_cast<float,string>(val);
++//    label("                ");
++//    label(label_str.c_str());
++}
+diff --git a/src/UI/Fl_Osc_Slider.H b/src/UI/Fl_Osc_Slider.H
+new file mode 100644
+index 00000000..7591355f
+--- /dev/null
++++ b/src/UI/Fl_Osc_Slider.H
+@@ -0,0 +1,28 @@
++#pragma once
++#include <FL/Fl_Slider.H>
++#include "Fl_Osc_Widget.H"
++#include <string>
++
++using std::string; //yes this is bad form FIXME
++
++class Fl_Osc_Slider:public Fl_Slider, Fl_Osc_Widget
++{
++
++    public:
++        Fl_Osc_Slider(int X, int Y, int W, int H, const char *label = NULL);
++       // string name,
++        //        const char *metadata);
++
++        virtual ~Fl_Osc_Slider(void);
++        void OSC_value(float);
++        void init(Fl_Osc_Interface *, std::string);
++        void init(std::string);
++
++        void cb(void);
++        static void _cb(Fl_Widget *w, void *);
++    private:
++        string label_str;
++        std::string full_path;
++        double real_value;
++        class Fl_Osc_Interface *osc;
++};
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+new file mode 100644
+index 00000000..3af9c68b
+--- /dev/null
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -0,0 +1,69 @@
++#include "Fl_Osc_Slider.H"
++#include "Fl_Osc_Interface.h"
++#include "Fl_Osc_Pane.H"
++#include <cstdlib>
++#include <cstring>
++#include <cmath>
++#include <cassert>
++#include <sstream>
++
++template<typename A, typename B>
++B string_cast(const A &a)
++{
++    std::stringstream s;
++    s.precision(3);
++    B b;
++    s << " " << a << " ";
++    s >> b;
++    return b;
++}
++
++Fl_Osc_Slider::Fl_Osc_Slider(int X, int Y, int W, int H, const char *label)
++    :Fl_Slider(X,Y,W,H,label), Fl_Osc_Widget(), osc(NULL)
++{
++    //bounds(0.0f,1.0f);
++    callback(Fl_Osc_Slider::_cb);
++}
++
++void Fl_Osc_Slider::init(std::string path)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    assert(pane);
++    osc = pane->osc;
++    init(osc,path);
++}
++
++void Fl_Osc_Slider::init(Fl_Osc_Interface *osc, std::string path)
++{
++    Fl_Osc_Pane *pane = fetch_osc_pane(this);
++    assert(pane);
++    full_path = pane->pane_name + path;
++    this->osc = osc;
++    osc->createLink(full_path, this);
++    osc->requestValue(full_path);
++};
++
++Fl_Osc_Slider::~Fl_Osc_Slider(void)
++{
++    if(osc)
++        osc->removeLink(full_path, this);
++    else
++        fprintf(stderr, "Warning: Missing OSC link in " __FILE__ "\n");
++}
++
++void Fl_Osc_Slider::OSC_value(float v)
++{
++    Fl_Slider::value(v);
++}
++
++void Fl_Osc_Slider::cb(void)
++{
++    const float val = Fl_Slider::value();
++    osc->writeValue(full_path, val);
++    //OSC_value(val);
++}
++
++void Fl_Osc_Slider::_cb(Fl_Widget *w, void *)
++{
++    static_cast<Fl_Osc_Slider*>(w)->cb();
++}
+diff --git a/src/UI/LFOUI.fl b/src/UI/LFOUI.fl
+index 889a3861..f764fc9e 100644
+--- a/src/UI/LFOUI.fl
++++ b/src/UI/LFOUI.fl
+@@ -1,99 +1,104 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0110 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {} 
++decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
++} 
+ 
+-decl {//License: GNU GPL version 2 or later} {} 
++decl {//License: GNU GPL version 2 or later} {private local
++} 
+ 
+-decl {\#include "WidgetPDial.h"} {public
++decl {\#include "Fl_Osc_Dial.H"} {public local
+ } 
+ 
+-decl {\#include <stdio.h>} {public
++decl {\#include "Fl_Osc_DialF.H"} {public local
+ } 
+ 
+-decl {\#include <stdlib.h>} {public
++decl {\#include "Fl_Osc_Choice.H"} {public local
+ } 
+ 
+-decl {\#include "../globals.h"} {public
++decl {\#include "Fl_Osc_Check.H"} {public local
+ } 
+ 
+-decl {\#include <FL/Fl_Group.H>} {public
++decl {\#include "../globals.h"} {private global
+ } 
+ 
+-decl {\#include "../Params/LFOParams.h"} {public
++decl {\#include <FL/Fl_Group.H>} {private global
+ } 
+ 
+-decl {\#include <FL/Fl_Box.H>} {public
++decl {\#include <FL/Fl_Box.H>} {private global
+ } 
+ 
+-decl {\#include <FL/fl_draw.H>} {public
++decl {\#include <FL/fl_draw.H>} {private global
+ } 
+ 
+-decl {\#include <FL/fl_ask.H>} {public
++decl {\#include <string>} {public local
+ } 
+ 
+-decl {\#include "PresetsUI.h"} {public
++decl {\#include "PresetsUI.h"} {public local
+ } 
+ 
+-decl {\#include "common.H"} {public
++decl {\#include "common.H"} {public local
+ } 
+ 
+ class LFOUI {open : {public Fl_Group, PresetsUI_}
+ } {
+-  Function {LFOUI(int x,int y, int w, int h, const char *label=0):Fl_Group(x,y,w,h,label)} {} {
+-    code {pars=NULL;} {}
++  Function {LFOUI(int x,int y, int w, int h, const char *label=0):Fl_Group(x,y,w,h,label)} {open
++  } {
++    code {} {}
+   }
+-  Function {~LFOUI()} {} {
++  Function {~LFOUI()} {open
++  } {
+     code {lfoui->hide();
+-hide();
+-//delete (lfoui);} {}
++hide();} {}
+   }
+   Function {make_window()} {open
+   } {
+-    Fl_Window lfoui {open selected
+-      xywh {630 351 230 70} type Double color 50 labelfont 1
++    Fl_Window lfoui {open
++      xywh {636 397 230 70} type Double color 50 labelfont 1
+       class Fl_Group visible
+     } {
+       Fl_Group lfoparamswindow {
+-        label LFO
++        label LFO open
+         xywh {0 0 230 70} box UP_BOX color 223 labeltype ENGRAVED_LABEL labelsize 10 align 17
+         code0 {set_module_parameters(o);}
++        class Fl_Osc_Group
+       } {
+         Fl_Dial freq {
+-          label {Freq.}
+-          callback {pars->Pfreq=o->value();}
++          label {Freq.} selected
+           tooltip {LFO Frequency} xywh {5 20 30 30} box ROUND_UP_BOX labelsize 10 step 1e-05
+-          class WidgetPDial
++          code0 {lfoparamswindow->osc=osc;lfoparamswindow->pane_name=loc;o->init("Pfreq");}
++          class Fl_Osc_DialF
+         }
+         Fl_Dial intensity {
+           label Depth
+-          callback {pars->Pintensity=(int)o->value();}
+           tooltip {LFO Amount} xywh {40 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {o->init("Pintensity");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial delay {
+           label Delay
+-          callback {pars->Pdelay=(int)o->value();}
+           tooltip {LFO delay} xywh {110 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {o->init("Pdelay");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial startphase {
+           label Start
+-          callback {pars->Pstartphase=(int)o->value();}
+           tooltip {LFO Startphase (leftmost is Random)} xywh {75 20 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {o->init("Pstartphase");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial randomness {
+           label {A.R.}
+-          callback {pars->Prandomness=(int)o->value();}
+           tooltip {LFO Amplitude Randomness} xywh {180 7 20 20} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {o->init("Prandomness");}
++          class Fl_Osc_Dial
+         }
+         Fl_Choice LFOtype {
+           label Type
+-          callback {pars->PLFOtype=(int)o->value();}
+           tooltip {LFO function} xywh {180 40 45 15} down_box BORDER_BOX labelsize 10 align 2 textsize 8
++          code0 {o->init("PLFOtype");}
++          class Fl_Osc_Choice
+         } {
+           MenuItem {} {
+             label SINE
+@@ -126,47 +131,51 @@ hide();
+         }
+         Fl_Check_Button continous {
+           label {C.}
+-          callback {pars->Pcontinous=(int)o->value();}
+           tooltip {Continous LFO} xywh {165 35 15 15} down_box DOWN_BOX labelsize 10 align 2
++          code0 {o->init("Pcontinous");}
++          class Fl_Osc_Check
+         }
+         Fl_Dial freqrand {
+           label {F.R.}
+-          callback {pars->Pfreqrand=(int)o->value();}
+           tooltip {LFO Frequency Randomness} xywh {205 7 20 20} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {o->init("Pfreqrand");}
++          class Fl_Osc_Dial
+         }
+         Fl_Dial stretch {
+           label {Str.}
+-          callback {pars->Pstretch=(int)o->value();}
+           tooltip {LFO stretch} xywh {144 30 20 20} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-          class WidgetPDial
++          code0 {o->init("Pstretch");}
++          class Fl_Osc_Dial
+         }
+         Fl_Button {} {
+           label C
+-          callback {presetsui->copy(pars);}
+-          xywh {145 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          callback {//presetsui->copy(pars);}
++          xywh {145 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7 deactivate
+         }
+         Fl_Button {} {
+           label P
+-          callback {presetsui->paste(pars,this);}
+-          xywh {162 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
++          callback {//presetsui->paste(pars,this);}
++          xywh {162 10 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7 deactivate
+         }
+       }
+     }
+   }
+-  Function {refresh()} {} {
+-    code {freq->value(pars->Pfreq);
+-intensity->value(pars->Pintensity);
+-startphase->value(pars->Pstartphase);
+-delay->value(pars->Pdelay);
+-continous->value(pars->Pcontinous);
+-stretch->value(pars->Pstretch);
+-randomness->value(pars->Prandomness);
+-freqrand->value(pars->Pfreqrand);
+-LFOtype->value(pars->PLFOtype);} {}
++  Function {refresh()} {open
++  } {
++    code {freq->update();
++intensity->update();
++startphase->update();
++delay->update();
++continous->update();
++stretch->update();
++randomness->update();
++freqrand->update();
++LFOtype->update();} {}
+   }
+-  Function {init(LFOParams *lfopars_)} {} {
+-    code {pars=lfopars_;
++  Function {init(Fl_Osc_Interface *osc_, std::string loc_)} {open
++  } {
++    code {loc = loc_;
++osc = osc_;
+ 
+ make_window();
+ end();
+@@ -177,5 +186,8 @@ lfoui->resize(this->x(),this->y(),this->w(),this->h());
+ 
+ lfoparamswindow->label(this->label());} {}
+   }
+-  decl {LFOParams *pars;} {}
++  decl {Fl_Osc_Interface *osc;} {private local
++  }
++  decl {std::string loc;} {private local
++  }
+ } 
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index e6e6609b..195c4583 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -1,5 +1,5 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0300 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+ decl {\#include "../Params/PADnoteParameters.h"} {public local
+@@ -84,7 +84,7 @@ make_window();} {}
+   } {
+     Fl_Window padnotewindow {
+       label {PAD synth Parameters} open
+-      xywh {40 232 535 435} type Double visible
++      xywh {49 301 535 435} type Double visible
+     } {
+       Fl_Tabs {} {
+         callback {if (o->value()!=harmonicstructuregroup) applybutton->hide();
+@@ -93,7 +93,7 @@ make_window();} {}
+       } {
+         Fl_Group harmonicstructuregroup {
+           label {Harmonic Structure} open
+-          xywh {0 20 535 375} box UP_FRAME
++          xywh {0 20 535 375} box UP_FRAME hide
+           class Fl_Osc_Group
+         } {
+           Fl_Group bwprofilegroup {open
+@@ -528,7 +528,7 @@ cbwidget->do_callback();}
+           Fl_Choice qbasenote {
+             label base
+             callback {pars->Pquality.basenote=(int) o->value();
+-cbwidget->do_callback();} selected
++cbwidget->do_callback();}
+             xywh {375 155 50 20} down_box BORDER_BOX labelsize 11 align 5 textsize 11
+             code0 {o->value(pars->Pquality.basenote);}
+           } {
+@@ -619,10 +619,10 @@ cbwidget->do_callback();}
+         }
+         Fl_Group {} {
+           label {Envelopes&LFOs} open
+-          xywh {0 20 535 375} box UP_FRAME hide
++          xywh {0 20 535 375} box UP_FRAME
+         } {
+           Fl_Group {} {
+-            label FREQUENCY
++            label FREQUENCY open
+             xywh {5 275 525 115} box UP_FRAME labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 17
+           } {
+             Fl_Group freqenv {
+@@ -655,9 +655,9 @@ pars->PCoarseDetune = k+
+               code3 {o->lstep(10);}
+             }
+             Fl_Group freqlfo {
+-              label {Frequency LFO     } open
++              label {Frequency LFO     } open selected
+               xywh {215 315 230 70} box FLAT_BOX color 47 align 144
+-              code0 {o->init(pars->FreqLfo);}
++              code0 {o->init(osc_i, location + "FreqLfo/");}
+               class LFOUI
+             } {}
+             Fl_Slider detune {
+@@ -699,7 +699,7 @@ if (x==0) fixedfreqetdial->deactivate();
+             }
+           }
+           Fl_Group {} {
+-            label AMPLITUDE
++            label AMPLITUDE open
+             xywh {5 25 240 250} box UP_FRAME labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 17
+           } {
+             Fl_Value_Slider volume {
+@@ -758,7 +758,7 @@ if (x==0) fixedfreqetdial->deactivate();
+             Fl_Group amplfo {
+               label {Amplitude LFO     } open
+               xywh {10 165 230 70} box FLAT_BOX color 47 align 144
+-              code0 {o->init(pars->AmpLfo);}
++              code0 {o->init(osc_i, location+"AmpLfo/");}
+               class LFOUI
+             } {}
+             Fl_Check_Button stereo {
+@@ -770,7 +770,7 @@ hprofile->redraw();}
+             }
+           }
+           Fl_Group {} {
+-            label FILTER
++            label FILTER open
+             xywh {245 25 285 250} box UP_FRAME labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 17
+           } {
+             Fl_Group filterenv {
+@@ -782,7 +782,7 @@ hprofile->redraw();}
+             Fl_Group filterlfo {
+               label {Filter LFO     } open
+               xywh {250 200 230 70} box FLAT_BOX color 47 align 144
+-              code0 {o->init(pars->FilterLfo);}
++              code0 {o->init(osc_i, location+"FilterLfo/");}
+               class LFOUI
+             } {}
+             Fl_Group filterui {
+-- 
+2.47.0
+

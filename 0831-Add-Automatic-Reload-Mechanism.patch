@@ -1,0 +1,367 @@
+From f8e7820f07a07285f6191196c4bee7c3d6fb0389 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 27 Jan 2016 22:16:53 -0500
+Subject: [PATCH 0831/1936] Add Automatic Reload Mechanism
+
+On startup if auto save is used the auto save directory is checked
+for save files which would indicate a crashed instance.
+If it finds such a file it prompts the user if they want to reload it.
+
+- Adds command line arg -A --auto-save to determine auto save period.
+- Defaults to 60 seconds.
+- Moves Savefile to ~/.local/zynaddsubfx-PID-autosave.xmz
+---
+ src/Misc/CallbackRepeater.cpp |  2 +-
+ src/Misc/MiddleWare.cpp       | 81 ++++++++++++++++++++++++++++++++++-
+ src/Misc/MiddleWare.h         | 13 ++++++
+ src/UI/Connection.cpp         | 33 +++++++++++++-
+ src/UI/MasterUI.fl            | 17 +++-----
+ src/main.cpp                  | 19 +++++++-
+ 6 files changed, 148 insertions(+), 17 deletions(-)
+
+diff --git a/src/Misc/CallbackRepeater.cpp b/src/Misc/CallbackRepeater.cpp
+index 010c02af..ca25e254 100644
+--- a/src/Misc/CallbackRepeater.cpp
++++ b/src/Misc/CallbackRepeater.cpp
+@@ -6,7 +6,7 @@ CallbackRepeater::CallbackRepeater(int interval, cb_t cb_)
+ void CallbackRepeater::tick(void)
+ {
+     auto now = time(0);
+-    if(now-last > dt) {
++    if(now-last > dt && dt >= 0) {
+         cb();
+         last = now;
+     }
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 9ec380f7..0dc56da8 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -5,6 +5,7 @@
+ #include <cstdlib>
+ #include <fstream>
+ #include <iostream>
++#include <dirent.h>
+ 
+ #include <rtosc/undo-history.h>
+ #include <rtosc/thread-link.h>
+@@ -985,6 +986,17 @@ static rtosc::Ports middwareSnoopPorts = {
+         const char *file    = rtosc_argument(msg,1).s;
+         impl.savePart(part_id, file);
+         rEnd},
++    {"reload_auto_save:i", 0, 0,
++        rBegin
++        const int save_id      = rtosc_argument(msg,0).i;
++        const string save_dir  = string(getenv("HOME")) + "/.local";
++        const string save_file = "zynaddsubfx-"+to_s(save_id)+"-autosave.xmz";
++        const string save_loc  = save_dir + "/" + save_file;
++        impl.loadMaster(save_loc.c_str());
++        //XXX it would be better to remove the autosave after there is a new
++        //autosave, but this method should work for non-immediate crashes :-|
++        remove(save_loc.c_str());
++        rEnd},
+     {"load_xmz:s", 0, 0,
+         rBegin;
+         const char *file = rtosc_argument(msg, 0).s;
+@@ -1112,10 +1124,13 @@ static rtosc::Ports middlewareReplyPorts = {
+ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, SYNTH_T synth_,
+     Config* config, int preferrred_port)
+     :parent(mw), config(config), ui(nullptr), synth(std::move(synth_)),
+-    presetsstore(*config), autoSave(60, [this]() {
++    presetsstore(*config), autoSave(-1, [this]() {
+             auto master = this->master;
+             this->doReadOnlyOp([master](){
+-                int res = master->saveXML("/tmp/autosave.xmz");
++                std::string home = getenv("HOME");
++                std::string save_file = home+"/.local/zynaddsubfx-"+to_s(getpid())+"-autosave.xmz";
++                printf("doing an autosave <%s>...\n", save_file.c_str());
++                int res = master->saveXML(save_file.c_str());
+                 (void)res;});})
+ {
+     bToU = new rtosc::ThreadLink(4096*2,1024);
+@@ -1439,24 +1454,86 @@ MiddleWare::MiddleWare(SYNTH_T synth, Config* config,
+                        int preferred_port)
+ :impl(new MiddleWareImpl(this, std::move(synth), config, preferred_port))
+ {}
++
+ MiddleWare::~MiddleWare(void)
+ {
+     delete impl;
+ }
++
+ void MiddleWare::updateResources(Master *m)
+ {
+     impl->updateResources(m);
+ }
++
+ Master *MiddleWare::spawnMaster(void)
+ {
+     assert(impl->master);
+     assert(impl->master->uToB);
+     return impl->master;
+ }
++
++void MiddleWare::enableAutoSave(int interval_sec)
++{
++    impl->autoSave.dt = interval_sec;
++}
++
++int MiddleWare::checkAutoSave(void)
++{
++    //save spec zynaddsubfx-PID-autosave.xmz
++    const std::string home     = getenv("HOME");
++    const std::string save_dir = home+"/.local/";
++
++    DIR *dir = opendir(save_dir.c_str());
++
++    if(dir == NULL)
++        return -1;
++
++    struct dirent *fn;
++    int    reload_save = -1;
++
++    while((fn = readdir(dir))) {
++        const char *filename = fn->d_name;
++        const char *prefix = "zynaddsubfx-";
++
++        //check for manditory prefix
++        if(strstr(filename, prefix) != filename)
++            continue;
++
++        int id = atoi(filename+strlen(prefix));
++
++        bool in_use = false;
++
++        std::string proc_file = "/proc/" + to_s(id) + "/comm";
++        std::ifstream ifs(proc_file);
++        if(ifs.good()) {
++            std::string comm_name;
++            ifs >> comm_name;
++            in_use = (comm_name == "zynaddsubfx");
++        }
++
++        if(!in_use) {
++            reload_save = id;
++            break;
++        }
++    }
++
++    closedir(dir);
++
++    return reload_save;
++}
++
++void MiddleWare::removeAutoSave(void)
++{
++    std::string home = getenv("HOME");
++    std::string save_file = home+"/.local/zynaddsubfx-"+to_s(getpid())+"-autosave.xmz";
++    remove(save_file.c_str());
++}
++
+ Fl_Osc_Interface *MiddleWare::spawnUiApi(void)
+ {
+     return impl->osc;
+ }
++
+ void MiddleWare::tick(void)
+ {
+     impl->tick();
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 1fc1491c..d62e035a 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -17,6 +17,18 @@ class MiddleWare
+         void updateResources(Master *m);
+         //returns internal master pointer
+         class Master *spawnMaster(void);
++
++        //Enable AutoSave Functionality
++        void enableAutoSave(int interval_sec=60);
++
++        //Check for old automatic saves which should only exist if multiple
++        //instances are in use OR when there was a crash
++        //
++        //When an old save is found return the id of the save file
++        int checkAutoSave(void);
++
++        void removeAutoSave(void);
++
+         //return  UI interface
+         class Fl_Osc_Interface *spawnUiApi(void);
+         //Set callback to push UI events to
+@@ -40,6 +52,7 @@ class MiddleWare
+         //Indicate that a bank will be loaded
+         //NOTE: Can only be called by realtime thread
+         void pendingSetBank(int bank);
++
+         //Indicate that a program will be loaded on a known part
+         //NOTE: Can only be called by realtime thread
+         void pendingSetProgram(int part, int program);
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index b38d5cec..09fbebc3 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -134,7 +134,7 @@ void GUI::destroyUi(ui_handle_t ui)
+     delete static_cast<MasterUI*>(ui);
+ }
+ 
+-#define BEGIN(x) {x,":non-realtime\0",NULL,[](const char *m, rtosc::RtData d){ \
++#define BEGIN(x) {x,":non-realtime\0",NULL,[](const char *m, rtosc::RtData &d){ \
+     MasterUI *ui   = static_cast<MasterUI*>(d.obj); \
+     rtosc_arg_t a0 = {0}, a1 = {0}; \
+     if(rtosc_narguments(m) > 0) \
+@@ -157,6 +157,15 @@ rtosc::Ports uiPorts::ports = {
+     BEGIN("alert:s") {
+         fl_alert("%s",a0.s);
+     } END
++    BEGIN("alert-reload:i") {
++        if(1==fl_choice("Old autosave found, do you want to reload?",
++                NULL, "Reload", "Ignore")) {
++            printf("trying to reload...\n");
++            d.reply("/reload_auto_save", "i", a0.i);
++            ui->refresh_master_ui();
++            ui->updatepanel();
++        }
++    } END
+     BEGIN("session-type:s") {
+         if(strcmp(a0.s,"LASH"))
+             return;
+@@ -188,6 +197,26 @@ rtosc::Ports uiPorts::ports = {
+     } END
+ };
+ 
++//very tiny rtdata ext
++class RtDataUI: public rtosc::RtData {
++public:
++
++    RtDataUI(Fl_Osc_Interface *osc_)
++        :osc(osc_)
++    {}
++
++    void reply(const char *path, const char *args, ...) override
++    {
++        va_list va;
++        va_start(va,args);
++        char buf[2048];
++        rtosc_vmessage(buf,sizeof(buf),path,args,va);
++        osc->writeRaw(buf);
++        va_end(va);
++    }
++
++    Fl_Osc_Interface *osc;
++};
+ 
+ void GUI::raiseUi(ui_handle_t gui, const char *message)
+ {
+@@ -209,7 +238,7 @@ void GUI::raiseUi(ui_handle_t gui, const char *message)
+     //printf("got message for UI '%s'\n", message);
+     char buffer[1024];
+     memset(buffer, 0, sizeof(buffer));
+-    rtosc::RtData d;
++    RtDataUI d(mui->osc);
+     d.loc = buffer;
+     d.loc_size = 1024;
+     d.obj = gui;
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index c58e6d0e..40787917 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -178,18 +178,13 @@ bankui->show();}
+       }
+       Fl_Check_Button partenabled {
+         label 01
+-        callback {o->oscWrite("Penabled", o->value() ? "T" : "F");
+-if ((int) o->value()==0) panellistitemgroup->deactivate();
+-  else {
+-    panellistitemgroup->activate();
+-    /*
+-    if ((int)bankui->cbwig->value()!=(npart+1)){
+-       bankui->cbwig->value(npart+1);
+-       bankui->cbwig->do_callback();
+-    };*/
+-};
++        callback {
++            if ((int) o->value()==0) panellistitemgroup->deactivate();
++            else {
++                panellistitemgroup->activate();
++            };
+ 
+-o->redraw();}
++            o->redraw();}
+         private xywh {5 0 45 20} down_box DOWN_BOX labeltype EMBOSSED_LABEL labelfont 1 labelsize 13 align 24
+         code0 {char tmp[10];snprintf(tmp,10,"%d",npart+1);o->copy_label(tmp);}
+         code1 {o->init("Penabled");}
+diff --git a/src/main.cpp b/src/main.cpp
+index deb63b0d..b8fb8045 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -109,6 +109,7 @@ void exitprogram(const Config& config)
+ {
+     Nio::stop();
+     config.save();
++    middleware->removeAutoSave();
+ 
+     GUI::destroyUi(gui);
+     delete middleware;
+@@ -193,6 +194,9 @@ int main(int argc, char *argv[])
+         {
+             "auto-connect", 0, NULL, 'a'
+         },
++        {
++            "auto-save", 0, NULL, 'A'
++        },
+         {
+             "pid-in-client-name", 0, NULL, 'p'
+         },
+@@ -221,6 +225,7 @@ int main(int argc, char *argv[])
+     opterr = 0;
+     int option_index = 0, opt, exitwithhelp = 0, exitwithversion = 0;
+     int prefered_port = -1;
++    int auto_save_interval = 60;
+ 
+     string loadfile, loadinstrument, execAfterInit, ui_title;
+ 
+@@ -230,7 +235,7 @@ int main(int argc, char *argv[])
+         /**\todo check this process for a small memory leak*/
+         opt = getopt_long(argc,
+                           argv,
+-                          "l:L:r:b:o:I:O:N:e:P:u:hvapSDUY",
++                          "l:L:r:b:o:I:O:N:e:P:A:u:hvapSDUY",
+                           opts,
+                           &option_index);
+         char *optarguments = optarg;
+@@ -321,6 +326,10 @@ int main(int argc, char *argv[])
+                 if(optarguments)
+                     prefered_port = atoi(optarguments);
+                 break;
++            case 'A':
++                if(optarguments)
++                    auto_save_interval = atoi(optarguments);
++                break;
+             case 'e':
+                 GETOP(execAfterInit);
+                 break;
+@@ -370,6 +379,7 @@ int main(int argc, char *argv[])
+         "  -U , --no-gui\t\t\t\t Run ZynAddSubFX without user interface\n"
+              << "  -N , --named\t\t\t\t Postfix IO Name when possible\n"
+              << "  -a , --auto-connect\t\t\t AutoConnect when using JACK\n"
++             << "  -A , --auto-save=INTERVAL\t\t Automatically save at interval (disabled for negative intervals)\n"
+              << "  -p , --pid-in-client-name\t\t Append PID to (JACK) "
+                 "client name\n"
+              << "  -P , --preferred-port\t\t\t Preferred OSC Port\n"
+@@ -476,6 +486,13 @@ int main(int argc, char *argv[])
+                     "Default IO did not initialize.\nDefaulting to NULL backend.");
+     }
+ 
++    if(auto_save_interval >= 0) {
++        int old_save = middleware->checkAutoSave();
++        if(old_save > 0)
++            GUI::raiseUi(gui, "/alert-reload", "i", old_save);
++        middleware->enableAutoSave(auto_save_interval);
++    }
++
+ #if USE_NSM
+     char *nsm_url = getenv("NSM_URL");
+ 
+-- 
+2.47.0
+

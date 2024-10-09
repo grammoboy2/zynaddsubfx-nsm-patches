@@ -1,0 +1,66 @@
+From d1d390a1502a52c4dd3e3f6abcd848c474ce6f43 Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Thu, 4 Jan 2018 15:50:09 +0100
+Subject: [PATCH 1238/1936] Add build-system support for OSX/macOS: frameworks
+
+---
+ src/CMakeLists.txt                    |  2 ++
+ src/Plugin/ZynAddSubFX/CMakeLists.txt | 21 +++++++++++++++++----
+ 2 files changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index fcf5d73b..a8b75504 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -491,6 +491,8 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+             wsock32
+             "-static" iphlpapi
+             "-static" winpthread)
++elseif(APPLE)
++    set(PTHREAD_LIBRARY pthread)
+ else()
+     set(PLATFORM_LIBRARIES rt)
+     set(PTHREAD_LIBRARY pthread)
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 35dccdea..4f59738f 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -115,7 +115,11 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+             "-static" iphlpapi
+             "-static" winpthread)
+ elseif(ZestGui)
+-    set(PLATFORM_LIBRARIES X11 GL rt)
++    if(APPLE)
++        set(PLATFORM_LIBRARIES)
++    else()
++        set(PLATFORM_LIBRARIES X11 GL rt)
++    endif()
+ elseif(NtkGui OR FltkGui)
+     set(PLATFORM_LIBRARIES X11 rt)
+ else()
+@@ -126,10 +130,19 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+     target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+         ${PLATFORM_LIBRARIES})
+ endif()
+-target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+-    ${PLATFORM_LIBRARIES})
++if(APPLE)
++    target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
++        ${PLATFORM_LIBRARIES} "-framework Cocoa" "-framework openGL")
++else()
++    target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
++        ${PLATFORM_LIBRARIES})
++endif()
+ if(ZestGui AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+-    target_link_libraries(ZynAddSubFX_lv2_ui X11 GL)
++    if(APPLE)
++        target_link_libraries(ZynAddSubFX_lv2_ui "-framework Cocoa" "-framework openGL")
++    else()
++        target_link_libraries(ZynAddSubFX_lv2_ui X11 GL)
++    endif()
+ endif()
+ 
+ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+-- 
+2.47.0
+

@@ -1,0 +1,616 @@
+From 8c5883e8a6339cee0851fed1adafd4f2fbedfe0b Mon Sep 17 00:00:00 2001
+From: kinichiro <kinichiro.inoguchi@gmail.com>
+Date: Mon, 29 Jun 2020 22:47:46 +0900
+Subject: [PATCH 1573/1936] Add sndio support
+
+---
+ .travis.yml             |   1 +
+ cmake/FindSndio.cmake   |  38 +++++
+ src/CMakeLists.txt      |  15 ++
+ src/Nio/CMakeLists.txt  |   4 +
+ src/Nio/EngineMgr.cpp   |   6 +
+ src/Nio/SndioEngine.cpp | 356 ++++++++++++++++++++++++++++++++++++++++
+ src/Nio/SndioEngine.h   |  78 +++++++++
+ 7 files changed, 498 insertions(+)
+ create mode 100644 cmake/FindSndio.cmake
+ create mode 100644 src/Nio/SndioEngine.cpp
+ create mode 100644 src/Nio/SndioEngine.h
+
+diff --git a/.travis.yml b/.travis.yml
+index 2cb38a23..58696562 100644
+--- a/.travis.yml
++++ b/.travis.yml
+@@ -8,6 +8,7 @@ dist: xenial
+ before_install:
+     - sudo apt-get install zlib1g-dev libmxml-dev libfftw3-dev dssi-dev libfltk1.3-dev fluid libxpm-dev
+     - sudo apt-get install liblo-dev
++    - sudo apt-get install libsndio-dev
+     - sudo apt-get install --force-yes cxxtest
+ 
+ 
+diff --git a/cmake/FindSndio.cmake b/cmake/FindSndio.cmake
+new file mode 100644
+index 00000000..3cf552df
+--- /dev/null
++++ b/cmake/FindSndio.cmake
+@@ -0,0 +1,38 @@
++# Sndio check, based on libkmid/configure.in.in.
++# It defines ...
++# It offers the following macros:
++#  SNDIO_CONFIGURE_FILE(config_header) - generate a config.h, typical usage: 
++#                                       SNDIO_CONFIGURE_FILE(${CMAKE_BINARY_DIR}/config-sndio.h)
++
++# Copyright (c) 2020, Kinichiro Inoguchi
++#
++# Redistribution and use is allowed according to the terms of the BSD license.
++# For details see the accompanying COPYING-CMAKE-SCRIPTS file.
++
++include(CheckIncludeFiles)
++include(CheckIncludeFileCXX)
++include(CheckLibraryExists)
++
++# Already done by toplevel
++find_library(SNDIO_LIBRARY sndio)
++set(SNDIO_LIBRARY_DIR "")
++if(SNDIO_LIBRARY)
++   get_filename_component(SNDIO_LIBRARY_DIR ${SNDIO_LIBRARY} PATH)
++endif(SNDIO_LIBRARY)
++
++check_library_exists(sndio sio_open "${SNDIO_LIBRARY_DIR}" HAVE_LIBSNDIO)
++if(HAVE_LIBSNDIO)
++    message(STATUS "Found SNDIO: ${SNDIO_LIBRARY}")
++else(HAVE_LIBSNDIO)
++    message(STATUS "SNDIO not found")
++endif(HAVE_LIBSNDIO)
++set(SNDIO_FOUND ${HAVE_LIBSNDIO})
++
++find_path(SNDIO_INCLUDES sndio.h)
++
++get_filename_component(_FIND_SNDIO_MODULE_DIR ${CMAKE_CURRENT_LIST_FILE} PATH)
++macro(SNDIO_CONFIGURE_FILE _destFile)
++    configure_file(${_FIND_SNDIO_MODULE_DIR}/config-sndio.h.cmake ${_destFile})
++endmacro(SNDIO_CONFIGURE_FILE _destFile)
++
++mark_as_advanced(SNDIO_INCLUDES SNDIO_LIBRARY)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index cc35bd5b..f6c7af1d 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -15,6 +15,7 @@ find_package(X11)
+ find_package(Threads   REQUIRED)
+ find_package(OSS)
+ find_package(Alsa)
++find_package(Sndio)
+ find_package(FLTK)
+ find_package(OpenGL) #for FLTK
+ find_package(CxxTest)
+@@ -87,6 +88,8 @@ SET (OssEnable ${OSS_FOUND} CACHE BOOL
+     "Enable support for Open Sound System")
+ SET (PaEnable ${PORTAUDIO_FOUND} CACHE BOOL
+     "Enable support for Port Audio System")
++SET (SndioEnable ${SNDIO_FOUND} CACHE BOOL
++    "Enable support for Sndio System")
+ SET (LashEnable ${LASH_FOUND} CACHE BOOL
+     "Enable LASH Audio Session Handler")
+ SET (DssiEnable ${DSSI_FOUND} CACHE BOOL
+@@ -154,6 +157,11 @@ elseif (PaEnable)
+         "Default Output module: [null, alsa, oss, jack, portaudio]")
+     SET (DefaultInput null CACHE STRING
+         "Default Input module: [null, alsa, oss, jack]")
++elseif (SndioEnable)
++    SET (DefaultOutput sndio CACHE STRING
++        "Default Output module: [null, alsa, oss, jack, portaudio, sndio]")
++    SET (DefaultInput sndio CACHE STRING
++        "Default Input module: [null, alsa, oss, jack, sndio]")
+ else()
+     SET (DefaultOutput null CACHE STRING
+         "Default Output module: [null, alsa, oss, jack, portaudio]")
+@@ -300,6 +308,12 @@ if(OssEnable)
+ 	add_definitions(-DOSS=1)
+ endif(OssEnable)
+ 
++if(SndioEnable)
++	list(APPEND AUDIO_LIBRARIES ${SNDIO_LIBRARY})
++	list(APPEND AUDIO_LIBRARY_DIRS ${SNDIO_LIBRARY_DIRS})
++	add_definitions(-DSNDIO=1)
++endif(SndioEnable)
++
+ if (CompileTests)
+ 	ENABLE_TESTING()
+ endif()
+@@ -655,6 +669,7 @@ package_status(AlsaEnable       "ALSA     " "enabled" ${Yellow})
+ package_status(JackEnable       "JACK     " "enabled" ${Yellow})
+ package_status(OssEnable        "OSS      " "enabled" ${Yellow})
+ package_status(PaEnable         "PA       " "enabled" ${Yellow})
++package_status(SndioEnable      "SNDIO    " "enabled" ${Yellow})
+ #TODO GUI MODULE
+ package_status(HAVE_ASYNC       "c++ async" "usable"  ${Yellow})
+ 
+diff --git a/src/Nio/CMakeLists.txt b/src/Nio/CMakeLists.txt
+index 4c4aa96d..7c965f7a 100644
+--- a/src/Nio/CMakeLists.txt
++++ b/src/Nio/CMakeLists.txt
+@@ -46,6 +46,10 @@ if(OssEnable)
+     list(APPEND zynaddsubfx_nio_SRCS OssEngine.cpp OssMultiEngine.cpp)
+ endif(OssEnable)
+ 
++if(SndioEnable)
++    list(APPEND zynaddsubfx_nio_SRCS SndioEngine.cpp)
++    list(APPEND zynaddsubfx_nio_lib ${SNDIO_LIBRARY})
++endif(SndioEnable)
+ 
+ add_library(zynaddsubfx_nio STATIC
+     ${zynaddsubfx_nio_SRCS} 
+diff --git a/src/Nio/EngineMgr.cpp b/src/Nio/EngineMgr.cpp
+index c441c04f..f7f65bfa 100644
+--- a/src/Nio/EngineMgr.cpp
++++ b/src/Nio/EngineMgr.cpp
+@@ -35,6 +35,9 @@ using namespace std;
+ #if PORTAUDIO
+ #include "PaEngine.h"
+ #endif
++#if SNDIO
++#include "SndioEngine.h"
++#endif
+ 
+ namespace zyn {
+ 
+@@ -66,6 +69,9 @@ EngineMgr::EngineMgr(const SYNTH_T *synth, const oss_devs_t& oss_devs)
+ #if PORTAUDIO
+     engines.push_back(new PaEngine(*synth));
+ #endif
++#if SNDIO
++    engines.push_back(new SndioEngine(*synth));
++#endif
+ 
+     defaultOut = dynamic_cast<AudioOut *>(defaultEng);
+ 
+diff --git a/src/Nio/SndioEngine.cpp b/src/Nio/SndioEngine.cpp
+new file mode 100644
+index 00000000..597c7e97
+--- /dev/null
++++ b/src/Nio/SndioEngine.cpp
+@@ -0,0 +1,356 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  SndioEngine.cpp - SNDIO Driver
++  Copyright (C) 2020 Kinichiro Inoguchi
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++#include <cmath>
++#include <iostream>
++#include <poll.h>
++#include <stdlib.h>
++
++#include "Compressor.h"
++#include "InMgr.h"
++#include "Nio.h"
++#include "SndioEngine.h"
++#include "../Misc/Config.h"
++#include "../Misc/Util.h"
++
++using namespace std;
++
++namespace zyn {
++
++SndioEngine::SndioEngine(const SYNTH_T &synth)
++    :AudioOut(synth)
++{
++    name = "SNDIO";
++    audio.handle = NULL;
++    audio.buffer = new short[synth.buffersize * 2];
++    audio.buffer_size = synth.buffersize * 2 * sizeof(short);
++    audio.peaks[0] = 0;
++    audio.pThread = 0;
++
++    midi.handle  = NULL;
++    midi.pThread = 0;
++}
++
++SndioEngine::~SndioEngine()
++{
++    Stop();
++    delete[] audio.buffer;
++}
++
++bool SndioEngine::Start()
++{
++    return openAudio() && openMidi();
++}
++
++void SndioEngine::Stop()
++{
++    if(getMidiEn())
++        setMidiEn(false);
++    if(getAudioEn())
++        setAudioEn(false);
++}
++
++void SndioEngine::setAudioEn(bool nval)
++{
++    if(nval)
++        openAudio();
++    else
++        stopAudio();
++}
++
++bool SndioEngine::getAudioEn() const
++{
++    return audio.handle;
++}
++
++void SndioEngine::setMidiEn(bool nval)
++{
++    if(nval)
++        openMidi();
++    else
++        stopMidi();
++}
++
++bool SndioEngine::getMidiEn() const
++{
++    return midi.handle;
++}
++
++void *SndioEngine::AudioThread()
++{
++    set_realtime();
++    return processAudio();
++}
++
++void *SndioEngine::_AudioThread(void *arg)
++{
++    return (static_cast<SndioEngine *>(arg))->AudioThread();
++}
++
++void *SndioEngine::MidiThread(void)
++{
++    set_realtime();
++    return processMidi();
++}
++
++void *SndioEngine::_MidiThread(void *arg)
++{
++    return static_cast<SndioEngine *>(arg)->MidiThread();
++}
++
++bool SndioEngine::openAudio()
++{
++    int rc;
++
++    if(getAudioEn())
++        return true;
++
++    audio.handle = NULL;
++
++    if((audio.handle = sio_open(SIO_DEVANY, SIO_PLAY, 0)) == NULL) {
++        fprintf(stderr, "unable to open sndio audio device\n");
++        return false;
++    }
++
++    sio_initpar(&audio.params);
++    audio.params.rate = synth.samplerate;
++    audio.params.appbufsz = audio.params.rate * 0.05;
++    audio.params.xrun = SIO_SYNC;
++
++    rc = sio_setpar(audio.handle, &audio.params);
++    if(rc != 1) {
++        fprintf(stderr, "unable to set sndio audio parameters");
++        return false;
++    }
++
++    showAudioInfo(audio.handle);
++
++    rc = sio_start(audio.handle);
++    if(rc != 1) {
++        fprintf(stderr, "unable to start sndio audio");
++        return false;
++    }
++
++    pthread_attr_t attr;
++    pthread_attr_init(&attr);
++    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
++    pthread_create(&audio.pThread, &attr, _AudioThread, this);
++    return true;
++}
++
++void SndioEngine::stopAudio()
++{
++    struct sio_hdl *handle = audio.handle;
++    int rc;
++
++    if(!getAudioEn())
++        return;
++
++    audio.handle = NULL;
++
++    pthread_join(audio.pThread, NULL);
++
++    rc = sio_stop(handle);
++    if(rc != 1)
++        fprintf(stderr, "unable to stop sndio audio");
++
++    sio_close(handle);
++}
++
++bool SndioEngine::openMidi()
++{
++    if(getMidiEn())
++        return true;
++
++    midi.handle = NULL;
++
++    if((midi.handle = mio_open(MIO_PORTANY, MIO_IN, 1)) == NULL) {
++        fprintf(stderr, "unable to open sndio midi device\n");
++        return false;
++    }
++
++    midi.exiting = false;
++    pthread_attr_t attr;
++
++    pthread_attr_init(&attr);
++    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
++    pthread_create(&midi.pThread, &attr, _MidiThread, this);
++    return true;
++}
++
++void SndioEngine::stopMidi()
++{
++    struct mio_hdl *handle = midi.handle;
++
++    if(!getMidiEn())
++        return;
++
++    if((midi.handle != NULL) && midi.pThread) {
++        midi.exiting = true;
++        pthread_join(midi.pThread, 0);
++    }
++
++    midi.handle = NULL;
++
++    if(handle)
++        mio_close(handle);
++}
++
++void *SndioEngine::processAudio()
++{
++    size_t len;
++    struct sio_hdl *handle;
++
++    while(audio.handle) {
++        audio.buffer = interleave(getNext());
++	handle = audio.handle;	
++	len = sio_write(handle, audio.buffer, audio.buffer_size);
++	if(len < 0) {
++            cerr << "sio_write error" << endl;
++	}
++    }
++    return NULL;
++}
++
++void *SndioEngine::processMidi()
++{
++    int n;
++    int nfds;
++    struct pollfd *pfd;
++    int rc;
++    int revents;
++    size_t len;
++    unsigned char buf[3];
++
++    n = mio_nfds(midi.handle);
++    if(n <= 0) {
++        cerr << "mio_nfds error" << endl;
++        return NULL;
++    }
++
++    pfd = (struct pollfd *) calloc(n, sizeof(struct pollfd));
++    if(pfd == NULL) {
++        cerr << "calloc error" << endl;
++        return NULL;
++    }
++
++    while(1) {
++        if(midi.exiting)
++            break;
++
++	nfds = mio_pollfd(midi.handle, pfd, POLLIN);
++
++	rc = poll(pfd, nfds, 1000);
++	if(rc < 0 && rc != EAGAIN && rc != EINTR) {
++            cerr << "poll error" << endl;
++	    break;
++	}
++
++	revents = mio_revents(midi.handle, pfd);
++	if(revents & POLLHUP) {
++            cerr << "mio_revents catches POLLHUP" << endl;
++	    continue;
++	}
++	if(!(revents & POLLIN))
++	    continue;
++
++	memset(buf, 0, sizeof(buf));
++	len = mio_read(midi.handle, buf, sizeof(buf));
++	if(len < 0 || len > sizeof(buf)) {
++            fprintf(stderr, "mio_read invalid len = %zu\n", len);
++	    continue;
++	}
++
++        midiProcess(buf[0], buf[1], buf[2]);
++    }
++    free(pfd);
++    return NULL;
++}
++
++short *SndioEngine::interleave(const Stereo<float *> &smps)
++{
++    short *shortInterleaved;
++    int frame, idx;
++    float l, r;
++    double scaled;
++
++    shortInterleaved = audio.buffer;
++    memset(shortInterleaved, 0, audio.buffer_size);
++
++    for(frame = idx = 0; frame < synth.buffersize; ++frame) {
++        l = smps.l[frame];
++        r = smps.r[frame];
++        stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
++
++        scaled = l * (8.0f * 0x10000000);
++        shortInterleaved[idx++] = (short int)(lrint(scaled) >> 16);
++        scaled = r * (8.0f * 0x10000000);
++        shortInterleaved[idx++] = (short int)(lrint(scaled) >> 16);
++    }
++    return shortInterleaved;
++}
++
++void SndioEngine::showAudioInfo(struct sio_hdl *handle)
++{
++    int rc;
++    struct sio_par par;
++    struct sio_cap cap;
++    unsigned int i;
++
++    rc = sio_getpar(handle, &par);
++    if(rc != 1) {
++        fprintf(stderr, "unable to get sndio audio parameters");
++        return;
++    }
++
++    fprintf(stderr, "sndio audio parameters:\n");
++    fprintf(stderr,
++        "  bits = %u bps = %u sig = %u le = %u msb = %u rchan = %u pchan = %u\n"
++	"  rate = %u appbufsz = %u bufsz = %u round = %u xrun = %u\n",
++        par.bits, par.bps, par.sig, par.le, par.msb, par.rchan, par.pchan,
++	par.rate, par.appbufsz, par.bufsz, par.round, par.xrun);
++
++    rc = sio_getcap(handle, &cap);
++    if(rc != 1) {
++        fprintf(stderr, "unable to get sndio audio capabilities");
++        return;
++    }
++
++    fprintf(stderr, "sndio audio capabilities:\n");
++    fprintf(stderr, "  supported encodings:\n");
++    for(i = 0; i < SIO_NENC; ++i)
++        fprintf(stderr,
++            "    [%d] bits = %u bps = %u sig = %u le = %u msb = %u\n",
++            i, cap.enc[i].bits, cap.enc[i].bps, cap.enc[i].sig,
++	    cap.enc[i].le, cap.enc[i].msb);
++
++    fprintf(stderr, "  supported channel numbers of recording:\n");
++    for(i = 0; i < SIO_NCHAN; ++i)
++        fprintf(stderr, "    [%d] rchan = %u\n", i, cap.rchan[i]);
++
++    fprintf(stderr, "  supported channel numbers of playback:\n");
++    for(i = 0; i < SIO_NCHAN; ++i)
++        fprintf(stderr, "    [%d] pchan = %u\n", i, cap.pchan[i]);
++
++    fprintf(stderr, "  suported sample rates:\n");
++    for(i = 0; i < SIO_NRATE; ++i)
++        fprintf(stderr, "    [%d] rate = %u\n", i, cap.rate[i]);
++
++    fprintf(stderr, "  available configurations:\n");
++    for(i = 0; i < cap.nconf; ++i)
++        fprintf(stderr,
++            "    [%d] enc = %x rchan = %x pchan = %x rate = %x\n",
++	    i, cap.confs[i].enc, cap.confs[i].rchan, cap.confs[i].pchan, 
++	    cap.confs[i].rate);
++}
++
++}
+diff --git a/src/Nio/SndioEngine.h b/src/Nio/SndioEngine.h
+new file mode 100644
+index 00000000..cab7df06
+--- /dev/null
++++ b/src/Nio/SndioEngine.h
+@@ -0,0 +1,78 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  SndioEngine.h - SNDIO Driver
++  Copyright (C) 2020 Kinichiro Inoguchi
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++#ifndef SNDIO_ENGINE_H
++#define SNDIO_ENGINE_H
++
++#include <pthread.h>
++#include <queue>
++#include <sndio.h>
++#include <string>
++
++#include "AudioOut.h"
++#include "MidiIn.h"
++#include "OutMgr.h"
++#include "../Misc/Stereo.h"
++
++namespace zyn {
++
++class SndioEngine:public AudioOut, MidiIn
++{
++    public:
++        SndioEngine(const SYNTH_T &synth);
++        ~SndioEngine();
++
++        bool Start();
++        void Stop();
++
++        void setAudioEn(bool nval);
++        bool getAudioEn() const;
++        void setMidiEn(bool nval);
++        bool getMidiEn() const;
++
++    protected:
++        void *AudioThread();
++        static void *_AudioThread(void *arg);
++        void *MidiThread();
++        static void *_MidiThread(void *arg);
++
++    private:
++        bool openAudio();
++        void stopAudio();
++        bool openMidi();
++        void stopMidi();
++
++        void *processAudio();
++        void *processMidi();
++        short *interleave(const Stereo<float *> &smps);
++	void showAudioInfo(struct sio_hdl *handle);
++
++        struct {
++            struct sio_hdl *handle;
++            struct sio_par params;
++            short *buffer;
++	    size_t buffer_size;
++            pthread_t pThread;
++            float peaks[1];
++        } audio;
++
++        struct {
++            std::string device;
++            struct mio_hdl *handle;
++            bool exiting;
++            pthread_t pThread;
++        } midi;
++};
++
++}
++
++#endif
+-- 
+2.47.0
+

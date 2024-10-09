@@ -1,0 +1,331 @@
+From 5880ab0f3d79b31fc7cd4b78d9b76446382718c7 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 2 Jan 2022 18:50:18 +0100
+Subject: [PATCH 1809/1936] Fix all memory leaks in tests
+
+... and adds a valgrind suppression. Letting valgrind run with
+
+```
+valgrind
+    --leak-check=full
+    --show-reachable=yes
+    --suppressions=valgrind-suppressions.txt
+```
+
+should succeed for all tests.
+
+Exception: port-checker: Not trivial to test with valgrind.
+---
+ src/Tests/AdNoteTest.cpp            | 10 +++++++---
+ src/Tests/KitTest.cpp               |  2 ++
+ src/Tests/MemoryStressTest.cpp      |  1 +
+ src/Tests/MessageTest.cpp           |  1 +
+ src/Tests/MiddlewareTest.cpp        | 12 +++++++++---
+ src/Tests/PadNoteTest.cpp           |  3 +++
+ src/Tests/PluginTest.cpp            |  3 +++
+ src/Tests/SubNoteTest.cpp           |  2 ++
+ src/Tests/TriggerTest.cpp           |  2 ++
+ src/Tests/UnisonTest.cpp            |  5 ++---
+ src/Tests/WatchTest.cpp             |  4 +++-
+ src/Tests/valgrind-suppressions.txt | 18 ++++++++++++++++++
+ 12 files changed, 53 insertions(+), 10 deletions(-)
+ create mode 100644 src/Tests/valgrind-suppressions.txt
+
+diff --git a/src/Tests/AdNoteTest.cpp b/src/Tests/AdNoteTest.cpp
+index f4df5a67..e2a5db7d 100644
+--- a/src/Tests/AdNoteTest.cpp
++++ b/src/Tests/AdNoteTest.cpp
+@@ -47,7 +47,6 @@ class AdNoteTest
+         WatchManager *w;
+         float *outR, *outL;
+ 
+-        LFO          *lfo;
+         LFOParams    *lfop;
+         int randval(int min, int max)
+         {
+@@ -71,7 +70,7 @@ class AdNoteTest
+ 
+         void run_lfo_randomtest(void)
+         {
+-            lfo  = new LFO(*lfop, 440.0f, *time);
++            LFO* lfo  = new LFO(*lfop, 440.0f, *time);
+             for(int i=0; i<100; ++i) {
+                 float out = lfo->lfoout();
+                 switch(lfop->fel)
+@@ -88,6 +87,7 @@ class AdNoteTest
+                         break;
+                 }
+             }
++            delete lfo;
+         }
+ 
+ 
+@@ -150,9 +150,12 @@ class AdNoteTest
+             delete controller;
+             delete defaultPreset;
+             delete fft;
++            delete w;
++            delete tr;
+             delete [] outL;
+             delete [] outR;
+             FFT_cleanup();
++            delete time;
+             delete synth;
+         }
+ 
+@@ -219,7 +222,7 @@ class AdNoteTest
+ 
+             TS_ASSERT_EQUAL_INT(sampleCount, 30208);
+ 
+-              lfop = new LFOParams(time);
++            lfop = new LFOParams(time);
+             lfop->fel  = zyn::consumer_location_type_t::amp;
+             lfop->freq = 2.0f;
+             lfop->delay = 0.0f;
+@@ -227,6 +230,7 @@ class AdNoteTest
+                 randomize_params();
+                 run_lfo_randomtest();
+             }
++            delete lfop;
+ 
+ 
+         }
+diff --git a/src/Tests/KitTest.cpp b/src/Tests/KitTest.cpp
+index 68a3ae22..be92d69f 100644
+--- a/src/Tests/KitTest.cpp
++++ b/src/Tests/KitTest.cpp
+@@ -44,6 +44,7 @@ enum PrivateNoteStatus {
+ class KitTest
+ {
+     private:
++        struct FFTCleaner { ~FFTCleaner() { FFT_cleanup(); } } cleaner;
+         Alloc      alloc;
+         FFTwrapper fft;
+         Microtonal microtonal;
+@@ -59,6 +60,7 @@ class KitTest
+         KitTest()
+             :fft(getSynthTDefaultOscilSize()), microtonal(dummy)
+         {}
++
+         void setUp() {
+             synth = new SYNTH_T;
+             time  = new AbsTime(*synth);
+diff --git a/src/Tests/MemoryStressTest.cpp b/src/Tests/MemoryStressTest.cpp
+index 6db8909e..6b920a7d 100644
+--- a/src/Tests/MemoryStressTest.cpp
++++ b/src/Tests/MemoryStressTest.cpp
+@@ -77,6 +77,7 @@ class MemoryStressTest
+             delete defaultPreset;
+             delete fft;
+             FFT_cleanup();
++            delete time;
+             delete synth;
+         }
+ 
+diff --git a/src/Tests/MessageTest.cpp b/src/Tests/MessageTest.cpp
+index a9f6a85e..ef7558df 100644
+--- a/src/Tests/MessageTest.cpp
++++ b/src/Tests/MessageTest.cpp
+@@ -40,6 +40,7 @@ char *instance_name=(char*)"";
+ class MessageTest
+ {
+     public:
++        struct FFTCleaner { ~FFTCleaner() { FFT_cleanup(); } } cleaner;
+         Config config;
+         void setUp() {
+             synth    = new SYNTH_T;
+diff --git a/src/Tests/MiddlewareTest.cpp b/src/Tests/MiddlewareTest.cpp
+index 12543e43..6c76d318 100644
+--- a/src/Tests/MiddlewareTest.cpp
++++ b/src/Tests/MiddlewareTest.cpp
+@@ -33,9 +33,10 @@ char *instance_name=(char*)"";
+ 
+ #define NUM_MIDDLEWARE 3
+ 
+-class PluginTest
++class MiddleWareTest
+ {
+     public:
++        struct FFTCleaner { ~FFTCleaner() { FFT_cleanup(); } } cleaner;
+         Config config;
+         void setUp() {
+             synth = new SYNTH_T;
+@@ -60,16 +61,21 @@ class PluginTest
+                 middleware[i] = new MiddleWare(std::move(*synth), &config);
+                 master[i] = middleware[i]->spawnMaster();
+                 //printf("Octave size = %d\n", master[i]->microtonal.getoctavesize());
++                if (i != NUM_MIDDLEWARE-1) {
++                    delete synth;
++                } else {
++                    // "synth" is kept to be directly accessed by the tests
++                }
+             }
+         }
+ 
+         void tearDown() {
+             for(int i = 0; i < NUM_MIDDLEWARE; ++i)
+                 delete middleware[i];
++            delete synth;
+ 
+             delete[] outL;
+             delete[] outR;
+-            delete synth;
+         }
+ 
+ 
+@@ -147,7 +153,7 @@ class PluginTest
+ 
+ int main()
+ {
+-    PluginTest test;
++    MiddleWareTest test;
+     RUN_TEST(testInit);
+     RUN_TEST(testPanic);
+     RUN_TEST(testLoad);
+diff --git a/src/Tests/PadNoteTest.cpp b/src/Tests/PadNoteTest.cpp
+index 472144a1..9816c972 100644
+--- a/src/Tests/PadNoteTest.cpp
++++ b/src/Tests/PadNoteTest.cpp
+@@ -118,10 +118,13 @@ class PadNoteTest
+             delete note;
+             delete controller;
+             delete fft;
++            delete w;
++            delete tr;
+             delete [] outL;
+             delete [] outR;
+             delete pars;
+             FFT_cleanup();
++            delete time;
+             delete synth;
+ 
+             note = NULL;
+diff --git a/src/Tests/PluginTest.cpp b/src/Tests/PluginTest.cpp
+index aa39a2d4..3be5ad1d 100644
+--- a/src/Tests/PluginTest.cpp
++++ b/src/Tests/PluginTest.cpp
+@@ -165,6 +165,7 @@ void print_string_differences(string orig, string next)
+ class PluginTest
+ {
+     public:
++        struct FFTCleaner { ~FFTCleaner() { FFT_cleanup(); } } cleaner;
+         Config config;
+         void setUp() {
+             synth = new SYNTH_T;
+@@ -235,6 +236,8 @@ class PluginTest
+             TS_ASSERT(fdata == result);
+             if(fdata != result)
+                 print_string_differences(fdata, result);
++
++            free(result);
+         }
+ 
+ 
+diff --git a/src/Tests/SubNoteTest.cpp b/src/Tests/SubNoteTest.cpp
+index b148bf78..3e46ff85 100644
+--- a/src/Tests/SubNoteTest.cpp
++++ b/src/Tests/SubNoteTest.cpp
+@@ -91,6 +91,8 @@ class SubNoteTest
+         void tearDown() {
+             delete controller;
+             delete note;
++            delete w;
++            delete tr;
+             delete [] outL;
+             delete [] outR;
+             delete time;
+diff --git a/src/Tests/TriggerTest.cpp b/src/Tests/TriggerTest.cpp
+index 72e48e51..2bb24c20 100644
+--- a/src/Tests/TriggerTest.cpp
++++ b/src/Tests/TriggerTest.cpp
+@@ -84,6 +84,8 @@ class TriggerTest
+         void tearDown() {
+             delete controller;
+             delete note;
++            delete w;
++            delete tr;
+             delete [] outL;
+             delete [] outR;
+             delete time;
+diff --git a/src/Tests/UnisonTest.cpp b/src/Tests/UnisonTest.cpp
+index d621cbf6..62e6f172 100644
+--- a/src/Tests/UnisonTest.cpp
++++ b/src/Tests/UnisonTest.cpp
+@@ -36,7 +36,6 @@ class UnisonTest
+ {
+     public:
+ 
+-        ADnote       *note;
+         FFTwrapper   *fft;
+         Controller   *controller;
+         float test_freq_log2;
+@@ -74,7 +73,6 @@ class UnisonTest
+         }
+ 
+         void tearDown() {
+-            delete note;
+             delete controller;
+             delete fft;
+             FFT_cleanup();
+@@ -97,7 +95,7 @@ class UnisonTest
+             params->VoicePar[0].Unison_invert_phase     = f;
+ 
+             SynthParams pars{memory, *controller, *synth, *time, 120, 0, test_freq_log2, false, prng()};
+-            note = new ADnote(params, pars);
++            ADnote* note = new ADnote(params, pars);
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(values[0], outL[80], 1.9e-5);
+             printf("{%f,", outL[80]);
+@@ -110,6 +108,7 @@ class UnisonTest
+             note->noteout(outL, outR);
+             TS_ASSERT_DELTA(values[3], outR[200], 1.9e-5);
+             printf("%f},\n", outR[200]);
++            delete note;
+         }
+ 
+         void testUnison() {
+diff --git a/src/Tests/WatchTest.cpp b/src/Tests/WatchTest.cpp
+index 9b118373..d4abb373 100644
+--- a/src/Tests/WatchTest.cpp
++++ b/src/Tests/WatchTest.cpp
+@@ -53,10 +53,12 @@ class WatchTest
+             w   = new WatchManager(tr);
+             par = new LFOParams(at);
+             l   = new LFO(*par, 440.0, *at, w);
+-
+         }
+ 
+         void tearDown() {
++            delete l;
++            delete par;
++            delete w;
+             delete at;
+             delete s;
+             delete tr;
+diff --git a/src/Tests/valgrind-suppressions.txt b/src/Tests/valgrind-suppressions.txt
+new file mode 100644
+index 00000000..deea8d6e
+--- /dev/null
++++ b/src/Tests/valgrind-suppressions.txt
+@@ -0,0 +1,18 @@
++# dl_init and dl_open are known to have memory leaks
++# this is a glibc issue, not ours
++{
++   glibc_dl_init
++   Memcheck:Leak
++   match-leak-kinds: reachable
++   fun:*alloc
++   ...
++   fun:_dl_init
++}
++{
++   glibc_dl_open
++   Memcheck:Leak
++   match-leak-kinds: reachable
++   fun:*alloc
++   ...
++   fun:_dl_open
++}
+-- 
+2.47.0
+

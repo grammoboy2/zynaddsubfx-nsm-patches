@@ -1,0 +1,106 @@
+From 861dfb46a235b58727e908c4f32db2f4b7994085 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Mon, 12 Oct 2015 02:40:24 -0400
+Subject: [PATCH 0593/1936] Roll back on xmz load failures.
+
+---
+ src/Misc/MiddleWare.cpp |  5 ++++-
+ src/UI/MasterUI.fl      | 23 ++++++++++++++++++-----
+ src/main.cpp            |  3 +--
+ 3 files changed, 23 insertions(+), 8 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 5a15442b..20e6bdfa 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -658,7 +658,10 @@ public:
+         m->uToB = uToB;
+         m->bToU = bToU;
+         if(filename) {
+-            m->loadXML(filename);
++            if ( m->loadXML(filename) ) {
++                delete m;
++                return;
++            }
+             m->applyparameters();
+         }
+ 
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 65d3ba94..f9e015c3 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1508,7 +1508,15 @@ nsyseff=0;
+ npart=0;
+ last_xmz = new Osc_DataModel(osc);
+ last_xmz->callback = [this](std::string filestr) {
+-    strncpy(last_loaded, filestr.c_str(), XMZ_PATH_MAX);
++    const char *filename = filestr.c_str();
++    if (filename[0] != 0)
++       strncpy(last_loaded, filename, XMZ_PATH_MAX);
++    else if (loading_next[0] != 0) {
++       strncpy(last_loaded, loading_next, XMZ_PATH_MAX);
++       loading_next[0] = 0;
++    } else
++       last_loaded[0] = 0;
++    last_loaded[XMZ_PATH_MAX - 1] = 0;
+     char *label = last_loaded[0] == 0 ? NULL
+                   : ((label = strrchr(last_loaded, '/'))) ? label+1
+ 		  : last_loaded;
+@@ -1582,7 +1590,7 @@ simplelistitemgroup->redraw();} {}
+ microtonalui=new MicrotonalUI(osc, "/microtonal/");
+ 
+     osc->write("/reset_master");
+-       osc->write("/last_xmz", "s", "");
++       osc->write("/last_xmz");
+        npartcounter->value(1);
+        refresh_master_ui();
+        updatepanel();} {}
+@@ -1594,7 +1602,9 @@ microtonalui=new MicrotonalUI(osc, "/microtonal/");
+   }
+   Function {do_revert_changes_unconditional()} {return_type int
+   } {
+-    code {osc->write("/load_xmz", "s", last_loaded);
++    code {strncpy(loading_next, last_loaded, XMZ_PATH_MAX);
++    osc->write("/load_xmz", "s", last_loaded);
++    osc->write("/last_xmz");
+     refresh_master_ui();
+     updatepanel();
+ 
+@@ -1610,8 +1620,9 @@ return 1;} {}
+   }
+   Function {do_load_master_unconditional(const char *filename, const char *display_name)} {return_type int
+   } {
+-    code {osc->write("/load_xmz", "s", filename);
+-    osc->write("/last_xmz", "s", filename);
++    code {strncpy(loading_next, filename, XMZ_PATH_MAX);
++    osc->write("/load_xmz", "s", filename);
++    osc->write("/last_xmz");
+     refresh_master_ui();
+     updatepanel();
+ 
+@@ -1723,6 +1734,8 @@ bankui->hide();} {}
+   }
+   decl {char last_loaded[XMZ_PATH_MAX];} {public local
+   }
++  decl {char loading_next[XMZ_PATH_MAX];} {public local
++  }
+   Function {close()} {open return_type void
+   } {
+     code {*exitprogram=1;} {}
+diff --git a/src/main.cpp b/src/main.cpp
+index 9ed366ff..208f52d7 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -402,8 +402,7 @@ int main(int argc, char *argv[])
+         }
+         else {
+             strncpy(master->last_xmz, filename, XMZ_PATH_MAX);
+-            if (master->last_xmz[XMZ_PATH_MAX-1] != 0)
+-                master->last_xmz[0] = 0;
++            master->last_xmz[XMZ_PATH_MAX-1] = 0;
+             master->applyparameters();
+             cout << "Master file loaded." << endl;
+         }
+-- 
+2.47.0
+

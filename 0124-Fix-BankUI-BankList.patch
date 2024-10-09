@@ -1,0 +1,247 @@
+From 303b0dd3bde627f847f14d45d4f3ebd47c031057 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 13 Aug 2013 12:56:46 -0400
+Subject: [PATCH 0124/1936] Fix BankUI BankList
+
+---
+ src/Misc/Bank.h         |  3 ---
+ src/Misc/MiddleWare.cpp | 54 ++++++++++++++++++++++++++++++++++-------
+ src/UI/BankUI.fl        | 16 +++++++++---
+ src/UI/BankView.cpp     | 25 +++++++++++++++++++
+ src/UI/BankView.h       |  9 +++++++
+ 5 files changed, 91 insertions(+), 16 deletions(-)
+
+diff --git a/src/Misc/Bank.h b/src/Misc/Bank.h
+index e3841b4a..4df14b83 100644
+--- a/src/Misc/Bank.h
++++ b/src/Misc/Bank.h
+@@ -91,9 +91,6 @@ class Bank
+         void clearbank();
+ 
+         std::string defaultinsname;
+-
+-    private:
+-
+         std::string dirname;
+ 
+         void scanrootdir(std::string rootdir); //scans a root dir for banks
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 70d00f8b..2619ece2 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -131,7 +131,7 @@ void deallocate(const char *str, void *v)
+     printf("deallocating a '%s' at '%p'\n", str, v);
+     if(!strcmp(str, "Part"))
+         delete (Part*)v;
+-    if(!strcmp(str, "Master"))
++    else if(!strcmp(str, "Master"))
+         delete (Master*)v;
+     else if(!strcmp(str, "fft_t"))
+         delete[] (fft_t*)v;
+@@ -212,6 +212,32 @@ void refreshBankView(const Bank &bank, unsigned loc, Fl_Osc_Interface *osc)
+     osc->tryLink(response);
+ }
+ 
++void bankList(Bank &bank, Fl_Osc_Interface *osc)
++{
++    char response[2048];
++    int i = 0;
++
++    for(auto &elm : bank.banks) {
++        if(!rtosc_message(response, 2048, "/bank-list", "iss",
++                    i++, elm.name.c_str(), elm.dir.c_str()))
++            errx(1, "Failure to handle bank update properly...");
++        osc->tryLink(response);
++    }
++}
++
++void rescanForBanks(Bank &bank, Fl_Osc_Interface *osc)
++{
++    bank.rescanforbanks();
++    bankList(bank, osc);
++}
++
++void loadBank(Bank &bank, int pos, Fl_Osc_Interface *osc)
++{
++    bank.loadbank(bank.banks[pos].dir);
++    for(int i=0; i<BANK_SIZE; ++i)
++        refreshBankView(bank, i, osc);
++}
++
+ //
+ //static rtosc::Ports padPorts= {
+ //    {"prepare:", "::Prepares the padnote instance", 0, }
+@@ -386,6 +412,9 @@ struct MiddleWareImpl
+                 }
+             }
+         }
++
++        master = m;
++
+         //Give it to the backend and wait for the old part to return for
+         //deallocation
+         //printf("writing something to the location called '%s'\n", msg);
+@@ -472,12 +501,16 @@ struct MiddleWareImpl
+         //printf("watching '%s' go by\n", msg);
+         //Get the object resource locator
+         string obj_rl(msg, last_path+1);
+-        //XXX Utilize object map for this as well
+-        //This dereference will become unsafe when loading new master instances
+-        //is supported
+-        if(!strcmp(msg, "/refresh_bank") && !strcmp(rtosc_argument_string(msg), "i"))
++
++        if(!strcmp(msg, "/refresh_bank") && !strcmp(rtosc_argument_string(msg), "i")) {
+             refreshBankView(master->bank, rtosc_argument(msg,0).i, osc);
+-        else if(objmap.find(obj_rl) != objmap.end()) {
++        } else if(!strcmp(msg, "/bank-list") && !strcmp(rtosc_argument_string(msg), "")) {
++            bankList(master->bank, osc);
++        } else if(!strcmp(msg, "/rescanforbanks") && !strcmp(rtosc_argument_string(msg), "")) {
++            rescanForBanks(master->bank, osc);
++        } else if(!strcmp(msg, "/loadbank") && !strcmp(rtosc_argument_string(msg), "c")) {
++            loadBank(master->bank, rtosc_argument(msg, 0).i, osc);
++        } else if(objmap.find(obj_rl) != objmap.end()) {
+             //try some over simplified pattern matching
+             if(strstr(msg, "oscil/")) {
+                 if(!handleOscil(obj_rl, last_path+1, objmap[obj_rl]))
+@@ -615,7 +648,7 @@ class UI_Interface:public Fl_Osc_Interface
+ 
+         void renameLink(string old, string newer, Fl_Osc_Widget *w) override
+         {
+-            fprintf(stderr, "renameLink('%s','%s',%p)\n",
++            fprintf(stdout, "renameLink('%s','%s',%p)\n",
+                     old.c_str(), newer.c_str(), w);
+             removeLink(old, w);
+             createLink(newer, w);
+@@ -678,6 +711,9 @@ class UI_Interface:public Fl_Osc_Interface
+                     } else if(!strcmp(arg_str, "c")) {
+                         pair.second->OSC_value((char)rtosc_argument(msg,0).i,
+                                 handle);
++                    } else if(!strcmp(arg_str, "s")) {
++                        pair.second->OSC_value((const char*)rtosc_argument(msg,0).s,
++                                handle);
+                     } else if(!strcmp(arg_str, "i")) {
+                         pair.second->OSC_value((int)rtosc_argument(msg,0).i,
+                                 handle);
+@@ -690,7 +726,7 @@ class UI_Interface:public Fl_Osc_Interface
+                 }
+             }
+ 
+-            if(found_count == 0 
++            if(found_count == 0
+                     && strcmp(msg, "/vu-meter")
+                     && strcmp(msg, "undo_change")
+                     && !strstr(msg, "parameter")
+@@ -713,7 +749,7 @@ class UI_Interface:public Fl_Osc_Interface
+         std::multimap<string,Fl_Osc_Widget*> map;
+         MiddleWareImpl *impl;
+ };
+-    
++
+ void MiddleWareImpl::warnMemoryLeaks(void)
+ {
+     UI_Interface *o = (UI_Interface*)osc;
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index 988399c2..2db0ec64 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -53,7 +53,13 @@ class BankUI {open
+       xywh {492 406 785 575} type Double
+       code0 {/*o->label(bank->bankfiletitle.c_str());*/}
+       code1 {/*if (bank->bankfiletitle.empty()) o->label ("Choose a bank from the bank list on the left (or go to settings if to configure the bank location) or choose 'New Bank...' to make a new bank.");*/} visible
++      class Fl_Osc_Window
+     } {
++      Fl_Box {} {
++        xywh {0 0 0 0}
++        code0 {bankuiwindow->osc = osc;}
++        code1 {bankuiwindow->base = "/";}
++      }
+       Fl_Button {} {
+         label Close
+         callback {bankuiwindow->hide();}
+@@ -88,14 +94,16 @@ refreshmainwindow();}
+         code0 {o->value(config.cfg.BankUIAutoClose);}
+       }
+       Fl_Choice banklist {
+-        callback {int n=o->value();
+-std::string dirname="";/*bank->banks[n].dir;*/
+-if (dirname.empty()) return;
+-osc->write("/loadbank", "s", dirname.c_str());
++        callback { //int n=o->value();
++//std::string dirname="";/*bank->banks[n].dir;*/
++//if (dirname.empty()) return;
++//osc->write("/loadbank", "s", dirname.c_str());
+ /*if (bank->loadbank(dirname)==2)
+        fl_alert("Error: Could not load the bank from the directory\\n%s.",dirname.c_str());*/
+ refreshmainwindow();}
+         xywh {5 8 220 20} down_box BORDER_BOX labelfont 1 align 0 textfont 1 textsize 11
++        code0 {o->init("loadbank");}
++        class BankList
+       } {}
+       Fl_Button {} {
+         label {Refresh bank list}
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index c2643b58..7e1c6a68 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -8,6 +8,31 @@
+ #include <cstring>
+ #include <cassert>
+ 
++BankList::BankList(int x,int y, int w, int h, const char *label)
++    :Fl_Osc_Choice(x,y,w,h,label)
++{}
++
++void BankList::init(std::string path)
++{
++    ext = path;
++    oscRegister(path.c_str());
++    osc->createLink("/bank-list", this);
++}
++
++void BankList::OSC_raw(const char *msg)
++{
++    if(strcmp(msg, "/bank-list"))
++        return;
++
++    const int   pos  = rtosc_argument(msg, 0).i;
++    const char *path = rtosc_argument(msg, 1).s;
++
++    if(pos == 0)
++        this->clear();
++
++    this->add(path);
++}
++
+ BankSlot::BankSlot(int x,int y, int w, int h, const char *label)
+ :Fl_Button(x,y,w,h,label), nslot(-1)
+ {
+diff --git a/src/UI/BankView.h b/src/UI/BankView.h
+index 7ef9b62b..8e3ae279 100644
+--- a/src/UI/BankView.h
++++ b/src/UI/BankView.h
+@@ -2,6 +2,7 @@
+ #define BANKVIEW_H
+ 
+ #include "Fl_Osc_Widget.H"
++#include "Fl_Osc_Choice.H"
+ #include <FL/Fl_Group.H>
+ #include <FL/Fl_Button.H>
+ #include <string>
+@@ -12,6 +13,14 @@ class Bank;
+ class BankView;
+ class Fl_Light_Button;
+ 
++class BankList : public Fl_Osc_Choice
++{
++    public:
++        BankList(int x,int y, int w, int h, const char *label=0);
++        void init(std::string path);
++        void OSC_raw(const char *msg);
++};
++
+ class BankSlot : public Fl_Button
+ {
+     public:
+-- 
+2.47.0
+

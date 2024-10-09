@@ -1,0 +1,80 @@
+From cc0e9d3367fe6b5014f349991113d32d3afa673c Mon Sep 17 00:00:00 2001
+From: Daniel Sheeler <dsheeler@pobox.com>
+Date: Tue, 19 Mar 2019 03:23:32 -0500
+Subject: [PATCH 1340/1936] remove old PVolume
+
+---
+ src/Params/ADnoteParameters.cpp | 16 ++++++++++------
+ src/Params/ADnoteParameters.h   |  1 -
+ 2 files changed, 10 insertions(+), 7 deletions(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index a06a2387..8a0e1a85 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -128,8 +128,16 @@ static const Ports voicePorts = {
+     //Amplitude Stuff
+     rParamZyn(PPanning,                  rShort("pan."), rDefault(64),
+         "Panning"),
+-    rParamZyn(PVolume,                   rShort("vol."), rDefault(100),
+-        "Volume"),
++    {"PVolume::i", rShort("vol.") rLinear(0,127)
++        rDoc("Volume"), NULL,
++        [](const char *msg, RtData &d)
++        {
++            rObject *obj = (rObject *)d.obj;
++            if (!rtosc_narguments(msg))
++                d.reply(d.loc, "i", (int)roundf(127.0f * (1.0f + obj->volume/60.0f)));
++            else 
++                obj->volume = -60.0f * (1.0f - rtosc_argument(msg, 0).i / 127.0f);
++        }},
+     {"volume::f", rShort("volume") rProp(parameter) rUnit(dB) rDefault(-12.75) rLinear(-60.0f, 0.0f)
+         rDoc("Part Volume"), NULL,
+         [](const char *msg, RtData &d)
+@@ -138,7 +146,6 @@ static const Ports voicePorts = {
+             if(!rtosc_narguments(msg)) {
+                d.reply(d.loc, "f", obj->volume);
+             } else if (rtosc_narguments(msg) == 1 && rtosc_type(msg, 0) == 'f') {
+-               obj->PVolume = ((int) roundf(127.0f * (rtosc_argument(msg, 0).f / 60.0f + 1.0f)));
+                obj->volume = rtosc_argument(msg, 0).f;
+                d.broadcast(d.loc, "f", ((obj->volume)));
+             }
+@@ -537,7 +544,6 @@ void ADnoteVoiceParam::defaults()
+     Poscilphase   = 64;
+     PFMoscilphase = 64;
+     PDelay                    = 0;
+-    PVolume                   = 100;
+     volume                    = -60.0f* (1.0f - 100.0f / 127.0f);
+     PVolumeminus              = 0;
+     PPanning                  = 64; //center
+@@ -1094,7 +1100,6 @@ void ADnoteVoiceParam::paste(ADnoteVoiceParam &a)
+ 
+ 
+     copy(PPanning);
+-    copy(PVolume);
+     copy(volume);
+     copy(PVolumeminus);
+     copy(PAmpVelocityScaleFunction);
+@@ -1235,7 +1240,6 @@ void ADnoteVoiceParam::getfromXML(XMLwrapper& xml, unsigned nvoice)
+ 
+     if(xml.enterbranch("AMPLITUDE_PARAMETERS")) {
+         PPanning     = xml.getpar127("panning", PPanning);
+-        PVolume      = xml.getpar127("volume", PVolume);
+         const bool upgrade_3_0_3 = (xml.fileversion() < version_type(3,0,3)) ||
+             (!xml.hasparreal("volume"));
+ 
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index a77ca1cd..5ab370f2 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -214,7 +214,6 @@ struct ADnoteVoiceParam {
+     unsigned char PPanning;
+ 
+     /* Voice Volume */
+-    unsigned char PVolume;
+     float volume;
+ 
+     /* If the Volume negative */
+-- 
+2.47.0
+

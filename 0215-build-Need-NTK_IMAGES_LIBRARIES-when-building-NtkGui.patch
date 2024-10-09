@@ -1,0 +1,27 @@
+From 25fd7c06bc1a0b9281b0bf45af2331372f036b03 Mon Sep 17 00:00:00 2001
+From: "Wladimir J. van der Laan" <laanwj@gmail.com>
+Date: Sun, 20 Jul 2014 15:05:28 +0200
+Subject: [PATCH 0215/1936] build: Need NTK_IMAGES_LIBRARIES when building
+ NtkGui
+
+Fix an undefined reference to fl_init_images.
+---
+ src/UI/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index fc7ce074..79f2ee6c 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -58,7 +58,7 @@ add_library(zynaddsubfx_gui STATIC
+ 	)
+ 
+ if(NtkGui)
+-  target_link_libraries(zynaddsubfx_gui ${NTK_LIBRARIES})
++  target_link_libraries(zynaddsubfx_gui ${NTK_LIBRARIES} ${NTK_IMAGES_LIBRARIES})
+ endif(NtkGui)
+ 
+ if(FltkGui)
+-- 
+2.47.0
+

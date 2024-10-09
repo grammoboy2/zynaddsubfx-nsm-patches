@@ -1,0 +1,228 @@
+From 7e19b5c55bd9f1012315ebc3a4d17be0a7153cbf Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 19 Jan 2016 21:17:11 -0500
+Subject: [PATCH 0828/1936] NotePool: Let Killed Notes Live For 1 Cycle
+
+When enforcing the keylimit with a hard kill() there is a pop in
+the audio stream.
+By letting the notes fade for one frame this pop can be avoided.
+---
+ src/Containers/NotePool.cpp | 16 ++++++++++++++--
+ src/Containers/NotePool.h   |  1 +
+ src/Synth/ADnote.cpp        |  7 ++++++-
+ src/Synth/ADnote.h          |  4 +++-
+ src/Synth/Envelope.cpp      |  5 +++++
+ src/Synth/Envelope.h        |  2 ++
+ src/Synth/PADnote.cpp       |  7 ++++++-
+ src/Synth/PADnote.h         |  4 +++-
+ src/Synth/SUBnote.cpp       |  7 ++++++-
+ src/Synth/SUBnote.h         |  3 ++-
+ src/Synth/SynthNote.h       |  5 ++++-
+ 11 files changed, 52 insertions(+), 9 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 891de4be..c3348a85 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -197,8 +197,13 @@ void NotePool::enforceKeyLimit(int limit)
+         }
+     }
+ 
+-    if(to_kill)
+-        kill(*to_kill);
++    if(to_kill) {
++        auto status = to_kill->status;
++        if(status == Part::KEY_RELEASED || status == Part::KEY_RELEASED_AND_SUSTAINED)
++            kill(*to_kill);
++        else
++            entomb(*to_kill);
++    }
+ }
+ 
+ void NotePool::releasePlayingNotes(void)
+@@ -247,6 +252,13 @@ void NotePool::kill(SynthDescriptor &s)
+     needs_cleaning = true;
+ }
+ 
++void NotePool::entomb(NoteDescriptor &d)
++{
++    d.status = Part::KEY_RELEASED;
++    for(auto &s:activeNotes(d))
++        s.note->entomb();
++}
++
+ const char *getStatus(int status_bits)
+ {
+     switch(status_bits)
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index 5fe3abf7..945a8b25 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -113,6 +113,7 @@ class NotePool
+         void killNote(note_t note);
+         void kill(NoteDescriptor &d);
+         void kill(SynthDescriptor &s);
++        void entomb(NoteDescriptor &d);
+ 
+         void cleanup(void);
+ 
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index c3f4694b..d624077e 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -1845,7 +1845,7 @@ void ADnote::releasekey()
+ /*
+  * Check if the note is finished
+  */
+-int ADnote::finished() const
++bool ADnote::finished() const
+ {
+     if(NoteEnabled == ON)
+         return 0;
+@@ -1853,6 +1853,11 @@ int ADnote::finished() const
+         return 1;
+ }
+ 
++void ADnote::entomb(void)
++{
++    NoteGlobalPar.AmpEnvelope->forceFinish();
++}
++
+ void ADnote::Voice::releasekey()
+ {
+     if(!Enabled)
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index e11d839b..1fb25066 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -52,7 +52,9 @@ class ADnote:public SynthNote
+ 
+         int noteout(float *outl, float *outr);
+         void releasekey();
+-        int finished() const;
++        bool finished() const;
++        void entomb(void);
++
+ 
+         virtual SynthNote *cloneLegato(void) override;
+     private:
+diff --git a/src/Synth/Envelope.cpp b/src/Synth/Envelope.cpp
+index 4199e495..2b22ece9 100644
+--- a/src/Synth/Envelope.cpp
++++ b/src/Synth/Envelope.cpp
+@@ -101,6 +101,11 @@ void Envelope::releasekey()
+         t = 0.0f;
+ }
+ 
++void Envelope::forceFinish(void)
++{
++    envfinish = true;
++}
++
+ /*
+  * Envelope Output
+  */
+diff --git a/src/Synth/Envelope.h b/src/Synth/Envelope.h
+index bfa9f1af..6fb2d725 100644
+--- a/src/Synth/Envelope.h
++++ b/src/Synth/Envelope.h
+@@ -35,6 +35,8 @@ class Envelope
+         /**Destructor*/
+         ~Envelope();
+         void releasekey();
++        /**Push Envelope to finishing state*/
++        void forceFinish(void);
+         float envout();
+         float envout_dB();
+         /**Determines the status of the Envelope
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index 27ae76e6..759c9bed 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -428,11 +428,16 @@ int PADnote::noteout(float *outl, float *outr)
+     return 1;
+ }
+ 
+-int PADnote::finished() const
++bool PADnote::finished() const
+ {
+     return finished_;
+ }
+ 
++void PADnote::entomb(void)
++{
++    NoteGlobalPar.AmpEnvelope->forceFinish();
++}
++
+ void PADnote::releasekey()
+ {
+     NoteGlobalPar.FreqEnvelope->releasekey();
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index 528f1ac9..acfa2624 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -38,7 +38,9 @@ class PADnote:public SynthNote
+         void legatonote(LegatoParams pars);
+ 
+         int noteout(float *outl, float *outr);
+-        int finished() const;
++        bool finished() const;
++        void entomb(void);
++
+         void releasekey();
+     private:
+         void setup(float freq, float velocity, int portamento_,
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 743a5c11..31b0371c 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -619,10 +619,15 @@ void SUBnote::releasekey()
+ /*
+  * Check if the note is finished
+  */
+-int SUBnote::finished() const
++bool SUBnote::finished() const
+ {
+     if(NoteEnabled == OFF)
+         return 1;
+     else
+         return 0;
+ }
++
++void SUBnote::entomb(void)
++{
++    AmpEnvelope->forceFinish();
++}
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 20a78388..b57b7bd1 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -38,7 +38,8 @@ class SUBnote:public SynthNote
+ 
+         int noteout(float *outl, float *outr); //note output,return 0 if the note is finished
+         void releasekey();
+-        int finished() const;
++        bool finished() const;
++        void entomb(void);
+     private:
+ 
+         void setup(float freq,
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index 38e98a55..bf5271f7 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -63,7 +63,10 @@ class SynthNote
+ 
+         /**Return if note is finished.
+          * @return finished=1 unfinished=0*/
+-        virtual int finished() const = 0;
++        virtual bool finished() const = 0;
++
++        /**Make a note die off next buffer compute*/
++        virtual void entomb(void) = 0;
+ 
+         virtual void legatonote(LegatoParams pars) = 0;
+ 
+-- 
+2.47.0
+

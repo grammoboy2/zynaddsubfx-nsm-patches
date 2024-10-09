@@ -1,0 +1,25 @@
+From 59da039c84e1dd6d5d8c4c14b6c494b9cc3a4581 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 14 May 2015 14:30:44 -0400
+Subject: [PATCH 0465/1936] Middleware: Disable Debugging Printf
+
+---
+ src/Misc/MiddleWare.cpp | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index f00cc655..c46c4c80 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -969,8 +969,6 @@ void MiddleWareImpl::doReadOnlyOp(std::function<void()> read_only_fn)
+ 
+ void MiddleWareImpl::bToUhandle(const char *rtmsg, bool dummy)
+ {
+-    printf("bToUhandle(%s,%s)\n", last_url.c_str(), 
+-            curr_url.c_str());
+     assert(strcmp(rtmsg, "/part0/kit0/Ppadenableda"));
+     assert(strcmp(rtmsg, "/ze_state"));
+     //Dump Incomming Events For Debugging
+-- 
+2.47.0
+

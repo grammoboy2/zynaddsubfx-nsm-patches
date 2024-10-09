@@ -1,0 +1,30 @@
+From edca8ab11b0f408b9343dbf33cb3eb7f4c337577 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 5 Mar 2016 12:10:53 -0500
+Subject: [PATCH 0879/1936] FFTWrapper: Fix Compile Issue With GCC 5.3.0
+
+https://github.com/falkTX/Carla/issues/368
+---
+ src/DSP/FFTwrapper.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/DSP/FFTwrapper.h b/src/DSP/FFTwrapper.h
+index 8c95fa50..418bfb89 100644
+--- a/src/DSP/FFTwrapper.h
++++ b/src/DSP/FFTwrapper.h
+@@ -49,10 +49,10 @@ std::complex<_Tp>
+ FFTpolar(const _Tp& __rho, const _Tp& __theta = _Tp(0))
+ {
+         _Tp __x = __rho * cos(__theta);
+-        if (isnan(__x))
++        if (std::isnan(__x))
+                 __x = 0;
+         _Tp __y = __rho * sin(__theta);
+-        if (isnan(__y))
++        if (std::isnan(__y))
+                 __y = 0;
+         return std::complex<_Tp>(__x, __y);
+ }
+-- 
+2.47.0
+

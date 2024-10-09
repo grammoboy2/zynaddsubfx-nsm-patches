@@ -1,0 +1,56 @@
+From 58b8c69845cde0ab303485e6ecf0c1732076f1b7 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 16 Jul 2016 10:30:56 +0200
+Subject: [PATCH 0946/1936] Add forgotten license to new files.
+
+---
+ src/version.cpp  | 13 +++++++++++++
+ src/version.h.in | 14 ++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/src/version.cpp b/src/version.cpp
+index 908d8bc9..48bfb84d 100644
+--- a/src/version.cpp
++++ b/src/version.cpp
+@@ -1,3 +1,16 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  version.cpp - implementation of version_type class
++  Copyright (C) 2016 Johannes Lorenz
++  Author: Johannes Lorenz
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
+ #include <iostream>
+ 
+ #include "version.h"
+diff --git a/src/version.h.in b/src/version.h.in
+index 423b8c27..dc359d21 100644
+--- a/src/version.h.in
++++ b/src/version.h.in
+@@ -1,3 +1,17 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  version.h - declaration of version_type class
++              contains the current zynaddsubfx version
++  Copyright (C) 2016 Johannes Lorenz
++  Author: Johannes Lorenz
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
+ #ifndef VERSION_H
+ #define VERSION_H
+ 
+-- 
+2.47.0
+

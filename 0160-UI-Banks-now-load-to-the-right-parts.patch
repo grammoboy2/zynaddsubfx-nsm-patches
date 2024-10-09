@@ -1,0 +1,73 @@
+From 002326f94f648bdf8bb69fdaf524e959e7c5e364 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Mar 2014 19:21:47 -0400
+Subject: [PATCH 0160/1936] UI: Banks now load to the right parts
+
+---
+ src/UI/BankUI.fl    | 2 +-
+ src/UI/BankView.cpp | 6 +++---
+ src/UI/BankView.h   | 4 ++--
+ 3 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index 2db0ec64..1fe22f68 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -118,7 +118,7 @@ banklist->value(0);}
+     code {npart=*npart_;
+ osc  =osc_;
+ make_window();
+-bankview->init(osc, modeselect, *npart_);} {}
++bankview->init(osc, modeselect, npart_);} {}
+   }
+   Function {~BankUI()} {open return_type virtual
+   } {
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index 7e1c6a68..eab1d598 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -196,7 +196,7 @@ BankView::~BankView(void)
+         osc->removeLink("/bankview", this);
+ }
+ 
+-void BankView::init(Fl_Osc_Interface *osc_, BankViewControls *bvc_, int npart_)
++void BankView::init(Fl_Osc_Interface *osc_, BankViewControls *bvc_, int *npart_)
+ {
+     assert(osc_);
+ 
+@@ -259,8 +259,8 @@ void BankView::react(int event, int nslot)
+     //Reads from slot
+     if ((event==1)&&(mode==1)&&(!slot.empty())){
+         printf("Loading a part #%d with file '%s'\n", nslot, slot.filename());
+-        osc->write("/load-part", "is", npart, slot.filename());
+-        osc->writeValue("/part"+to_s(npart)+"/name", slot.name());
++        osc->write("/load-part", "is", *npart, slot.filename());
++        osc->writeValue("/part"+to_s(*npart)+"/name", slot.name());
+     }
+ 
+     //save(write) to slot
+diff --git a/src/UI/BankView.h b/src/UI/BankView.h
+index 8e3ae279..112b3e80 100644
+--- a/src/UI/BankView.h
++++ b/src/UI/BankView.h
+@@ -73,7 +73,7 @@ class BankView: public Fl_Group, public Fl_Osc_Widget
+     public:
+         BankView(int x,int y, int w, int h, const char *label=0);
+         ~BankView(void);
+-        void init(Fl_Osc_Interface *osc_, BankViewControls *bvc_, int npart_);
++        void init(Fl_Osc_Interface *osc_, BankViewControls *bvc_, int *npart_);
+ 
+         void react(int event, int slot);
+ 
+@@ -90,7 +90,7 @@ class BankView: public Fl_Group, public Fl_Osc_Widget
+         //XXX TODO locked banks...
+         int mode;
+         int nselected;
+-        int npart;
++        int *npart;
+ };
+ 
+ #endif
+-- 
+2.47.0
+

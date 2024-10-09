@@ -1,0 +1,22 @@
+From 4e99c27a3043f24f57f873481e38b784baa8e72e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 15 Nov 2016 20:02:26 -0500
+Subject: [PATCH 1079/1936] HISTORY.txt: Set 3.0.0 Release
+
+---
+ HISTORY.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/HISTORY.txt b/HISTORY.txt
+index f25b7c08..a1bce4ef 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,4 +1,4 @@
+-3.0.0 (TBD)
++3.0.0 (17 November 2016)
+         - Add support for zest toolkit via Zyn-Fusion
+         - Add watchpoints to env/LFO
+         - Add Bank searching capabilities
+-- 
+2.47.0
+

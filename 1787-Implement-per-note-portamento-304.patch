@@ -1,0 +1,1586 @@
+From 435e1244b4825f5673eb37d1f1e62924417c0b6d Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Sat, 9 Oct 2021 08:01:03 +0200
+Subject: [PATCH 1787/1936] Implement per-note portamento (#304)
+
+Implement per-note portamento, rather than per-controller (in reality,
+per-part).
+
+For each note played, when portamento is needed, create a portamento
+object which is referred to by all constituent synth engines, and which
+is updated by the part continually. The portamento object is deleted
+by the note pool when a note is killed, by which time the synth engines
+will have been deallocated and there exists no reference to it.
+
+For legato mode, reuse the portamento object, since the note
+descriptors are also reused. Otherwise, the portamento object would
+have to be deallocated in various places in the note pool code whenever
+a note was reused in legato mode, which would clutter up the code,
+and possibly lead to a number of corner cases where the portamento
+object was still referred to by the synth engines.
+On the other hand, the part code would become cleaner if the
+portamento object were not reused.
+
+Whenever a new note starts its glide when portamento is enabled,
+start at the current pitch of the previously played note
+(including any portamento the previous note is currently
+exhibiting), rather than simply the target pitch of the previous
+note.
+
+This will create a much smoother portamento, especially in legato
+mode, with no pitch jumping, which was the case previosly when
+new notes started their portamento cycle at the target pitch of
+the previous note.
+
+If the previous note is killed before its portamento cycle has
+completed, save the pitch of the note when it was killed
+(or, more exactly, when the portamento object is destroyed, which
+should be virtually the same time) to use as the starting pitch
+for the portamento cycle of the next note played. This is a slightly
+rare corner case, but fairly simple to handle.
+
+Portamento is now tested in its own test PortamentoTest,
+which means ControllerTest is now empty. Leave it as it is for
+future Controller test initiatives.
+---
+ src/Containers/NotePool.cpp  |  44 +++++++++-----
+ src/Containers/NotePool.h    |   9 ++-
+ src/Misc/Part.cpp            |  83 +++++++++++++++++++++++---
+ src/Misc/Part.h              |   8 ++-
+ src/Params/Controller.cpp    |  70 ----------------------
+ src/Params/Controller.h      |  30 ----------
+ src/Synth/ADnote.cpp         |  10 ++--
+ src/Synth/ADnote.h           |   5 +-
+ src/Synth/CMakeLists.txt     |   5 +-
+ src/Synth/PADnote.cpp        |  11 ++--
+ src/Synth/PADnote.h          |   5 +-
+ src/Synth/Portamento.cpp     | 106 ++++++++++++++++++++++++++++++++++
+ src/Synth/Portamento.h       | 105 +++++++++++++++++++++++++++++++++
+ src/Synth/SUBnote.cpp        |  11 ++--
+ src/Synth/SUBnote.h          |   5 +-
+ src/Synth/SynthNote.cpp      |   5 +-
+ src/Synth/SynthNote.h        |  18 +++---
+ src/Tests/CMakeLists.txt     |   1 +
+ src/Tests/ControllerTest.cpp |  35 -----------
+ src/Tests/KitTest.cpp        | 109 +++++++++++++++++++++++------------
+ src/Tests/PortamentoTest.cpp |  97 +++++++++++++++++++++++++++++++
+ 21 files changed, 543 insertions(+), 229 deletions(-)
+ create mode 100644 src/Synth/Portamento.cpp
+ create mode 100644 src/Synth/Portamento.h
+ create mode 100644 src/Tests/PortamentoTest.cpp
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 9cf69b10..02ebd2e6 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -11,6 +11,7 @@
+ */
+ #include "NotePool.h"
+ #include "../Misc/Allocator.h"
++#include "../Synth/Portamento.h"
+ #include "../Synth/SynthNote.h"
+ #include <cstring>
+ #include <cassert>
+@@ -185,7 +186,7 @@ int NotePool::usedSynthDesc(void) const
+     return cnt;
+ }
+ 
+-void NotePool::insertNote(note_t note, uint8_t sendto, SynthDescriptor desc, bool legato)
++void NotePool::insertNote(note_t note, uint8_t sendto, SynthDescriptor desc, PortamentoRealtime *portamento_realtime, bool legato)
+ {
+     //Get first free note descriptor
+     int desc_id = getMergeableDescriptor(note, sendto, legato, ndesc);
+@@ -202,11 +203,12 @@ void NotePool::insertNote(note_t note, uint8_t sendto, SynthDescriptor desc, boo
+         sdesc_id++;
+     }
+ 
+-    ndesc[desc_id].note         = note;
+-    ndesc[desc_id].sendto       = sendto;
+-    ndesc[desc_id].size        += 1;
+-    ndesc[desc_id].status       = KEY_PLAYING;
+-    ndesc[desc_id].legatoMirror = legato;
++    ndesc[desc_id].note                = note;
++    ndesc[desc_id].sendto              = sendto;
++    ndesc[desc_id].size               += 1;
++    ndesc[desc_id].status              = KEY_PLAYING;
++    ndesc[desc_id].legatoMirror        = legato;
++    ndesc[desc_id].portamentoRealtime  = portamento_realtime;
+ 
+     sdesc[sdesc_id] = desc;
+     return;
+@@ -222,15 +224,16 @@ void NotePool::upgradeToLegato(void)
+     for(auto &d:activeDesc())
+         if(d.playing())
+             for(auto &s:activeNotes(d))
+-                insertLegatoNote(d.note, d.sendto, s);
++                insertLegatoNote(d, s);
+ }
+ 
+-void NotePool::insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor desc)
++void NotePool::insertLegatoNote(NoteDescriptor desc, SynthDescriptor sdesc)
+ {
+-    assert(desc.note);
++    assert(sdesc.note);
+     try {
+-        desc.note = desc.note->cloneLegato();
+-        insertNote(note, sendto, desc, true);
++        sdesc.note = sdesc.note->cloneLegato();
++        // No portamentoRealtime for the legatoMirror descriptor
++        insertNote(desc.note, desc.sendto, sdesc, NULL, true);
+     } catch (std::bad_alloc &ba) {
+         std::cerr << "failed to insert legato note: " << ba.what() << std::endl;
+     }
+@@ -239,7 +242,7 @@ void NotePool::insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor des
+ //There should only be one pair of notes which are still playing.
+ //Note however that there can be releasing legato notes already in the
+ //list when we get called, so need to handle that.
+-void NotePool::applyLegato(note_t note, const LegatoParams &par)
++void NotePool::applyLegato(note_t note, const LegatoParams &par, PortamentoRealtime *portamento_realtime)
+ {
+     for(auto &desc:activeDesc()) {
+         //Currently, there can actually be more than one legato pair, while a
+@@ -248,6 +251,16 @@ void NotePool::applyLegato(note_t note, const LegatoParams &par)
+         if (desc.dying())
+             continue;
+         desc.note = note;
++        // Only set portamentoRealtime for the primary of the two note
++        // descriptors in legato mode, or we'll get two note descriptors
++        // with the same realtime pointer, causing double updateportamento,
++        // and deallocation crashes.
++        if (!desc.legatoMirror) {
++            //If realtime is already set, we mustn't set it to NULL or we'll
++            //leak the old portamento.
++            if (portamento_realtime)
++                desc.portamentoRealtime = portamento_realtime;
++        }
+         for(auto &synth:activeNotes(desc))
+             try {
+                 synth.note->legatonote(par);
+@@ -491,6 +504,8 @@ void NotePool::kill(NoteDescriptor &d)
+     d.setStatus(KEY_OFF);
+     for(auto &s:activeNotes(d))
+         kill(s);
++    if (d.portamentoRealtime)
++        d.portamentoRealtime->memory.dealloc(d.portamentoRealtime);
+ }
+ 
+ void NotePool::kill(SynthDescriptor &s)
+@@ -544,8 +559,11 @@ void NotePool::cleanup(void)
+             ndesc[i].size = new_length[i];
+             if(new_length[i] != 0)
+                 ndesc[cum_new++] = ndesc[i];
+-            else
++            else {
+                 ndesc[i].setStatus(KEY_OFF);
++                if (ndesc[i].portamentoRealtime)
++                    ndesc[i].portamentoRealtime->memory.dealloc(ndesc[i].portamentoRealtime);
++            }
+         }
+         memset(ndesc+cum_new, 0, sizeof(*ndesc)*(POLYPHONY-cum_new));
+     }
+diff --git a/src/Containers/NotePool.h b/src/Containers/NotePool.h
+index c0927d34..56fafc05 100644
+--- a/src/Containers/NotePool.h
++++ b/src/Containers/NotePool.h
+@@ -22,6 +22,7 @@ namespace zyn {
+ typedef uint8_t note_t; //Global MIDI note definition
+ 
+ struct LegatoParams;
++struct PortamentoRealtime;
+ class NotePool
+ {
+     public:
+@@ -37,6 +38,7 @@ class NotePool
+             uint8_t size;
+             uint8_t status;
+             bool    legatoMirror;
++            PortamentoRealtime *portamentoRealtime;
+             bool operator==(NoteDescriptor);
+ 
+             //status checks
+@@ -121,11 +123,12 @@ class NotePool
+         NotePool(void);
+ 
+         //Operations
+-        void insertNote(note_t note, uint8_t sendto, SynthDescriptor desc, bool legato=false);
+-        void insertLegatoNote(note_t note, uint8_t sendto, SynthDescriptor desc);
++        void insertNote(note_t note, uint8_t sendto, SynthDescriptor desc,
++                        PortamentoRealtime *portamento_realtime=NULL, bool legato=false);
++        void insertLegatoNote(NoteDescriptor desc, SynthDescriptor sdesc);
+ 
+         void upgradeToLegato(void);
+-        void applyLegato(note_t note, const LegatoParams &par);
++        void applyLegato(note_t note, const LegatoParams &par, PortamentoRealtime *portamento_realtime=NULL);
+ 
+         void makeUnsustainable(note_t note);
+         
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 33e8fa02..b5dc984c 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -20,6 +20,7 @@
+ #include "../Params/ADnoteParameters.h"
+ #include "../Params/SUBnoteParameters.h"
+ #include "../Params/PADnoteParameters.h"
++#include "../Synth/Portamento.h"
+ #include "../Synth/Resonance.h"
+ #include "../Synth/SynthNote.h"
+ #include "../Synth/ADnote.h"
+@@ -317,6 +318,8 @@ Part::Part(Allocator &alloc, const SYNTH_T &synth_, const AbsTime &time_,
+ 
+     killallnotes = false;
+     oldfreq_log2 = -1.0f;
++    oldportamento = NULL;
++    legatoportamento = NULL;
+ 
+     cleanup();
+ 
+@@ -546,18 +549,80 @@ bool Part::NoteOnInternal(note_t note,
+     // notes. That means it is required that the previous note is
+     // still held down or sustained for the Portamento to activate
+     // (that's like Legato).
+-    const bool portamento = (Ppolymode || isRunningNote) &&
+-        ctl.initportamento(oldfreq_log2, note_log2_freq, doingLegato);
++    PortamentoRealtime *portamento_realtime = NULL;
++    if(Ppolymode || isRunningNote) {
++        // If there is a currently ongoing glide, shift the starting point
++        // for any new portamento to where the current glide is right now
++        if (oldportamento && oldportamento->portamento.active)
++            oldportamentofreq_log2 += oldportamento->portamento.freqdelta_log2;
++        // Non-portamento settings and conditions say the note may have
++        // portamento, but it remains for Portamento.init to make the
++        // final decision depending on the portamento enable, threshold and
++        // other parameters.
++        Portamento portamento(ctl, synth, oldfreq_log2, oldportamentofreq_log2, note_log2_freq);
++        if(portamento.active) {
++            // We're good to go! Just need to figure out how.
++            // If we're doing legato and we already have a portamento structure,
++            // reuse it.
++            if (doingLegato && legatoportamento) {
++                portamento_realtime = legatoportamento;
++                portamento_realtime->portamento = portamento;
++            } else {
++                // Create new one if we don't already have one, or for each
++                // note in poly/mono mode
++                portamento_realtime = memory.alloc<PortamentoRealtime>
++                    (this,
++                     memory,
++                     // Cleanup function: Destroy any references we might
++                     // have to the current realtime pointer so that it
++                     // can not be (re)used, with disastrous results.
++                     [](PortamentoRealtime *realtime)
++                        {
++                            assert(realtime);
++                            Part *part = static_cast<Part *>(realtime->handle);
++                            assert(part);
++                            if (realtime == part->oldportamento) {
++                                // Since the last note is going away, capture
++                                // the portamento:ed pitch offset to our saved
++                                // previous note. This will be our starting
++                                // point for the next portamento glide.
++                                if (realtime->portamento.active)
++                                    part->oldportamentofreq_log2 +=
++                                        realtime->portamento.freqdelta_log2;
++                                part->oldportamento = NULL;
++                            }
++                            if (realtime == part->legatoportamento)
++                                part->legatoportamento = NULL;
++                        },
++                     portamento
++                    );
++                if (doingLegato)
++                    legatoportamento = portamento_realtime;
++            }
++        }
++    }
++
++    // Create the portamento pointer that we distribute to the synth notes
++    Portamento *portamento = NULL;
++    if(portamento_realtime)
++        portamento = &portamento_realtime->portamento;
+ 
++    // Save note freq and pointer to portamento state for next note
+     oldfreq_log2 = note_log2_freq;
++    oldportamentofreq_log2 = oldfreq_log2;
++    oldportamento = portamento_realtime;
+ 
+     //Adjust Existing Notes
+     if(doingLegato) {
+         LegatoParams pars = {vel, portamento, note_log2_freq, true, prng()};
+-        notePool.applyLegato(note, pars);
++        notePool.applyLegato(note, pars, portamento_realtime);
+         return true;
+     }
+ 
++    // We know now that we are not doing legato, so we destroy the reference
++    // to the previous legato portamento info so we don't try to reuse it
++    legatoportamento = NULL;
++
+     if(Ppolymode)
+         notePool.makeUnsustainable(note);
+     
+@@ -583,14 +648,17 @@ bool Part::NoteOnInternal(note_t note,
+             if(item.Padenabled)
+                 notePool.insertNote(note, sendto,
+                         {memory.alloc<ADnote>(kit[i].adpars, pars,
+-                            wm, (pre+"kit"+i+"/adpars/").c_str), 0, i});
++                            wm, (pre+"kit"+i+"/adpars/").c_str), 0, i},
++                                    portamento_realtime);
+             if(item.Psubenabled)
+                 notePool.insertNote(note, sendto,
+-                        {memory.alloc<SUBnote>(kit[i].subpars, pars, wm, (pre+"kit"+i+"/subpars/").c_str), 1, i});
++                        {memory.alloc<SUBnote>(kit[i].subpars, pars, wm, (pre+"kit"+i+"/subpars/").c_str), 1, i},
++                                    portamento_realtime);
+             if(item.Ppadenabled)
+                 notePool.insertNote(note, sendto,
+                         {memory.alloc<PADnote>(kit[i].padpars, pars, interpolation, wm,
+-                            (pre+"kit"+i+"/padpars/").c_str), 2, i});
++                            (pre+"kit"+i+"/padpars/").c_str), 2, i},
++                                    portamento_realtime);
+         } catch (std::bad_alloc & ba) {
+             std::cerr << "dropped new note: " << ba.what() << std::endl;
+         }
+@@ -948,6 +1016,8 @@ void Part::ComputePartSmps()
+             if(note.finished())
+                 notePool.kill(s);
+         }
++    if (d.portamentoRealtime)
++        d.portamentoRealtime->portamento.update();
+     }
+ 
+     //Apply part's effects and mix them
+@@ -983,7 +1053,6 @@ void Part::ComputePartSmps()
+         for(int nefx = 0; nefx < NUM_PART_EFX; ++nefx)
+             partefx[nefx]->cleanup();
+     }
+-    ctl.updateportamento();
+ }
+ 
+ /*
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index bc36adda..0a70def2 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -24,6 +24,7 @@
+ 
+ namespace zyn {
+ 
++struct PortamentoParams;
+ /** Part implementation*/
+ class Part
+ {
+@@ -120,7 +121,6 @@ class Part
+             const static rtosc::Ports &ports;
+         } kit[NUM_KIT_ITEMS];
+ 
+-
+         //Part parameters
+         void setkeylimit(unsigned char Pkeylimit);
+         void setvoicelimit(unsigned char Pvoicelimit);
+@@ -218,7 +218,11 @@ class Part
+            store the velocity and logarithmic frequency values of a given note.
+            For example 'monomem[note].velocity' would be the velocity value of the note 'note'.*/
+ 
+-        float oldfreq_log2;    //this is used for portamento
++        float oldfreq_log2;    // previous note pitch, used for portamento
++        float oldportamentofreq_log2; // previous portamento pitch
++        PortamentoRealtime *oldportamento; // previous portamento
++        PortamentoRealtime *legatoportamento; // last used legato portamento
++
+         Microtonal *microtonal;
+         FFTwrapper *fft;
+         WatchManager *wm;
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index cbaea632..f555b628 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -112,7 +112,6 @@ void Controller::defaults()
+     NRPN.receive = 1;
+ 
+     portamento.portamento = 0;
+-    portamento.used = 0;
+     portamento.proportional = 0;
+     portamento.propRate     = 80;
+     portamento.propDepth    = 90;
+@@ -124,7 +123,6 @@ void Controller::defaults()
+     resonancecenter.depth    = 64;
+     resonancebandwidth.depth = 64;
+ 
+-    initportamento(log2f(440.0f), log2f(440.0f), false);
+     setportamento(0);
+ }
+ 
+@@ -271,74 +269,6 @@ void Controller::setportamento(int value)
+         portamento.portamento = ((value < 64) ? 0 : 1);
+ }
+ 
+-int Controller::initportamento(float oldfreq_log2,
+-                               float newfreq_log2,
+-                               bool legatoflag)
+-{
+-    if(legatoflag) {  // Legato in progress
+-        if(portamento.portamento == 0)
+-            return 0;
+-    }
+-    else {  // No legato, do the original if...return
+-        if((portamento.used != 0) || (portamento.portamento == 0))
+-            return 0;
+-    }
+-
+-    float portamentotime = powf(100.0f, portamento.time / 127.0f) / 50.0f; //portamento time in seconds
+-    const float deltafreq_log2 = oldfreq_log2 - newfreq_log2;
+-    const float absdeltaf_log2 = fabsf(deltafreq_log2);
+-
+-    if(portamento.proportional) {
+-        const float absdeltaf = powf(2.0f, absdeltaf_log2);
+-
+-        portamentotime *= powf(absdeltaf
+-            / (portamento.propRate / 127.0f * 3 + .05),
+-              (portamento.propDepth / 127.0f * 1.6f + .2));
+-    }
+-
+-    if((portamento.updowntimestretch >= 64) && (newfreq_log2 < oldfreq_log2)) {
+-        if(portamento.updowntimestretch == 127)
+-            return 0;
+-        portamentotime *= powf(0.1f,
+-                               (portamento.updowntimestretch - 64) / 63.0f);
+-    }
+-    if((portamento.updowntimestretch < 64) && (newfreq_log2 > oldfreq_log2)) {
+-        if(portamento.updowntimestretch == 0)
+-            return 0;
+-        portamentotime *= powf(0.1f,
+-                               (64.0f - portamento.updowntimestretch) / 64.0f);
+-    }
+-
+-    portamento.x = 0.0f;
+-    portamento.dx = synth.buffersize_f / (portamentotime * synth.samplerate_f);
+-    portamento.origfreqdelta_log2 = deltafreq_log2;
+-
+-    const float threshold_log2 = portamento.pitchthresh / 12.0f;
+-    if((portamento.pitchthreshtype == 0) && (absdeltaf_log2 - 0.00001f > threshold_log2))
+-        return 0;
+-    if((portamento.pitchthreshtype == 1) && (absdeltaf_log2 + 0.00001f < threshold_log2))
+-        return 0;
+-
+-    portamento.used = 1;
+-    portamento.freqdelta_log2 = deltafreq_log2;
+-    return 1;
+-}
+-
+-void Controller::updateportamento()
+-{
+-    if(portamento.used == 0)
+-        return;
+-
+-    portamento.x += portamento.dx;
+-    if(portamento.x > 1.0f) {
+-        portamento.x    = 1.0f;
+-        portamento.used = 0;
+-    }
+-    portamento.freqdelta_log2 =
+-        (1.0f - portamento.x) * portamento.origfreqdelta_log2;
+-}
+-
+-
+ void Controller::setresonancecenter(int value)
+ {
+     resonancecenter.data      = value;
+diff --git a/src/Params/Controller.h b/src/Params/Controller.h
+index b10e0497..5345ece7 100644
+--- a/src/Params/Controller.h
++++ b/src/Params/Controller.h
+@@ -53,17 +53,6 @@ class Controller
+         void setparameternumber(unsigned int type, int value); //used for RPN and NRPN's
+         int getnrpn(int *parhi, int *parlo, int *valhi, int *vallo);
+ 
+-        /**
+-         * Initialize a portamento
+-         *
+-         * @param oldfreq Starting frequency of the portamento (Hz)
+-         * @param newfreq Ending frequency of the portamento (Hz)
+-         * @param legatoflag true when legato is in progress, false otherwise
+-         * @returns 1 if properly initialized, 0 otherwise*/
+-        int initportamento(float oldfreq, float newfreq, bool legatoflag);
+-        /**Update portamento's freqrap to next value based upon dx*/
+-        void updateportamento();
+-
+         // Controllers values
+         struct { //Pitch Wheel
+             int       data;
+@@ -166,25 +155,6 @@ class Controller
+              * (eg: the portamento is from 300Hz to 200 Hz)
+              */
+             unsigned char updowntimestretch;
+-            /**this value is used to compute the actual portamento
+-             *
+-             * This is the logarithmic power of two frequency
+-             * adjustment of the newer frequency to fit the profile of
+-             * the portamento.
+-             * This will be linear with respect to x.*/
+-            float freqdelta_log2;
+-            /**if a the portamento is used by a note
+-             * \todo see if this can be a bool*/
+-            int used;
+-
+-            //Internal data
+-
+-            /**x is from 0.0f (start portamento) to 1.0f (finished portamento)*/
+-            float x;
+-            /**dx is the increment to x when updateportamento is called*/
+-            float dx;
+-            /** this is used for computing freqdelta_log2 value from x*/
+-            float origfreqdelta_log2;
+         } portamento;
+ 
+         struct { //Resonance Center Frequency
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 348caac1..5a0d58a4 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -501,7 +501,7 @@ void ADnote::setupVoiceMod(int nvoice, bool first_run)
+ SynthNote *ADnote::cloneLegato(void)
+ {
+     SynthParams sp{memory, ctl, synth, time, velocity,
+-                (bool)portamento, legato.param.note_log2_freq, true,
++                portamento, legato.param.note_log2_freq, true,
+                 initial_seed };
+     return memory.alloc<ADnote>(&pars, sp);
+ }
+@@ -1091,10 +1091,10 @@ void ADnote::computecurrentparameters()
+ 
+     //compute the portamento, if it is used by this note
+     float portamentofreqdelta_log2 = 0.0f;
+-    if(portamento != 0) { //this voice use portamento
+-        portamentofreqdelta_log2 = ctl.portamento.freqdelta_log2;
+-        if(ctl.portamento.used == 0) //the portamento has finished
+-            portamento = 0;  //this note is no longer "portamented"
++    if(portamento) { //this voice uses portamento
++        portamentofreqdelta_log2 = portamento->freqdelta_log2;
++        if(!portamento->active) //the portamento has finished
++            portamento = NULL;  //this note is no longer "portamented"
+     }
+ 
+     //compute parameters for all voices
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 91749506..6063df11 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -17,6 +17,7 @@
+ #include "SynthNote.h"
+ #include "Envelope.h"
+ #include "LFO.h"
++#include "Portamento.h"
+ #include "../Params/ADnoteParameters.h"
+ #include "../Params/Controller.h"
+ #include "WatchPoint.h"
+@@ -322,8 +323,8 @@ class ADnote:public SynthNote
+         //interpolate the amplitudes
+         float globaloldamplitude, globalnewamplitude;
+ 
+-        //1 if the note has portamento
+-        int portamento;
++        //Pointer to portamento if note has portamento
++        Portamento *portamento;
+ 
+         //how the fine detunes are made bigger or smaller
+         float bandwidthDetuneMultiplier;
+diff --git a/src/Synth/CMakeLists.txt b/src/Synth/CMakeLists.txt
+index 9b4044b6..cab4b0a8 100644
+--- a/src/Synth/CMakeLists.txt
++++ b/src/Synth/CMakeLists.txt
+@@ -6,8 +6,9 @@ set(zynaddsubfx_synth_SRCS
+     Synth/ModFilter.cpp
+ 	Synth/OscilGen.cpp
+ 	Synth/PADnote.cpp
++	Synth/Portamento.cpp
+ 	Synth/Resonance.cpp
+-	Synth/SUBnote.cpp
+-    Synth/WatchPoint.cpp
++    Synth/SUBnote.cpp
++        Synth/WatchPoint.cpp
+ 	PARENT_SCOPE
+ )
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index fa3269d3..26386bee 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -14,6 +14,7 @@
+ #include <cmath>
+ #include "PADnote.h"
+ #include "ModFilter.h"
++#include "Portamento.h"
+ #include "../Misc/Config.h"
+ #include "../Misc/Allocator.h"
+ #include "../Params/PADnoteParameters.h"
+@@ -42,7 +43,7 @@ PADnote::PADnote(const PADnoteParameters *parameters,
+ }
+ 
+ void PADnote::setup(float velocity_,
+-                    int portamento_,
++                    struct Portamento *portamento_,
+                     float note_log2_freq_,
+                     bool legato,
+                     WatchManager *wm,
+@@ -203,7 +204,7 @@ void PADnote::setup(float velocity_,
+ SynthNote *PADnote::cloneLegato(void)
+ {
+     SynthParams sp{memory, ctl, synth, time, velocity,
+-                   (bool)portamento, legato.param.note_log2_freq, true, legato.param.seed};
++                   portamento, legato.param.note_log2_freq, true, legato.param.seed};
+     return memory.alloc<PADnote>(&pars, sp, interpolation);
+ }
+ 
+@@ -268,9 +269,9 @@ void PADnote::computecurrentparameters()
+     //compute the portamento, if it is used by this note
+     float portamentofreqdelta_log2 = 0.0f;
+     if(portamento) { //this voice use portamento
+-        portamentofreqdelta_log2 = ctl.portamento.freqdelta_log2;
+-        if(ctl.portamento.used == 0) //the portamento has finished
+-            portamento = false;  //this note is no longer "portamented"
++        portamentofreqdelta_log2 = portamento->freqdelta_log2;
++        if(!portamento->active) //the portamento has finished
++            portamento = NULL;  //this note is no longer "portamented"
+     }
+ 
+     realfreq =
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index 03a12b34..4febc02b 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -39,7 +39,7 @@ class PADnote:public SynthNote
+ 
+         void releasekey();
+     private:
+-        void setup(float velocity, int portamento_,
++        void setup(float velocity, Portamento *portamento,
+                    float note_log2_freq, bool legato = false, WatchManager *wm=0, const char *prefix=0);
+         void fadein(float *smps);
+         void computecurrentparameters();
+@@ -54,7 +54,8 @@ class PADnote:public SynthNote
+         float OffsetHz;
+         bool  firsttime;
+ 
+-        int nsample, portamento;
++        int nsample;
++        Portamento *portamento;
+ 
+         int Compute_Linear(float *outl,
+                            float *outr,
+diff --git a/src/Synth/Portamento.cpp b/src/Synth/Portamento.cpp
+new file mode 100644
+index 00000000..01fcb687
+--- /dev/null
++++ b/src/Synth/Portamento.cpp
+@@ -0,0 +1,106 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Portamento.cpp - Portamento calculation and management
++  Copyright (C) 2016 Mark McCurry
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++#include "Portamento.h"
++#include "../globals.h"
++
++namespace zyn {
++
++Portamento::Portamento(const Controller &ctl,
++                       const SYNTH_T &synth,
++                       float oldfreq_log2,
++                       float oldportamentofreq_log2,
++                       float newfreq_log2)
++{
++    init(ctl, synth, oldfreq_log2, oldportamentofreq_log2, newfreq_log2);
++}
++
++void Portamento::init(const Controller &ctl,
++                      const SYNTH_T &synth,
++                      float oldfreq_log2,
++                      float oldportamentofreq_log2,
++                      float newfreq_log2)
++{
++    active = false;
++
++    if(ctl.portamento.portamento == 0)
++        return;
++
++    if(oldfreq_log2 == newfreq_log2)
++        return;
++
++    float portamentotime = powf(100.0f, ctl.portamento.time / 127.0f) / 50.0f; //portamento time in seconds
++    const float deltafreq_log2 = oldportamentofreq_log2 - newfreq_log2;
++    const float absdeltaf_log2 = fabsf(deltafreq_log2);
++    const float absdeltanotefreq_log2 = fabsf(oldfreq_log2 - newfreq_log2);
++
++    if(ctl.portamento.proportional) {
++        const float absdeltaf = powf(2.0f, absdeltaf_log2);
++
++        portamentotime *= powf(absdeltaf
++            / (ctl.portamento.propRate / 127.0f * 3 + .05),
++              (ctl.portamento.propDepth / 127.0f * 1.6f + .2));
++    }
++
++    if((ctl.portamento.updowntimestretch >= 64) && (newfreq_log2 < oldfreq_log2)) {
++        if(ctl.portamento.updowntimestretch == 127)
++            return;
++        portamentotime *= powf(0.1f,
++                               (ctl.portamento.updowntimestretch - 64) / 63.0f);
++    }
++    if((ctl.portamento.updowntimestretch < 64) && (newfreq_log2 > oldfreq_log2)) {
++        if(ctl.portamento.updowntimestretch == 0)
++            return;
++        portamentotime *= powf(0.1f,
++                               (64.0f - ctl.portamento.updowntimestretch) / 64.0f);
++    }
++
++    const float threshold_log2 = ctl.portamento.pitchthresh / 12.0f;
++    if((ctl.portamento.pitchthreshtype == 0) && (absdeltanotefreq_log2 - 0.00001f > threshold_log2))
++        return;
++    if((ctl.portamento.pitchthreshtype == 1) && (absdeltanotefreq_log2 + 0.00001f < threshold_log2))
++        return;
++
++    x = 0.0f;
++    dx = synth.buffersize_f / (portamentotime * synth.samplerate_f);
++    origfreqdelta_log2 = deltafreq_log2;
++
++    freqdelta_log2 = deltafreq_log2;
++    active = true;
++}
++
++void Portamento::update(void)
++{
++    if(!active)
++        return;
++
++    x += dx;
++    if(x > 1.0f) {
++        x    = 1.0f;
++        active = false;
++    }
++    freqdelta_log2 = (1.0f - x) * origfreqdelta_log2;
++}
++
++PortamentoRealtime::PortamentoRealtime(void *handle,
++                                       Allocator &memory,
++                                       std::function<void(PortamentoRealtime *)> cleanup,
++                                       const Portamento &portamento)
++    :handle(handle), memory(memory), cleanup(cleanup), portamento(portamento)
++{
++}
++
++PortamentoRealtime::~PortamentoRealtime()
++{
++    cleanup(this);
++}
++
++}
+diff --git a/src/Synth/Portamento.h b/src/Synth/Portamento.h
+new file mode 100644
+index 00000000..2090ec2b
+--- /dev/null
++++ b/src/Synth/Portamento.h
+@@ -0,0 +1,105 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  Portamento.h - Portamento calculation and management
++  Copyright (C) 2021 Mark McCurry
++  Author: Mark McCurry
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++#ifndef PORTAMENTO_H
++#define PORTAMENTO_H
++#include "../globals.h"
++#include "../Params/Controller.h"
++#include <functional>
++
++namespace zyn {
++
++// Realtime struct governing portamento. Read by synth engines,
++// created and managed by parts.
++class Portamento {
++    public:
++        /**
++         * Create a portamento.
++         * Sets the active member if the portemento is activated.
++         *
++         * @param ctl The Controller which contains user patch parameters
++         * @param synth The SYNTH_T from which to get sample rate and bufsize
++         * @param oldfreq_log2 Pitch of previous note
++         * @param oldportamentofreq_log2 Starting pitch of the portamento
++         * @param newfreq_log2 Ending pitch of the portamento
++         */
++        Portamento(const Controller &ctl,
++                   const SYNTH_T &synth,
++                   float oldfreq_log2,
++                   float oldportamentofreq_log2,
++                   float newfreq_log2);
++        /**
++         * Initialize an already existing portamento.
++         * Sets the active member if the portemento is activated.
++         *
++         * @param ctl The Controller which contains user patch parameters
++         * @param synth The SYNTH_T from which to get sample rate and bufsize
++         * @param oldfreq_log2 Pitch of previous note
++         * @param oldportamentofreq_log2 Starting pitch of the portamento
++         * @param newfreq_log2 Ending pitch of the portamento
++         */
++        void init(const Controller &ctl,
++                  const SYNTH_T &synth,
++                  float oldfreq_log2,
++                  float oldportamentofreq_log2,
++                  float newfreq_log2);
++        /**Update portamento's freqrap to next value based upon dx*/
++        void update(void);
++        /**if the portamento is in use*/
++        bool active;
++        /**this value is used to compute the actual portamento
++         *
++         * This is the logarithmic power of two frequency
++         * adjustment of the newer frequency to fit the profile of
++         * the portamento.
++         * This will be linear with respect to x.*/
++        float freqdelta_log2;
++
++    private:
++        /**x is from 0.0f (start portamento) to 1.0f (finished portamento)*/
++        float x;
++        /**dx is the increment to x when update is called*/
++        float dx;
++        /** this is used for computing freqdelta_log2 value from x*/
++        float origfreqdelta_log2;
++};
++
++class PortamentoRealtime {
++    public:
++        /**
++         * Create a portamento realtime structure.
++         *
++         * @param handle handle to be used by cleanup function
++         * @param memory Allocator used
++         * @param cleanup Callback called from destructor
++         * @param portamento Portamento object to be contained
++         */
++        PortamentoRealtime(void *handle,
++                           Allocator &memory,
++                           std::function<void(PortamentoRealtime *)> cleanup,
++                           const Portamento &portamento);
++
++        ~PortamentoRealtime();
++
++        /**handle to be used by cleanup function in lieu of lambda capture*/
++        void *handle;
++        /**Allocator used to allocate memory*/
++        Allocator &memory;
++        /**Cleanup callback called by destructor*/
++        std::function<void(PortamentoRealtime *)> cleanup;
++        /**The actual portamento object*/
++        Portamento portamento;
++};
++
++}
++
++#endif /* PORTAMENTO_H */
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 805442d3..99ac37fa 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -20,6 +20,7 @@
+ #include "SUBnote.h"
+ #include "Envelope.h"
+ #include "ModFilter.h"
++#include "Portamento.h"
+ #include "../Containers/ScratchString.h"
+ #include "../Containers/NotePool.h"
+ #include "../Params/Controller.h"
+@@ -93,7 +94,7 @@ float SUBnote::setupFilters(float basefreq, int *pos, bool automation)
+ }
+ 
+ void SUBnote::setup(float velocity_,
+-                    int portamento_,
++                    Portamento *portamento_,
+                     float note_log2_freq_,
+                     bool legato,
+                     WatchManager *wm,
+@@ -452,7 +453,7 @@ void SUBnote::computecurrentparameters()
+     if(FreqEnvelope || BandWidthEnvelope
+        || (oldpitchwheel != ctl.pitchwheel.data)
+        || (oldbandwidth != ctl.bandwidth.data)
+-       || portamento
++       || (portamento != NULL)
+        || filterupdate) {
+         float envfreq = 1.0f;
+         float envbw   = 1.0f;
+@@ -467,9 +468,9 @@ void SUBnote::computecurrentparameters()
+ 
+         //Update frequency while portamento is converging
+         if(portamento) {
+-            envfreq *= powf(2.0f, ctl.portamento.freqdelta_log2);
+-            if(!ctl.portamento.used) //the portamento has finished
+-                portamento = false;
++            envfreq *= powf(2.0f, portamento->freqdelta_log2);
++            if(!portamento->active) //the portamento has finished
++                portamento = NULL;
+         }
+ 
+         if(BandWidthEnvelope) {
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 1c1fd464..be94b1af 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -37,7 +37,7 @@ class SUBnote:public SynthNote
+     private:
+ 
+         void setup(float velocity,
+-                   int portamento_,
++                   Portamento *portamento_,
+                    float note_log2_freq,
+                    bool legato = false, WatchManager *wm = 0, const char *prefix = 0);
+         float setupFilters(float basefreq, int *pos, bool automation);
+@@ -70,7 +70,8 @@ class SUBnote:public SynthNote
+ 
+         //internal values
+         bool   NoteEnabled;
+-        bool   firsttick, portamento;
++        bool   firsttick;
++        Portamento *portamento;
+         float  volume, oldamplitude, newamplitude;
+         float  oldreduceamp;
+ 
+diff --git a/src/Synth/SynthNote.cpp b/src/Synth/SynthNote.cpp
+index 8000d9d0..baacfcf4 100644
+--- a/src/Synth/SynthNote.cpp
++++ b/src/Synth/SynthNote.cpp
+@@ -25,7 +25,8 @@ SynthNote::SynthNote(const SynthParams &pars)
+             pars.note_log2_freq, pars.quiet, pars.seed), ctl(pars.ctl), synth(pars.synth), time(pars.time)
+ {}
+ 
+-SynthNote::Legato::Legato(const SYNTH_T &synth_, float vel, int port,
++SynthNote::Legato::Legato(const SYNTH_T &synth_, float vel,
++                          Portamento *portamento,
+                           float note_log2_freq, bool quiet, prng_t seed)
+     :synth(synth_)
+ {
+@@ -37,7 +38,7 @@ SynthNote::Legato::Legato(const SYNTH_T &synth_, float vel, int port,
+     fade.step  = (1.0f / fade.length);
+     decounter  = -10;
+     param.vel  = vel;
+-    param.portamento = port;
++    param.portamento = portamento;
+     param.note_log2_freq = note_log2_freq;
+     param.seed = seed;
+     lastfreq_log2 = note_log2_freq;
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index ad5668c4..27ac6a22 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -20,6 +20,7 @@ namespace zyn {
+ 
+ class Allocator;
+ class Controller;
++struct Portamento;
+ struct SynthParams
+ {
+     Allocator &memory;   //Memory Allocator for the Note to use
+@@ -27,7 +28,7 @@ struct SynthParams
+     const SYNTH_T    &synth;
+     const AbsTime    &time;
+     float     velocity;  //Velocity of the Note
+-    bool      portamento;//True if portamento is used for this note
++    Portamento *portamento; //Realtime portamento info
+     float     note_log2_freq; //Floating point value of the note
+     bool      quiet;     //Initial output condition for legato notes
+     prng_t    seed;      //Random seed
+@@ -36,7 +37,7 @@ struct SynthParams
+ struct LegatoParams
+ {
+     float velocity;
+-    bool portamento;
++    Portamento *portamento;
+     float note_log2_freq; //Floating point value of the note
+     bool externcall;
+     prng_t seed;
+@@ -88,7 +89,8 @@ class SynthNote
+         class Legato
+         {
+             public:
+-                Legato(const SYNTH_T &synth_, float vel, int port,
++                Legato(const SYNTH_T &synth_, float vel,
++                       Portamento *portamento,
+                        float note_log2_freq, bool quiet, prng_t seed);
+ 
+                 void apply(SynthNote &note, float *outl, float *outr);
+@@ -104,10 +106,12 @@ class SynthNote
+                     float m, step;
+                 } fade;
+             public:
++                //TODO: portamento and note freq are used not just for legato,
++                //so should they really be here in the Legato class?
+                 struct { // Note parameters
+-                    float  freq, vel;
+-                    bool   portamento;
+-                    float  note_log2_freq;
++                    float               freq, vel;
++                    Portamento         *portamento;
++                    float               note_log2_freq;
+                     prng_t seed;
+                 } param;
+                 const SYNTH_T &synth;
+@@ -115,7 +119,7 @@ class SynthNote
+             public: /* Some get routines for legatonote calls (aftertouch feature)*/
+                 float getFreq() {return param.freq; }
+                 float getVelocity() {return param.vel; }
+-                bool  getPortamento() {return param.portamento; }
++                Portamento *getPortamento() {return param.portamento; }
+                 float getNoteLog2Freq() {return param.note_log2_freq; }
+                 prng_t getSeed() {return param.seed;}
+                 void setSilent(bool silent_) {silent = silent_; }
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 35bdfb7e..dffb771c 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -31,6 +31,7 @@ quick_test(MicrotonalTest   ${test_lib})
+ quick_test(MsgParseTest     ${test_lib})
+ quick_test(OscilGenTest     ${test_lib})
+ quick_test(PadNoteTest      ${test_lib})
++quick_test(PortamentoTest   ${test_lib})
+ quick_test(RandTest         ${test_lib})
+ quick_test(SubNoteTest      ${test_lib})
+ quick_test(TriggerTest      ${test_lib})
+diff --git a/src/Tests/ControllerTest.cpp b/src/Tests/ControllerTest.cpp
+index 34900e22..3cef2dab 100644
+--- a/src/Tests/ControllerTest.cpp
++++ b/src/Tests/ControllerTest.cpp
+@@ -34,46 +34,11 @@ class ControllerTest
+             delete synth;
+         }
+ 
+-
+-        void testPortamentoRange() {
+-            //Initialize portamento
+-            testCtl->setportamento(127);
+-            testCtl->portamento.time = 127;
+-            testCtl->initportamento(log2f(40.0f), log2f(400.0f), false);
+-            //Bounds Check
+-            while(testCtl->portamento.used) {
+-                TS_ASSERT((0.0f <= testCtl->portamento.x)
+-                          && (testCtl->portamento.x <= 1.0f));
+-                TS_ASSERT((log2f(0.1f) <= testCtl->portamento.freqdelta_log2)
+-                          && (testCtl->portamento.freqdelta_log2 <= log2f(1.0f)));
+-                testCtl->updateportamento();
+-            }
+-            TS_ASSERT((0.0f <= testCtl->portamento.x)
+-                      && (testCtl->portamento.x <= 1.0f));
+-            TS_ASSERT((log2f(0.1f) <= testCtl->portamento.freqdelta_log2)
+-                      && (testCtl->portamento.freqdelta_log2 <= log2f(1.0f)));
+-        }
+-
+-        void testPortamentoValue() {
+-            testCtl->setportamento(127);
+-            testCtl->portamento.time = 127;
+-            testCtl->initportamento(log2f(40.0f), log2f(400.0f), false);
+-            int i;
+-            for(i = 0; i < 10; ++i)
+-                testCtl->updateportamento();
+-            //Assert that the numbers are the same as they were at release
+-            TS_ASSERT_DELTA(testCtl->portamento.x, 0.0290249f, 0.000001f);
+-            TS_ASSERT_DELTA(testCtl->portamento.freqdelta_log2, -3.2255092, 0.000001f);
+-        }
+-
+     private:
+         Controller *testCtl;
+ };
+ 
+ int main()
+ {
+-    ControllerTest test;
+-    RUN_TEST(testPortamentoRange);
+-    RUN_TEST(testPortamentoValue);
+     return test_summary();
+ }
+diff --git a/src/Tests/KitTest.cpp b/src/Tests/KitTest.cpp
+index ef3ef8ec..8c2a6d68 100644
+--- a/src/Tests/KitTest.cpp
++++ b/src/Tests/KitTest.cpp
+@@ -61,7 +61,6 @@ class KitTest
+             memset(outL, 0, synth->bufferbytes);
+             memset(outR, 0, synth->bufferbytes);
+ 
+-
+             part = new Part(alloc, *synth, *time, dummy, dummy, &microtonal, &fft);
+         }
+ 
+@@ -84,7 +83,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_RELEASED|SUSTAIN_BIT,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -93,7 +93,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_RELEASED_AND_SUSTAINED,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -102,7 +103,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+         }
+ 
+         void testSustainCase2() {
+@@ -123,7 +125,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_RELEASED|SUSTAIN_BIT,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -132,7 +135,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -141,7 +145,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+         }
+ 
+         void testMonoSustain() {
+@@ -165,7 +170,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_RELEASED,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -174,7 +180,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -183,7 +190,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+         }
+ 
+         //Enumerate cases of:
+@@ -204,7 +212,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -213,7 +222,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -222,7 +232,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+         }
+ 
+         void testNoKitYesLegatoNoMono() {
+@@ -238,7 +249,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -247,7 +259,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -256,7 +269,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+@@ -284,7 +298,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_RELEASED,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -293,7 +308,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -302,7 +318,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+@@ -336,7 +353,8 @@ class KitTest
+                     .sendto=0,
+                     .size=2,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -345,7 +363,8 @@ class KitTest
+                     .sendto=0,
+                     .size=2,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -354,7 +373,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+@@ -404,7 +424,8 @@ class KitTest
+                     .sendto=0,
+                     .size=2,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -413,7 +434,8 @@ class KitTest
+                     .sendto=0,
+                     .size=2,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -422,7 +444,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+@@ -472,7 +495,8 @@ class KitTest
+                     .sendto=0,
+                     .size=2,
+                     .status=KEY_RELEASED,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -481,7 +505,8 @@ class KitTest
+                     .sendto=0,
+                     .size=2,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -490,7 +515,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+@@ -539,7 +565,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -548,7 +575,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -557,7 +585,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+@@ -595,7 +624,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -604,7 +634,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -613,7 +644,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+@@ -648,7 +680,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_RELEASED,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[1],
+                     (NotePool::NoteDescriptor{
+@@ -657,7 +690,8 @@ class KitTest
+                     .sendto=0,
+                     .size=1,
+                     .status=KEY_PLAYING,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_ASSERT_EQUAL_CPP(part->notePool.ndesc[2],
+                     (NotePool::NoteDescriptor{
+@@ -666,7 +700,8 @@ class KitTest
+                     .sendto=0,
+                     .size=0,
+                     .status=0,
+-                    .legatoMirror=false}));
++                    .legatoMirror=false,
++                    .portamentoRealtime=NULL}));
+ 
+             TS_NON_NULL(part->notePool.sdesc[0].note);
+             TS_ASSERT_EQUAL_INT(part->notePool.sdesc[0].note->legato.silent, false);
+diff --git a/src/Tests/PortamentoTest.cpp b/src/Tests/PortamentoTest.cpp
+new file mode 100644
+index 00000000..b4857419
+--- /dev/null
++++ b/src/Tests/PortamentoTest.cpp
+@@ -0,0 +1,97 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  PortamentoTest.h - Test For Portamento
++  Copyright (C) 2016 Mark McCurry
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++#include "test-suite.h"
++#include <cmath>
++#include <cstring>
++#include <cstdlib>
++#include <iostream>
++#include "../Misc/Time.h"
++#include "../Misc/Allocator.h"
++#define private public
++#define protected public
++#include "../Synth/SynthNote.h"
++#include "../Synth/Portamento.h"
++#include "../globals.h"
++
++using namespace std;
++using namespace zyn;
++
++#define MAX_PORTAMENTO_LOOPS 1000
++
++SYNTH_T *synth;
++int dummy=0;
++
++class PortamentoTest
++{
++    private:
++        AbsTime *time;
++        SYNTH_T *synth;
++        Controller *ctl;
++    public:
++        PortamentoTest() {}
++        void setUp() {
++            synth = new SYNTH_T;
++            time  = new AbsTime(*synth);
++            ctl = new Controller(*synth, time);
++        }
++
++        void testPortamentoRange() {
++            //Initialize portamento
++            ctl->setportamento(127);
++            ctl->portamento.time = 127;
++            Portamento portamento(*ctl, *synth, log2f(40.0f), log2f(40.0f), log2f(400.0f));
++            TS_ASSERT(portamento.active);
++            //Bounds Check
++            //We put a bound on number of loops executed, or we could be here
++            //a very long time if the exit condition is never fulfilled.
++            int loopcount = 0;
++            while(portamento.active && ++loopcount < MAX_PORTAMENTO_LOOPS) {
++                TS_ASSERT((0.0f <= portamento.x)
++                          && (portamento.x <= 1.0f));
++                TS_ASSERT((log2f(0.1f) <= portamento.freqdelta_log2)
++                          && (portamento.freqdelta_log2 <= log2f(1.0f)));
++                portamento.update();
++            }
++            TS_ASSERT(loopcount < MAX_PORTAMENTO_LOOPS);
++            TS_ASSERT((0.0f <= portamento.x)
++                      && (portamento.x <= 1.0f));
++            TS_ASSERT((log2f(0.1f) <= portamento.freqdelta_log2)
++                      && (portamento.freqdelta_log2 <= log2f(1.0f)));
++        }
++
++        void testPortamentoValue() {
++            ctl->setportamento(127);
++            ctl->portamento.time = 127;
++            Portamento portamento(*ctl, *synth, log2f(40.0f), log2f(40.0f), log2f(400.0f));
++            TS_ASSERT(portamento.active);
++            int i;
++            for(i = 0; i < 10; ++i)
++                portamento.update();
++            //Assert that the numbers are the same as they were at release
++            TS_ASSERT_DELTA(portamento.x, 0.0290249f, 0.000001f);
++            TS_ASSERT_DELTA(portamento.freqdelta_log2, -3.2255092, 0.000001f);
++        }
++
++        void tearDown() {
++            delete ctl;
++            delete time;
++            delete synth;
++        }
++};
++
++int main()
++{
++    PortamentoTest test;
++    RUN_TEST(testPortamentoRange);
++    RUN_TEST(testPortamentoValue);
++    return test_summary();
++}
+-- 
+2.47.0
+

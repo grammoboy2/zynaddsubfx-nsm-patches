@@ -1,0 +1,35 @@
+From ccf7a28e6cbed9cf79e6fe2adb72feedea25b9ce Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 30 May 2015 10:47:44 -0400
+Subject: [PATCH 0479/1936] Add cfg.OscilPower::i Port To Config
+
+---
+ src/Misc/Config.cpp | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index bbdfcd1c..01cb9f2b 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -116,6 +116,18 @@ static rtosc::Ports ports = {
+     rParamI(cfg.VirKeybLayout,       "Keyboard Layout For Virtual Piano Keyboard"),
+     //rParamS(cfg.LinuxALSAaudioDev),
+     //rParamS(cfg.nameTag)
++    {"cfg.OscilPower::i", rDoc("Size Of Oscillator Wavetable"), 0,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            Config &c = *(Config*)d.obj;
++            if(rtosc_narguments(msg) == 0) {
++                d.reply(d.loc, "i", (int)(log(c.cfg.OscilSize*1.0)/log(2.0)));
++                return;
++            }
++            float val = powf(2.0, rtosc_argument(msg, 0).i);
++            c.cfg.OscilSize = val;
++            d.broadcast(d.loc, "i", (int)(log(c.cfg.OscilSize*1.0)/log(2.0)));
++        }},
+ };
+ rtosc::Ports &Config::ports = ::ports;
+ #endif
+-- 
+2.47.0
+

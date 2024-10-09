@@ -1,0 +1,142 @@
+From a4ae2e7de051400342951e13caa3257f0ff2e4d5 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Wed, 21 Dec 2022 23:18:49 +0100
+Subject: [PATCH 1882/1936] Effects: Get rid of compiler warnings
+
+This fixes warnings like
+
+```
+Distortion.cpp:117:5: Call to virtual method 'Distortion::setpreset' during construction bypasses virtual dispatch [clang-analyzer-optin.cplusplus.VirtualCall]
+```
+---
+ src/Effects/Alienwah.h      | 2 +-
+ src/Effects/Chorus.h        | 2 +-
+ src/Effects/Distortion.h    | 2 +-
+ src/Effects/DynamicFilter.h | 2 +-
+ src/Effects/EQ.h            | 2 +-
+ src/Effects/Echo.h          | 2 +-
+ src/Effects/Phaser.h        | 2 +-
+ src/Effects/Reverb.h        | 2 +-
+ src/Effects/Sympathetic.h   | 2 +-
+ 9 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/src/Effects/Alienwah.h b/src/Effects/Alienwah.h
+index 1602aa48..79130dd9 100644
+--- a/src/Effects/Alienwah.h
++++ b/src/Effects/Alienwah.h
+@@ -23,7 +23,7 @@
+ namespace zyn {
+ 
+ /**"AlienWah" Effect*/
+-class Alienwah:public Effect
++class Alienwah final:public Effect
+ {
+     public:
+         Alienwah(EffectParams pars);
+diff --git a/src/Effects/Chorus.h b/src/Effects/Chorus.h
+index b854355d..001499ae 100644
+--- a/src/Effects/Chorus.h
++++ b/src/Effects/Chorus.h
+@@ -22,7 +22,7 @@
+ namespace zyn {
+ 
+ /**Chorus and Flange effects*/
+-class Chorus:public Effect
++class Chorus final:public Effect
+ {
+     public:
+         Chorus(EffectParams pars);
+diff --git a/src/Effects/Distortion.h b/src/Effects/Distortion.h
+index 82087130..288c7940 100644
+--- a/src/Effects/Distortion.h
++++ b/src/Effects/Distortion.h
+@@ -19,7 +19,7 @@
+ namespace zyn {
+ 
+ /**Distortion Effect*/
+-class Distortion:public Effect
++class Distortion final :public Effect
+ {
+     public:
+         Distortion(EffectParams pars);
+diff --git a/src/Effects/DynamicFilter.h b/src/Effects/DynamicFilter.h
+index f4fc1dee..e7e810dc 100644
+--- a/src/Effects/DynamicFilter.h
++++ b/src/Effects/DynamicFilter.h
+@@ -20,7 +20,7 @@
+ namespace zyn {
+ 
+ /**DynamicFilter Effect*/
+-class DynamicFilter:public Effect
++class DynamicFilter final:public Effect
+ {
+     public:
+         DynamicFilter(EffectParams pars);
+diff --git a/src/Effects/EQ.h b/src/Effects/EQ.h
+index 750f0050..4eaa5e35 100644
+--- a/src/Effects/EQ.h
++++ b/src/Effects/EQ.h
+@@ -19,7 +19,7 @@
+ namespace zyn {
+ 
+ /**EQ Effect*/
+-class EQ:public Effect
++class EQ final:public Effect
+ {
+     public:
+         EQ(EffectParams pars);
+diff --git a/src/Effects/Echo.h b/src/Effects/Echo.h
+index 592d2065..5809828c 100644
+--- a/src/Effects/Echo.h
++++ b/src/Effects/Echo.h
+@@ -20,7 +20,7 @@
+ namespace zyn {
+ 
+ /**Echo Effect*/
+-class Echo:public Effect
++class Echo final:public Effect
+ {
+     public:
+         Echo(EffectParams pars);
+diff --git a/src/Effects/Phaser.h b/src/Effects/Phaser.h
+index 7d417e64..87479b64 100644
+--- a/src/Effects/Phaser.h
++++ b/src/Effects/Phaser.h
+@@ -25,7 +25,7 @@
+ 
+ namespace zyn {
+ 
+-class Phaser:public Effect
++class Phaser final:public Effect
+ {
+     public:
+         Phaser(EffectParams pars);
+diff --git a/src/Effects/Reverb.h b/src/Effects/Reverb.h
+index 0c751a8b..4a6ffeef 100644
+--- a/src/Effects/Reverb.h
++++ b/src/Effects/Reverb.h
+@@ -22,7 +22,7 @@
+ namespace zyn {
+ 
+ /**Creates Reverberation Effects*/
+-class Reverb:public Effect
++class Reverb final:public Effect
+ {
+     public:
+         Reverb(EffectParams pars);
+diff --git a/src/Effects/Sympathetic.h b/src/Effects/Sympathetic.h
+index 7cae68a9..d1f5e942 100644
+--- a/src/Effects/Sympathetic.h
++++ b/src/Effects/Sympathetic.h
+@@ -32,7 +32,7 @@ const unsigned int num_triple_strings = 48;
+ // frequencies of a guitar in standard e tuning
+ const float guitar_freqs[6] = {82.4f, 110.0f, 146.8f, 196.0f, 246.9f, 329.6f};
+ 
+-class Sympathetic:public Effect
++class Sympathetic final:public Effect
+ {
+ 
+     public:
+-- 
+2.47.0
+

@@ -1,0 +1,223 @@
+From 5688401dea4e381debe92ac96216835ac5dc562e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 14 Jun 2012 09:46:52 -0400
+Subject: [PATCH 0020/1936] Quiets down compiler warnings
+
+The warnings silenced here are mostly cosmetic ones or #warnings about possible
+issues that have never arisen (to my knowledge).
+---
+ src/DSP/Unison.cpp     | 24 +++++++++++++++---------
+ src/Effects/Reverb.cpp |  5 ++++-
+ src/Misc/Master.cpp    |  2 +-
+ src/Misc/Master.h      |  2 +-
+ src/Misc/Part.cpp      |  2 +-
+ src/Misc/Recorder.cpp  |  2 +-
+ src/Nio/PaEngine.cpp   |  2 +-
+ src/UI/MasterUI.fl     |  6 +++---
+ src/UI/NSM.C           |  1 +
+ src/main.cpp           |  4 ++--
+ 10 files changed, 30 insertions(+), 20 deletions(-)
+
+diff --git a/src/DSP/Unison.cpp b/src/DSP/Unison.cpp
+index a8a73d3d..f2bef69b 100644
+--- a/src/DSP/Unison.cpp
++++ b/src/DSP/Unison.cpp
+@@ -21,6 +21,7 @@
+ 
+ #include <cmath>
+ #include <cstring>
++#include <err.h>
+ 
+ #include "Unison.h"
+ 
+@@ -74,8 +75,10 @@ void Unison::setBandwidth(float bandwidth)
+     if(bandwidth > 1200.0f)
+         bandwidth = 1200.0f;
+ 
+-#warning \
+-    : todo: if bandwidth is too small the audio will be self canceled (because of the sign change of the outputs)
++    /* If the bandwidth is too small, the audio may cancel itself out
++     * (due to the sign change of the outputs)
++     * TODO figure out the acceptable lower bound and codify it
++     */
+     unison_bandwidth_cents = bandwidth;
+     updateParameters();
+ }
+@@ -102,10 +105,13 @@ void Unison::updateParameters(void)
+     unison_amplitude_samples = 0.125f * (max_speed - 1.0f)
+                                * synth->samplerate_f / base_freq;
+ 
+-#warning \
+-    todo: test if unison_amplitude_samples is to big and reallocate bigger memory
+-    if(unison_amplitude_samples >= max_delay - 1)
++    //If functions exceed this limit, they should have requested a bigguer delay
++    //and thus are buggy
++    if(unison_amplitude_samples >= max_delay - 1) {
++        warnx("BUG: Unison amplitude samples too big");
++        warnx("Unision max_delay should be larger");
+         unison_amplitude_samples = max_delay - 2;
++    }
+ 
+     updateUnisonData();
+ }
+@@ -169,10 +175,10 @@ void Unison::updateUnisonData()
+             step = -step;
+         }
+         float vibratto_val = (pos - 0.333333333f * pos * pos * pos) * 1.5f; //make the vibratto lfo smoother
+-#warning \
+-        I will use relative amplitude, so the delay might be bigger than the whole buffer
+-#warning \
+-        I have to enlarge (reallocate) the buffer to make place for the whole delay
++
++        //Relative amplitude is utilized, so the delay may be larger than the
++        //whole buffer, if the buffer is too small, this indicates a buggy call
++        //to Unison()
+         float newval = 1.0f + 0.5f
+                        * (vibratto_val + 1.0f) * unison_amplitude_samples
+                        * uv[k].relative_amplitude;
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index 767f7fd9..2d7884ea 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -356,10 +356,13 @@ void Reverb::settype(unsigned char _Ptype)
+     delete bandwidth;
+     bandwidth = NULL;
+     if(Ptype == 2) { //bandwidth
++        //TODO the size of the unison buffer may be too small, though this has
++        //not been verified yet.
++        //As this cannot be resized in a RT context, a good upper bound should
++        //be found
+         bandwidth = new Unison(synth->buffersize / 4 + 1, 2.0f);
+         bandwidth->setSize(50);
+         bandwidth->setBaseFrequency(1.0f);
+-#warning sa schimb size-ul
+     }
+     settime(Ptime);
+     cleanup();
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 855735ac..37cf59fb 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -468,7 +468,7 @@ void Master::AudioOut(float *outl, float *outr)
+ //TODO review the respective code from yoshimi for this
+ //If memory serves correctly, libsamplerate was used
+ void Master::GetAudioOutSamples(size_t nsamples,
+-                                int samplerate,
++                                unsigned samplerate,
+                                 float *outl,
+                                 float *outr)
+ {
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index cce999b3..32509a98 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -106,7 +106,7 @@ class Master
+         void AudioOut(float *outl, float *outr);
+         /**Audio Output (for callback mode). This allows the program to be controled by an external program*/
+         void GetAudioOutSamples(size_t nsamples,
+-                                int samplerate,
++                                unsigned samplerate,
+                                 float *outl,
+                                 float *outr);
+ 
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index e7551d5a..4e444a04 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -650,6 +650,7 @@ void Part::PolyphonicAftertouch(unsigned char note,
+                                 unsigned char velocity,
+                                 int masterkeyshift)
+ {
++    (void) masterkeyshift;
+     if(!Pnoteon || (note < Pminkey) || (note > Pmaxkey))
+         return;
+     if(Pdrummode)
+@@ -686,7 +687,6 @@ void Part::PolyphonicAftertouch(unsigned char note,
+                        || (note > kit[item].Pmaxkey))
+                         continue;
+ 
+-                    int ci = partnote[i].itemsplaying; // ci=current item
+                     if(kit[item].Padenabled)
+                         partnote[i].kititem[item].adnote->setVelocity(vel);
+                     if(kit[item].Psubenabled)
+diff --git a/src/Misc/Recorder.cpp b/src/Misc/Recorder.cpp
+index 98d1f37b..78aef068 100644
+--- a/src/Misc/Recorder.cpp
++++ b/src/Misc/Recorder.cpp
+@@ -90,4 +90,4 @@ void Recorder::triggernow()
+     }
+ }
+ 
+-#warning todo move recorder inside nio system
++//TODO move recorder inside nio system
+diff --git a/src/Nio/PaEngine.cpp b/src/Nio/PaEngine.cpp
+index 99ea7ff4..d41543b0 100644
+--- a/src/Nio/PaEngine.cpp
++++ b/src/Nio/PaEngine.cpp
+@@ -62,7 +62,7 @@ bool PaEngine::Start()
+                   &outputParameters,
+                   synth->samplerate,
+                   synth->buffersize,
+-                  NULL,
++                  0,
+                   PAprocess,
+                   (void *) this);
+     Pa_StartStream(stream);
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index b98080b0..794348c5 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -430,13 +430,13 @@ class MasterUI {open
+       callback {\#ifdef VSTAUDIOOUT
+ fl_alert("ZynAddSubFX could not be closed this way, because it's a VST plugin. Please use the host aplication to close it.");
+ \#else
+-if (
++if ((
+ \#if USE_NSM 
+-nsm && nsm->is_active()
++(nsm && nsm->is_active())
+ \#else
+ 0
+ \#endif
+- || fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
++ || fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))) {
+     config.save();
+     *exitprogram=1;
+ };
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index 9c7bbd57..dee0ff3f 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -50,6 +50,7 @@ int command_save(char **out_msg);
+ int
+ NSM_Client::command_save(char **out_msg)
+ {
++    (void) out_msg;
+     int r = ERR_OK;
+ 
+     ui->do_save_master(project_filename);
+diff --git a/src/main.cpp b/src/main.cpp
+index 649fa367..22a5836f 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -91,7 +91,7 @@ void sigterm_exit(int /*sig*/)
+ /*
+  * Program initialisation
+  */
+-void initprogram(int argc, char **argv)
++void initprogram(void)
+ {
+     cerr.precision(1);
+     cerr << std::fixed;
+@@ -359,7 +359,7 @@ int main(int argc, char *argv[])
+     for(int i = 0; i < synth->buffersize; ++i)
+         denormalkillbuf[i] = (RND - 0.5f) * 1e-16;
+ 
+-    initprogram(argc, argv);
++    initprogram();
+ 
+     if(!loadfile.empty()) {
+         int tmp = master->loadXML(loadfile.c_str());
+-- 
+2.47.0
+

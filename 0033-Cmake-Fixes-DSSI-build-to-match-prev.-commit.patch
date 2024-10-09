@@ -1,0 +1,30 @@
+From 18d356c743ff65dced01241f2f6779cac6b56f89 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 27 Oct 2012 08:43:16 -0400
+Subject: [PATCH 0033/1936] Cmake: Fixes DSSI build to match prev. commit
+
+- Typo in previous commit left the DSSI build with errors
+  as zynaddsubfx_lib was specified as a library rather than zynaddsubfx_core
+---
+ src/CMakeLists.txt | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 58621e0d..cc5e4cbb 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -306,10 +306,7 @@ if (DssiEnable)
+ 		)
+ 
+ 	target_link_libraries(zynaddsubfx_dssi
+-        zynaddsubfx_lib
+-		${ZLIB_LIBRARIES}
+-		${FFTW_LIBRARY}
+-        ${MXML_LIBRARIES}
++        zynaddsubfx_core
+ 		${NIO_LIBRARIES}
+ 		${AUDIO_LIBRARIES}
+ 		${OS_LIBRARIES}
+-- 
+2.47.0
+

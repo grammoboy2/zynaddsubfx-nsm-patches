@@ -1,0 +1,25 @@
+From 88b0aa471aa204576be2b4593b0e94c77526e4df Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 30 Jul 2016 15:36:31 +0200
+Subject: [PATCH 0987/1936] Undo last commit, it did not work.
+
+---
+ src/Misc/XMLwrapper.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/XMLwrapper.h b/src/Misc/XMLwrapper.h
+index d9ad14a8..f9157daf 100644
+--- a/src/Misc/XMLwrapper.h
++++ b/src/Misc/XMLwrapper.h
+@@ -16,7 +16,7 @@
+ #include <mxml.h>
+ #include <string>
+ #include <vector>
+-#include "zyn-version.h"
++#include "../zyn-version.h"
+ 
+ #ifndef XML_WRAPPER_H
+ #define XML_WRAPPER_H
+-- 
+2.47.0
+

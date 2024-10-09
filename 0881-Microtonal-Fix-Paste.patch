@@ -1,0 +1,26 @@
+From 77f885e8100e980f108a3e7ed3b2879dd96a679f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 5 Mar 2016 12:17:22 -0500
+Subject: [PATCH 0881/1936] Microtonal: Fix Paste
+
+Previously an invalid pointer was used
+---
+ src/Misc/Microtonal.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 804a76b9..6cd936a7 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -114,7 +114,7 @@ const rtosc::Ports Microtonal::ports = {
+         {
+             rtosc_blob_t b = rtosc_argument(msg, 0).b;
+             assert(b.len == sizeof(void*));
+-            Microtonal *other = *(Microtonal**)b.len;
++            Microtonal *other = *(Microtonal**)b.data;
+             Microtonal &self  = *(Microtonal*)d.obj;
+             //oh how I wish there was some darn reflection for this...
+ 
+-- 
+2.47.0
+

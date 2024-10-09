@@ -1,0 +1,67 @@
+From 8e868b3e0a93d5de5605ba40ad4c9e5d424298d9 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sat, 17 Oct 2015 03:33:26 -0400
+Subject: [PATCH 0605/1936] Clamped an unlimited arg to value.  Use clamp
+ rather than limit for value. It already knows about min and max.
+
+---
+ src/UI/Fl_Osc_Slider.cpp | 4 ++--
+ src/UI/WidgetPDial.cpp   | 6 +++---
+ 2 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/UI/Fl_Osc_Slider.cpp b/src/UI/Fl_Osc_Slider.cpp
+index bf2d057c..4148182f 100644
+--- a/src/UI/Fl_Osc_Slider.cpp
++++ b/src/UI/Fl_Osc_Slider.cpp
+@@ -112,7 +112,7 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+             return 1;
+         case FL_RELEASE:
+             rounded = value() + 0.5;
+-            value(limit((double)rounded,minimum(),maximum()));
++            value(clamp((double)rounded));
+             if (Fl::event_clicks() == 1) {
+                 Fl::event_clicks(0);
+                 reset_requested = true;
+@@ -138,7 +138,7 @@ int Fl_Osc_Slider::handle(int ev, int X, int Y, int W, int H)
+     handled = Fl_Slider::handle(ev, X, Y, W, H);
+     int delta = value() - old_value;
+     if (ev == FL_DRAG && (delta < -1 || delta > 1)) {
+-        value(old_value + (delta > 0 ? 1 : -1));
++        value(clamp((old_value + (delta > 0 ? 1 : -1))));
+         value_damage();
+         do_callback();
+     }
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index 12069dee..82570677 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -66,7 +66,7 @@ int WidgetPDial::handle(int event)
+             else
+                 dragsize = Fl::event_button1() ? 200.0f : 2000.0f;
+ 
+-            value(limit(oldvalue + dy / dragsize * (max - min), min, max));
++            value(clamp(oldvalue + dy / dragsize * (max - min)));
+             tipwin->showValue(transform(value()));
+             value_damage();
+             if(this->when() != 0)
+@@ -94,7 +94,7 @@ int WidgetPDial::handle(int event)
+                 }
+                 result = value() + dy / dragsize * (max - min);
+             }
+-            value(limit(result, min, max));
++            value(clamp(result));
+ 
+             tipwin->showValue(transform(value()));
+             value_damage();
+@@ -113,7 +113,7 @@ int WidgetPDial::handle(int event)
+         case FL_RELEASE:
+             if (integer_step) {
+                 int rounded = value() + 0.5;
+-                value(limit((double)rounded,min,max));
++                value(clamp(rounded));
+             }
+             tipwin->hide();
+             resetPos();
+-- 
+2.47.0
+

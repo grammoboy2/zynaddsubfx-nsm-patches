@@ -1,0 +1,105 @@
+From c1e943fdeb9e04f3f0700aa87d751d9d04dca0c5 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Tue, 13 Dec 2022 17:41:43 +0100
+Subject: [PATCH 1881/1936] Switch some ports so apropos() works for them
+
+This is due to a bug, which is documented in rtosc tests.
+---
+ rtosc                           |  2 +-
+ src/Effects/EffectMgr.cpp       | 46 ++++++++++++++++-----------------
+ src/Params/ADnoteParameters.cpp |  4 ++-
+ 3 files changed, 27 insertions(+), 25 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index f3c08354..5cae2dfd 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit f3c08354a2cd05fef6f194b3db53a5ccbf79d9fa
++Subproject commit 5cae2dfdc00b9fe223c62dfebceb020f066baaee
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index d8cf5649..e18ebbab 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -48,6 +48,29 @@ namespace zyn {
+         }}
+ static const rtosc::Ports local_ports = {
+     rSelf(EffectMgr, rEnabledByCondition(self-enabled)),
++    {"preset::i", rProp(parameter) rDoc("Effect Preset Selector")
++        rDefault(0), NULL,
++        [](const char *msg, rtosc::RtData &d)
++        {
++            char loc[1024];
++            EffectMgr *eff = (EffectMgr*)d.obj;
++            if(!rtosc_narguments(msg))
++                d.reply(d.loc, "i", eff->getpreset());
++            else {
++                eff->changepresetrt(rtosc_argument(msg, 0).i);
++                d.broadcast(d.loc, "i", eff->getpreset());
++
++                //update parameters as well
++                fast_strcpy(loc, d.loc, sizeof(loc));
++                char *tail = strrchr(loc, '/');
++                if(!tail)
++                    return;
++                for(int i=0;i<128;++i) {
++                    sprintf(tail+1, "parameter%d", i);
++                    d.broadcast(loc, "i", eff->geteffectparrt(i));
++                }
++            }
++        }}, // must come before rPaste, because apropos otherwise picks "preset-type" first
+     rPaste,
+     rEnabledCondition(self-enabled, obj->geteffect()),
+     rRecurp(filterpars, "Filter Parameter for Dynamic Filter"),
+@@ -96,29 +119,6 @@ static const rtosc::Ports local_ports = {
+                 d.broadcast(d.loc, "i", eff->geteffectparrt(atoi(mm)));
+             }
+         }},
+-    {"preset::i", rProp(parameter) rProp(alias) rDoc("Effect Preset Selector")
+-        rDefault(0), NULL,
+-        [](const char *msg, rtosc::RtData &d)
+-        {
+-            char loc[1024];
+-            EffectMgr *eff = (EffectMgr*)d.obj;
+-            if(!rtosc_narguments(msg))
+-                d.reply(d.loc, "i", eff->getpreset());
+-            else {
+-                eff->changepresetrt(rtosc_argument(msg, 0).i);
+-                d.broadcast(d.loc, "i", eff->getpreset());
+-
+-                //update parameters as well
+-                fast_strcpy(loc, d.loc, sizeof(loc));
+-                char *tail = strrchr(loc, '/');
+-                if(!tail)
+-                    return;
+-                for(int i=0;i<128;++i) {
+-                    sprintf(tail+1, "parameter%d", i);
+-                    d.broadcast(loc, "i", eff->geteffectparrt(i));
+-                }
+-            }
+-        }},
+     {"numerator::i", rShort("num") rDefault(0) rLinear(0,99)
+         rProp(parameter) rDoc("Numerator of ratio to bpm"), NULL,
+         [](const char *msg, rtosc::RtData &d)
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 522ae8fe..f6a5ff68 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -447,11 +447,13 @@ static const Ports adPorts = {//XXX 16 should not be hard coded
+     rSelf(ADnoteParameters),
+     rPasteRt,
+     rArrayPasteRt,
+-    rRecurs(VoicePar, NUM_VOICES),
+     {"VoicePar#" STRINGIFY(NUM_VOICES) "/Enabled::T:F",
+      rProp(parameter) rShort("enable") rDoc("Voice Enable")
+      rDefault([true false false ...]),
+      NULL, rArrayTCbMember(VoicePar, Enabled)},
++    // this must come after "VoicePar#.../..." ports, so rtosc::apropos finds
++    // the more exact path first (bug in apropos)
++    rRecurs(VoicePar, NUM_VOICES),
+     rRecur(GlobalPar, "Adnote Parameters"),
+ };
+ #undef rChangeCb
+-- 
+2.47.0
+

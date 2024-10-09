@@ -1,0 +1,1638 @@
+From 5ead822908bd9fe5aee333ebe4d4816e6aad93c5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 28 Jul 2013 17:59:48 -0400
+Subject: [PATCH 0094/1936] Resonance: Add OSC Layer
+
+---
+ rtosc                            |   2 +-
+ src/Misc/Master.cpp              |  11 +-
+ src/Misc/MiddleWare.cpp          |  31 ++-
+ src/Params/ADnoteParameters.cpp  |   1 +
+ src/Params/PADnoteParameters.cpp |   1 +
+ src/Synth/Resonance.cpp          |  33 ++-
+ src/Synth/Resonance.h            |   4 +-
+ src/UI/ADnoteUI.fl               |  14 +-
+ src/UI/CMakeLists.txt            |   4 +
+ src/UI/Fl_Osc_Button.H           |  13 +-
+ src/UI/Fl_Osc_Button.cpp         |  24 +--
+ src/UI/Fl_Osc_Interface.h        |   8 +-
+ src/UI/Fl_Osc_Output.H           |  24 +++
+ src/UI/Fl_Osc_Output.cpp         |  65 ++++++
+ src/UI/Fl_Osc_Pane.H             |  15 ++
+ src/UI/Fl_Osc_Roller.H           |  24 +++
+ src/UI/Fl_Osc_Roller.cpp         |  52 +++++
+ src/UI/Fl_Osc_Widget.H           |  50 ++---
+ src/UI/Fl_Osc_Widget.cpp         |  74 +++++++
+ src/UI/Fl_Resonance_Graph.H      |  45 +++++
+ src/UI/Fl_Resonance_Graph.cpp    | 246 ++++++++++++++++++++++
+ src/UI/PADnoteUI.fl              |  13 +-
+ src/UI/ResonanceUI.fl            | 337 +++++++++----------------------
+ 23 files changed, 783 insertions(+), 308 deletions(-)
+ create mode 100644 src/UI/Fl_Osc_Output.H
+ create mode 100644 src/UI/Fl_Osc_Output.cpp
+ create mode 100644 src/UI/Fl_Osc_Roller.H
+ create mode 100644 src/UI/Fl_Osc_Roller.cpp
+ create mode 100644 src/UI/Fl_Osc_Widget.cpp
+ create mode 100644 src/UI/Fl_Resonance_Graph.H
+ create mode 100644 src/UI/Fl_Resonance_Graph.cpp
+
+diff --git a/rtosc b/rtosc
+index fae283ad..d96df101 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit fae283ad5f438535b942ee0fb5e117d05948804b
++Subproject commit d96df10161a34722bc3ef86f9225ce8c502d1915
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 2366a665..dc6514c0 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -407,10 +407,13 @@ void Master::AudioOut(float *outl, float *outr)
+     int events = 0;
+     while(uToB->hasNext()) {
+         const char *msg = uToB->read();
+-        //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 5 + 30, 0 + 40);
+-        //fprintf(stdout, "backend: '%s'<%s>\n", msg,
+-        //        rtosc_argument_string(msg));
+-        //fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++        //XXX yes, this is not realtime safe, but it is useful...
++        if(strcmp(msg, "/get-vu")) {
++            fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 5 + 30, 0 + 40);
++            fprintf(stdout, "backend: '%s'<%s>\n", msg,
++                    rtosc_argument_string(msg));
++            fprintf(stdout, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
++        }
+         d.matches = 0;
+         //fprintf(stdout, "address '%s'\n", uToB->peak());
+         ports.dispatch(msg+1, d);
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 8e5cc803..9e24edde 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -441,10 +441,10 @@ struct MiddleWareImpl
+             //    handleKitItem(obj_rl, objmap[obj_rl],atoi(rindex(msg,'m')+1),rtosc_argument(msg,0).T);
+             } else if(strstr(msg, "padpars/prepare"))
+                 preparePadSynth(obj_rl,(PADnoteParameters *) objmap[obj_rl]);
+-            else if(strstr(msg, "padpars"))
++            else if(strstr(msg, "padpars")) {
+                 if(!handlePAD(obj_rl, last_path+1, objmap[obj_rl]))
+                     uToB->raw_write(msg);
+-            else //just forward the message
++            } else //just forward the message
+                 uToB->raw_write(msg);
+         } else if(strstr(msg, "load-part"))
+             loadPart(msg, master);
+@@ -530,6 +530,11 @@ class UI_Interface:public Fl_Osc_Interface
+             impl->write(s.c_str(), args, va);
+         }
+ 
++        void writeRaw(const char *msg) override
++        {
++            impl->handleMsg(msg);
++        }
++
+         void writeValue(string s, string ss) override
+         {
+             fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 4 + 30, 0 + 40);
+@@ -572,10 +577,30 @@ class UI_Interface:public Fl_Osc_Interface
+             printf("[%d] removing '%s' (%p)...\n", map.size(), s.c_str(), w);
+         }
+ 
++        virtual void removeLink(class Fl_Osc_Widget *w)
++        {
++            bool processing = true;
++            while(processing)
++            {
++                //Verify Iterator invalidation sillyness
++                processing = false;//Exit if no new elements are found
++                for(auto i = map.begin(); i != map.end(); ++i) {
++                    if(i->second == w) {
++                        printf("[%d] removing '%s' (%p)...\n", map.size()-1,
++                                i->first.c_str(), w);
++                        map.erase(i);
++                        processing = true;
++                        break;
++                    }
++                }
++            }
++        }
++
+         void tryLink(const char *msg) override
+         {
+ 
+-            printf("trying the link for a '%s'\n", msg);
++            if(strcmp(msg, "/vu-meter"))//Ignore repeated message
++                printf("trying the link for a '%s'\n", msg);
+             const char *handle = rindex(msg,'/');
+             if(handle)
+                 ++handle;
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index b118c955..07107f05 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -49,6 +49,7 @@ static Ports voicePorts = {
+ 
+ static Ports globalPorts = {
+     PARAMC(ADnoteGlobalParam, PPanning, panning, "Panning (0 random, 1 left, 127 right)"),
++    RECURP(ADnoteGlobalParam, Resonance, Reson,   Reson, "Resonance"),
+     RECURP(ADnoteGlobalParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
+     RECURP(ADnoteGlobalParam, LFOParams, AmpLfo, AmpLfo, "Amplitude LFO"),
+     RECURP(ADnoteGlobalParam, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 063a3e22..baec9450 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -46,6 +46,7 @@ static rtosc::Ports localPorts =
+     RECURP(PADnoteParameters, LFOParams, FreqLfo,   FreqLfo, "Frequency LFO"),
+     RECURP(PADnoteParameters, LFOParams, AmpLfo,    AmpLfo,   "Amplitude LFO"),
+     RECURP(PADnoteParameters, LFOParams, FilterLfo, FilterLfo, "Filter LFO"),
++    RECURP(PADnoteParameters, Resonance, resonance, resonance, "Resonance"),
+     PARAMC(PADnoteParameters, Pmode, mode,
+             "0 - bandwidth, 1 - discrete 2 - continious"),
+     PC(hp.base.type),
+diff --git a/src/Synth/Resonance.cpp b/src/Synth/Resonance.cpp
+index 2d929074..7af3342b 100644
+--- a/src/Synth/Resonance.cpp
++++ b/src/Synth/Resonance.cpp
+@@ -24,6 +24,31 @@
+ #include "Resonance.h"
+ #include "../Misc/Util.h"
+ 
++#include <rtosc/ports.h>
++#include <rtosc/port-sugar.h>
++
++#define rObject Resonance
++
++using namespace rtosc;
++rtosc::Ports Resonance::ports = {
++    rToggle(Penabled, "resonance enable"),
++    rToggle(Pprotectthefundamental, "Disable resonance filter on first harmonic"),
++    rParams(Prespoints, N_RES_POINTS, "Resonance data points"),
++    rParam(PmaxdB, "how many dB the signal may be amplified"),
++    rParam(Pcenterfreq, "Center frequency"),
++    rParam(Poctavesfreq, "The number of octaves..."),
++    rActioni(randomize, rMap(min,0), rMap(max, 2), "Randomize frequency response"),
++    rActioni(interpolatepeaks, rMap(min,0), rMap(max, 2), "Generate response from peak values"),
++    rAction(smooth, "Smooth out frequency response"),
++    rAction(zero,   "Reset frequency response"),
++    //UI Value listeners
++    {"centerfreq:", "", NULL, [](const char *, RtData &d)
++        {d.reply(d.loc, "f", ((rObject*)d.obj)->getcenterfreq());}},
++    {"octavesfreq:", "", NULL, [](const char *, RtData &d)
++        {d.reply(d.loc, "f", ((rObject*)d.obj)->getoctavesfreq());}},
++                                                                
++};
++
+ Resonance::Resonance():Presets()
+ {
+     setpresettype("Presonance");
+@@ -122,7 +147,7 @@ float Resonance::getfreqresponse(float freq) const
+ /*
+  * Smooth the resonance function
+  */
+-void Resonance::smooth()
++void Resonance::smooth(void)
+ {
+     float old = Prespoints[0];
+     for(int i = 0; i < N_RES_POINTS; ++i) {
+@@ -156,6 +181,12 @@ void Resonance::randomize(int type)
+     smooth();
+ }
+ 
++void Resonance::zero(void)
++{
++    for(int i=0; i<N_RES_POINTS; ++i) 
++        setpoint(i,64);
++}
++
+ /*
+  * Interpolate the peaks
+  */
+diff --git a/src/Synth/Resonance.h b/src/Synth/Resonance.h
+index df1f4dcf..7676cf49 100644
+--- a/src/Synth/Resonance.h
++++ b/src/Synth/Resonance.h
+@@ -40,12 +40,14 @@ class Resonance:public Presets
+         void smooth(void);
+         void interpolatepeaks(int type);
+         void randomize(int type);
++        void zero(void);
+ 
+         void add2XML(XMLwrapper *xml);
+         void defaults(void);
+         void getfromXML(XMLwrapper *xml);
+ 
+ 
++        //TODO remove unused methods
+         float getfreqpos(float freq) const;
+         float getfreqx(float x) const;
+         float getfreqresponse(float freq) const;
+@@ -64,7 +66,7 @@ class Resonance:public Presets
+         float ctlcenter; //center frequency(relative)
+         float ctlbw; //bandwidth(relative)
+ 
+-    private:
++        static rtosc::Ports ports;
+ };
+ 
+ #endif
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 13acab3f..f0cee3d4 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -64,7 +64,7 @@ class ADvoicelistitem {open : {public Fl_Group}
+   Function {make_window()} {open private
+   } {
+     Fl_Window ADnoteVoiceListItem {open
+-      private xywh {334 881 615 100} type Double box UP_FRAME
++      private xywh {337 881 615 100} type Double box UP_FRAME
+       class Fl_Group visible
+     } {
+       Fl_Group voicelistitemgroup {open
+@@ -852,7 +852,7 @@ class ADnoteUI {open : {public PresetsUI_}
+   } {
+     Fl_Window ADnoteGlobalParameters {
+       label {ADsynth Global Parameters of the Instrument} open
+-      xywh {676 551 540 430} type Double visible
++      xywh {679 551 540 430} type Double visible
+     } {
+       Fl_Group {} {
+         label FREQUENCY open
+@@ -1061,7 +1061,7 @@ resui->resonancewindow->show();}
+     }
+     Fl_Window ADnoteVoice {
+       label {ADsynth Voice Parameters} open
+-      xywh {36 321 765 620} type Double visible
++      xywh {39 344 765 620} type Double visible
+     } {
+       Fl_Group advoice {open
+         xywh {0 0 765 585}
+@@ -1149,10 +1149,11 @@ assert(!loc_.empty());
+ 
+ pars=parameters;
+ nvoice=0;
+-resui=new ResonanceUI(pars->GlobalPar.Reson);
++resui=new ResonanceUI(osc_, loc_+"global/Reson/");
+ loc=loc_;
+ osc=osc_;
+-make_window();} {}
++make_window();} {selected
++    }
+   }
+   Function {~ADnoteUI()} {open
+   } {
+@@ -1162,8 +1163,7 @@ ADnoteVoice->hide();
+ delete ADnoteVoiceList;
+ delete ADnoteGlobalParameters;
+ delete ADnoteVoice;
+-delete resui;} {selected
+-    }
++delete resui;} {}
+   }
+   Function {refresh()} {open
+   } {
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index 49d2a43f..ba452bc9 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -34,12 +34,16 @@ add_library(zynaddsubfx_gui STATIC
+ 	${zynaddsubfx_gui_FLTK_UI_SRCS}
+         NioUI.cpp
+         WidgetPDial.cpp
++        Fl_Osc_Widget.cpp
+         Fl_Osc_Dial.cpp
+         Fl_Osc_DialF.cpp
+         Fl_Osc_Slider.cpp
+         Fl_Osc_Button.cpp
+         Fl_Osc_Check.cpp
+         Fl_Osc_Choice.cpp
++        Fl_Osc_Roller.cpp
++        Fl_Osc_Output.cpp
++        Fl_Resonance_Graph.cpp
+         BankView.cpp
+         Connection.cpp
+ 	)
+diff --git a/src/UI/Fl_Osc_Button.H b/src/UI/Fl_Osc_Button.H
+index e0df0e49..b41795d3 100644
+--- a/src/UI/Fl_Osc_Button.H
++++ b/src/UI/Fl_Osc_Button.H
+@@ -5,7 +5,7 @@
+ 
+ using std::string; //yes this is bad form FIXME
+ 
+-class Fl_Osc_Button:public Fl_Button, Fl_Osc_Widget
++class Fl_Osc_Button:public Fl_Button, public Fl_Osc_Widget
+ {
+ 
+     public:
+@@ -14,12 +14,9 @@ class Fl_Osc_Button:public Fl_Button, Fl_Osc_Widget
+         virtual ~Fl_Osc_Button(void);
+         virtual void OSC_value(bool);
+ 
+-        void init(Fl_Osc_Interface *, std::string);
+-        void init(std::string);
++        //void init(Fl_Osc_Interface *, std::string);
++        //void init(std::string);
+ 
+-        void cb(void);
+-        static void _cb(Fl_Widget *w, void *);
+-    private:
+-        class Fl_Osc_Interface *osc;
+-        std::string full_path;
++        //void cb(void);
++        //static void _cb(Fl_Widget *w, void *);
+ };
+diff --git a/src/UI/Fl_Osc_Button.cpp b/src/UI/Fl_Osc_Button.cpp
+index 5cfd4d42..7b48f86f 100644
+--- a/src/UI/Fl_Osc_Button.cpp
++++ b/src/UI/Fl_Osc_Button.cpp
+@@ -8,28 +8,27 @@
+ #include <sstream>
+ 
+ Fl_Osc_Button::Fl_Osc_Button(int X, int Y, int W, int H, const char *label)
+-    :Fl_Button(X,Y,W,H,label), Fl_Osc_Widget()
++    :Fl_Button(X,Y,W,H,label), Fl_Osc_Widget(this)
+ {
+-    callback(Fl_Osc_Button::_cb);
+-
+-    Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(parent());
+-    assert(pane);
+-    osc = pane->osc;
+-    assert(osc);
+-    osc->createLink(full_path, this);
+-    osc->requestValue(full_path);
++    //callback(Fl_Osc_Button::_cb);
++
++    //Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(parent());
++    //assert(pane);
++    //osc = pane->osc;
++    //assert(osc);
++    //osc->createLink(full_path, this);
++    //osc->requestValue(full_path);
+ }
+ 
+ Fl_Osc_Button::~Fl_Osc_Button(void)
+-{
+-    osc->removeLink(full_path, this);
+-}
++{}
+ 
+ void Fl_Osc_Button::OSC_value(bool v)
+ {
+     Fl_Button::value(v);
+ }
+ 
++/*
+ void Fl_Osc_Button::init(std::string path)
+ {
+     Fl_Osc_Pane *pane = fetch_osc_pane(this);
+@@ -55,3 +54,4 @@ void Fl_Osc_Button::_cb(Fl_Widget *w, void *)
+ {
+     static_cast<Fl_Osc_Button*>(w)->cb();
+ }
++*/
+diff --git a/src/UI/Fl_Osc_Interface.h b/src/UI/Fl_Osc_Interface.h
+index 774805eb..196b0b43 100644
+--- a/src/UI/Fl_Osc_Interface.h
++++ b/src/UI/Fl_Osc_Interface.h
+@@ -9,10 +9,11 @@ class Fl_Osc_Interface
+         virtual ~Fl_Osc_Interface(void){};
+         //It is assumed that you want to have a registry for all of these
+         //elements
+-        virtual void createLink(string s, class Fl_Osc_Widget *w)
+-        {printf("linking %s (%p)...\n", s.c_str(), w);};
++        virtual void createLink(string, class Fl_Osc_Widget *) {};
+         virtual void renameLink(string,string,class Fl_Osc_Widget*){};
+-        virtual void removeLink(string s,class Fl_Osc_Widget*){printf("removing '%s'...\n", s.c_str());};
++        virtual void removeLink(string,class Fl_Osc_Widget*){};
++        virtual void removeLink(class Fl_Osc_Widget*){};
++
+         //and to be able to give them events
+         virtual void tryLink(const char *){};
+ 
+@@ -24,4 +25,5 @@ class Fl_Osc_Interface
+         virtual void writeValue(string, bool){};
+         virtual void writeValue(string, string){};
+         virtual void write(string, const char *, ...) {};//{printf("write: '%s'\n", s.c_str());};
++        virtual void writeRaw(const char *) {}
+ };
+diff --git a/src/UI/Fl_Osc_Output.H b/src/UI/Fl_Osc_Output.H
+new file mode 100644
+index 00000000..d2e94128
+--- /dev/null
++++ b/src/UI/Fl_Osc_Output.H
+@@ -0,0 +1,24 @@
++#pragma once
++#include <FL/Fl_Value_Output.H>
++#include "Fl_Osc_Widget.H"
++
++class Fl_Osc_Output:public Fl_Value_Output, Fl_Osc_Widget
++{
++    public:
++        Fl_Osc_Output(int x, int y, int w, int h, const char *label = NULL);
++        void init(const char *path);
++        void OSC_value(char);
++        void OSC_value(float);
++        using Fl_Osc_Widget::OSC_value;
++        
++        void update(void);
++        void callback(Fl_Callback *cb, void *p = NULL);
++
++        float newvalue() const;
++
++        void cb(void);
++    private:
++        float newvalue_;
++        std::string name;
++        std::pair<Fl_Callback*, void*> cb_data;
++};
+diff --git a/src/UI/Fl_Osc_Output.cpp b/src/UI/Fl_Osc_Output.cpp
+new file mode 100644
+index 00000000..727e94ae
+--- /dev/null
++++ b/src/UI/Fl_Osc_Output.cpp
+@@ -0,0 +1,65 @@
++#include "Fl_Osc_Output.H"
++#include <cstdlib>
++#include <cstring>
++#include <cmath>
++#include <cassert>
++#include <sstream>
++
++static void callback_fn(Fl_Widget *w, void *v)
++{
++    ((Fl_Osc_Output*)w)->cb();
++}
++
++Fl_Osc_Output::Fl_Osc_Output(int X, int Y, int W, int H, const char *label)
++    :Fl_Value_Output(X,Y,W,H, label), Fl_Osc_Widget(this)
++{
++    Fl_Value_Output::callback(callback_fn);
++}
++
++
++void Fl_Osc_Output::init(const char *path)
++{
++    name = path;
++    oscRegister(path);
++};
++
++void Fl_Osc_Output::callback(Fl_Callback *cb, void *p)
++{
++    cb_data.first = cb;
++    cb_data.second = p;
++}
++
++void Fl_Osc_Output::OSC_value(char v)
++{
++    newvalue_ = v;
++    value(v);
++    
++    //Hide the fact that this widget is async
++    if(cb_data.first)
++        cb_data.first(this, cb_data.second);
++}
++
++void Fl_Osc_Output::OSC_value(float v)
++{
++    newvalue_ = v;
++    value(v);
++   
++    //Hide the fact that this widget is async
++    if(cb_data.first)
++        cb_data.first(this, cb_data.second);
++}
++        
++void Fl_Osc_Output::update(void)
++{
++    oscWrite(name);
++}
++
++float Fl_Osc_Output::newvalue(void) const
++{
++    return newvalue_;
++}
++
++void Fl_Osc_Output::cb(void)
++{
++    oscWrite(name);
++}
+diff --git a/src/UI/Fl_Osc_Pane.H b/src/UI/Fl_Osc_Pane.H
+index e39ad8c5..9b08ef7a 100644
+--- a/src/UI/Fl_Osc_Pane.H
++++ b/src/UI/Fl_Osc_Pane.H
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include <FL/Fl_Group.H>
++#include <FL/Fl_Double_Window.H>
+ #include <string>
+ 
+ class Fl_Osc_Pane
+@@ -12,6 +13,20 @@ class Fl_Osc_Pane
+         std::string pane_name;
+ };
+ 
++class Fl_Osc_Window:public Fl_Osc_Pane, public Fl_Double_Window
++{
++    public:
++        Fl_Osc_Window(int w, int h, const char *L=0)
++            :Fl_Double_Window(w,h,L)
++        {}
++
++        void init(Fl_Osc_Interface *osc_, std::string loc_)
++        {
++            osc       = osc_;
++            pane_name = loc_;
++        }
++};
++
+ class Fl_Osc_Group:public Fl_Osc_Pane, public Fl_Group
+ {
+     public:
+diff --git a/src/UI/Fl_Osc_Roller.H b/src/UI/Fl_Osc_Roller.H
+new file mode 100644
+index 00000000..49b62dda
+--- /dev/null
++++ b/src/UI/Fl_Osc_Roller.H
+@@ -0,0 +1,24 @@
++#pragma once
++#include <FL/Fl_Roller.H>
++#include "Fl_Osc_Widget.H"
++
++class Fl_Osc_Roller:public Fl_Roller, Fl_Osc_Widget
++{
++
++    public:
++        Fl_Osc_Roller(int X, int Y, int W, int H, const char *label = NULL);
++        virtual ~Fl_Osc_Roller(void);
++        void init(const char *path);
++        //void OSC_value(float);
++        void OSC_value(char) override;
++        using Fl_Osc_Widget::OSC_value;
++
++        //Refetch parameter information
++        void update(void);
++        void callback(Fl_Callback *cb, void *p = NULL);
++
++        void cb(void);
++    private:
++        std::string name;
++        std::pair<Fl_Callback*, void*> cb_data;
++};
+diff --git a/src/UI/Fl_Osc_Roller.cpp b/src/UI/Fl_Osc_Roller.cpp
+new file mode 100644
+index 00000000..12c4a314
+--- /dev/null
++++ b/src/UI/Fl_Osc_Roller.cpp
+@@ -0,0 +1,52 @@
++#include "Fl_Osc_Roller.H"
++#include <cstdlib>
++#include <cstring>
++#include <cmath>
++#include <cassert>
++#include <sstream>
++
++static void callback_fn(Fl_Widget *w, void *)
++{
++    ((Fl_Osc_Roller*)w)->cb();
++}
++
++Fl_Osc_Roller::Fl_Osc_Roller(int X, int Y, int W, int H, const char *label)
++    :Fl_Roller(X,Y,W,H, label), Fl_Osc_Widget(this)
++{
++    Fl_Roller::callback(callback_fn);
++    bounds(0.0, 127.0f);
++}
++
++
++void Fl_Osc_Roller::init(const char *path)
++{
++    name = path;
++    oscRegister(path);
++};
++
++Fl_Osc_Roller::~Fl_Osc_Roller(void)
++{}
++
++void Fl_Osc_Roller::callback(Fl_Callback *cb, void *p)
++{
++    cb_data.first = cb;
++    cb_data.second = p;
++}
++
++void Fl_Osc_Roller::OSC_value(char v)
++{
++    value(v);
++}
++        
++void Fl_Osc_Roller::update(void)
++{
++    oscWrite(name);
++}
++
++void Fl_Osc_Roller::cb(void)
++{
++    oscWrite(name, "c", (unsigned char)value());
++    
++    if(cb_data.first)
++        cb_data.first(this, cb_data.second);
++}
+diff --git a/src/UI/Fl_Osc_Widget.H b/src/UI/Fl_Osc_Widget.H
+index 7c8abe25..47f92d69 100644
+--- a/src/UI/Fl_Osc_Widget.H
++++ b/src/UI/Fl_Osc_Widget.H
+@@ -1,42 +1,42 @@
+ #pragma once
+ #include <string>
+ #include <cstring>
++#include <cassert>
+ #include <cmath>
++#include "Fl_Osc_Interface.h"
+ #include "Fl_Osc_Pane.H"
+ #include <FL/Fl_Group.H>
+ 
+ class Fl_Osc_Widget
+ {
+     public:
+-        Fl_Osc_Widget(void) {}
+-        virtual ~Fl_Osc_Widget(void){};
++        Fl_Osc_Widget(void); //Deprecated
++        Fl_Osc_Widget(Fl_Widget *self);
++        virtual ~Fl_Osc_Widget(void);
+ 
+-        virtual void OSC_value(float) {}
+-        virtual void OSC_value(int) {}
+-        virtual void OSC_value(char) {}
+-        virtual void OSC_value(unsigned,void*) {}
++        //Callback methods
++        virtual void OSC_value(float);
++        virtual void OSC_value(int);
++        virtual void OSC_value(char);
++        virtual void OSC_value(unsigned,void*);
+ 
+         //labeled forwarding methods
+-        virtual void OSC_value(float x, const char *) {OSC_value(x);}
+-        virtual void OSC_value(bool x, const char *) {OSC_value(x);}
+-        virtual void OSC_value(char x, const char *) {OSC_value(x);}
+-        virtual void OSC_value(unsigned x, void *v, const char *)
+-        {OSC_value(x,v);}
++        virtual void OSC_value(float x, const char *);
++        virtual void OSC_value(bool x, const char *);
++        virtual void OSC_value(char x, const char *);
++        virtual void OSC_value(unsigned x, void *v, const char *);
+ 
+-        virtual void OSC_raw(const char *)
+-        {}
+-
+-        Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w)
+-        {
+-            if(!w)
+-                return NULL;
+-
+-            Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(w->parent());
+-            if(pane)
+-                return pane;
+-            return fetch_osc_pane(w->parent());
+-        }
++        //Raw messages
++        virtual void OSC_raw(const char *);
++        
++        
++        //Widget methods
++        void oscWrite(std::string path, const char *args, ...);
++        void oscWrite(std::string path);
++        void oscRegister(const char *path);
+ 
+         std::string loc;
+-        class Fl_Osc_Interface *osc;
++        Fl_Osc_Interface *osc;
++    protected:
++        Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w);
+ };
+diff --git a/src/UI/Fl_Osc_Widget.cpp b/src/UI/Fl_Osc_Widget.cpp
+new file mode 100644
+index 00000000..28d196a3
+--- /dev/null
++++ b/src/UI/Fl_Osc_Widget.cpp
+@@ -0,0 +1,74 @@
++#include "Fl_Osc_Widget.H"
++#include <rtosc/rtosc.h>
++
++Fl_Osc_Widget::Fl_Osc_Widget(void) //Deprecated
++:loc(), osc(NULL)
++{}
++
++Fl_Osc_Widget:: Fl_Osc_Widget(Fl_Widget *self)
++{
++    assert(fetch_osc_pane(self));
++    if(auto *pane = fetch_osc_pane(self)) {
++        osc = pane->osc;
++        loc = pane->pane_name;
++    }
++    assert(osc);
++}
++
++Fl_Osc_Widget::~Fl_Osc_Widget(void)
++{
++    if(osc)
++        osc->removeLink(this);
++};
++
++void Fl_Osc_Widget::OSC_value(float) {}
++void Fl_Osc_Widget::OSC_value(int) {}
++void Fl_Osc_Widget::OSC_value(char) {}
++void Fl_Osc_Widget::OSC_value(unsigned,void*) {}
++
++//labeled forwarding methods
++void Fl_Osc_Widget::OSC_value(float x, const char *) {OSC_value(x);}
++void Fl_Osc_Widget::OSC_value(bool x, const char *) {OSC_value(x);}
++void Fl_Osc_Widget::OSC_value(char x, const char *) {OSC_value(x);}
++void Fl_Osc_Widget::OSC_value(unsigned x, void *v, const char *) {OSC_value(x,v);}
++
++void Fl_Osc_Widget::OSC_raw(const char *)
++{}
++
++
++void Fl_Osc_Widget::oscWrite(std::string path, const char *args, ...)
++{
++    char buffer[1024];
++    puts("writing OSC");
++    printf("Path = '%s'\n", path.c_str());
++
++    va_list va;
++    va_start(va, args);
++
++    if(rtosc_vmessage(buffer, 1024, (loc+path).c_str(), args, va))
++        osc->writeRaw(buffer);
++    else
++        puts("Dangerous Event ommision");
++}
++
++void Fl_Osc_Widget::oscWrite(std::string path)
++{
++    osc->requestValue(loc+path);
++}
++
++void Fl_Osc_Widget::oscRegister(const char *path)
++{
++    osc->createLink(loc+path, this);
++    osc->requestValue(loc+path);
++}
++
++Fl_Osc_Pane *Fl_Osc_Widget::fetch_osc_pane(Fl_Widget *w)
++{
++    if(!w)
++        return NULL;
++
++    Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(w->parent());
++    if(pane)
++        return pane;
++    return fetch_osc_pane(w->parent());
++}
+diff --git a/src/UI/Fl_Resonance_Graph.H b/src/UI/Fl_Resonance_Graph.H
+new file mode 100644
+index 00000000..ba157766
+--- /dev/null
++++ b/src/UI/Fl_Resonance_Graph.H
+@@ -0,0 +1,45 @@
++// generated by Fast Light User Interface Designer (fluid) version 1.0302
++
++#ifndef Fl_Resonance_Graph_H
++#define Fl_Resonance_Graph_H
++#include <FL/Fl_Box.H>
++#include "../Synth/Resonance.h"
++#include "Fl_Osc_Widget.H"
++
++class Fl_Value_Output;
++class Fl_Widget;
++class Fl_Resonance_Graph : public Fl_Box, public Fl_Osc_Widget {
++    public:
++        Fl_Resonance_Graph(int x,int y, int w, int h, const char *label=0);
++        virtual ~Fl_Resonance_Graph(void);
++        void init(Fl_Value_Output *khzvalue_,Fl_Value_Output *dbvalue_);
++        void draw_freq_line(float freq,int type);
++        void draw();
++        int handle(int event);
++        void setcbwidget(Fl_Widget *cbwidget,Fl_Widget *applybutton);
++        void update(void);
++
++        float khzval; 
++
++        void OSC_raw(const char *msg);
++
++    private:
++        float getfreqx(float x) const;
++        float getfreqpos(float freq) const;
++        float getcenterfreq() const;
++        float getoctavesfreq() const;
++
++        void setPoint(int idx, int val);
++
++        Fl_Value_Output *khzvalue; 
++        Fl_Value_Output *dbvalue; 
++        int oldx,oldy; 
++        Fl_Widget *cbwidget,*applybutton; 
++
++        //duplicate data required to render response
++        unsigned char Prespoints[N_RES_POINTS];
++        char Pcenterfreq;
++        char Poctavesfreq;
++        char PmaxdB;
++};
++#endif
+diff --git a/src/UI/Fl_Resonance_Graph.cpp b/src/UI/Fl_Resonance_Graph.cpp
+new file mode 100644
+index 00000000..ea4c86d8
+--- /dev/null
++++ b/src/UI/Fl_Resonance_Graph.cpp
+@@ -0,0 +1,246 @@
++#include "Fl_Resonance_Graph.H"
++#include <FL/Fl.H>
++#include <FL/fl_draw.H>
++#include <FL/Fl_Value_Output.H>
++#include <rtosc/rtosc.h>
++
++Fl_Resonance_Graph::Fl_Resonance_Graph(int x,int y, int w, int h, const char *label)
++    :Fl_Box(x,y,w,h,label), Fl_Osc_Widget(this), khzvalue(NULL), dbvalue(NULL),
++    oldx(-1), oldy(-1), cbwidget(NULL), applybutton(NULL), Pcenterfreq(0), Poctavesfreq(0),
++    PmaxdB(0)
++{
++    memset(Prespoints, 64, N_RES_POINTS);
++    //Get values
++    oscRegister("Prespoints");
++    oscRegister("Pcenterfreq");
++    oscRegister("Poctavesfreq");
++    oscRegister("PmaxdB");
++
++    cbwidget=NULL;
++    applybutton=NULL;
++}
++
++Fl_Resonance_Graph::~Fl_Resonance_Graph(void)
++{
++}
++
++void Fl_Resonance_Graph::init(Fl_Value_Output *khzvalue_,Fl_Value_Output *dbvalue_)
++{
++    khzvalue=khzvalue_;
++    dbvalue=dbvalue_;
++    oldx=-1;
++    khzval=-1;
++}
++
++void Fl_Resonance_Graph::draw_freq_line(float freq,int type)
++{
++    const float freqx=getfreqpos(freq);//XXX
++    switch(type){
++        case 0:fl_line_style(FL_SOLID);break;
++        case 1:fl_line_style(FL_DOT);break;
++        case 2:fl_line_style(FL_DASH);break;
++    }
++
++
++    if ((freqx>0.0)&&(freqx<1.0))
++        fl_line(x()+(int) (freqx*w()),y(),
++                x()+(int) (freqx*w()),y()+h());
++}
++
++void Fl_Resonance_Graph::draw()
++{
++    const int ox=x(),oy=y(),lx=w(),ly=h();
++
++    fl_color(FL_DARK1);
++    fl_rectf(ox,oy,lx,ly);
++
++
++    //draw the lines
++    fl_color(FL_GRAY);
++
++    fl_line_style(FL_SOLID);
++    fl_line(ox+2,oy+ly/2,ox+lx-2,oy+ly/2);
++
++
++    //Draw 1kHz line
++    const float freqx=getfreqpos(1000.0);//XXX
++    if ((freqx>0.0)&&(freqx<1.0))
++        fl_line(ox+(int) (freqx*lx),oy,
++                ox+(int) (freqx*lx),oy+ly);
++
++    //Draw other frequency lines
++    for (int i=1; i<10; ++i){
++        if(i==1) {
++            draw_freq_line(i*100.0,0);
++            draw_freq_line(i*1000.0,0);
++        } else 
++            if (i==5) {
++                draw_freq_line(i*100.0,2);
++                draw_freq_line(i*1000.0,2);
++            } else {
++                draw_freq_line(i*100.0,1);
++                draw_freq_line(i*1000.0,1);
++            }
++    }
++
++    draw_freq_line(10000.0,0);
++    draw_freq_line(20000.0,1);
++
++    //Draw dotted grid
++    fl_line_style(FL_DOT);
++    int GY=10;if (ly<GY*3) GY=-1;
++    for (int i=1; i<GY; ++i){
++        int tmp=(int)(ly/(float)GY*i);
++        fl_line(ox+2,oy+tmp,ox+lx-2,oy+tmp);
++    }
++
++
++
++    //draw the data
++    fl_color(FL_RED);
++    fl_line_style(FL_SOLID,2);
++    fl_begin_line();
++    int oiy = ly*Prespoints[0]/128.0;//XXX easy
++    for (int i=1; i<N_RES_POINTS; ++i){
++        const int ix=(i*1.0/N_RES_POINTS*lx);
++        const int iy= ly*Prespoints[i]/128.0;//XXX easy
++        fl_vertex(ox+ix,oy+ly-oiy);
++        oiy=iy;
++    }
++    fl_end_line();
++    fl_line_style(FL_SOLID,0);
++}
++
++int Fl_Resonance_Graph::handle(int event)
++{
++    int x_=Fl::event_x()-x();
++    int y_=Fl::event_y()-y();
++    if((x_>=0)&&(x_<w()) && (y_>=0)&&(y_<h())){
++        khzvalue->value(getfreqx(x_*1.0/w())/1000.0);//XXX
++        dbvalue->value((1.0-y_*2.0/h())*PmaxdB);//XXX
++    }
++
++    if((event==FL_PUSH)||(event==FL_DRAG)){
++        const bool leftbutton = Fl::event_button() == FL_LEFT_MOUSE;
++
++        if (x_<0) x_=0;if (y_<0) y_=0;
++        if (x_>=w()) x_=w();if (y_>=h()-1) y_=h()-1;
++
++        if ((oldx<0)||(oldx==x_)){
++            int sn=(int)(x_*1.0/w()*N_RES_POINTS);
++            int sp=127-(int)(y_*1.0/h()*127);
++            if(leftbutton)
++                setPoint(sn,sp);
++                //oscWrite("setpoint", "ii", sn, sp);//respar->setpoint(sn,sp);//XXX easy
++            else
++                setPoint(sn,sp);
++                //oscWrite("setpoint", "ii", sn, 64);//respar->setpoint(sn,64);//XXX easy
++        } else {
++            int x1=oldx;
++            int x2=x_;
++            int y1=oldy;
++            int y2=y_;
++            if (oldx>x_){
++                x1=x_;y1=y_;
++                x2=oldx;y2=oldy;
++            }
++            for (int i=0;i<x2-x1;i++){
++                int sn=(int)((i+x1)*1.0/w()*N_RES_POINTS);
++                float yy=(y2-y1)*1.0/(x2-x1)*i;
++                int sp=127-(int)((y1+yy)/h()*127);
++                if(leftbutton) //respar->setpoint(sn,sp);//XXX easy
++                    setPoint(sn, sp);
++                    //oscWrite("setpoint", "ii", sn, sp);
++                else //respar->setpoint(sn,64);//XXX easy
++                    setPoint(sn, sp);
++                    //oscWrite("setpoint", "ii", sn, sp);
++            }
++        }
++
++        oldx=x_;oldy=y_;
++        redraw();
++    }
++
++    if(event==FL_RELEASE) {
++        oldx=-1;
++        if(cbwidget) {
++            cbwidget->do_callback();
++            if(applybutton) {
++                applybutton->color(FL_RED);
++                applybutton->redraw();
++            }
++        }
++    }
++
++    return 1;
++}
++
++void Fl_Resonance_Graph::setcbwidget(Fl_Widget *cbwidget,Fl_Widget *applybutton)
++{
++    this->cbwidget=cbwidget;
++    this->applybutton=applybutton;
++}
++
++void Fl_Resonance_Graph::update(void)
++{
++    oscWrite("Prespoints");
++    oscWrite("Pcenterfreq");
++    oscWrite("Poctavesfreq");
++    oscWrite("PmaxdB");
++}
++        
++void Fl_Resonance_Graph::OSC_raw(const char *msg)
++{
++    //TODO check the types (OSC regex)
++    if(strstr(msg, "Prespoints")) {
++        rtosc_blob_t arg = rtosc_argument(msg, 0).b;
++        assert(arg.len == N_RES_POINTS);
++        memcpy(Prespoints, arg.data, N_RES_POINTS);
++    } else if(strstr(msg, "Pcenterfreq"))
++        Pcenterfreq = rtosc_argument(msg, 0).i;
++    else if(strstr(msg, "Poctavesfreq"))
++        Poctavesfreq = rtosc_argument(msg, 0).i;
++    else if(strstr(msg, "PmaxdB"))
++        PmaxdB = rtosc_argument(msg, 0).i;
++    else
++        puts("I got an unknown message...");
++
++    redraw();
++}
++
++float Fl_Resonance_Graph::getfreqx(float x) const
++{
++    const float octf = powf(2.0f, getoctavesfreq());
++    return getcenterfreq() / sqrt(octf) * powf(octf, limit(x, 0.0f, 1.0f));
++}
++
++/*
++ * Get the x coordinate from frequency (used by the UI)
++ */
++float Fl_Resonance_Graph::getfreqpos(float freq) const
++{
++    return (logf(freq) - logf(getfreqx(0.0f))) / logf(2.0f) / getoctavesfreq();
++}
++
++/*
++ * Get the center frequency of the resonance graph
++ */
++float Fl_Resonance_Graph::getcenterfreq() const
++{
++    return 10000.0f * powf(10, -(1.0f - Pcenterfreq / 127.0f) * 2.0f);
++}
++
++/*
++ * Get the number of octave that the resonance functions applies to
++ */
++float Fl_Resonance_Graph::getoctavesfreq() const
++{
++    return 0.25f + 10.0f * Poctavesfreq / 127.0f;
++}
++
++void Fl_Resonance_Graph::setPoint(int idx, int val)
++{
++    Prespoints[idx] = val;
++    oscWrite(std::string("Prespoints")+to_s(idx), "c", val);
++    redraw();
++}
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 348b4db8..b436c2ec 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -76,14 +76,15 @@ location=location_;
+ pars=parameters;
+ oscui=NULL;
+ osc_i = osc_;
+-resui=new ResonanceUI(pars->resonance);
+-make_window();} {}
++resui=new ResonanceUI(osc_i, location+"resonance/");
++make_window();} {selected
++    }
+   }
+   Function {make_window()} {open
+   } {
+     Fl_Window padnotewindow {
+       label {PAD synth Parameters} open
+-      xywh {49 301 535 435} type Double visible
++      xywh {52 324 535 435} type Double hide
+     } {
+       Fl_Tabs {} {
+         callback {if (o->value()!=harmonicstructuregroup) applybutton->hide();
+@@ -92,7 +93,7 @@ make_window();} {}
+       } {
+         Fl_Group harmonicstructuregroup {
+           label {Harmonic Structure} open
+-          xywh {0 20 535 375} box UP_FRAME hide
++          xywh {0 20 535 375} box UP_FRAME
+           class Fl_Osc_Group
+         } {
+           Fl_Group bwprofilegroup {open
+@@ -618,7 +619,7 @@ cbwidget->do_callback();}
+         }
+         Fl_Group {} {
+           label {Envelopes&LFOs} open
+-          xywh {0 20 535 375} box UP_FRAME
++          xywh {0 20 535 375} box UP_FRAME hide
+         } {
+           Fl_Group {} {
+             label FREQUENCY open
+@@ -654,7 +655,7 @@ pars->PCoarseDetune = k+
+               code3 {o->lstep(10);}
+             }
+             Fl_Group freqlfo {
+-              label {Frequency LFO     } open selected
++              label {Frequency LFO     } open
+               xywh {215 315 230 70} box FLAT_BOX color 47 align 144
+               code0 {o->init(osc_i, location + "FreqLfo/");}
+               class LFOUI
+diff --git a/src/UI/ResonanceUI.fl b/src/UI/ResonanceUI.fl
+index 12e591ab..03923262 100644
+--- a/src/UI/ResonanceUI.fl
++++ b/src/UI/ResonanceUI.fl
+@@ -1,219 +1,78 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0110 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {} 
+-
+-decl {//License: GNU GPL version 2 or later} {} 
+-
+-decl {\#include <FL/Fl_Box.H>} {public
++decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
+ } 
+ 
+-decl {\#include <FL/fl_draw.H>} {public
++decl {//License: GNU GPL version 2 or later} {private local
+ } 
+ 
+-decl {\#include <FL/Fl_Value_Output.H>} {public
++decl {\#include <FL/Fl_Box.H>} {public local
+ } 
+ 
+-decl {\#include <math.h>} {} 
+-
+-decl {\#include <stdio.h>} {} 
+-
+-decl {\#include <stdlib.h>} {} 
+-
+-decl {\#include <string.h>} {} 
+-
+-decl {\#include "../Synth/Resonance.h"} {public
++decl {\#include <FL/fl_draw.H>} {public local
+ } 
+ 
+-decl {\#include "WidgetPDial.h"} {public
++decl {\#include <FL/Fl_Value_Output.H>} {public local
+ } 
+ 
+-decl {\#include "PresetsUI.h"} {public
++decl {\#include <math.h>} {private local
+ } 
+ 
+-class ResonanceGraph {open : {public Fl_Box}
+-} {
+-  Function {ResonanceGraph(int x,int y, int w, int h, const char *label=0):Fl_Box(x,y,w,h,label)} {} {
+-    code {respar=NULL;
+-cbwidget=NULL;
+-applybutton=NULL;} {}
+-  }
+-  Function {init(Resonance *respar_,Fl_Value_Output *khzvalue_,Fl_Value_Output *dbvalue_)} {} {
+-    code {respar=respar_;
+-khzvalue=khzvalue_;
+-dbvalue=dbvalue_;
+-oldx=-1;
+-khzval=-1;} {}
+-  }
+-  Function {draw_freq_line(float freq,int type)} {open
+-  } {
+-    code {float freqx=respar->getfreqpos(freq);
+-switch(type){
+-  case 0:fl_line_style(FL_SOLID);break;
+-  case 1:fl_line_style(FL_DOT);break;
+-  case 2:fl_line_style(FL_DASH);break;
+-}; 
+-
+-
+-if ((freqx>0.0)&&(freqx<1.0))
+-   fl_line(x()+(int) (freqx*w()),y(),
+-   x()+(int) (freqx*w()),y()+h());} {}
+-  }
+-  Function {draw()} {open
+-  } {
+-    code {int ox=x(),oy=y(),lx=w(),ly=h(),i,ix,iy,oiy;
+-float freqx;
+-
+-fl_color(FL_DARK1);
+-fl_rectf(ox,oy,lx,ly);
+-
+-
+-//draw the lines
+-fl_color(FL_GRAY);
+-
+-fl_line_style(FL_SOLID);
+-fl_line(ox+2,oy+ly/2,ox+lx-2,oy+ly/2);
+-
+-freqx=respar->getfreqpos(1000.0);
+-if ((freqx>0.0)&&(freqx<1.0))
+-   fl_line(ox+(int) (freqx*lx),oy,
+-    ox+(int) (freqx*lx),oy+ly);
+-
+-for (i=1;i<10;i++){
+-   if(i==1){
+-     draw_freq_line(i*100.0,0);
+-     draw_freq_line(i*1000.0,0);
+-   }else 
+-    if (i==5){
+-      draw_freq_line(i*100.0,2);
+-      draw_freq_line(i*1000.0,2);
+-    }else{
+-      draw_freq_line(i*100.0,1);
+-      draw_freq_line(i*1000.0,1);
+-    };
+-};
+-
+-draw_freq_line(10000.0,0);
+-draw_freq_line(20000.0,1);
++decl {\#include <stdio.h>} {private local
++} 
+ 
+-fl_line_style(FL_DOT);
+-int GY=10;if (ly<GY*3) GY=-1;
+-for (i=1;i<GY;i++){
+-   int tmp=(int)(ly/(float)GY*i);
+-   fl_line(ox+2,oy+tmp,ox+lx-2,oy+tmp);
+-};
++decl {\#include <stdlib.h>} {private local
++} 
+ 
++decl {\#include <string.h>} {private local
++} 
+ 
++decl {\#include "Fl_Osc_Dial.H"} {public local
++} 
+ 
+-//draw the data
+-fl_color(FL_RED);
+-fl_line_style(FL_SOLID,2);
+-fl_begin_line();
+-oiy=(int)(respar->Prespoints[0]/128.0*ly);
+-for (i=1;i<N_RES_POINTS;i++){
+-   ix=(int)(i*1.0/N_RES_POINTS*lx);
+-   iy=(respar->Prespoints[i]/128.0*ly);
+-   fl_vertex(ox+ix,oy+ly-oiy);
+-   oiy=iy;
+-};
+-fl_end_line();
+-fl_line_style(FL_SOLID,0);} {selected
+-    }
+-  }
+-  Function {handle(int event)} {return_type int
+-  } {
+-    code {int x_=Fl::event_x()-x();
+-int y_=Fl::event_y()-y();
+-if ( (x_>=0)&&(x_<w()) && (y_>=0)&&(y_<h())){
+-   khzvalue->value(respar->getfreqx(x_*1.0/w())/1000.0);
+-   dbvalue->value((1.0-y_*2.0/h())*respar->PmaxdB);
+-};
++decl {\#include "Fl_Osc_Pane.H"} {selected public local
++} 
+ 
+-if ((event==FL_PUSH)||(event==FL_DRAG)){
+-  int leftbutton=1;
+-  if (Fl::event_button()==FL_RIGHT_MOUSE) leftbutton=0;
+-  if (x_<0) x_=0;if (y_<0) y_=0;
+-  if (x_>=w()) x_=w();if (y_>=h()-1) y_=h()-1;
++decl {\#include "Fl_Osc_Button.H"} {public local
++} 
+ 
+-  if ((oldx<0)||(oldx==x_)){
+-    int sn=(int)(x_*1.0/w()*N_RES_POINTS);
+-    int sp=127-(int)(y_*1.0/h()*127);
+-    if (leftbutton!=0) respar->setpoint(sn,sp);
+-        else respar->setpoint(sn,64);
+-  } else {
+-    int x1=oldx;
+-    int x2=x_;
+-    int y1=oldy;
+-    int y2=y_;
+-    if (oldx>x_){
+-      x1=x_;y1=y_;
+-      x2=oldx;y2=oldy;
+-    };
+-   for (int i=0;i<x2-x1;i++){
+-      int sn=(int)((i+x1)*1.0/w()*N_RES_POINTS);
+-      float yy=(y2-y1)*1.0/(x2-x1)*i;
+-      int sp=127-(int)((y1+yy)/h()*127);
+-      if (leftbutton!=0) respar->setpoint(sn,sp);
+-         else respar->setpoint(sn,64);
+-    };
+-  };
++decl {\#include "Fl_Osc_Check.H"} {public local
++} 
+ 
+-  oldx=x_;oldy=y_;
+-  redraw();
+-};
++decl {\#include "Fl_Osc_Roller.H"} {public local
++} 
+ 
+-if (event==FL_RELEASE) {
+-	oldx=-1;
+-	if (cbwidget!=NULL) {
+-		cbwidget->do_callback();
+-		if (applybutton!=NULL) {
+-			applybutton->color(FL_RED);
+-			applybutton->redraw();
++decl {\#include "Fl_Osc_Output.H"} {public local
++} 
+ 
+-		};
+-	};
+-};
++decl {\#include "Fl_Resonance_Graph.H"} {public local
++} 
+ 
+-return(1);} {}
+-  }
+-  Function {setcbwidget(Fl_Widget *cbwidget,Fl_Widget *applybutton)} {} {
+-    code {this->cbwidget=cbwidget;
+-this->applybutton=applybutton;} {}
+-  }
+-  decl {Fl_Value_Output *khzvalue;} {}
+-  decl {Fl_Value_Output *dbvalue;} {}
+-  decl {Resonance *respar;} {}
+-  decl {int oldx,oldy;} {}
+-  decl {float khzval;} {public
+-  }
+-  decl {Fl_Widget *cbwidget,*applybutton;} {}
++decl {\#include "PresetsUI.h"} {public local
+ } 
+ 
+ class ResonanceUI {open : PresetsUI_
+ } {
+-  Function {make_window()} {open
++  Function {make_window(Fl_Osc_Interface *osc, std::string loc)} {open
+   } {
+     Fl_Window resonancewindow {
+       label Resonance open
+-      xywh {120 70 780 305} type Double hide
++      xywh {123 93 780 305} type Double
++      class Fl_Osc_Window visible
+     } {
+       Fl_Value_Output khzvalue {
+         label kHz
+         xywh {415 264 45 18} labelsize 12 align 8 minimum 0.001 maximum 48 step 0.01 textfont 1 textsize 12
+         code0 {//this widget must be before the calling widgets}
++        code1 {resonancewindow->init(osc,loc);}
+       }
+       Fl_Value_Output dbvalue {
+         label dB
+         xywh {415 282 45 18} labelsize 12 align 8 minimum -150 maximum 150 step 0.1 textfont 1 textsize 12
+         code0 {//this widget must be before the calling widgets}
+       }
+-      Fl_Group {} {
+-        xywh {6 5 768 256} box BORDER_BOX
+-        code0 {rg=new ResonanceGraph(o->x(),o->y(),o->w(),o->h(),"");}
+-        code1 {rg->init(respar,khzvalue,dbvalue);}
+-        code2 {rg->show();}
+-      } {}
+       Fl_Button {} {
+         label Close
+         callback {resonancewindow->hide();}
+@@ -221,37 +80,35 @@ class ResonanceUI {open : PresetsUI_
+       }
+       Fl_Button {} {
+         label Zero
+-        callback {for (int i=0;i<N_RES_POINTS;i++) 
+-   respar->setpoint(i,64);
+-resonancewindow->redraw();
+-redrawPADnoteApply();}
++        callback {
++        o->oscWrite("zero");
++        redrawPADnoteApply();}
+         tooltip {Clear the resonance function} xywh {491 264 66 15} box THIN_UP_BOX labelfont 1 labelsize 12
++        class Fl_Osc_Button
+       }
+       Fl_Button {} {
+         label Smooth
+-        callback {respar->smooth();
+-resonancewindow->redraw();
++        callback {o->oscWrite("smooth");
+ redrawPADnoteApply();}
+         tooltip {Smooth the resonance function} xywh {491 282 66 18} box THIN_UP_BOX labelfont 1 labelsize 12
++        class Fl_Osc_Button
+       }
+       Fl_Check_Button enabled {
+         label Enable
+-        callback {respar->Penabled=(int) o->value();
+-redrawPADnoteApply();}
+         xywh {6 270 78 27} box THIN_UP_BOX down_box DOWN_BOX
+-        code0 {o->value(respar->Penabled);}
++        code0 {o->init("Penabled");}
++        class Fl_Osc_Check
+       }
+       Fl_Roller maxdb {
+         callback {maxdbvo->value(o->value());
+-respar->PmaxdB=(int) o->value();
+ redrawPADnoteApply();}
+         xywh {90 282 84 15} type Horizontal minimum 1 maximum 90 step 1 value 30
++        code0 {o->init("PmaxdB");}
++        class Fl_Osc_Roller
+       }
+       Fl_Value_Output maxdbvo {
+         label {Max.}
+-        callback {o->value(respar->PmaxdB);}
+         tooltip {The Maximum amplitude (dB)} xywh {126 264 24 18} labelsize 12 minimum 1 maximum 127 step 1 value 30 textfont 1 textsize 12
+-        code0 {o->value(respar->PmaxdB);}
+       }
+       Fl_Box {} {
+         label dB
+@@ -259,82 +116,79 @@ redrawPADnoteApply();}
+       }
+       Fl_Value_Output centerfreqvo {
+         label {C.f.}
+-        callback {o->value(respar->getcenterfreq()/1000.0);}
++        callback {o->value(o->newvalue()/1000.0);}
+         tooltip {Center Frequency (kHz)} xywh {210 264 33 18} labelsize 12 when 3 minimum 1 maximum 10 step 0.01 value 1 textfont 1 textsize 12
+-        code0 {o->value(respar->getcenterfreq()/1000.0);}
++        code0 {o->init("centerfreq");}
++        class Fl_Osc_Output
+       }
+       Fl_Value_Output octavesfreqvo {
+         label {Oct.}
+-        callback {o->value(respar->getoctavesfreq());}
++        callback {o->value(o->newvalue());}
+         tooltip {No. of octaves} xywh {210 282 33 18} labelsize 12 when 3 minimum 1 maximum 127 step 1 value 30 textfont 1 textsize 12
+-        code0 {o->value(respar->getoctavesfreq());}
++        code0 {o->init("octavesfreq");}
++        class Fl_Osc_Output
+       }
+       Fl_Button {} {
+         label RND2
+-        callback {respar->randomize(1);
+-resonancewindow->redraw();
++        callback {o->oscWrite("randomize", "i", 1);
+ redrawPADnoteApply();}
+         tooltip {Randomize the resonance function} xywh {566 276 42 12} box THIN_UP_BOX labelfont 1 labelsize 10
++        class Fl_Osc_Button
+       }
+       Fl_Button {} {
+         label RND1
+-        callback {respar->randomize(0);
+-resonancewindow->redraw();
++        callback {o->oscWrite("randomize", "i", 0);
+ redrawPADnoteApply();}
+         tooltip {Randomize the resonance function} xywh {566 264 42 12} box THIN_UP_BOX labelfont 1 labelsize 10
++        class Fl_Osc_Button
+       }
+       Fl_Button {} {
+         label RND3
+-        callback {respar->randomize(2);
+-resonancewindow->redraw();
++        callback {o->oscWrite("randomize", "i", 2);
+ redrawPADnoteApply();}
+         tooltip {Randomize the resonance function} xywh {566 288 42 12} box THIN_UP_BOX labelfont 1 labelsize 10
++        class Fl_Osc_Button
+       }
+       Fl_Check_Button p1st {
+         label {P.1st}
+-        callback {respar->Pprotectthefundamental=(int) o->value();
+-redrawPADnoteApply();}
+         tooltip {Protect the fundamental frequency (do not damp the first harmonic)} xywh {365 285 45 15} down_box DOWN_BOX labelsize 10
+-        code0 {o->value(respar->Pprotectthefundamental);}
++        code0 {o->init("Pprotectthefundamental");}
++        class Fl_Osc_Check
+       }
+       Fl_Button {} {
+         label InterpP
+         callback {int type;
+-if (Fl::event_button()==FL_LEFT_MOUSE) type=0;
++       if (Fl::event_button()==FL_LEFT_MOUSE) type=0;
+        else type=1;
+-respar->interpolatepeaks(type);
+-resonancewindow->redraw();
+-redrawPADnoteApply();}
++       o->oscWrite("interpolatepeaks", "i", type);
++       redrawPADnoteApply();}
+         tooltip {Interpolate the peaks} xywh {365 265 46 15} box THIN_UP_BOX labelfont 1 labelsize 10
++        class Fl_Osc_Button
+       }
+       Fl_Dial centerfreq {
+         label {C.f.}
+-        callback {respar->Pcenterfreq=(int)o->value();
+-centerfreqvo->do_callback();
+-rg->redraw();
++        callback {centerfreqvo->do_callback();
+ redrawPADnoteApply();}
+         xywh {245 265 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-        code0 {o->value(respar->Pcenterfreq);}
+-        class WidgetPDial
++        code0 {o->init("Pcenterfreq");}
++        class Fl_Osc_Dial
+       }
+       Fl_Dial octavesfreq {
+         label {Oct.}
+-        callback {respar->Poctavesfreq=(int)o->value();
+-octavesfreqvo->do_callback();
+-rg->redraw();
++        callback {octavesfreqvo->do_callback();
+ redrawPADnoteApply();}
+         xywh {280 265 30 30} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+-        code0 {o->value(respar->Poctavesfreq);}
+-        class WidgetPDial
++        code0 {o->init("Poctavesfreq");}
++        class Fl_Osc_Dial
+       }
+       Fl_Button {} {
+         label C
+-        callback {presetsui->copy(respar);}
++        callback {/*presetsui->copy(respar);*/}
+         xywh {625 275 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+       }
+       Fl_Button {} {
+         label P
+-        callback {presetsui->paste(respar,this);}
++        callback {/*presetsui->paste(respar,this);*/}
+         xywh {655 275 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+       }
+       Fl_Button applybutton {
+@@ -348,20 +202,31 @@ if (cbapplywidget!=NULL) {
+ };}
+         xywh {690 265 85 15} box THIN_UP_BOX labelfont 1 labelsize 11
+       }
++      Fl_Box rg {
++        xywh {6 5 768 256} box BORDER_BOX
++        class Fl_Resonance_Graph
++      }
+     }
+   }
+-  Function {ResonanceUI(Resonance *respar_)} {} {
+-    code {respar=respar_;
++  Function {ResonanceUI(Fl_Osc_Interface *osc, std::string loc)} {open
++  } {
++    code {
++assert(osc);
+ cbwidget=NULL;
+ cbapplywidget=NULL;
+-make_window();
++make_window(osc, loc);
++rg->init(khzvalue,dbvalue);
+ applybutton->hide();} {}
+   }
+   Function {~ResonanceUI()} {} {
+-    code {resonancewindow->hide();} {}
++    code {resonancewindow->hide();
++    delete resonancewindow;
++    } {}
+   }
+   Function {redrawPADnoteApply()} {} {
+-    code {if (cbwidget!=NULL) {
++    code {
++    rg->update();
++    if (cbwidget!=NULL) {
+ 	cbwidget->do_callback();
+ 	applybutton->color(FL_RED);
+ 	applybutton->redraw();
+@@ -375,24 +240,22 @@ applybutton->show();} {}
+   }
+   Function {refresh()} {} {
+     code {redrawPADnoteApply();
+-
+-enabled->value(respar->Penabled);
+-
+-maxdb->value(respar->PmaxdB);
+-maxdbvo->value(respar->PmaxdB);
+-
+-centerfreqvo->value(respar->getcenterfreq()/1000.0);
+-octavesfreqvo->value(respar->getoctavesfreq());
+-
+-centerfreq->value(respar->Pcenterfreq);
+-octavesfreq->value(respar->Poctavesfreq);
+-
+-p1st->value(respar->Pprotectthefundamental);
+-
+-rg->redraw();} {}
++//TODO fix me when controls are relocatable
++//enabled->value(respar->Penabled);
++
++//maxdb->value(respar->PmaxdB);
++//maxdbvo->value(respar->PmaxdB);
++//
++//centerfreqvo->value(respar->getcenterfreq()/1000.0);
++//octavesfreqvo->value(respar->getoctavesfreq());
++//
++//centerfreq->value(respar->Pcenterfreq);
++//octavesfreq->value(respar->Poctavesfreq);
++//
++//p1st->value(respar->Pprotectthefundamental);
++
++rg->update();} {}
+   }
+-  decl {Resonance *respar;} {public
++  decl {Fl_Widget *cbwidget,*cbapplywidget;} {private local
+   }
+-  decl {ResonanceGraph *rg;} {}
+-  decl {Fl_Widget *cbwidget,*cbapplywidget;} {}
+ } 
+-- 
+2.47.0
+

@@ -1,0 +1,24 @@
+From d458d5297440bdf3d9fddbd30fb0a37fff88f73c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 27 Oct 2014 23:27:00 -0400
+Subject: [PATCH 0271/1936] Initialize Master's RT Data On XML Load
+
+---
+ src/Misc/Master.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 4b430994..3ebae05e 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -983,6 +983,7 @@ int Master::loadXML(const char *filename)
+     xml->exitbranch();
+ 
+     delete (xml);
++    initialize_rt();
+     return 0;
+ }
+ 
+-- 
+2.47.0
+

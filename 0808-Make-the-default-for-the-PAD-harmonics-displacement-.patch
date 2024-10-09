@@ -1,0 +1,28 @@
+From 8ee1dfbaf5a4f6e7ed8435506addf37d40694343 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Sat, 2 Jan 2016 18:38:39 -0500
+Subject: [PATCH 0808/1936] Make the default for the PAD harmonics displacement
+ all zero.
+
+---
+ src/Params/PADnoteParameters.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index e449a064..93e97f1a 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -321,8 +321,8 @@ void PADnoteParameters::defaults()
+     oscilgen->defaults();
+ 
+     Phrpos.type = 0;
+-    Phrpos.par1 = 64;
+-    Phrpos.par2 = 64;
++    Phrpos.par1 = 0;
++    Phrpos.par2 = 0;
+     Phrpos.par3 = 0;
+ 
+     Pquality.samplesize = 3;
+-- 
+2.47.0
+

@@ -1,0 +1,24 @@
+From fc2841c6f46f135024480186674f2f50012e2144 Mon Sep 17 00:00:00 2001
+From: Simon van der Veldt <simon.vanderveldt@gmail.com>
+Date: Wed, 30 Sep 2020 15:14:26 +0200
+Subject: [PATCH 1595/1936] Fix missing CMake include
+
+---
+ src/Nio/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Nio/CMakeLists.txt b/src/Nio/CMakeLists.txt
+index 7c965f7a..e29f94e9 100644
+--- a/src/Nio/CMakeLists.txt
++++ b/src/Nio/CMakeLists.txt
+@@ -21,6 +21,7 @@ add_definitions(-DOUT_DEFAULT="${DefaultOutput}")
+ add_definitions(-DIN_DEFAULT="${DefaultInput}")
+ 
+ if(JackEnable)
++    INCLUDE(CheckIncludeFiles)
+     include_directories(${JACK_INCLUDE_DIR})
+     list(APPEND zynaddsubfx_nio_SRCS JackEngine.cpp JackMultiEngine.cpp)
+     list(APPEND zynaddsubfx_nio_lib ${JACK_LIBRARIES})
+-- 
+2.47.0
+

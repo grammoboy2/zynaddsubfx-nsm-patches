@@ -1,0 +1,25 @@
+From 731722e4dca0c810773673df5eb98bf9ed384af3 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Mon, 9 May 2016 10:00:05 +0200
+Subject: [PATCH 0898/1936] Plug runtime memory leak.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Misc/MiddleWare.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index a431def8..b1642918 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -750,6 +750,7 @@ class MwDataObj:public rtosc::RtData
+ 
+         ~MwDataObj(void)
+         {
++            delete[] loc;
+             delete[] buffer;
+         }
+ 
+-- 
+2.47.0
+

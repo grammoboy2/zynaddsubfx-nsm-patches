@@ -1,0 +1,285 @@
+From a8f94e538c676cc58ce097863d94dba5345addab Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 17 Jul 2014 15:17:46 -0400
+Subject: [PATCH 0212/1936] Add Jack OSC Support
+
+---
+ rtosc                  |  2 +-
+ src/Misc/Master.cpp    | 11 +++++
+ src/Misc/Master.h      |  2 +
+ src/Nio/JackEngine.cpp | 27 ++++++++++--
+ src/Nio/JackEngine.h   |  3 ++
+ src/Nio/OutMgr.cpp     |  5 +++
+ src/Nio/OutMgr.h       |  1 +
+ src/Nio/jack_osc.h     | 95 ++++++++++++++++++++++++++++++++++++++++++
+ 8 files changed, 142 insertions(+), 4 deletions(-)
+ create mode 100644 src/Nio/jack_osc.h
+
+diff --git a/rtosc b/rtosc
+index 4d5ea21c..58e39275 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 4d5ea21cabe5242905f3fad165686f03f499e1ff
++Subproject commit 58e392751494a848b2eca7abb82182fdd8a719ba
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 8a416a30..0f0ff1dd 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -212,6 +212,17 @@ Master::Master()
+     };
+ }
+ 
++void Master::applyOscEvent(const char *msg)
++{
++    char loc_buf[1024];
++    DataObj d{loc_buf, 1024, this, bToU};
++    memset(loc_buf, sizeof(loc_buf), 0);
++    d.matches = 0;
++    ports.dispatch(msg+1, d);
++    if(d.matches == 0)
++        fprintf(stderr, "Unknown path '%s'\n", msg);
++}
++
+ void Master::defaults()
+ {
+     volume = 1.0f;
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index a7273e5b..a446cfc3 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -56,6 +56,8 @@ class Master
+         /** Destructor*/
+         ~Master();
+ 
++        void applyOscEvent(const char *event);
++
+         /**Saves all settings to a XML file
+          * @return 0 for ok or <0 if there is an error*/
+         int saveXML(const char *filename);
+diff --git a/src/Nio/JackEngine.cpp b/src/Nio/JackEngine.cpp
+index 1201024d..ba4a34c2 100644
+--- a/src/Nio/JackEngine.cpp
++++ b/src/Nio/JackEngine.cpp
+@@ -2,30 +2,33 @@
+     JackEngine.cpp
+ 
+     Copyright 2009, Alan Calvert
++    Copyright 2014, Mark McCurry
+ 
+-    This file is part of yoshimi, which is free software: you can
++    This file is part of ZynAddSubFX, which is free software: you can
+     redistribute it and/or modify it under the terms of the GNU General
+     Public License as published by the Free Software Foundation, either
+     version 3 of the License, or (at your option) any later version.
+ 
+-    yoshimi is distributed in the hope that it will be useful,
++    ZynAddSubFX is distributed in the hope that it will be useful,
+     but WITHOUT ANY WARRANTY; without even the implied warranty of
+     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+     GNU General Public License for more details.
+ 
+     You should have received a copy of the GNU General Public License
+-    along with yoshimi.  If not, see <http://www.gnu.org/licenses/>.
++    along with ZynAddSubFX.  If not, see <http://www.gnu.org/licenses/>.
+ */
+ 
+ #include <iostream>
+ 
+ #include <jack/midiport.h>
++#include "jack_osc.h"
+ #include <fcntl.h>
+ #include <sys/stat.h>
+ #include <cassert>
+ #include <cstring>
+ 
+ #include "Nio.h"
++#include "OutMgr.h"
+ #include "InMgr.h"
+ 
+ #include "JackEngine.h"
+@@ -213,6 +216,8 @@ bool JackEngine::openAudio()
+                 cerr << "Warning, No outputs to autoconnect to" << endl;
+         }
+         midi.jack_sync = true;
++        osc.oscport = jack_port_register(jackClient, "osc",
++                JACK_DEFAULT_OSC_TYPE, JackPortIsInput, 0);
+         return true;
+     }
+     else
+@@ -230,6 +235,8 @@ void JackEngine::stopAudio()
+             jack_port_unregister(jackClient, port);
+     }
+     midi.jack_sync = false;
++    if(osc.oscport)
++        jack_port_unregister(jackClient, osc.oscport);
+     if(!getMidiEn())
+         disconnectJack();
+ }
+@@ -293,6 +300,20 @@ int JackEngine::processCallback(jack_nframes_t nframes)
+ 
+ bool JackEngine::processAudio(jack_nframes_t nframes)
+ {
++    //handle rt osc events first
++    void   *oscport    = jack_port_get_buffer(osc.oscport, nframes);
++    size_t osc_packets = jack_osc_get_event_count(oscport);
++
++    for(int i = 0; i < osc_packets; ++i) {
++        jack_osc_event_t event;
++        if(jack_osc_event_get(&event, oscport, i))
++            continue;
++        if(*event.buffer!='/') //Bundles are unhandled
++            continue;
++        //TODO validate message length
++        OutMgr::getInstance().applyOscEventRt((char*)event.buffer);
++    }
++
+     for(int port = 0; port < 2; ++port) {
+         audio.portBuffs[port] =
+             (jsample_t *)jack_port_get_buffer(audio.ports[port], nframes);
+diff --git a/src/Nio/JackEngine.h b/src/Nio/JackEngine.h
+index 705ff3ec..142ea33b 100644
+--- a/src/Nio/JackEngine.h
++++ b/src/Nio/JackEngine.h
+@@ -78,6 +78,9 @@ class JackEngine:public AudioOut, MidiIn
+             jack_port_t *ports[2];
+             jsample_t   *portBuffs[2];
+         } audio;
++        struct osc {
++            jack_port_t *oscport;
++        } osc;
+         struct midi {
+             jack_port_t *inport;
+             bool         jack_sync;
+diff --git a/src/Nio/OutMgr.cpp b/src/Nio/OutMgr.cpp
+index 85b0d4de..bba28c4e 100644
+--- a/src/Nio/OutMgr.cpp
++++ b/src/Nio/OutMgr.cpp
+@@ -118,6 +118,11 @@ void OutMgr::setMaster(Master *master_)
+     master=master_;
+ }
+ 
++void OutMgr::applyOscEventRt(const char *msg)
++{
++    master->applyOscEvent(msg);
++}
++
+ //perform a cheap linear interpolation for resampling
+ //This will result in some distortion at frame boundries
+ //returns number of samples produced
+diff --git a/src/Nio/OutMgr.h b/src/Nio/OutMgr.h
+index 335fbec2..3a5e37f1 100644
+--- a/src/Nio/OutMgr.h
++++ b/src/Nio/OutMgr.h
+@@ -42,6 +42,7 @@ class OutMgr
+         friend class EngineMgr;
+ 
+         void setMaster(class Master *master_);
++        void applyOscEventRt(const char *msg);
+     private:
+         OutMgr();
+         void addSmps(float *l, float *r);
+diff --git a/src/Nio/jack_osc.h b/src/Nio/jack_osc.h
+new file mode 100644
+index 00000000..321cb228
+--- /dev/null
++++ b/src/Nio/jack_osc.h
+@@ -0,0 +1,95 @@
++/*
++ * Copyright (c) 2014 Hanspeter Portner (dev@open-music-kontrollers.ch)
++ * 
++ * This software is provided 'as-is', without any express or implied
++ * warranty. In no event will the authors be held liable for any damages
++ * arising from the use of this software.
++ * 
++ * Permission is granted to anyone to use this software for any purpose,
++ * including commercial applications, and to alter it and redistribute it
++ * freely, subject to the following restrictions:
++ * 
++ *     1. The origin of this software must not be misrepresented; you must not
++ *     claim that you wrote the original software. If you use this software
++ *     in a product, an acknowledgment in the product documentation would be
++ *     appreciated but is not required.
++ * 
++ *     2. Altered source versions must be plainly marked as such, and must not be
++ *     misrepresented as being the original software.
++ * 
++ *     3. This notice may not be removed or altered from any source
++ *     distribution.
++ */
++
++#ifndef __JACK_OSC_H
++#define __JACK_OSC_H
++
++#ifdef __cplusplus
++extern "C" {
++#endif /* __cplusplus */
++
++#include <jack/jack.h>
++#include <jack/types.h>
++#include <jack/midiport.h>
++
++/*
++ * It is not necessary to use this header since it contains transparent
++ * macros referring to the Jack MIDI API, but developers are encouraged
++ * to use this header (or at least the same definitions) to make their
++ * code more clear.
++ */
++
++/*
++ * Use this as port type in jack_port_register to make it clear that
++ * this MIDI port is used to route OSC messages.
++ *
++ * jack_port_t *osc_in;
++ * osc_in = jack_port_register(client, "osc.in", JACK_DEFAULT_OSC_TYPE,
++ *                             JackPortIsInput, 0);
++ */
++#define JACK_DEFAULT_OSC_TYPE           JACK_DEFAULT_MIDI_TYPE
++
++/*
++ * Use this as value for metadata key JACKEY_EVENT_TYPES 
++ * (http://jackaudio.org/metadata/event-type) to mark/query/unmark a port
++ * as OSC carrier in jack_{set,get,remove}_property.
++ *
++ * jack_uuid_t uuid_in = jack_port_uuid(osc_in);
++ *
++ * // set port event type to OSC
++ * jack_set_property(client, uuid_in, JACKEY_EVENT_TYPES,
++ *                   JACK_EVENT_TYPE__OSC, NULL);
++ *
++ * // query port event type
++ * char *value = NULL;
++ * char *type = NULL;
++ * if( (jack_get_property(uuid, JACKEY_EVENT_TYPES, &value, &type) == 0)
++ *  && (strstr(value, JACK_EVENT_TYPE__OSC) != NULL) )
++ * 	printf("This port routes OSC!\n");
++ * jack_free(value);
++ * jack_free(type);
++ *
++ * // clear port event type
++ * jack_remove_property(client, uuid_in, JACKEY_EVENT_TYPES);
++ */
++#define JACK_EVENT_TYPE__OSC            "OSC"
++
++/*
++ * The Jack OSC API is a direct map to the Jack MIDI API.
++ */
++typedef jack_midi_data_t                jack_osc_data_t;
++typedef jack_midi_event_t               jack_osc_event_t;
++
++#define jack_osc_get_event_count        jack_midi_get_event_count
++#define jack_osc_event_get              jack_midi_event_get
++#define jack_osc_clear_buffer           jack_midi_clear_buffer
++#define jack_osc_max_event_size         jack_midi_max_event_size
++#define jack_osc_event_reserve          jack_midi_event_reserve
++#define jack_osc_event_write            jack_midi_event_write
++#define jack_osc_get_lost_event_count   jack_midi_get_lost_event_count
++
++#ifdef __cplusplus
++}
++#endif /* __cplusplus */
++
++#endif /* __JACK_OSC_H */
+-- 
+2.47.0
+

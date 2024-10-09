@@ -1,0 +1,205 @@
+From 90041ac2e7f474fed5727dcdb8de6914e18604b8 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 8 May 2015 23:19:43 -0400
+Subject: [PATCH 0452/1936] Add Split Pitchblend
+
+Original Patch By Christopher Oliver
+---
+ HISTORY.txt               |  1 +
+ src/Params/Controller.cpp | 24 +++++++++++++++++-------
+ src/Params/Controller.h   |  5 +++--
+ src/UI/PartUI.fl          | 30 ++++++++++++++++++++++--------
+ 4 files changed, 43 insertions(+), 17 deletions(-)
+
+diff --git a/HISTORY.txt b/HISTORY.txt
+index b109ebf5..86c7ac10 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -4,6 +4,7 @@
+         - Add OSC port option
+         - Add MIDI unlearn
+         - Add External UI Compilation
++        - Add Split Pitchblend
+         - Fix No Install NTK Build
+         - Fix Linker Issues
+         - Fix Presets/Copy/Paste
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index 0c9d72c0..0f998e6c 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -39,7 +39,9 @@ const rtosc::Ports Controller::ports = {
+     rToggle(bandwidth.exponential, "Bandwidth Exponential Mode"),
+     rParamZyn(modwheel.depth, "Depth of Modwheel MIDI Control"),
+     rToggle(modwheel.exponential, "Modwheel Exponential Mode"),
++    rToggle(pitchwheel.is_split, "If PitchWheel Has unified blendrange or not"),
+     rParamI(pitchwheel.bendrange, "Range of MIDI Pitch Wheel"),
++    rParamI(pitchwheel.bendrange_down, "Lower Range of MIDI Pitch Wheel"),
+     rToggle(expression.receive, "Expression MIDI Receive"),
+     rToggle(fmamp.receive,      "FM amplitude MIDI Receive"),
+     rToggle(volume.receive,     "Volume MIDI Receive"),
+@@ -79,7 +81,9 @@ Controller::~Controller()
+ 
+ void Controller::defaults()
+ {
+-    setpitchwheelbendrange(200); //2 halftones
++    pitchwheel.bendrange = 200; //2 halftones
++    pitchwheel.bendrange_down = 0; //Unused by default
++    pitchwheel.is_split   = false;
+     expression.receive    = 1;
+     panning.depth         = 64;
+     filtercutoff.depth    = 64;
+@@ -137,16 +141,14 @@ void Controller::setpitchwheel(int value)
+ {
+     pitchwheel.data = value;
+     float cents = value / 8192.0f;
+-    cents *= pitchwheel.bendrange;
++    if(pitchwheel.is_split && cents < 0)
++        cents *= pitchwheel.bendrange_down;
++    else
++        cents *= pitchwheel.bendrange;
+     pitchwheel.relfreq = powf(2, cents / 1200.0f);
+     //fprintf(stderr,"%ld %ld -> %.3f\n",pitchwheel.bendrange,pitchwheel.data,pitchwheel.relfreq);fflush(stderr);
+ }
+ 
+-void Controller::setpitchwheelbendrange(unsigned short int value)
+-{
+-    pitchwheel.bendrange = value;
+-}
+-
+ void Controller::setexpression(int value)
+ {
+     expression.data = value;
+@@ -385,6 +387,8 @@ void Controller::setparameternumber(unsigned int type, int value)
+ void Controller::add2XML(XMLwrapper *xml)
+ {
+     xml->addpar("pitchwheel_bendrange", pitchwheel.bendrange);
++    xml->addpar("pitchwheel_bendrange_down", pitchwheel.bendrange_down);
++    xml->addparbool("pitchwheel_split", pitchwheel.is_split);
+ 
+     xml->addparbool("expression_receive", expression.receive);
+     xml->addpar("panning_depth", panning.depth);
+@@ -417,6 +421,12 @@ void Controller::getfromXML(XMLwrapper *xml)
+                                        pitchwheel.bendrange,
+                                        -6400,
+                                        6400);
++    pitchwheel.bendrange_down = xml->getpar("pitchwheel_bendrange_down",
++                                       pitchwheel.bendrange_down,
++                                       -6400,
++                                       6400);
++    pitchwheel.is_split = xml->getparbool("pitchwheel_split",
++                                          pitchwheel.is_split);
+ 
+     expression.receive = xml->getparbool("expression_receive",
+                                          expression.receive);
+diff --git a/src/Params/Controller.h b/src/Params/Controller.h
+index e67fbfc1..77f3a33f 100644
+--- a/src/Params/Controller.h
++++ b/src/Params/Controller.h
+@@ -41,7 +41,6 @@ class Controller
+ 
+         //Controllers functions
+         void setpitchwheel(int value);
+-        void setpitchwheelbendrange(unsigned short int value);
+         void setexpression(int value);
+         void setpanning(int value);
+         void setfiltercutoff(int value);
+@@ -74,8 +73,10 @@ class Controller
+ 
+         // Controllers values
+         struct { //Pitch Wheel
+-            int data;
++            int       data;
++            bool      is_split; //Up and down bends may be different
+             short int bendrange; //bendrange is in cents
++            short int bendrange_down;
+             float     relfreq; //the relative frequency (default is 1.0f)
+         } pitchwheel;
+ 
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index f0e04703..a20cd168 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -410,7 +410,7 @@ if (event==FL_RIGHT_MOUSE){
+     }
+     Fl_Window ctlwindow {
+       label Controllers
+-      private xywh {777 376 500 130} type Double box NO_BOX
++      private xywh {777 376 500 135} type Double box NO_BOX
+       class Fl_Osc_Window visible
+     } {
+       Fl_Box {} {
+@@ -420,7 +420,7 @@ if (event==FL_RIGHT_MOUSE){
+       }
+       Fl_Check_Button {} {
+         label Expr
+-        tooltip {Expression enable} xywh {155 55 45 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
++        tooltip {Expression enable} xywh {155 58 45 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
+         code0 {o->init("expression.receive");}
+         class Fl_Osc_Check
+       }
+@@ -454,22 +454,36 @@ if (event==FL_RIGHT_MOUSE){
+         code0 {o->init("modwheel.depth");}
+         class Fl_Osc_Dial
+       }
+-      Fl_Counter {} {
++      Fl_Check_Button benddir {
++        label Downward
++        callback {if (o->value()) {bendrng->oscMove("pitchwheel.bendrange_down");}
++else {bendrng->oscMove("pitchwheel.bendrange");}}
++        xywh {205 37 69 15} down_box DOWN_BOX labelsize 10
++      }
++      Fl_Counter bendrng {
+         label {PWheelB.Rng (cents)}
+         tooltip {Pitch Wheel Bend Range (cents)} xywh {165 15 110 20} labelsize 10 align 1 minimum -6400 maximum 6400 step 1
+         code0 {o->init("pitchwheel.bendrange", 'i');}
+         code1 {o->lstep(100);}
+         class Fl_Osc_Counter
+       }
++      Fl_Check_Button bendsplt {
++        label Split
++        callback {if(o->value()) {benddir->activate();}
++            else {benddir->deactivate(); benddir->value(0); benddir->do_callback();}}
++        xywh {167 37 38 15} down_box DOWN_BOX labelsize 10
++        code0 {o->init("pitchwheel.is_split");}
++        class Fl_Osc_Check
++      }
+       Fl_Check_Button {} {
+         label FMamp
+-        tooltip {FM amplitude enable} xywh {205 55 60 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
++        tooltip {FM amplitude enable} xywh {205 58 60 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
+         code0 {o->init("fmamp.receive");}
+         class Fl_Osc_Check
+       }
+       Fl_Check_Button {} {
+         label Vol
+-        tooltip {Volume enable} xywh {155 80 45 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
++        tooltip {Volume enable} xywh {155 83 45 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
+         code0 {o->init("volume.receive");}
+         class Fl_Osc_Check
+       }
+@@ -480,19 +494,19 @@ if (event==FL_RIGHT_MOUSE){
+                 ReleaseSustainedKeys();
+                 ctl.setsustain(0);
+             };*/}
+-        tooltip {Sustain pedal enable} xywh {205 80 60 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
++        tooltip {Sustain pedal enable} xywh {205 83 60 20} box THIN_UP_BOX down_box DOWN_BOX labelsize 10
+         code0 {o->init("sustain.receive");}
+         class Fl_Osc_Check
+       }
+       Fl_Button {} {
+         label Close
+         callback {ctlwindow->hide();}
+-        xywh {400 107 95 20} box THIN_UP_BOX
++        xywh {400 110 95 20} box THIN_UP_BOX
+       }
+       Fl_Button {} {
+         label {Reset all controllers}
+         callback {o->oscWrite("defaults");//part->SetController(C_resetallcontrollers,0);}
+-        xywh {5 107 210 20} box THIN_UP_BOX
++        xywh {5 110 210 20} box THIN_UP_BOX
+         class Fl_Osc_Button
+       }
+       Fl_Group {} {
+-- 
+2.47.0
+

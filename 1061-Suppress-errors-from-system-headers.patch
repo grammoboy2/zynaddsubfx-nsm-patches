@@ -1,0 +1,36 @@
+From fdbd3007a070a3ee70f5ae7b9741291d5b6b9440 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Sat, 15 Oct 2016 23:18:24 +0200
+Subject: [PATCH 1061/1936] Suppress errors from system headers.
+
+---
+ src/CMakeLists.txt | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 06e3d5f8..f16427bf 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -262,12 +262,18 @@ add_definitions(
+ 	 -Wextra
+ 	 )
+ 
+-CHECK_CXX_COMPILER_FLAG(-Wno-inconsistent-missing-override
++check_cxx_compiler_flag(-Wno-inconsistent-missing-override
+ 	COMPILER_SUPPORTS_OVERRIDE)
+ if(COMPILER_SUPPORTS_OVERRIDE)
+     add_definitions(-Wno-inconsistent-missing-override)
+ endif()
+ 
++check_cxx_compiler_flag(--system-header-prefix
++	COMPILER_SUPPORTS_SYSTEM_HDR_PREFIX)
++if(COMPILER_SUPPORTS_OVERRIDE)
++    add_definitions(--system-header-prefix="FL/")
++endif()
++
+ if(NOT AVOID_ASM)
+ 	message(STATUS "Compiling with x86 opcode support")
+     add_definitions(-DASM_F2I_YES)
+-- 
+2.47.0
+

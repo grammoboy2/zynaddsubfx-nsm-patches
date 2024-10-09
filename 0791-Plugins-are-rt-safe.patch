@@ -1,0 +1,109 @@
+From 291ddb4a77e324d1e071448e1489b23f7de6dcc3 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Sun, 13 Dec 2015 19:22:42 +0100
+Subject: [PATCH 0791/1936] Plugins are rt-safe
+
+---
+ src/Plugin/AlienWah/DistrhoPluginInfo.h      | 2 +-
+ src/Plugin/Chorus/DistrhoPluginInfo.h        | 2 +-
+ src/Plugin/Distortion/DistrhoPluginInfo.h    | 2 +-
+ src/Plugin/DynamicFilter/DistrhoPluginInfo.h | 2 +-
+ src/Plugin/Echo/DistrhoPluginInfo.h          | 2 +-
+ src/Plugin/Phaser/DistrhoPluginInfo.h        | 2 +-
+ src/Plugin/Reverb/DistrhoPluginInfo.h        | 2 +-
+ 7 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/src/Plugin/AlienWah/DistrhoPluginInfo.h b/src/Plugin/AlienWah/DistrhoPluginInfo.h
+index 8fce04bd..88e930b2 100644
+--- a/src/Plugin/AlienWah/DistrhoPluginInfo.h
++++ b/src/Plugin/AlienWah/DistrhoPluginInfo.h
+@@ -28,7 +28,7 @@
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#AlienWah"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    1
+ #define DISTRHO_PLUGIN_IS_SYNTH      0
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+diff --git a/src/Plugin/Chorus/DistrhoPluginInfo.h b/src/Plugin/Chorus/DistrhoPluginInfo.h
+index e3c68016..2c62b481 100644
+--- a/src/Plugin/Chorus/DistrhoPluginInfo.h
++++ b/src/Plugin/Chorus/DistrhoPluginInfo.h
+@@ -28,7 +28,7 @@
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Chorus"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    1
+ #define DISTRHO_PLUGIN_IS_SYNTH      0
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+diff --git a/src/Plugin/Distortion/DistrhoPluginInfo.h b/src/Plugin/Distortion/DistrhoPluginInfo.h
+index 5e68a381..7531cd87 100644
+--- a/src/Plugin/Distortion/DistrhoPluginInfo.h
++++ b/src/Plugin/Distortion/DistrhoPluginInfo.h
+@@ -28,7 +28,7 @@
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Distortion"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    1
+ #define DISTRHO_PLUGIN_IS_SYNTH      0
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+diff --git a/src/Plugin/DynamicFilter/DistrhoPluginInfo.h b/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
+index 2bd909e5..cba15ca1 100644
+--- a/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
++++ b/src/Plugin/DynamicFilter/DistrhoPluginInfo.h
+@@ -28,7 +28,7 @@
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#DynamicFilter"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    1
+ #define DISTRHO_PLUGIN_IS_SYNTH      0
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+diff --git a/src/Plugin/Echo/DistrhoPluginInfo.h b/src/Plugin/Echo/DistrhoPluginInfo.h
+index c457e6a6..b4d3c2e1 100644
+--- a/src/Plugin/Echo/DistrhoPluginInfo.h
++++ b/src/Plugin/Echo/DistrhoPluginInfo.h
+@@ -28,7 +28,7 @@
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Echo"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    1
+ #define DISTRHO_PLUGIN_IS_SYNTH      0
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+diff --git a/src/Plugin/Phaser/DistrhoPluginInfo.h b/src/Plugin/Phaser/DistrhoPluginInfo.h
+index a428037e..e99b93ce 100644
+--- a/src/Plugin/Phaser/DistrhoPluginInfo.h
++++ b/src/Plugin/Phaser/DistrhoPluginInfo.h
+@@ -28,7 +28,7 @@
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Phaser"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    1
+ #define DISTRHO_PLUGIN_IS_SYNTH      0
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+diff --git a/src/Plugin/Reverb/DistrhoPluginInfo.h b/src/Plugin/Reverb/DistrhoPluginInfo.h
+index dd28244b..4ea142f8 100644
+--- a/src/Plugin/Reverb/DistrhoPluginInfo.h
++++ b/src/Plugin/Reverb/DistrhoPluginInfo.h
+@@ -28,7 +28,7 @@
+ #define DISTRHO_PLUGIN_URI   "http://zynaddsubfx.sourceforge.net/fx#Reverb"
+ 
+ #define DISTRHO_PLUGIN_HAS_UI        0
+-#define DISTRHO_PLUGIN_IS_RT_SAFE    0
++#define DISTRHO_PLUGIN_IS_RT_SAFE    1
+ #define DISTRHO_PLUGIN_IS_SYNTH      0
+ #define DISTRHO_PLUGIN_NUM_INPUTS    2
+ #define DISTRHO_PLUGIN_NUM_OUTPUTS   2
+-- 
+2.47.0
+

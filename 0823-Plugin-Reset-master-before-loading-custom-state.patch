@@ -1,0 +1,24 @@
+From c58f4e20198c455d7988b9a3880cae95b6a57f22 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Fri, 15 Jan 2016 12:04:18 +0100
+Subject: [PATCH 0823/1936] Plugin: Reset master before loading custom state
+
+---
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index 2cf92c56..b61d0811 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -312,6 +312,7 @@ protected:
+         const MiddleWareThread::ScopedStopper mwss(*middlewareThread);
+         const MutexLocker cml(mutex);
+ 
++        master->defaults();
+         master->putalldata(value);
+         master->applyparameters();
+         master->initialize_rt();
+-- 
+2.47.0
+

@@ -1,0 +1,24 @@
+From 53c41d955be772d7562aad946ba7ab878953839e Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 26 Mar 2021 21:01:51 +0100
+Subject: [PATCH 1718/1936] Fix cmake warning about obsolete minimum version
+ required.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 08aa9e6e..c2133d31 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 2.8)
++cmake_minimum_required(VERSION 3.0)
+ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+ set(VERSION_MAJOR "3")
+-- 
+2.47.0
+

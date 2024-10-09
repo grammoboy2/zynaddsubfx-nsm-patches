@@ -1,0 +1,53 @@
+From eb74cfc05526d43522d15edc64a7d77048099a6d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 18 Nov 2014 11:16:37 -0500
+Subject: [PATCH 0291/1936] Add Non-Proxy Parameter Accessors For Effects
+
+Fixes Some Out-of-Date parameter values in the GUI
+---
+ src/Effects/EffectMgr.cpp | 9 ++++++++-
+ src/Effects/EffectMgr.h   | 1 +
+ 2 files changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 17449f50..dfae187e 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -48,7 +48,7 @@ rtosc::Ports EffectMgr::ports = {
+             while(!isdigit(*mm))++mm;
+ 
+             if(!rtosc_narguments(msg))
+-                d.reply(d.loc, "i", eff->geteffectpar(atoi(mm)));
++                d.reply(d.loc, "i", eff->geteffectparrt(atoi(mm)));
+             else 
+                 eff->seteffectparrt(atoi(mm), rtosc_argument(msg, 0).i);
+         }},
+@@ -269,6 +269,13 @@ unsigned char EffectMgr::geteffectpar(int npar)
+     return efx->getpar(npar);
+ }
+ 
++unsigned char EffectMgr::geteffectparrt(int npar)
++{
++    if(!efx)
++        return 0;
++    return efx->getpar(npar);
++}
++
+ // Apply the effect
+ void EffectMgr::out(float *smpsl, float *smpsr)
+ {
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index 7f076cd4..8e0cb6f5 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -70,6 +70,7 @@ class EffectMgr:public Presets
+         void seteffectpar(int npar, unsigned char value) NONREALTIME;
+         void seteffectparrt(int npar, unsigned char value) REALTIME;
+         unsigned char geteffectpar(int npar);
++        unsigned char geteffectparrt(int npar) REALTIME;
+ 
+         const bool insertion;
+         float     *efxoutl, *efxoutr;
+-- 
+2.47.0
+

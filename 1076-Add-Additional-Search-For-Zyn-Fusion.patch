@@ -1,0 +1,24 @@
+From 2234458e9305597fcd47ca31f096c2a3aa496a0b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 15 Nov 2016 19:42:11 -0500
+Subject: [PATCH 1076/1936] Add Additional Search For Zyn-Fusion
+
+---
+ src/main.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/main.cpp b/src/main.cpp
+index 9a7f8d40..f1758f9b 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -637,6 +637,7 @@ int wmidi = -1;
+         const char *addr = middleware->getServerAddress();
+         if(fork() == 0) {
+             execlp("zyn-fusion", "zyn-fusion", addr, "--builtin", "--no-hotload",  0);
++            execlp("./zyn-fusion", "zyn-fusion", addr, "--builtin", "--no-hotload",  0);
+ 
+             err(1,"Failed to launch Zyn-Fusion");
+         }
+-- 
+2.47.0
+

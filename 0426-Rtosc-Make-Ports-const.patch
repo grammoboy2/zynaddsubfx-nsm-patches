@@ -1,0 +1,538 @@
+From 8db11389080942ec84535db5941edc3fd156db25 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 26 Apr 2015 14:41:16 -0400
+Subject: [PATCH 0426/1936] Rtosc: Make Ports const
+
+---
+ rtosc                            |  2 +-
+ src/Effects/EffectMgr.cpp        |  2 +-
+ src/Effects/EffectMgr.h          |  2 +-
+ src/Misc/Master.cpp              |  8 ++++----
+ src/Misc/Master.h                |  2 +-
+ src/Misc/Microtonal.cpp          |  2 +-
+ src/Misc/Microtonal.h            |  2 +-
+ src/Misc/Part.cpp                |  8 ++++----
+ src/Misc/Part.h                  |  4 ++--
+ src/Params/ADnoteParameters.cpp  | 12 ++++++------
+ src/Params/ADnoteParameters.h    |  6 +++---
+ src/Params/Controller.cpp        |  2 +-
+ src/Params/Controller.h          |  2 +-
+ src/Params/EnvelopeParams.cpp    |  4 ++--
+ src/Params/EnvelopeParams.h      |  2 +-
+ src/Params/FilterParams.cpp      |  6 +++---
+ src/Params/FilterParams.h        |  2 +-
+ src/Params/LFOParams.cpp         |  4 ++--
+ src/Params/LFOParams.h           |  2 +-
+ src/Params/PADnoteParameters.cpp |  4 ++--
+ src/Params/PADnoteParameters.h   |  2 +-
+ src/Params/SUBnoteParameters.cpp |  4 ++--
+ src/Params/SUBnoteParameters.h   |  2 +-
+ src/Synth/OscilGen.cpp           |  2 +-
+ src/Synth/OscilGen.h             |  2 +-
+ src/Synth/Resonance.cpp          |  2 +-
+ src/Synth/Resonance.h            |  2 +-
+ 27 files changed, 47 insertions(+), 47 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index 65d4fdb9..9cc3ece4 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit 65d4fdb9f04f7b293872268e9457ee7109136027
++Subproject commit 9cc3ece4f79e5b0f09776f94befb2754934f48b0
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index beb41b11..44cb47d7 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -39,7 +39,7 @@
+ 
+ 
+ #define rObject EffectMgr
+-rtosc::Ports EffectMgr::ports = {
++const rtosc::Ports EffectMgr::ports = {
+     rSelf(EffectMgr),
+     rPaste(),
+     RECURP(EffectMgr, FilterParams, Filter, filterpars, "Filter Parameter for Dynamic Filter"),
+diff --git a/src/Effects/EffectMgr.h b/src/Effects/EffectMgr.h
+index 6cbb734c..6a12386c 100644
+--- a/src/Effects/EffectMgr.h
++++ b/src/Effects/EffectMgr.h
+@@ -81,7 +81,7 @@ class EffectMgr:public Presets
+ 
+         FilterParams *filterpars;
+ 
+-        static rtosc::Ports ports;
++        static const rtosc::Ports ports;
+         int     nefx;
+         Effect *efx;
+     private:
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index cfe0aaaf..74436455 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -48,7 +48,7 @@ using namespace std;
+ using namespace rtosc;
+ #define rObject Master
+ 
+-static Ports sysefxPort =
++static const Ports sysefxPort =
+ {
+     {"part#" STRINGIFY(NUM_MIDI_PARTS) "::i", 0, 0, [](const char *m, RtData&d)
+         {
+@@ -75,7 +75,7 @@ static Ports sysefxPort =
+         }}
+ };
+ 
+-static Ports sysefsendto = 
++static const Ports sysefsendto =
+ {
+     {"to#" STRINGIFY(NUM_SYS_EFX) "::i", 0, 0, [](const char *m, RtData&d)
+         {
+@@ -99,7 +99,7 @@ static Ports sysefsendto =
+         }}
+ };
+ 
+-static Ports master_ports = {
++static const Ports master_ports = {
+     rRecursp(part, 16, "Part"),//NUM_MIDI_PARTS
+     rRecursp(sysefx, 4, "System Effect"),//NUM_SYS_EFX
+     rRecursp(insefx, 8, "Insertion Effect"),//NUM_INS_EFX
+@@ -213,7 +213,7 @@ static Ports master_ports = {
+     {"undo_resume",0,0,[](const char *, rtosc::RtData &d)
+         {d.reply("/undo_resume", "");}},
+ };
+-Ports &Master::ports = master_ports;
++const Ports &Master::ports = master_ports;
+ 
+ //XXX HACKS
+ Master *the_master;
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index e20caceb..f81f38d2 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -156,7 +156,7 @@ class Master
+ 
+         class FFTwrapper * fft;
+ 
+-        static rtosc::Ports &ports;
++        static const rtosc::Ports &ports;
+         float  volume;
+ 
+         //Statistics on output levels
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index 1c6c9a6e..0a7076a8 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -46,7 +46,7 @@ using namespace rtosc;
+  *
+  * A good lookup table should be a good finalization of this
+  */
+-rtosc::Ports Microtonal::ports = {
++const rtosc::Ports Microtonal::ports = {
+     rToggle(Pinvertupdown, "key mapping inverse"),
+     rParamZyn(Pinvertupdowncenter, "center of the inversion"),
+     rToggle(Penabled, "Enable for microtonal mode"),
+diff --git a/src/Misc/Microtonal.h b/src/Misc/Microtonal.h
+index 048d0bb1..d32893c2 100644
+--- a/src/Misc/Microtonal.h
++++ b/src/Misc/Microtonal.h
+@@ -114,7 +114,7 @@ class Microtonal
+         bool operator==(const Microtonal &micro) const;
+         bool operator!=(const Microtonal &micro) const;
+ 
+-        static rtosc::Ports ports;
++        static const rtosc::Ports ports;
+     private:
+         int linetotunings(unsigned int nline, const char *line);
+         //loads a line from the text file, while ignoring the lines beggining with "!"
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 1959597e..b5deb1f5 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -48,7 +48,7 @@ using rtosc::Ports;
+ using rtosc::RtData;
+ 
+ #define rObject Part
+-static Ports partPorts = {
++static const Ports partPorts = {
+     rRecurs(kit, 16, "Kit"),//NUM_KIT_ITEMS
+     rRecursp(partefx, 3, "Part Effect"),
+     rRecur(ctl,       "Controller"),
+@@ -130,7 +130,7 @@ static Ports partPorts = {
+ 
+ #undef  rObject
+ #define rObject Part::Kit
+-static Ports kitPorts = {
++static const Ports kitPorts = {
+     rRecurp(padpars, "Padnote parameters"),
+     rRecurp(adpars, "Adnote parameters"),
+     rRecurp(subpars, "Adnote parameters"),
+@@ -165,8 +165,8 @@ static Ports kitPorts = {
+     //    [](
+ };
+ 
+-Ports &Part::Kit::ports = kitPorts;
+-Ports &Part::ports = partPorts;
++const Ports &Part::Kit::ports = kitPorts;
++const Ports &Part::ports = partPorts;
+ 
+ Part::Part(Allocator &alloc, Microtonal *microtonal_, FFTwrapper *fft_)
+     :memory(alloc)
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index d49885f0..5a95aa4d 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -94,7 +94,7 @@ class Part
+             SUBnoteParameters *subpars;
+             PADnoteParameters *padpars;
+ 
+-            static rtosc::Ports &ports;
++            const static rtosc::Ports &ports;
+         } kit[NUM_KIT_ITEMS];
+ 
+ 
+@@ -150,7 +150,7 @@ class Part
+ 
+         int lastnote;
+ 
+-        static rtosc::Ports &ports;
++        const static rtosc::Ports &ports;
+ 
+     private:
+         void RunNote(unsigned k);
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 7c31bc28..08fcfcc6 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -41,7 +41,7 @@ using rtosc::RtData;
+ #define EXPAND(x) x
+ #define rObject ADnoteVoiceParam
+ 
+-static Ports voicePorts = {
++static const Ports voicePorts = {
+     RECURP(ADnoteVoiceParam, OscilGen, oscil,     OscilSmp, "Primary Oscillator"),
+     RECURP(ADnoteVoiceParam, OscilGen, mod-oscil, FMSmp,    "Modulating Oscillator"),
+     RECURP(ADnoteVoiceParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
+@@ -188,7 +188,7 @@ static Ports voicePorts = {
+ #undef  rObject
+ #define rObject ADnoteGlobalParam
+ 
+-static Ports globalPorts = {
++static const Ports globalPorts = {
+     PARAMC(ADnoteGlobalParam, PPanning, panning, "Panning (0 random, 1 left, 127 right)"),
+     RECURP(ADnoteGlobalParam, Resonance, Reson,   Reson, "Resonance"),
+     RECURP(ADnoteGlobalParam, LFOParams, FreqLfo, FreqLfo, "Frequency LFO"),
+@@ -259,14 +259,14 @@ static Ports globalPorts = {
+ 
+ };
+ 
+-static Ports adPorts = {//XXX 16 should not be hard coded
++static const Ports adPorts = {//XXX 16 should not be hard coded
+     RECURS(ADnoteParameters, ADnoteVoiceParam, voice, VoicePar, 16, "Voice Parameters"),
+     RECUR(ADnoteParameters, ADnoteGlobalParam, global, GlobalPar, "Adnote Parameters"),
+ };
+ 
+-Ports &ADnoteParameters::ports  = adPorts;
+-Ports &ADnoteVoiceParam::ports  = voicePorts;
+-Ports &ADnoteGlobalParam::ports = globalPorts;
++const Ports &ADnoteParameters::ports  = adPorts;
++const Ports &ADnoteVoiceParam::ports  = voicePorts;
++const Ports &ADnoteGlobalParam::ports = globalPorts;
+ 
+ int ADnote_unison_sizes[] =
+ {1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 0};
+diff --git a/src/Params/ADnoteParameters.h b/src/Params/ADnoteParameters.h
+index 119a932b..cfcda43c 100644
+--- a/src/Params/ADnoteParameters.h
++++ b/src/Params/ADnoteParameters.h
+@@ -103,7 +103,7 @@ struct ADnoteGlobalParam {
+     //how the randomness is applied to the harmonics on more voices using the same oscillator
+     unsigned char Hrandgrouping;
+ 
+-    static rtosc::Ports &ports;
++    static const rtosc::Ports &ports;
+ };
+ 
+ 
+@@ -281,7 +281,7 @@ struct ADnoteVoiceParam {
+     unsigned char   PFMAmpEnvelopeEnabled;
+     EnvelopeParams *FMAmpEnvelope;
+ 
+-    static rtosc::Ports &ports;
++    static const rtosc::Ports &ports;
+ };
+ 
+ class ADnoteParameters:public PresetsArray
+@@ -301,7 +301,7 @@ class ADnoteParameters:public PresetsArray
+         float getUnisonFrequencySpreadCents(int nvoice) const;
+         int get_unison_size_index(int nvoice) const;
+         void set_unison_size_index(int nvoice, int index);
+-        static rtosc::Ports &ports;
++        static const rtosc::Ports &ports;
+     private:
+         void defaults(int n); //n is the nvoice
+ 
+diff --git a/src/Params/Controller.cpp b/src/Params/Controller.cpp
+index abd04303..bc6326c8 100644
+--- a/src/Params/Controller.cpp
++++ b/src/Params/Controller.cpp
+@@ -31,7 +31,7 @@
+ using namespace rtosc;
+ 
+ #define rObject Controller
+-rtosc::Ports Controller::ports = {
++const rtosc::Ports Controller::ports = {
+     rParamZyn(panning.depth, "Depth of Panning MIDI Control"),
+     rParamZyn(filtercutoff.depth, "Depth of Filter Cutoff MIDI Control"),
+     rParamZyn(filterq.depth, "Depth of Filter Q MIDI Control"),
+diff --git a/src/Params/Controller.h b/src/Params/Controller.h
+index 841f9a74..2b1bfe2c 100644
+--- a/src/Params/Controller.h
++++ b/src/Params/Controller.h
+@@ -213,7 +213,7 @@ class Controller
+             unsigned char receive; //this is saved to disk by Master
+         } NRPN;
+ 
+-        static rtosc::Ports ports;
++        static const rtosc::Ports ports;
+     private:
+ };
+ 
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 51d6a569..1051c388 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -31,7 +31,7 @@
+ #define rObject EnvelopeParams
+ using namespace rtosc;
+ 
+-static rtosc::Ports localPorts = {
++static const rtosc::Ports localPorts = {
+     rSelf(EnvelopeParams),
+     rPaste(),
+     rToggle(Pfreemode, "Complex Envelope Definitions"),
+@@ -90,7 +90,7 @@ static rtosc::Ports localPorts = {
+         }},
+ };
+ 
+-rtosc::Ports &EnvelopeParams::ports = localPorts;
++const rtosc::Ports &EnvelopeParams::ports = localPorts;
+ 
+ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+         unsigned char Pforcedrelease_)
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index b2846472..c83c8233 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -74,7 +74,7 @@ class EnvelopeParams
+                      // 4 for ADSR_filter parameters (filter parameters)
+                      // 5 for ASR_bw parameters (bandwidth parameters)
+ 
+-        static rtosc::Ports &ports;
++        static const rtosc::Ports &ports;
+     private:
+         void store2defaults();
+ 
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index cd1e6d4c..3321b7b4 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -36,14 +36,14 @@ using namespace rtosc;
+ constexpr int sizeof_pvowels = sizeof(FilterParams::Pvowels);
+ 
+ #define rObject FilterParams::Pvowels_t::formants_t
+-static rtosc::Ports subsubports = {
++static const rtosc::Ports subsubports = {
+     rParamZyn(freq, "Formant frequency"),
+     rParamZyn(amp,  "Strength of formant"),
+     rParamZyn(q,    "Quality Factor"),
+ };
+ #undef rObject
+ 
+-static rtosc::Ports subports = {
++static const rtosc::Ports subports = {
+     {"Pformants#" STRINGIFY(FF_MAX_FORMANTS) "/", NULL, &subsubports,
+         [](const char *msg, RtData &d) {
+             const char *mm = msg;
+@@ -60,7 +60,7 @@ static rtosc::Ports subports = {
+ #define rObject FilterParams
+ #undef  rChangeCb
+ #define rChangeCb obj->changed = true;
+-rtosc::Ports FilterParams::ports = {
++const rtosc::Ports FilterParams::ports = {
+     rSelf(FilterParams),
+     rPaste(),
+     rParamZyn(Pcategory,   "Class of filter"),
+diff --git a/src/Params/FilterParams.h b/src/Params/FilterParams.h
+index c356db40..6d4c391c 100644
+--- a/src/Params/FilterParams.h
++++ b/src/Params/FilterParams.h
+@@ -92,7 +92,7 @@ class FilterParams
+ 
+         bool changed;
+ 
+-        static rtosc::Ports ports;
++        static const rtosc::Ports ports;
+     private:
+         void defaults(int n);
+ 
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 222d716a..da6863f9 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -33,7 +33,7 @@ using namespace rtosc;
+ 
+ 
+ #define rObject LFOParams
+-static rtosc::Ports _ports = {
++static const rtosc::Ports _ports = {
+     rSelf(LFOParams),
+     rPaste(),
+     rParamF(Pfreq, "frequency of LFO"),
+@@ -47,7 +47,7 @@ static rtosc::Ports _ports = {
+     rParamZyn(Pstretch, rCentered, "Note frequency stretch"),
+ };
+ 
+-rtosc::Ports &LFOParams::ports = _ports;
++const rtosc::Ports &LFOParams::ports = _ports;
+ 
+ int LFOParams::time;
+ 
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index 74374e79..c193aec8 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -60,7 +60,7 @@ class LFOParams
+         int fel; //what kind is the LFO (0 - frequency, 1 - amplitude, 2 - filter)
+         static int time; //is used by Pcontinous parameter
+ 
+-        static rtosc::Ports &ports;
++        static const rtosc::Ports &ports;
+ 
+     private:
+         /* Default parameters */
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 2adb50b3..9324f30f 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -50,7 +50,7 @@ void simpleset(const char *m, rtosc::RtData &d)
+ 
+ #define P_C(x) rtosc::Port{#x "::c", "::", NULL, \
+     simpleset<__builtin_offsetof(class PADnoteParameters, P##x)>}
+-static rtosc::Ports localPorts =
++static const rtosc::Ports localPorts =
+ {
+     RECURP(PADnoteParameters, OscilGen, oscil, oscilgen, "Oscillator"),
+     RECURP(PADnoteParameters, LFOParams, FreqLfo,   FreqLfo, "Frequency LFO"),
+@@ -188,7 +188,7 @@ static rtosc::Ports localPorts =
+         }},
+ };
+ 
+-rtosc::Ports &PADnoteParameters::ports = localPorts;
++const rtosc::Ports &PADnoteParameters::ports = localPorts;
+ 
+ PADnoteParameters::PADnoteParameters(FFTwrapper *fft_):Presets()
+ {
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index 786c6e7e..af73d61a 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -165,7 +165,7 @@ class PADnoteParameters:public Presets
+         void sampleGenerator(PADnoteParameters::callback cb,
+                              std::function<bool()> do_abort);
+ 
+-        static rtosc::Ports &ports;
++        static const rtosc::Ports &ports;
+ 
+     private:
+         void generatespectrum_bandwidthMode(float *spectrum,
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 6c01a247..c31dd2a9 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -33,7 +33,7 @@
+ 
+ #define rObject SUBnoteParameters
+ using namespace rtosc;
+-static rtosc::Ports localPorts = {
++static const rtosc::Ports localPorts = {
+     rSelf(SUBnoteParameters),
+     rPaste(),
+     rToggle(Pstereo, "Stereo Enable"),
+@@ -122,7 +122,7 @@ static rtosc::Ports localPorts = {
+ 
+ };
+ 
+-rtosc::Ports &SUBnoteParameters::ports = localPorts;
++const rtosc::Ports &SUBnoteParameters::ports = localPorts;
+ 
+ SUBnoteParameters::SUBnoteParameters():Presets()
+ {
+diff --git a/src/Params/SUBnoteParameters.h b/src/Params/SUBnoteParameters.h
+index 400c393f..6c088b96 100644
+--- a/src/Params/SUBnoteParameters.h
++++ b/src/Params/SUBnoteParameters.h
+@@ -103,7 +103,7 @@ class SUBnoteParameters:public Presets
+         //how the harmonics start("0"=0,"1"=random,"2"=1)
+         unsigned char Pstart;
+ 
+-        static rtosc::Ports &ports;
++        static const rtosc::Ports &ports;
+ };
+ 
+ #endif
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index b30119df..d6e99b88 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -41,7 +41,7 @@ pthread_t main_thread;
+ #define PC(x) rParamZyn(P##x, "undocumented oscilgen parameter")
+ 
+ #define rObject OscilGen
+-rtosc::Ports OscilGen::ports = {
++const rtosc::Ports OscilGen::ports = {
+     rSelf(OscilGen),
+     rPaste(),
+     PC(hmagtype),
+diff --git a/src/Synth/OscilGen.h b/src/Synth/OscilGen.h
+index b2fa27cc..31ba6d6e 100644
+--- a/src/Synth/OscilGen.h
++++ b/src/Synth/OscilGen.h
+@@ -114,7 +114,7 @@ class OscilGen:public Presets
+ 
+         bool ADvsPAD; //if it is used by ADsynth or by PADsynth
+ 
+-        static rtosc::Ports ports;
++        static const rtosc::Ports ports;
+ 
+         /* Oscillator Frequencies -
+          *  this is different than the hamonics set-up by the user,
+diff --git a/src/Synth/Resonance.cpp b/src/Synth/Resonance.cpp
+index 988dc11a..360413df 100644
+--- a/src/Synth/Resonance.cpp
++++ b/src/Synth/Resonance.cpp
+@@ -30,7 +30,7 @@
+ #define rObject Resonance
+ 
+ using namespace rtosc;
+-rtosc::Ports Resonance::ports = {
++const rtosc::Ports Resonance::ports = {
+     rSelf(Resonance),
+     rPaste(),
+     rToggle(Penabled, "resonance enable"),
+diff --git a/src/Synth/Resonance.h b/src/Synth/Resonance.h
+index 9ec013e1..95ae21f8 100644
+--- a/src/Synth/Resonance.h
++++ b/src/Synth/Resonance.h
+@@ -67,7 +67,7 @@ class Resonance:public Presets
+         float ctlcenter; //center frequency(relative)
+         float ctlbw; //bandwidth(relative)
+ 
+-        static rtosc::Ports ports;
++        static const rtosc::Ports ports;
+ };
+ 
+ #endif
+-- 
+2.47.0
+

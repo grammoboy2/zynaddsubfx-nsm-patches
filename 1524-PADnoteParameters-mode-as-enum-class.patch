@@ -1,0 +1,110 @@
+From 784c4b27d9a0a33d69f1307b2b7ca23655a37fe5 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Wed, 8 Apr 2020 19:26:18 +0200
+Subject: [PATCH 1524/1936] PADnoteParameters::mode as enum class
+
+---
+ rtosc                            |  2 +-
+ src/Params/PADnoteParameters.cpp | 10 +++++-----
+ src/Params/PADnoteParameters.h   | 15 +++++++++++----
+ src/Tests/PadNoteTest.h          |  2 +-
+ 4 files changed, 18 insertions(+), 11 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index f4b31cc0..345d6535 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit f4b31cc0463504fdf9d52a8f27d95fb82b7dfb3e
++Subproject commit 345d65354344ff5603ca94c684a187cffb9920ea
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index f0bb85b9..4f5546ed 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -352,7 +352,7 @@ PADnoteParameters::~PADnoteParameters()
+ 
+ void PADnoteParameters::defaults()
+ {
+-    Pmode = 0;
++    Pmode = pad_mode::bandwidth;
+     Php.base.type      = 0;
+     Php.base.par1      = 80;
+     Php.freqmult       = 0;
+@@ -811,7 +811,7 @@ void PADnoteParameters::generatespectrum_otherModes(float *spectrum,
+ 
+     //In continous mode the spectrum gets additional interpolation between the
+     //spectral peaks
+-    if(Pmode != 1) { //continous mode
++    if(Pmode == pad_mode::continous) { //continous mode
+         int old = 0;
+         for(int k = 1; k < size; ++k)
+             if((spectrum[k] > 1e-10) || (k == (size - 1))) {
+@@ -922,7 +922,7 @@ int PADnoteParameters::sampleGenerator(PADnoteParameters::callback cb,
+             const float basefreqadjust =
+                 powf(2.0f, adj_ptr[nsample] - adj_ptr[samplemax - 1] * 0.5f);
+ 
+-            if(this_c->Pmode == 0)
++            if(this_c->Pmode == pad_mode::bandwidth)
+                 this_c->generatespectrum_bandwidthMode(spectrum,
+                                                        spectrumsize,
+                                                        basefreq*basefreqadjust,
+@@ -1020,7 +1020,7 @@ void PADnoteParameters::add2XML(XMLwrapper& xml)
+     xml.setPadSynth(true);
+ 
+     xml.addparbool("stereo", PStereo);
+-    xml.addpar("mode", Pmode);
++    xml.addpar("mode", (int)Pmode);
+     xml.addpar("bandwidth", Pbandwidth);
+     xml.addpar("bandwidth_scale", Pbwscale);
+ 
+@@ -1120,7 +1120,7 @@ void PADnoteParameters::add2XML(XMLwrapper& xml)
+ void PADnoteParameters::getfromXML(XMLwrapper& xml)
+ {
+     PStereo    = xml.getparbool("stereo", PStereo);
+-    Pmode      = xml.getpar127("mode", 0);
++    Pmode      = (pad_mode)xml.getpar127("mode", 0);
+     Pbandwidth = xml.getpar("bandwidth", Pbandwidth, 0, 1000);
+     Pbwscale   = xml.getpar127("bandwidth_scale", Pbwscale);
+ 
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index 7bfeb7ec..598a0d2b 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -50,10 +50,17 @@ class PADnoteParameters:public Presets
+         float getprofile(float *smp, int size);
+ 
+         //parameters
+-
+-        //the mode: 0 - bandwidth, 1 - discrete (bandwidth=0), 2 - continous
+-        //the harmonic profile is used only on mode 0
+-        unsigned char Pmode;
++        //! the mode how bandwidth is created
++        //! the harmonic profile is used only on mode 0
++        enum class pad_mode
++        {
++            //! "normal" mode, generate the wave with bandwidth
++            bandwidth,
++            //! bandwidth = 0, almost like adnote
++            discrete,
++            //! filtered noise
++            continous
++        } Pmode;
+ 
+         //Harmonic profile (the frequency distribution of a single harmonic)
+         struct {
+diff --git a/src/Tests/PadNoteTest.h b/src/Tests/PadNoteTest.h
+index f8572fc7..95b8687f 100644
+--- a/src/Tests/PadNoteTest.h
++++ b/src/Tests/PadNoteTest.h
+@@ -194,7 +194,7 @@ class PadNoteTest:public CxxTest::TestSuite
+         }
+ 
+         void testInitialization() {
+-            TS_ASSERT_EQUALS(pars->Pmode, 0);
++            TS_ASSERT_EQUALS(pars->Pmode, PADnoteParameters::pad_mode::bandwidth);
+ 
+             TS_ASSERT_EQUALS(pars->PVolume, 90);
+             TS_ASSERT(pars->oscilgen);
+-- 
+2.47.0
+

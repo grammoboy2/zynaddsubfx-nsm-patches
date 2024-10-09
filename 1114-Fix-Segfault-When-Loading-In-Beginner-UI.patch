@@ -1,0 +1,25 @@
+From d1d8a4ae7301b07079bfd431fd180c6ffa30f408 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 17 Jan 2017 13:13:32 -0500
+Subject: [PATCH 1114/1936] Fix Segfault When Loading In Beginner UI
+
+---
+ src/UI/Fl_Osc_Widget.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/Fl_Osc_Widget.cpp b/src/UI/Fl_Osc_Widget.cpp
+index 1b4691d3..bad037cf 100644
+--- a/src/UI/Fl_Osc_Widget.cpp
++++ b/src/UI/Fl_Osc_Widget.cpp
+@@ -96,7 +96,7 @@ void Fl_Osc_Widget::oscRegister(const char *path)
+ 
+ void Fl_Osc_Widget::update(void)
+ {
+-    if(*((loc+ext).rbegin()) != '/')
++    if(*((loc+ext).rbegin()) != '/' && osc)
+         osc->requestValue(loc+ext);
+ }
+ 
+-- 
+2.47.0
+

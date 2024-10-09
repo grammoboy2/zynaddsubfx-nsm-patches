@@ -1,0 +1,137 @@
+From 1fe203f9bcfb9cda69962fd26e288df297708602 Mon Sep 17 00:00:00 2001
+From: falkTX <falktx@gmail.com>
+Date: Fri, 8 Jan 2016 06:49:09 +0000
+Subject: [PATCH 0819/1936] Proper way to check if running as plugin By
+ reporting it ourselves :)
+
+---
+ src/Misc/MiddleWare.cpp                | 13 -------------
+ src/Misc/Util.cpp                      |  2 ++
+ src/Misc/Util.h                        |  2 ++
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp |  1 +
+ src/UI/MasterUI.fl                     | 15 +++++----------
+ src/UI/guimain.cpp                     |  4 +++-
+ 6 files changed, 13 insertions(+), 24 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 85318dc4..7dea7225 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -421,19 +421,6 @@ class MiddleWareImpl
+     MiddleWare *parent;
+     private:
+ 
+-    //Detect if the name of the process is 'zynaddsubfx'
+-    bool isPlugin() const
+-    {
+-        std::string proc_file = "/proc/" + to_s(getpid()) + "/comm";
+-        std::ifstream ifs(proc_file);
+-        if(ifs.good()) {
+-            std::string comm_name;
+-            ifs >> comm_name;
+-            return comm_name != "zynaddsubfx";
+-        }
+-        return true;
+-    }
+-
+ public:
+     Config* const config;
+     MiddleWareImpl(MiddleWare *mw, SYNTH_T synth, Config* config,
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index 269449f1..cb956c39 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -44,6 +44,8 @@
+ 
+ #include <rtosc/rtosc.h>
+ 
++bool isPlugin = false;
++
+ prng_t prng_state = 0x1234;
+ 
+ /*
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 7fb9f15b..1eb2e002 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -35,6 +35,8 @@ using std::max;
+ //Velocity Sensing function
+ extern float VelF(float velocity, unsigned char scaling);
+ 
++extern bool isPlugin;
++
+ bool fileexists(const char *filename);
+ 
+ #define N_DETUNE_TYPES 4 //the number of detune types
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index 46088c79..2cf92c56 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -562,6 +562,7 @@ START_NAMESPACE_DISTRHO
+ 
+ Plugin* createPlugin()
+ {
++    ::isPlugin = true;
+     return new ZynAddSubFX();
+ }
+ 
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index c58e6d0e..cd2b83d2 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -243,13 +243,9 @@ class MasterUI {open
+   } {
+     Fl_Window masterwindow {
+       label zynaddsubfx
+-      callback {if ((
+-\#ifdef PLUGINVERSION
+-1
+-\#elif USE_NSM 
+-(nsm && nsm->is_active())
+-\#else
+-0
++      callback {if ((isPlugin
++\#if USE_NSM
++ || (nsm && nsm->is_active())
+ \#endif
+  || fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))) {
+     close();
+@@ -962,9 +958,8 @@ updatepanel();}
+     }
+     Fl_Window simplemasterwindow {
+       label ZynAddSubFX
+-      callback {\#ifndef PLUGINVERSION
+-if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))
+-\#endif
++      callback {
++if (isPlugin || fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))
+ {
+ 	*exitprogram=1;
+ };} open
+diff --git a/src/UI/guimain.cpp b/src/UI/guimain.cpp
+index a1af935c..aa055abb 100644
+--- a/src/UI/guimain.cpp
++++ b/src/UI/guimain.cpp
+@@ -86,6 +86,7 @@ int Pexitprogram = 0;
+ 
+ using namespace GUI;
+ class MasterUI *ui=0;
++bool isPlugin = false;
+ 
+ #ifdef NTK_GUI
+ static Fl_Tiled_Image *module_backdrop;
+@@ -198,9 +199,10 @@ ui_handle_t GUI::createUi(Fl_Osc_Interface *osc, void *exit)
+         if (long long winId = atoll(embedId))
+         {
+             // running embed as plugin
++            isPlugin = true;
+             MasterUI::menu_mastermenu[11].hide(); // file -> nio settings
+             MasterUI::menu_mastermenu[13].hide(); // file -> exit
+-            MasterUI::menu_mastermenu[26].hide(); // misc -> switch interface mode
++            MasterUI::menu_mastermenu[26].deactivate(); // misc -> switch interface mode
+             fl_embed(ui->masterwindow, winId);
+             ui->masterwindow->show();
+         }
+-- 
+2.47.0
+

@@ -1,0 +1,110 @@
+From d3b943a96d23e26d9562bd51843001f59d234799 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 23 Mar 2014 17:26:48 -0400
+Subject: [PATCH 0166/1936] Silence Some Unused Var Warnings
+
+---
+ src/Effects/EffectLFO.h        | 1 -
+ src/Effects/Reverb.cpp         | 6 ------
+ src/Effects/Reverb.h           | 5 +----
+ src/Misc/Master.h              | 1 -
+ src/Output/DSSIaudiooutput.cpp | 2 +-
+ 5 files changed, 2 insertions(+), 13 deletions(-)
+
+diff --git a/src/Effects/EffectLFO.h b/src/Effects/EffectLFO.h
+index 3df42ad9..82cbf87f 100644
+--- a/src/Effects/EffectLFO.h
++++ b/src/Effects/EffectLFO.h
+@@ -42,7 +42,6 @@ class EffectLFO
+         float xl, xr;
+         float incx;
+         float ampl1, ampl2, ampr1, ampr2; //necessary for "randomness"
+-        float lfointensity;
+         float lfornd;
+         char  lfotype;
+ 
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index 8cebfe8a..74961b2f 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -26,8 +26,6 @@
+ #include "../DSP/Unison.h"
+ #include <cmath>
+ 
+-//todo: EarlyReflections, Prdelay, Perbalance
+-
+ Reverb::Reverb(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
+     :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize),
+       // defaults
+@@ -35,8 +33,6 @@ Reverb::Reverb(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int s
+       Ptime(64),
+       Pidelay(40),
+       Pidelayfb(0),
+-      Prdelay(0),
+-      Perbalance(64),
+       Plpf(127),
+       Phpf(0),
+       Plohidamp(80),
+@@ -484,8 +480,6 @@ unsigned char Reverb::getpar(int npar) const
+         case 2:  return Ptime;
+         case 3:  return Pidelay;
+         case 4:  return Pidelayfb;
+-//      case 5:  return Prdelay;
+-//      case 6:  return Perbalance;
+         case 7:  return Plpf;
+         case 8:  return Phpf;
+         case 9:  return Plohidamp;
+diff --git a/src/Effects/Reverb.h b/src/Effects/Reverb.h
+index 10712299..5363759b 100644
+--- a/src/Effects/Reverb.h
++++ b/src/Effects/Reverb.h
+@@ -47,8 +47,6 @@ class Reverb:public Effect
+         unsigned char Ptime;        //duration
+         unsigned char Pidelay;      //initial delay
+         unsigned char Pidelayfb;    //initial feedback
+-        unsigned char Prdelay;      //delay between ER/Reverbs
+-        unsigned char Perbalance;   //EarlyReflections/Reverb Balance
+         unsigned char Plpf;
+         unsigned char Phpf;
+         unsigned char Plohidamp;    //Low/HighFrequency Damping
+@@ -69,11 +67,10 @@ class Reverb:public Effect
+         void setbandwidth(unsigned char _Pbandwidth);
+         void processmono(int ch, float *output, float *inputbuf);
+ 
+-        float erbalance;
+ 
+         //Parameters
+         int   lohidamptype;   //0=disable, 1=highdamp (lowpass), 2=lowdamp (highpass)
+-        int   idelaylen, rdelaylen;
++        int   idelaylen;
+         int   idelayk;
+         float lohifb;
+         float idelayfb;
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index b0179097..2238d759 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -167,7 +167,6 @@ class Master
+ 
+ 
+     private:
+-        bool   nullRun;
+         vuData vu;
+         float  volume;
+         float  sysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index e9cea86a..b343a486 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -403,7 +403,7 @@ void DSSIaudiooutput::selectProgram(unsigned long bank, unsigned long program)
+  * @param port [in] the input controller port
+  * @return the CC and NRPN values shifted and ORed together.
+  */
+-int DSSIaudiooutput::getMidiControllerForPort(unsigned long port)
++int DSSIaudiooutput::getMidiControllerForPort(unsigned long /*port*/)
+ {
+     return DSSI_NONE;
+ }
+-- 
+2.47.0
+

@@ -1,0 +1,28 @@
+From 9c9edf945a87442d01125029c4d2119bb7b51bec Mon Sep 17 00:00:00 2001
+From: Robin Gareus <robin@gareus.org>
+Date: Thu, 4 Jan 2018 04:45:20 +0100
+Subject: [PATCH 1236/1936] OSX compatibility for struct stat
+
+---
+ src/Misc/BankDb.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index f3b06dc9..e8c776e5 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -237,7 +237,11 @@ BankEntry BankDb::processXiz(std::string filename,
+ #ifndef WIN32
+     int ret  = lstat(fname.c_str(), &st);
+     if(ret != -1)
++# ifdef __APPLE__
++        time = st.st_mtimespec.tv_sec;
++# else
+         time = st.st_mtim.tv_sec;
++# endif
+ #else
+     int ret = 0;
+     time = rand();
+-- 
+2.47.0
+

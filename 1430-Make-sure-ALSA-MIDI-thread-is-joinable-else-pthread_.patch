@@ -1,0 +1,27 @@
+From 315d29b26350bbc09879e141aa67a5c17b77310d Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 3 Oct 2019 20:22:49 +0200
+Subject: [PATCH 1430/1936] Make sure ALSA MIDI thread is joinable else
+ pthread_join() will do nothing.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/AlsaEngine.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index 3458927b..ad573cb9 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -266,7 +266,7 @@ bool AlsaEngine::openMidi()
+     pthread_attr_t attr;
+ 
+     pthread_attr_init(&attr);
+-    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
++    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+     pthread_create(&midi.pThread, &attr, _MidiThread, this);
+     return true;
+ }
+-- 
+2.47.0
+

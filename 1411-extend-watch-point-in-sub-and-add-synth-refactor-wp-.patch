@@ -1,0 +1,360 @@
+From 5150ddf2854c979f2774aea552571687d1abe248 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Sun, 18 Aug 2019 11:33:12 +0300
+Subject: [PATCH 1411/1936] extend watch point in sub and add synth + refactor
+ wp name
+
+---
+ src/Synth/ADnote.cpp    |  9 ++++++---
+ src/Synth/ADnote.h      |  2 +-
+ src/Synth/PADnote.cpp   | 12 +++++------
+ src/Synth/PADnote.h     |  2 +-
+ src/Synth/SUBnote.cpp   |  8 +++++---
+ src/Synth/SUBnote.h     |  2 +-
+ src/Tests/AdNoteTest.h  |  4 ++--
+ src/Tests/SubNoteTest.h |  8 ++++----
+ src/Tests/TriggerTest.h | 44 ++++++++++++++++++++---------------------
+ 9 files changed, 48 insertions(+), 43 deletions(-)
+
+diff --git a/src/Synth/ADnote.cpp b/src/Synth/ADnote.cpp
+index 1da9728e..0698f26d 100644
+--- a/src/Synth/ADnote.cpp
++++ b/src/Synth/ADnote.cpp
+@@ -32,7 +32,8 @@ namespace zyn {
+ 
+ ADnote::ADnote(ADnoteParameters *pars_, SynthParams &spars,
+         WatchManager *wm, const char *prefix)
+-    :SynthNote(spars), pars(*pars_), watchOut(wm, prefix, "noteout"), watchOut1(wm,prefix,"noteout1")
++    :SynthNote(spars), pars(*pars_), watch_be4_add(wm, prefix, "noteout/be4_mix"), watch_after_add(wm,prefix,"noteout/after_mix"),
++    watch_punch(wm, prefix, "noteout/punch"), watch_legato(wm, prefix, "noteout/legato")
+ {
+     memory.beginTransaction();
+     tmpwavel = memory.valloc<float>(synth.buffersize);
+@@ -1702,9 +1703,9 @@ int ADnote::noteout(float *outl, float *outr)
+                 for(int i = 0; i < synth.buffersize; ++i)
+                     tmpwavel[i] += tw[i];
+             if(nvoice == 0)
+-                watchOut(tmpwavel,synth.buffersize);
++                watch_be4_add(tmpwavel,synth.buffersize);
+             
+-            watchOut1(tmpwavel,synth.buffersize);
++            watch_after_add(tmpwavel,synth.buffersize);
+         }
+         float unison_amplitude = 1.0f / sqrt(unison_size[nvoice]); //reduce the amplitude for large unison sizes
+         // Amplitude
+@@ -1857,10 +1858,12 @@ int ADnote::noteout(float *outl, float *outr)
+             }
+         }
+ 
++    watch_punch(outl, synth.buffersize);
+ 
+     // Apply legato-specific sound signal modifications
+     legato.apply(*this, outl, outr);
+ 
++    watch_legato(outl, synth.buffersize);
+ 
+     // Check if the global amplitude is finished.
+     // If it does, disable the note
+diff --git a/src/Synth/ADnote.h b/src/Synth/ADnote.h
+index 6166062a..c3ab231a 100644
+--- a/src/Synth/ADnote.h
++++ b/src/Synth/ADnote.h
+@@ -58,7 +58,7 @@ class ADnote:public SynthNote
+         int  setupVoiceUnison(int nvoice);
+         void setupVoiceDetune(int nvoice);
+         void setupVoiceMod(int nvoice, bool first_run = true);
+-        VecWatchPoint watchOut,watchOut1;
++        VecWatchPoint watch_be4_add,watch_after_add, watch_punch, watch_legato;
+         /**Changes the frequency of an oscillator.
+          * @param nvoice voice to run computations on
+          * @param in_freq new frequency*/
+diff --git a/src/Synth/PADnote.cpp b/src/Synth/PADnote.cpp
+index d9958e62..3af623e2 100644
+--- a/src/Synth/PADnote.cpp
++++ b/src/Synth/PADnote.cpp
+@@ -29,8 +29,8 @@ PADnote::PADnote(const PADnoteParameters *parameters,
+                  SynthParams pars, const int& interpolation, WatchManager *wm,
+                  const char *prefix)
+     :SynthNote(pars), pars(*parameters), interpolation(interpolation),
+-    watchOut(wm, prefix, "noteout/after_interpolation"), watchOut1(wm, prefix, "noteout/after_punch"),
+-    watchOut2(wm, prefix, "noteout/after_amp_interpolation"), watchOut3(wm, prefix, "noteout/after_legato")
++    watch_int(wm, prefix, "noteout/after_interpolation"), watch_punch(wm, prefix, "noteout/after_punch"),
++    watch_amp_int(wm, prefix, "noteout/after_amp_interpolation"), watch_legato(wm, prefix, "noteout/after_legato")
+ {
+     NoteGlobalPar.GlobalFilter    = nullptr;
+     NoteGlobalPar.FilterEnvelope  = nullptr;
+@@ -379,7 +379,7 @@ int PADnote::noteout(float *outl, float *outr)
+     else
+         Compute_Linear(outl, outr, freqhi, freqlo);
+ 
+-    watchOut(outl,synth.buffersize);
++    watch_int(outl,synth.buffersize);
+ 
+     if(firsttime) {
+         fadein(outl);
+@@ -403,7 +403,7 @@ int PADnote::noteout(float *outl, float *outr)
+             }
+         }
+     
+-    watchOut1(outl,synth.buffersize);
++    watch_punch(outl,synth.buffersize);
+ 
+     if(ABOVE_AMPLITUDE_THRESHOLD(globaloldamplitude, globalnewamplitude))
+         // Amplitude Interpolation
+@@ -421,12 +421,12 @@ int PADnote::noteout(float *outl, float *outr)
+             outr[i] *= globalnewamplitude * (1.0f - NoteGlobalPar.Panning);
+         }
+ 
+-    watchOut2(outl,synth.buffersize);
++    watch_amp_int(outl,synth.buffersize);
+ 
+     // Apply legato-specific sound signal modifications
+     legato.apply(*this, outl, outr);
+ 
+-    watchOut3(outl,synth.buffersize);
++    watch_legato(outl,synth.buffersize);
+ 
+     // Check if the global amplitude is finished.
+     // If it does, disable the note
+diff --git a/src/Synth/PADnote.h b/src/Synth/PADnote.h
+index 15d28478..0cc69a58 100644
+--- a/src/Synth/PADnote.h
++++ b/src/Synth/PADnote.h
+@@ -35,7 +35,7 @@ class PADnote:public SynthNote
+         bool finished() const;
+         void entomb(void);
+ 
+-        VecWatchPoint watchOut,watchOut1, watchOut2, watchOut3;
++        VecWatchPoint watch_int,watch_punch, watch_amp_int, watch_legato;
+ 
+         void releasekey();
+     private:
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index c76909cb..49a8bc82 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -45,7 +45,8 @@ SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars, WatchM
+     GlobalFilterEnvelope(nullptr),
+     NoteEnabled(true),
+     lfilter(nullptr), rfilter(nullptr),
+-    watchOut(wm, prefix, "noteout"), watchOut1(wm,prefix,"noteout1")
++    watch_filter(wm, prefix, "noteout/filter"), watch_amp_int(wm,prefix,"noteout/amp_int"),
++    watch_legato(wm, prefix, "noteout/legato")
+ {
+     setup(spars.frequency, spars.velocity, spars.portamento, spars.note_log2_freq, false, wm, prefix);
+ }
+@@ -548,7 +549,7 @@ int SUBnote::noteout(float *outl, float *outr)
+ 
+         memcpy(outr, outl, synth.bufferbytes);
+     }
+-    watchOut(outl,synth.buffersize);
++    watch_filter(outl,synth.buffersize);
+     if(firsttick) {
+         int n = 10;
+         if(n > synth.buffersize)
+@@ -577,12 +578,13 @@ int SUBnote::noteout(float *outl, float *outr)
+             outl[i] *= newamplitude * panning;
+             outr[i] *= newamplitude * (1.0f - panning);
+         }
++    watch_amp_int(outl,synth.buffersize);
+     oldamplitude = newamplitude;
+     computecurrentparameters();
+ 
+     // Apply legato-specific sound signal modifications
+     legato.apply(*this, outl, outr);
+-    watchOut1(outl,synth.buffersize);
++    watch_legato(outl,synth.buffersize);
+     // Check if the note needs to be computed more
+     if(AmpEnvelope->finished() != 0) {
+         for(int i = 0; i < synth.buffersize; ++i) { //fade-out
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 2454716f..c475ffe8 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -29,7 +29,7 @@ class SUBnote:public SynthNote
+ 
+         SynthNote *cloneLegato(void);
+         void legatonote(LegatoParams pars);
+-        VecWatchPoint watchOut,watchOut1;
++        VecWatchPoint watch_filter,watch_amp_int, watch_legato;
+         int noteout(float *outl, float *outr); //note output,return 0 if the note is finished
+         void releasekey();
+         bool finished() const;
+diff --git a/src/Tests/AdNoteTest.h b/src/Tests/AdNoteTest.h
+index afcaebd8..0c48bfe5 100644
+--- a/src/Tests/AdNoteTest.h
++++ b/src/Tests/AdNoteTest.h
+@@ -129,7 +129,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             note->releasekey();
+ 
+             TS_ASSERT(!tr->hasNext());
+-            w->add_watch("noteout");
++            w->add_watch("noteout/be4_mix");
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.4688f, 0.0001f);
+@@ -151,7 +151,7 @@ class AdNoteTest:public CxxTest::TestSuite
+             w->tick();
+ 
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout"), tr->read());
++            TS_ASSERT_EQUALS(string("noteout/be4_mix"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+ 
+             note->noteout(outL, outR);
+diff --git a/src/Tests/SubNoteTest.h b/src/Tests/SubNoteTest.h
+index 057fbd12..e0a4e353 100644
+--- a/src/Tests/SubNoteTest.h
++++ b/src/Tests/SubNoteTest.h
+@@ -123,7 +123,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             note->releasekey();
+ 
+             TS_ASSERT(!tr->hasNext());
+-            w->add_watch("noteout");
++            w->add_watch("noteout/filter");
+             
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+@@ -136,10 +136,10 @@ class SubNoteTest:public CxxTest::TestSuite
+             w->tick();
+ 
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout"), tr->read());
++            TS_ASSERT_EQUALS(string("noteout/filter"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+ 
+-            w->add_watch("noteout1");
++            w->add_watch("noteout/amp_int");
+             note->noteout(outL, outR);
+             sampleCount += synth->buffersize;
+             TS_ASSERT_DELTA(outL[255], -0.0017f, 0.0001f);
+@@ -150,7 +150,7 @@ class SubNoteTest:public CxxTest::TestSuite
+             TS_ASSERT_DELTA(outL[255], -0.0005f, 0.0001f);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+-            TS_ASSERT_EQUALS(string("noteout1"), tr->read());
++            TS_ASSERT_EQUALS(string("noteout/amp_int"), tr->read());
+             TS_ASSERT(!tr->hasNext());
+ 
+             while(!note->finished()) {
+diff --git a/src/Tests/TriggerTest.h b/src/Tests/TriggerTest.h
+index 739549a5..37e59eef 100644
+--- a/src/Tests/TriggerTest.h
++++ b/src/Tests/TriggerTest.h
+@@ -123,9 +123,9 @@ class TriggerTest:public CxxTest::TestSuite
+             TS_ASSERT(!w->trigger_active("data"));
+ 
+ 
+-            w->add_watch("noteout");
++            w->add_watch("noteout/filter");
+             for(int i=0; i<1024; ++i) {
+-                w->satisfy("noteout", &data[i], 1);
++                w->satisfy("noteout/filter", &data[i], 1);
+                 w->tick();
+             }
+             const char *msg1 = tr->read();
+@@ -139,9 +139,9 @@ class TriggerTest:public CxxTest::TestSuite
+             for(int i=0; i<127; ++i)
+                 buf1[i] = rtosc_argument(msg1, i).f;
+ 
+-            w->add_watch("noteout2");
++            w->add_watch("noteout/amp_int");
+             for(int i=0; i<1024/97; ++i) {
+-                w->satisfy("noteout2", &data[i*97], 97);
++                w->satisfy("noteout/amp_int", &data[i*97], 97);
+                 w->tick();
+             }
+             const char *msg2 = tr->read();
+@@ -173,20 +173,20 @@ class TriggerTest:public CxxTest::TestSuite
+             TS_ASSERT_EQUALS(string(""), w->active_list[1]);
+             TS_ASSERT_EQUALS(0, w->sample_list[0]);
+             TS_ASSERT_EQUALS(0, w->sample_list[1]);
+-            TS_ASSERT(!w->trigger_active("noteout"));
+-            TS_ASSERT(!w->trigger_active("noteout1"));
++            TS_ASSERT(!w->trigger_active("noteout/filter"));
++            TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+ 
+             //Setup a watchpoint
+             //
+             // - Watchpoints will be added to the active list in the watch
+             // manager
+             // - Watchpoints will not be triggered
+-            w->add_watch("noteout");
+-            w->add_watch("noteout1");
+-            TS_ASSERT(!w->trigger_active("noteout"));
+-            TS_ASSERT(!w->trigger_active("noteout1"));
+-            TS_ASSERT_EQUALS(string("noteout"),  w->active_list[0]);
+-            TS_ASSERT_EQUALS(string("noteout1"), w->active_list[1]);
++            w->add_watch("noteout/filter");
++            w->add_watch("noteout/amp_int");
++            TS_ASSERT(!w->trigger_active("noteout/filter"));
++            TS_ASSERT(!w->trigger_active("noteout/amp_int"));
++            TS_ASSERT_EQUALS(string("noteout/filter"),  w->active_list[0]);
++            TS_ASSERT_EQUALS(string("noteout/amp_int"), w->active_list[1]);
+             TS_ASSERT_EQUALS(0, w->sample_list[0]);
+             TS_ASSERT_EQUALS(0, w->sample_list[1]);
+             dump_samples("Initial pre-buffer");
+@@ -197,8 +197,8 @@ class TriggerTest:public CxxTest::TestSuite
+ 
+             w->tick();
+             dump_samples("Step 1 pre-buffer");
+-            TS_ASSERT(!w->trigger_active("noteout"));   //not active as prebuffer is not filled
+-            TS_ASSERT(!w->trigger_active("noteout1"));
++            TS_ASSERT(!w->trigger_active("noteout/filter"));   //not active as prebuffer is not filled
++            TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 0); // Is 0 as prebuffer not filled
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 0);
+@@ -208,8 +208,8 @@ class TriggerTest:public CxxTest::TestSuite
+             note->noteout(outL, outR);
+             w->tick();
+             dump_samples("Step 2 pre-buffer\n");
+-            TS_ASSERT(!w->trigger_active("noteout1")); // not active as prebuffer is not filled
+-            TS_ASSERT(!w->trigger_active("noteout"));
++            TS_ASSERT(!w->trigger_active("noteout/filter"));   //not active as prebuffer is not filled
++            TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 0); // Is 0 as prebuffer not filled
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 0);
+@@ -218,8 +218,8 @@ class TriggerTest:public CxxTest::TestSuite
+             note->noteout(outL, outR);
+             w->tick();
+             dump_samples("Step 3 pre-buffer\n");
+-            TS_ASSERT(!w->trigger_active("noteout1"));
+-            TS_ASSERT(!w->trigger_active("noteout"));
++            TS_ASSERT(!w->trigger_active("noteout/filter"));   
++            TS_ASSERT(!w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 0); // Is 0 as prebuffer not filled
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 0);
+@@ -228,8 +228,8 @@ class TriggerTest:public CxxTest::TestSuite
+             note->noteout(outL, outR);
+             w->tick();
+             dump_samples("Step 4 pre-buffer\n");
+-            TS_ASSERT(w->trigger_active("noteout1")); // trigger activate and filling post buffer
+-            TS_ASSERT(w->trigger_active("noteout"));
++            TS_ASSERT(w->trigger_active("noteout/filter"));   // trigger activate and filling post buffer
++            TS_ASSERT(w->trigger_active("noteout/amp_int"));
+             TS_ASSERT(!tr->hasNext());  // post buffer not reach 128
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[1], 128);   // prebuffer + postbuffer filled in
+             TS_ASSERT_LESS_THAN_EQUALS(w->sample_list[0], 128);
+@@ -243,14 +243,14 @@ class TriggerTest:public CxxTest::TestSuite
+             //Verify the output to the user interface
+             //if 128 samples are requested, then 128 should be delivered
+             const char *msg1 = tr->read();
+-            TS_ASSERT_EQUALS(string("noteout1"), msg1);
++            TS_ASSERT_EQUALS(string("noteout/filter"), msg1);
+             TS_ASSERT_EQUALS(string(f128), rtosc_argument_string(msg1));
+             TS_ASSERT_EQUALS(128, strlen(rtosc_argument_string(msg1)));
+             note->noteout(outL, outR);
+             w->tick();
+             TS_ASSERT(tr->hasNext());
+             const char *msg2 = tr->read();
+-            TS_ASSERT_EQUALS(string("noteout"), msg2);
++            TS_ASSERT_EQUALS(string("noteout/amp_int"), msg2);
+             TS_ASSERT_EQUALS(128, strlen(rtosc_argument_string(msg2)));
+             TS_ASSERT_EQUALS(string(f128), rtosc_argument_string(msg2));
+             TS_ASSERT(!tr->hasNext());
+-- 
+2.47.0
+

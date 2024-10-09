@@ -1,0 +1,62 @@
+From 43d2dc4e27d4eb0131b9a31df60b5830c3cfa89b Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 27 May 2013 14:57:45 -0400
+Subject: [PATCH 0086/1936] UI: Adjusts plugin behavior
+
+- Patch from falktx
+---
+ src/UI/MasterUI.fl | 21 ++++++++++-----------
+ 1 file changed, 10 insertions(+), 11 deletions(-)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index f625b1e2..06e186f4 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -437,11 +437,10 @@ class MasterUI {open
+   } {
+     Fl_Window masterwindow {
+       label zynaddsubfx
+-      callback {\#ifdef PLUGINVERSION
+-fl_alert("ZynAddSubFX could not be closed this way, because it's a plugin. Please use the host aplication to close it.");
+-\#else
+-if ((
+-\#if USE_NSM 
++      callback {if ((
++\#ifdef PLUGINVERSION
++1
++\#elif USE_NSM 
+ (nsm && nsm->is_active())
+ \#else
+ 0
+@@ -450,7 +449,7 @@ if ((
+     config.save();
+     *exitprogram=1;
+ };
+-\#endif} open
++} open
+       xywh {80 370 390 525} type Double xclass zynaddsubfx visible
+     } {
+       Fl_Menu_Bar mastermenu {
+@@ -1121,14 +1120,14 @@ updatepanel();}
+     }
+     Fl_Window simplemasterwindow {
+       label ZynAddSubFX
+-      callback {\#ifdef PLUGINVERSION
+-fl_alert("ZynAddSubFX could not be closed this way, because it's a plugin. Please use the host aplication to close it.");
+-\#else
+-if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
++      callback {\#ifndef PLUGINVERSION
++if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL))
++\#endif
++{
+ 	config.save();
+ 	*exitprogram=1;
+ };
+-\#endif} open
++} open
+       xywh {283 262 600 335} type Double visible
+     } {
+       Fl_Menu_Bar simplemastermenu {
+-- 
+2.47.0
+

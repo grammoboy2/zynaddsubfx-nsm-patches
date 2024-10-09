@@ -1,0 +1,38 @@
+From c07e1ce0c07e02c9d832c5564ad072804986faf0 Mon Sep 17 00:00:00 2001
+From: michiboo <chanmickyyun@gmail.com>
+Date: Tue, 9 Jul 2019 22:10:05 +0300
+Subject: [PATCH 1389/1936] add multiple waveform trigger without prebuffer
+
+---
+ src/Synth/WatchPoint.cpp | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/src/Synth/WatchPoint.cpp b/src/Synth/WatchPoint.cpp
+index 83efdc2b..84f18c73 100644
+--- a/src/Synth/WatchPoint.cpp
++++ b/src/Synth/WatchPoint.cpp
+@@ -185,6 +185,21 @@ void WatchManager::satisfy(const char *id, float *f, int n)
+                     i ++;
+                     if (f[i-1] <= 0 && f[i] > 0)
+                         trigger[selected] = true;
++                     for(int k=0; k<MAX_WATCH; ++k) {
++                            if(selected != k){
++                            char tmp[128];
++                            char tmp1[128];
++                            strcpy(tmp, active_list[selected]);
++                            strcpy(tmp1, active_list[k]);
++                            if(strlen(active_list[k]) < strlen(active_list[selected]))
++                                tmp[strlen(tmp)-1] =0;
++                            else if (strlen(active_list[k]) > strlen(active_list[selected]))
++                                tmp1[strlen(tmp1)-1] =0;
++                            if(!strcmp(tmp1,tmp)){
++                                trigger[k] = true;
++                            }
++                        }
++                     }
+                 }
+                 if(trigger[selected]){
+                     data_list[selected][sample_list[selected]] = f[i];
+-- 
+2.47.0
+

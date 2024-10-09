@@ -1,0 +1,25 @@
+From ca1120de25546a4b11942378706d13126e6d3456 Mon Sep 17 00:00:00 2001
+From: Carlo Bramini <30959007+carlo-bramini@users.noreply.github.com>
+Date: Sun, 5 Jul 2020 14:58:00 +0200
+Subject: [PATCH 1575/1936] [WIN32] Fix error on missing usleep()
+
+---
+ src/Misc/Master.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 1bfb4b5a..22be28ae 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1796,7 +1796,7 @@ int Master::saveOSC(const char *filename, master_dispatcher_t* dispatcher,
+     // We need to wait until savefile has been loaded into master2
+     int i;
+     for(i = 0; i < 20 && master2->uToB->hasNext(); ++i)
+-        usleep(50000);
++        os_usleep(50000);
+     if(i >= 20) // >= 1 second?
+     {
+         // Master failed to fetch its messages
+-- 
+2.47.0
+

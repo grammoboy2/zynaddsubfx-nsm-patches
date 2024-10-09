@@ -1,0 +1,28 @@
+From f88f91d6f374cb9419f86534b51ea19292696d1e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 10 Oct 2016 12:14:34 -0400
+Subject: [PATCH 1056/1936] Fix Bug In NSM Due To Windows Support
+
+---
+ src/UI/NSM.C | 5 ++++-
+ 1 file changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/NSM.C b/src/UI/NSM.C
+index 0b135c16..03fad935 100644
+--- a/src/UI/NSM.C
++++ b/src/UI/NSM.C
+@@ -83,7 +83,10 @@ NSM_Client::command_open(const char *name,
+ 
+     char *new_filename;
+ 
+-    //asprintf(&new_filename, "%s.xmz", name);
++    //if you're on windows enjoy the undefined behavior...
++#ifndef WIN32
++    asprintf(&new_filename, "%s.xmz", name);
++#endif
+ 
+     struct stat st;
+ 
+-- 
+2.47.0
+

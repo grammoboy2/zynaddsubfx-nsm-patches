@@ -1,0 +1,89 @@
+From 7b165b57ce40af0a3267e66edbf62112dd79c13f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 7 May 2015 17:08:06 -0400
+Subject: [PATCH 0443/1936] Fix Preset Deleting
+
+---
+ src/Misc/PresetExtractor.cpp |  7 ++++++-
+ src/Params/PresetsStore.cpp  | 11 +++++++++++
+ src/Params/PresetsStore.h    |  1 +
+ src/UI/PresetsUI.fl          |  6 +++---
+ 4 files changed, 21 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index da421be0..a1d068dc 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -86,6 +86,10 @@ const rtosc::Ports real_preset_ports =
+         [](const char *msg, rtosc::RtData &d) {
+             d.reply(d.loc, "s", presetsstore.clipboard.type.c_str());
+         }},
++    {"delete:s", 0, 0,
++        [](const char *msg, rtosc::RtData &d) {
++            presetsstore.deletepreset(rtosc_argument(msg,0).s);
++        }},
+ 
+ };
+ 
+@@ -95,7 +99,8 @@ const rtosc::Ports preset_ports
+     {"scan-for-presets:", rDoc("Scan For Presets"), 0, dummy},
+     {"copy:s:ss:si:ssi",  rDoc("Copy <s> URL to <s> Name/Clipboard from subfield <i>"), 0, dummy},
+     {"paste:s:ss:si:ssi", rDoc("Paste <s> URL to <s> File-Name/Clipboard from subfield <i>"), 0, dummy},
+-    {"clipboard-type:",   rDoc("Type Stored In Clipboard"), 0, dummy}
++    {"clipboard-type:",   rDoc("Type Stored In Clipboard"), 0, dummy},
++    {"delete:s", rDoc("Delete the given preset file"), 0, dummy},
+ };
+ 
+ //Relevant types to keep in mind
+diff --git a/src/Params/PresetsStore.cpp b/src/Params/PresetsStore.cpp
+index 4b9d8c83..c90796b9 100644
+--- a/src/Params/PresetsStore.cpp
++++ b/src/Params/PresetsStore.cpp
+@@ -178,3 +178,14 @@ void PresetsStore::deletepreset(unsigned int npreset)
+         return;
+     remove(filename.c_str());
+ }
++
++void PresetsStore::deletepreset(std::string filename)
++{
++    for(int i=0; i<(int)presets.size(); ++i) {
++        if(presets[i].file == filename) {
++            presets.erase(presets.begin()+i);
++            remove(filename.c_str());
++            return;
++        }
++    }
++}
+diff --git a/src/Params/PresetsStore.h b/src/Params/PresetsStore.h
+index a1637aec..6d7cacf8 100644
+--- a/src/Params/PresetsStore.h
++++ b/src/Params/PresetsStore.h
+@@ -42,6 +42,7 @@ class PresetsStore
+         void copypreset(XMLwrapper &xml, char *type, std::string name);
+         bool pastepreset(XMLwrapper &xml, unsigned int npreset);
+         void deletepreset(unsigned int npreset);
++        void deletepreset(std::string file);
+ 
+         struct presetstruct {
+             bool operator<(const presetstruct &b) const;
+diff --git a/src/UI/PresetsUI.fl b/src/UI/PresetsUI.fl
+index 47e25ce9..3b67efa4 100644
+--- a/src/UI/PresetsUI.fl
++++ b/src/UI/PresetsUI.fl
+@@ -183,10 +183,10 @@ class PresetsUI {} {
+             }
+             Fl_Button deletepbutton {
+                 label Delete
+-                    callback {int n=pastebrowse->value();
++                    callback {int n=pastebrowse->value()-1;
+ 
+-                        if (n!=0) {
+-                            /*presetDelete(n);*/
++                        if (n>=0) {
++                            osc->write("/presets/delete", "s", files[n].c_str());
+                         }
+                         rescan(url);
+                     } selected
+-- 
+2.47.0
+

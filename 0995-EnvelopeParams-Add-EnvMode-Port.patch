@@ -1,0 +1,28 @@
+From b5e792a7af74bc7f8b055d2db279501c610d5179 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 2 Aug 2016 10:18:46 -0400
+Subject: [PATCH 0995/1936] EnvelopeParams: Add EnvMode Port
+
+---
+ src/Params/EnvelopeParams.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index d5161132..14efc560 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -56,6 +56,11 @@ static const rtosc::Ports localPorts = {
+     rParamZyn(PR_dt,  rShort("r.dt"),  "Release Time"),
+     rParamZyn(PR_val, rShort("r.val"), "Release Value"),
+ 
++    {"Envmode:", rDoc("Envelope variant type"), NULL,
++        rBegin;
++        d.reply(d.loc, "i", env->Envmode);
++        rEnd},
++
+     {"envdt", rDoc("Envelope Delay Times"), NULL,
+         rBegin;
+         const int N = MAX_ENVELOPE_POINTS;
+-- 
+2.47.0
+

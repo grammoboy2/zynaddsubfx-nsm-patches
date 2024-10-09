@@ -1,0 +1,36 @@
+From 67c31f76ac368bfad1e1c76065a48582fe8da08a Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 15 Mar 2015 11:07:27 -0400
+Subject: [PATCH 0396/1936] MiddleWare: Put cstdarg Include In Right Place
+
+---
+ src/Misc/MiddleWare.cpp | 1 -
+ src/Misc/MiddleWare.h   | 1 +
+ 2 files changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 5a573c01..ab078335 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -3,7 +3,6 @@
+ #include <cstring>
+ #include <cstdio>
+ #include <cstdlib>
+-#include <cstdarg>
+ #include <fstream>
+ 
+ #include <rtosc/undo-history.h>
+diff --git a/src/Misc/MiddleWare.h b/src/Misc/MiddleWare.h
+index 02a5ed7e..74ab6b64 100644
+--- a/src/Misc/MiddleWare.h
++++ b/src/Misc/MiddleWare.h
+@@ -1,5 +1,6 @@
+ #pragma once
+ #include <functional>
++#include <cstdarg>
+ 
+ //Link between realtime and non-realtime layers
+ class MiddleWare
+-- 
+2.47.0
+

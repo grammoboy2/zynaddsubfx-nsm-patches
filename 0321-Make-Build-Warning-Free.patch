@@ -1,0 +1,555 @@
+From 440aed68b0f5c6866185d91da598f5fda9d6dc7f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 18 Feb 2015 17:09:40 -0500
+Subject: [PATCH 0321/1936] Make Build Warning Free
+
+---
+ src/Misc/PresetExtractor.cpp  |  5 +++++
+ src/Misc/Util.cpp             |  2 +-
+ src/Params/EnvelopeParams.cpp | 12 ++++++------
+ src/Params/EnvelopeParams.h   |  2 +-
+ src/Params/FilterParams.cpp   |  3 +--
+ src/Params/FilterParams.h     |  2 +-
+ src/Params/LFOParams.cpp      | 24 ++++++++++++------------
+ src/Params/LFOParams.h        |  2 +-
+ src/Synth/OscilGen.cpp        | 12 ++++++------
+ src/Synth/SynthNote.h         |  2 +-
+ src/UI/ADnoteUI.fl            |  6 +++---
+ src/UI/BankUI.fl              |  8 +-------
+ src/UI/EnvelopeUI.fl          |  6 +-----
+ src/UI/FilterUI.fl            | 12 +++++-------
+ src/UI/MasterUI.fl            |  5 -----
+ src/UI/OscilGenUI.fl          |  6 +++---
+ src/UI/PartUI.fl              |  2 +-
+ src/UI/PresetsUI.fl           |  1 +
+ src/UI/SUBnoteUI.fl           | 16 ++++++++--------
+ tlsf/tlsf.c                   |  1 +
+ 20 files changed, 59 insertions(+), 70 deletions(-)
+
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index 9ec52488..37e8ed66 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -89,6 +89,7 @@ std::string doCopy(MiddleWare &mw, string url)
+ template<class T>
+ void doPaste(MiddleWare &mw, string url, string data)
+ {
++    (void) data;
+     if(clip.length() < 20)
+         return;
+ 
+@@ -159,17 +160,21 @@ Clipboard clipboardCopy(MiddleWare &mw, string url)
+ 
+ void clipBoardPaste(const char *url, Clipboard clip)
+ {
++    (void) url;
++    (void) clip;
+ }
+ 
+ MiddleWare *middlewarepointer;
+ void presetCopy(std::string url, std::string name)
+ {
++    (void) name;
+     clip = doClassCopy(getUrlType(url), *middlewarepointer, url);
+     printf("PresetCopy()\n");
+     printf("clip = ``%s''\n", clip.c_str());
+ }
+ void presetPaste(std::string url, std::string name)
+ {
++    (void) name;
+     doClassPaste(getUrlType(url), *middlewarepointer, url, clip);
+     printf("PresetPaste()\n");
+ }
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index ae7ece80..e5b2943e 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -85,7 +85,7 @@ float getdetune(unsigned char type,
+             findet = fabs(fdetune / 8192.0f) * 10.0f;
+             break;
+         case 3:
+-            cdet   = fabs(cdetune * 100);
++            cdet   = fabs(cdetune * 100.0f);
+             findet = powf(10, fabs(fdetune / 8192.0f) * 3.0f) / 10.0f - 0.1f;
+             break;
+         case 4:
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index fc2d0543..51d6a569 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -93,7 +93,7 @@ static rtosc::Ports localPorts = {
+ rtosc::Ports &EnvelopeParams::ports = localPorts;
+ 
+ EnvelopeParams::EnvelopeParams(unsigned char Penvstretch_,
+-        unsigned char Pforcedrelease_):Presets()
++        unsigned char Pforcedrelease_)
+ {
+     PA_dt  = 10;
+     PD_dt  = 10;
+@@ -146,7 +146,7 @@ float EnvelopeParams::dt(char val)
+  */
+ void EnvelopeParams::ADSRinit(char A_dt, char D_dt, char S_val, char R_dt)
+ {
+-    setpresettype("Penvamplitude");
++    //setpresettype("Penvamplitude");
+     Envmode   = 1;
+     PA_dt     = A_dt;
+     PD_dt     = D_dt;
+@@ -160,7 +160,7 @@ void EnvelopeParams::ADSRinit(char A_dt, char D_dt, char S_val, char R_dt)
+ 
+ void EnvelopeParams::ADSRinit_dB(char A_dt, char D_dt, char S_val, char R_dt)
+ {
+-    setpresettype("Penvamplitude");
++    //setpresettype("Penvamplitude");
+     Envmode   = 2;
+     PA_dt     = A_dt;
+     PD_dt     = D_dt;
+@@ -174,7 +174,7 @@ void EnvelopeParams::ADSRinit_dB(char A_dt, char D_dt, char S_val, char R_dt)
+ 
+ void EnvelopeParams::ASRinit(char A_val, char A_dt, char R_val, char R_dt)
+ {
+-    setpresettype("Penvfrequency");
++    //setpresettype("Penvfrequency");
+     Envmode   = 3;
+     PA_val    = A_val;
+     PA_dt     = A_dt;
+@@ -193,7 +193,7 @@ void EnvelopeParams::ADSRinit_filter(char A_val,
+                                      char R_dt,
+                                      char R_val)
+ {
+-    setpresettype("Penvfilter");
++    //setpresettype("Penvfilter");
+     Envmode   = 4;
+     PA_val    = A_val;
+     PA_dt     = A_dt;
+@@ -208,7 +208,7 @@ void EnvelopeParams::ADSRinit_filter(char A_val,
+ 
+ void EnvelopeParams::ASRinit_bw(char A_val, char A_dt, char R_val, char R_dt)
+ {
+-    setpresettype("Penvbandwidth");
++    //setpresettype("Penvbandwidth");
+     Envmode   = 5;
+     PA_val    = A_val;
+     PA_dt     = A_dt;
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index 652fb574..b2846472 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -27,7 +27,7 @@
+ #include "../Misc/XMLwrapper.h"
+ #include "Presets.h"
+ 
+-class EnvelopeParams:public Presets
++class EnvelopeParams
+ {
+     public:
+         EnvelopeParams(unsigned char Penvstretch_=64,
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index a65829a5..cd1e6d4c 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -130,9 +130,8 @@ FilterParams::FilterParams()
+ FilterParams::FilterParams(unsigned char Ptype_,
+                            unsigned char Pfreq_,
+                            unsigned char Pq_)
+-    :PresetsArray()
+ {
+-    setpresettype("Pfilter");
++    //setpresettype("Pfilter");
+     Dtype = Ptype_;
+     Dfreq = Pfreq_;
+     Dq    = Pq_;
+diff --git a/src/Params/FilterParams.h b/src/Params/FilterParams.h
+index c92851ea..c356db40 100644
+--- a/src/Params/FilterParams.h
++++ b/src/Params/FilterParams.h
+@@ -27,7 +27,7 @@
+ #include "../Misc/XMLwrapper.h"
+ #include "PresetsArray.h"
+ 
+-class FilterParams:public PresetsArray
++class FilterParams
+ {
+     public:
+         FilterParams();
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index bc4a4f29..222d716a 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -73,19 +73,19 @@ LFOParams::LFOParams(char Pfreq_,
+                      char Prandomness_,
+                      char Pdelay_,
+                      char Pcontinous_,
+-                     char fel_):Presets()
++                     char fel_)
+ {
+-    switch(fel_) {
+-        case 0:
+-            setpresettype("Plfofrequency");
+-            break;
+-        case 1:
+-            setpresettype("Plfoamplitude");
+-            break;
+-        case 2:
+-            setpresettype("Plfofilter");
+-            break;
+-    }
++    //switch(fel_) {
++    //    case 0:
++    //        setpresettype("Plfofrequency");
++    //        break;
++    //    case 1:
++    //        setpresettype("Plfoamplitude");
++    //        break;
++    //    case 2:
++    //        setpresettype("Plfofilter");
++    //        break;
++    //}
+     Dfreq       = Pfreq_;
+     Dintensity  = Pintensity_;
+     Dstartphase = Pstartphase_;
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index 6d1e442a..74374e79 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -26,7 +26,7 @@
+ #include "Presets.h"
+ class XMLwrapper;
+ 
+-class LFOParams:public Presets
++class LFOParams
+ {
+     public:
+         LFOParams();
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 40f8fa5e..c8c0679a 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -95,7 +95,7 @@ static rtosc::Ports localPorts = {
+                 mag = rtosc_argument(m,0).i;
+         }},
+     {"base-spectrum:", rDoc("Returns spectrum of base waveshape"),
+-        NULL, [](const char *m, rtosc::RtData &d) {
++        NULL, [](const char *, rtosc::RtData &d) {
+             const unsigned n = synth->oscilsize / 2;
+             float *spc = new float[n];
+             memset(spc, 0, 4*n);
+@@ -104,7 +104,7 @@ static rtosc::Ports localPorts = {
+             delete[] spc;
+         }},
+     {"base-waveform:", rDoc("Returns base waveshape points"),
+-        NULL, [](const char *m, rtosc::RtData &d) {
++        NULL, [](const char *, rtosc::RtData &d) {
+             const unsigned n = synth->oscilsize;
+             float *smps = new float[n];
+             memset(smps, 0, 4*n);
+@@ -113,7 +113,7 @@ static rtosc::Ports localPorts = {
+             delete[] smps;
+         }},
+     {"spectrum:", rDoc("Returns spectrum of waveform"),
+-        NULL, [](const char *m, rtosc::RtData &d) {
++        NULL, [](const char *, rtosc::RtData &d) {
+             const unsigned n = synth->oscilsize / 2;
+             float *spc = new float[n];
+             memset(spc, 0, 4*n);
+@@ -122,7 +122,7 @@ static rtosc::Ports localPorts = {
+             delete[] spc;
+         }},
+     {"waveform:", rDoc("Returns waveform points"),
+-        NULL, [](const char *m, rtosc::RtData &d) {
++        NULL, [](const char *, rtosc::RtData &d) {
+             const unsigned n = synth->oscilsize;
+             float *smps = new float[n];
+             memset(smps, 0, 4*n);
+@@ -134,7 +134,7 @@ static rtosc::Ports localPorts = {
+             delete[] smps;
+         }},
+     {"prepare:", rDoc("Performs setup operation to oscillator"),
+-        NULL, [](const char *m, rtosc::RtData &d) {
++        NULL, [](const char *, rtosc::RtData &d) {
+             //fprintf(stderr, "prepare: got a message from '%s'\n", m);
+             OscilGen &o = *(OscilGen*)d.obj;
+             fft_t *data = new fft_t[synth->oscilsize / 2];
+@@ -144,7 +144,7 @@ static rtosc::Ports localPorts = {
+             o.pendingfreqs = data;
+         }},
+     {"convert2sine:", rDoc("Translates waveform into FS"),
+-        NULL, [](const char *m, rtosc::RtData &d) {
++        NULL, [](const char *, rtosc::RtData &d) {
+             ((OscilGen*)d.obj)->convert2sine();
+         }},
+     {"prepare:b", rProp(internal) rProp(pointer) rDoc("Sets prepared fft data"),
+diff --git a/src/Synth/SynthNote.h b/src/Synth/SynthNote.h
+index 686f1c1b..bcf5dbd0 100644
+--- a/src/Synth/SynthNote.h
++++ b/src/Synth/SynthNote.h
+@@ -67,7 +67,6 @@ class SynthNote
+         /* For polyphonic aftertouch needed */
+         void setVelocity(float velocity_);
+     protected:
+-        const Controller &ctl;
+         // Legato transitions
+         class Legato
+         {
+@@ -104,6 +103,7 @@ class SynthNote
+ 
+         //Realtime Safe Memory Allocator For notes
+         class Allocator &memory;
++        const Controller &ctl;
+ };
+ 
+ #endif
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 95854e42..bfe159d7 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -260,7 +260,7 @@ o->redraw();}
+               }
+               Fl_Value_Output fmdetunevalueoutput {
+                 label Detune
+-                callback {//o->value(getdetune((pars->VoicePar[nvoice].PFMDetuneType==0)?(pars->GlobalPar.PDetuneType) : (pars->VoicePar[nvoice].PFMDetuneType),0,pars->VoicePar[nvoice].PFMDetune));}
++                callback {(void)o;//o->value(getdetune((pars->VoicePar[nvoice].PFMDetuneType==0)?(pars->GlobalPar.PDetuneType) : (pars->VoicePar[nvoice].PFMDetuneType),0,pars->VoicePar[nvoice].PFMDetune));}
+                 xywh {540 245 45 18} labelsize 8 align 5 minimum -5000 maximum 5000 step 0.01 textfont 1 textsize 8
+                 code0 {o->init("FMdetunevalue");}
+                 class Fl_Osc_Output
+@@ -566,7 +566,7 @@ voiceonbutton->redraw();} open
+             }
+             Fl_Choice {} {
+               label Unison
+-              callback {//pars->set_unison_size_index(nvoice,(int) o->value());} open
++              callback {(void)o;//pars->set_unison_size_index(nvoice,(int) o->value());} open
+               tooltip {Unison size} xywh {10 560 75 20} down_box BORDER_BOX labelfont 1 align 5 textfont 1 textsize 10
+               code0 {o->add("OFF");char tmp[100];for (int i=1;ADnote_unison_sizes[i];i++){snprintf(tmp,100,"size %d",ADnote_unison_sizes[i]);o->add(tmp);};}
+               code1 {o->init("Unison_size");//pars->get_unison_size_index(nvoice));}
+@@ -606,7 +606,7 @@ voiceonbutton->redraw();} open
+             }
+             Fl_Dial {} {
+               label {Ph.rand}
+-              callback {/*pars->VoicePar[nvoice].Unison_phase_randomness=(int)o->value();*/}
++              callback {(void)o;/*pars->VoicePar[nvoice].Unison_phase_randomness=(int)o->value();*/}
+               tooltip {Phase randomness} xywh {280 555 25 25} box ROUND_UP_BOX labelsize 10 align 1 maximum 127 step 1
+               code0 {/*o->value(pars->VoicePar[nvoice].Unison_phase_randomness);*/}
+               class WidgetPDial
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index e106ec15..3fca120d 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -80,13 +80,7 @@ refreshmainwindow();}
+         code0 {o->value(config.cfg.BankUIAutoClose);}
+       }
+       Fl_Choice banklist {
+-        callback { //int n=o->value();
+-//std::string dirname="";/*bank->banks[n].dir;*/
+-//if (dirname.empty()) return;
+-//osc->write("/loadbank", "s", dirname.c_str());
+-/*if (bank->loadbank(dirname)==2)
+-       fl_alert("Error: Could not load the bank from the directory\\n%s.",dirname.c_str());*/
+-refreshmainwindow();}
++        callback {refreshmainwindow();}
+         xywh {5 8 220 20} down_box BORDER_BOX labelfont 1 align 0 textfont 1 textsize 11
+         code0 {bankview->init(osc, modeselect, npart);}
+         code1 {o->init("loadbank");}
+diff --git a/src/UI/EnvelopeUI.fl b/src/UI/EnvelopeUI.fl
+index ce868fbe..def5b8f1 100644
+--- a/src/UI/EnvelopeUI.fl
++++ b/src/UI/EnvelopeUI.fl
+@@ -160,13 +160,9 @@ freeedit->redraw();}
+       }
+       Fl_Counter sustaincounter {
+         label Sust
+-        callback {//Penvsustain=(int) o->value();
+-freeedit->redraw();
++        callback {freeedit->redraw();
+ envfree->redraw();}
+         tooltip {Sustain (0 is disabled)} xywh {315 155 40 15} type Simple labelsize 11 align 4 minimum 0 maximum 127 step 1
+-        code0 {//o->value(Penvsustain);}
+-        code1 {//if (Pfreemode==0) o->hide();}
+-        code2 {//o->maximum(Penvpoints-2);}
+         code3 {o->init("Penvsustain");}
+         class Fl_Osc_Counter
+       }
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index bc65cc72..8c90346c 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -294,8 +294,7 @@ formantfiltergraph->redraw();}
+           }
+           Fl_Dial formant_freq_dial {
+             label freq
+-            callback {//pars->Pvowels[nvowel].formants[nformant].freq=(int) o->value();
+-                formantfiltergraph->update();}
++            callback {formantfiltergraph->update();}
+             tooltip {Formant frequency} xywh {495 115 25 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+             code0 {//TODO get widget renaming working here!!!}
+             code1 {o->init("freq");}
+@@ -303,16 +302,14 @@ formantfiltergraph->redraw();}
+           }
+           Fl_Dial formant_q_dial {
+             label Q
+-            callback {//pars->Pvowels[nvowel].formants[nformant].q=(int) o->value();
+-formantfiltergraph->update();}
++            callback {formantfiltergraph->update();}
+             tooltip {Formant's Q} xywh {525 115 24 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+             code0 {o->init("q");}
+             class Fl_Osc_Dial
+           }
+           Fl_Dial formant_amp_dial {
+             label amp
+-            callback {//pars->Pvowels[nvowel].formants[nformant].amp=(int) o->value();
+-formantfiltergraph->update();}
++            callback {formantfiltergraph->update();}
+             tooltip {Formant amplitude} xywh {555 115 24 25} box ROUND_UP_BOX labelsize 10 maximum 127 step 1
+             code0 {o->init("amp");}
+             class Fl_Osc_Dial
+@@ -340,7 +337,7 @@ formantfiltergraph->update();}
+         }
+         Fl_Counter vowel_counter {
+           label Vowel
+-          callback {//pars->Psequence[nseqpos].nvowel=(int) o->value(); pars->changed=true;}
++          callback {(void)o;//pars->Psequence[nseqpos].nvowel=(int) o->value(); pars->changed=true;}
+           xywh {640 97 40 15} type Simple labelsize 10 align 1 minimum 0 maximum 127 step 1 textsize 10
+           code0 {o->bounds(0,FF_MAX_VOWELS-1);}
+         }
+@@ -504,6 +501,7 @@ update_formant_window();} {}
+   } {
+     code {
+     //TODO update Pgain & filter type on switch Pgain=64;
++    (void) newcat;
+ refresh();} {}
+   }
+   Function {use_for_dynamic_filter()} {open
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 33f79c16..c4ef73e3 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1154,11 +1154,6 @@ simplerefresh();}
+             }
+             Fl_Choice simplesysefftype {
+               label EffType
+-              callback {/*pthread_mutex_lock(&master->mutex);
+-master->sysefx[nsyseff]->changeeffect((int) o->value());
+-pthread_mutex_unlock(&master->mutex);
+-simplesyseffectui->efftype = o->value();
+-simplesyseffectui->refresh();*/}
+               xywh {515 80 70 15} down_box BORDER_BOX labelsize 10 align 5
+               code0 {o->init("sysefx"+to_s(nsyseff)+"/efftype");}
+               class Fl_Osc_Choice
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 1b42f11c..8dcb1c09 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -745,13 +745,13 @@ redrawoscil();}
+         } {
+           Fl_Counter harmonicshiftcounter {
+             label {Harmonic Shift}
+-            callback {//oscil->Pharmonicshift=(int)o->value();
++            callback {(void)o;//oscil->Pharmonicshift=(int)o->value();
+ redrawoscil();}
+             xywh {675 370 55 15} type Simple labelsize 10 align 129 minimum -64 maximum 64 step 1 textfont 1 textsize 10
+           }
+           Fl_Check_Button harmonicshiftpre {
+             label preH
+-            callback {//oscil->Pharmonicshiftfirst=(int)o->value();
++            callback {(void)o;//oscil->Pharmonicshiftfirst=(int)o->value();
+ redrawoscil();}
+             tooltip {Apply the harmonic shift before the waveshaping and filtering} xywh {695 390 34 15} down_box DOWN_BOX labelsize 10 align 24
+           }
+@@ -825,7 +825,7 @@ redrawoscil();}
+             class Fl_Osc_Dial
+           }
+           Fl_Slider adhrpar {
+-            callback {//oscil->Padaptiveharmonicspar=(int)o->value();
++            callback {(void)o;//oscil->Padaptiveharmonicspar=(int)o->value();
+ redrawoscil();}
+             xywh {675 450 55 10} type {Horz Knob} box NO_BOX maximum 100 step 1 value 50
+           }
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 8872b578..def0a0e3 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -677,7 +677,7 @@ inseffectui->refresh();}
+       }
+       Fl_Choice sendtochoice {
+         label {Send To.}
+-        callback {/*int x=(int) o->value();
++        callback {(void)o;/*int x=(int) o->value();
+ part->Pefxroute[ninseff]=x;
+ if (x==2) part->partefx[ninseff]->setdryonly(true);
+ 	else part->partefx[ninseff]->setdryonly(false);*/}
+diff --git a/src/UI/PresetsUI.fl b/src/UI/PresetsUI.fl
+index 32843826..908f4b2d 100644
+--- a/src/UI/PresetsUI.fl
++++ b/src/UI/PresetsUI.fl
+@@ -153,6 +153,7 @@ class PresetsUI {} {
+     Function {copy(std::string url_)} {} {
+         code {copybutton->activate();
+             copypbutton->deactivate();
++            (void) url_;
+ 
+             this->pui=NULL;
+             bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 11ea7d4e..6ea5b07d 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -435,10 +435,10 @@ globalfiltergroup->redraw();}
+       } {
+         Fl_Choice spreadtype {
+           label OvertonesPosition
+-          callback {/*pars->POvertoneSpread.type = (int)o->value();
++          callback {(void)o;/*pars->POvertoneSpread.type = (int)o->value();
+ pars->updateFrequencyMultipliers();*/} open
+           xywh {450 190 80 20} down_box BORDER_BOX labelsize 10 align 5 textsize 10
+-          code0 {/*o->value(pars->POvertoneSpread.type);*/}
++          code0 {(void)o;/*o->value(pars->POvertoneSpread.type);*/}
+         } {
+           MenuItem {} {
+             label Harmonic
+@@ -475,26 +475,26 @@ pars->updateFrequencyMultipliers();*/} open
+         }
+         Fl_Dial spreadpar1 {
+           label Par1
+-          callback {/*pars->POvertoneSpread.par1 = o->value();
++          callback {(void)o;/*pars->POvertoneSpread.par1 = o->value();
+ pars->updateFrequencyMultipliers();*/}
+           xywh {548 173 30 30} box ROUND_UP_BOX labelsize 10 maximum 255 step 1
+-          code0 {/*o->value(pars->POvertoneSpread.par1);*/}
++          code0 {(void)o;/*o->value(pars->POvertoneSpread.par1);*/}
+           class WidgetPDial
+         }
+         Fl_Dial spreadpar2 {
+           label Par2
+-          callback {/*pars->POvertoneSpread.par2 = o->value();
++          callback {(void)o;/*pars->POvertoneSpread.par2 = o->value();
+ pars->updateFrequencyMultipliers();*/}
+           xywh {583 173 30 30} box ROUND_UP_BOX labelsize 10 maximum 255 step 1
+-          code0 {/*o->value(pars->POvertoneSpread.par2);*/}
++          code0 {(void)o;/*o->value(pars->POvertoneSpread.par2);*/}
+           class WidgetPDial
+         }
+         Fl_Dial spreadpar3 {
+           label ForceH
+-          callback {/*pars->POvertoneSpread.par3 = o->value();
++          callback {(void)o;/*pars->POvertoneSpread.par3 = o->value();
+ pars->updateFrequencyMultipliers();*/}
+           xywh {618 173 30 30} box ROUND_UP_BOX labelsize 10 maximum 255 step 1
+-          code0 {/*o->value(pars->POvertoneSpread.par3);*/}
++          code0 {(void)o;/*o->value(pars->POvertoneSpread.par3);*/}
+           class WidgetPDial
+         }
+       }
+diff --git a/tlsf/tlsf.c b/tlsf/tlsf.c
+index 69963960..027c20c2 100644
+--- a/tlsf/tlsf.c
++++ b/tlsf/tlsf.c
+@@ -620,6 +620,7 @@ typedef struct integrity_t
+ 
+ static void integrity_walker(void* ptr, size_t size, int used, void* user)
+ {
++    (void) used;
+ 	block_header_t* block = block_from_ptr(ptr);
+ 	integrity_t* integ = tlsf_cast(integrity_t*, user);
+ 	const int this_prev_status = block_is_prev_free(block) ? 1 : 0;
+-- 
+2.47.0
+

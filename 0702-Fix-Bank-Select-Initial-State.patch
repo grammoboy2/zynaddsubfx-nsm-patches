@@ -1,0 +1,39 @@
+From 6992ec33c80e746af1a13a5e32530b88ff696b9e Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 7 Nov 2015 13:37:06 -0500
+Subject: [PATCH 0702/1936] Fix Bank Select Initial State
+
+Resolves https://sourceforge.net/p/zynaddsubfx/bugs/100/
+---
+ src/Misc/MiddleWare.cpp | 1 +
+ src/UI/BankUI.fl        | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 99d5bd01..49109331 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -793,6 +793,7 @@ rtosc::Ports bankPorts = {
+         int i = 0;
+         for(auto &elm : impl.banks)
+             d.reply("/bank/bank_select", "iss", i++, elm.name.c_str(), elm.dir.c_str());
++        d.reply("/bank/bank_select", "i", impl.bankpos);
+ 
+         rEnd},
+     {"slot#1024:", 0, 0,
+diff --git a/src/UI/BankUI.fl b/src/UI/BankUI.fl
+index 6c5fc99b..f98b61b8 100644
+--- a/src/UI/BankUI.fl
++++ b/src/UI/BankUI.fl
+@@ -138,7 +138,7 @@ bankview->refresh();} {}
+   Function {rescan_for_banks()} {open
+   } {
+     code {banklist->clear();
+-    osc->write("/rescanforbanks");
++    osc->write("/bank/rescan");
+ if (banklist->size() == 0)
+      banklist->add(" ");} {}
+   }
+-- 
+2.47.0
+

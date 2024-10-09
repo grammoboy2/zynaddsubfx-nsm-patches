@@ -1,0 +1,41 @@
+From 6d9dcb0918ae4b69406d828e8b004d45de1abf62 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 18 Feb 2015 21:48:13 -0500
+Subject: [PATCH 0324/1936] UI: Fix Fl_Osc_VSlider Integer OSC Handler
+
+---
+ src/UI/Fl_Osc_VSlider.H   | 1 +
+ src/UI/Fl_Osc_VSlider.cpp | 5 +++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/src/UI/Fl_Osc_VSlider.H b/src/UI/Fl_Osc_VSlider.H
+index 962a43c8..4277adf8 100644
+--- a/src/UI/Fl_Osc_VSlider.H
++++ b/src/UI/Fl_Osc_VSlider.H
+@@ -11,6 +11,7 @@ class Fl_Osc_VSlider:public Fl_Value_Slider, public Fl_Osc_Widget
+ 
+         virtual ~Fl_Osc_VSlider(void);
+         void OSC_value(char);
++        void OSC_value(int);
+         void OSC_value(float);
+ 	void init(std::string, char type = 'i');
+ 
+diff --git a/src/UI/Fl_Osc_VSlider.cpp b/src/UI/Fl_Osc_VSlider.cpp
+index dcb24a0d..b58496ea 100644
+--- a/src/UI/Fl_Osc_VSlider.cpp
++++ b/src/UI/Fl_Osc_VSlider.cpp
+@@ -28,6 +28,11 @@ void Fl_Osc_VSlider::OSC_value(char v)
+ {
+     Fl_Slider::value(v+minimum());
+ }
++        
++void Fl_Osc_VSlider::OSC_value(int v)
++{
++    Fl_Slider::value(v+minimum());
++}
+ 
+ void Fl_Osc_VSlider::OSC_value(float v)
+ {
+-- 
+2.47.0
+

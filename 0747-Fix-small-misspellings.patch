@@ -1,0 +1,67 @@
+From 130651f583961ac964c3ac07f8eb608eb01159a7 Mon Sep 17 00:00:00 2001
+From: Alessio Treglia <alessio@edbian.org>
+Date: Sun, 22 Nov 2015 10:27:45 -0500
+Subject: [PATCH 0747/1936] Fix small misspellings
+
+---
+ src/UI/ADnoteUI.fl  | 2 +-
+ src/UI/PADnoteUI.fl | 2 +-
+ src/UI/SUBnoteUI.fl | 2 +-
+ src/main.cpp        | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/src/UI/ADnoteUI.fl b/src/UI/ADnoteUI.fl
+index 7270fbf6..9f3348c9 100644
+--- a/src/UI/ADnoteUI.fl
++++ b/src/UI/ADnoteUI.fl
+@@ -580,7 +580,7 @@ o->redraw();}
+             }
+             Fl_Dial fixedfreqetdial {
+               label {Eq.T.}
+-              tooltip {How the frequency varies acording to the keyboard (leftmost for fixed frequency)} xywh {405 270 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
++              tooltip {How the frequency varies according to the keyboard (leftmost for fixed frequency)} xywh {405 270 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
+               code0 {o->init("PfixedfreqET");}
+               class Fl_Osc_Dial
+             }
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 5069b766..e23b17a7 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -719,7 +719,7 @@ cbwidget->do_callback();}
+             }
+             Fl_Dial fixedfreqetdial {
+               label {Eq.T.}
+-              tooltip {How the frequency varies acording to the keyboard (leftmost for fixed frequency)} xywh {420 295 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
++              tooltip {How the frequency varies according to the keyboard (leftmost for fixed frequency)} xywh {420 295 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
+               code0 {o->init("PfixedfreqET");}
+               class Fl_Osc_Dial
+             }
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 7aec51b5..d99f04a6 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -297,7 +297,7 @@ freqsettingsui->redraw();}
+         }
+         Fl_Dial fixedfreqetdial {
+           label {Eq.T.}
+-          tooltip {How the frequency varies acording to the keyboard (leftmost for fixed frequency)} xywh {610 53 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
++          tooltip {How the frequency varies according to the keyboard (leftmost for fixed frequency)} xywh {610 53 15 15} box ROUND_UP_BOX labelsize 10 align 8 maximum 127 step 1
+           code0 {o->init("PfixedfreqET");}
+           class Fl_Osc_Dial
+         }
+diff --git a/src/main.cpp b/src/main.cpp
+index 804c39b0..deb63b0d 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
+              << "  -a , --auto-connect\t\t\t AutoConnect when using JACK\n"
+              << "  -p , --pid-in-client-name\t\t Append PID to (JACK) "
+                 "client name\n"
+-             << "  -P , --prefered-port\t\t\t Prefered OSC Port\n"
++             << "  -P , --preferred-port\t\t\t Preferred OSC Port\n"
+              << "  -O , --output\t\t\t\t Set Output Engine\n"
+              << "  -I , --input\t\t\t\t Set Input Engine\n"
+              << "  -e , --exec-after-init\t\t Run post-initialization script\n"
+-- 
+2.47.0
+

@@ -1,0 +1,26 @@
+From ca01eaf518385e4a0870fc8e870e1ef0a257e629 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 3 Oct 2019 20:23:30 +0200
+Subject: [PATCH 1431/1936] Fix signed comparison compiler warning.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/AlsaEngine.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index ad573cb9..00e3dcaa 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -206,7 +206,7 @@ void *AlsaEngine::MidiThread(void)
+                 break;
+ 
+             case SND_SEQ_EVENT_SYSEX:   // system exclusive
+-                for (int x = 0; x < event->data.ext.len; x += 3) {
++                for (unsigned int x = 0; x < event->data.ext.len; x += 3) {
+                     uint8_t buf[3];
+                     int y = event->data.ext.len - x;
+                     if (y >= 3) {
+-- 
+2.47.0
+

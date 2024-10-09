@@ -1,0 +1,28 @@
+From e43f69901ef4939ee974805d069b3c4be95d333a Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Fri, 18 Dec 2015 07:53:21 -0500
+Subject: [PATCH 0800/1936] Make the free mode midline correspond to the middle
+ value for freqs (64).
+
+---
+ src/UI/EnvelopeFreeEdit.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/UI/EnvelopeFreeEdit.cpp b/src/UI/EnvelopeFreeEdit.cpp
+index f271c963..36325e82 100644
+--- a/src/UI/EnvelopeFreeEdit.cpp
++++ b/src/UI/EnvelopeFreeEdit.cpp
+@@ -139,8 +139,9 @@ void EnvelopeFreeEdit::draw(void)
+     //draw the lines
+     fl_color(FL_GRAY);
+ 
++    const int midline = oy+ly*(1-64.0/127);
+     fl_line_style(FL_SOLID);
+-    fl_line(ox+2,oy+ly/2,ox+lx-2,oy+ly/2);
++    fl_line(ox+2,midline,ox+lx-2,midline);
+ 
+     //draws the evelope points and lines
+     Fl_Color alb=FL_WHITE;
+-- 
+2.47.0
+

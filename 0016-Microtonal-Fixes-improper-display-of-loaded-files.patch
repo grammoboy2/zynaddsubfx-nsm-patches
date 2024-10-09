@@ -1,0 +1,39 @@
+From 806fd2f1b9c0f11155986e7634e433a2309888f0 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 2 Jun 2012 15:32:54 -0400
+Subject: [PATCH 0016/1936] Microtonal: Fixes improper display of loaded files
+
+- Previously when microtonal loaded .xsz files, it did not convert the tunings
+  back into their x.y format, which was displayed to the user, this patch
+  corrects this mistake.
+- Though the conversion is mathmatically exact, floating point precision is such
+  that the displayed number is different than the entered number.
+  To fix this either limitations in precision should be made obvious to the user
+  or a more precise format should be used in the scale files.
+---
+ src/Misc/Microtonal.cpp | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/src/Misc/Microtonal.cpp b/src/Misc/Microtonal.cpp
+index d7929b62..fc0e015e 100644
+--- a/src/Misc/Microtonal.cpp
++++ b/src/Misc/Microtonal.cpp
+@@ -632,8 +632,14 @@ void Microtonal::getfromXML(XMLwrapper *xml)
+ 
+                 if(octave[i].x2 != 0)
+                     octave[i].type = 2;
+-                else
++                else {
+                     octave[i].type = 1;
++                    //populate fields for display
++                    float x = logf(octave[i].tuning) / LOG_2 * 1200.0f;
++                    octave[i].x1 = (int) floor(x);
++                    octave[i].x2 = (int) (floor(fmodf(x, 1.0f) * 1e6));
++                }
++
+ 
+                 xml->exitbranch();
+             }
+-- 
+2.47.0
+

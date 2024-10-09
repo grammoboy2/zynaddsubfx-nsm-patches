@@ -1,0 +1,41 @@
+From 50d104c92a7cef7f28c7811e2102da4097e82203 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 5 Sep 2019 20:18:57 +0200
+Subject: [PATCH 1414/1936] Optimise away local integer variable.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Containers/NotePool.cpp | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index 27694450..3d9d4bcf 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -97,10 +97,12 @@ bool NotePool::NoteDescriptor::operator==(NoteDescriptor nd)
+ static int getMergeableDescriptor(note_t note, uint8_t sendto, bool legato,
+         NotePool::NoteDescriptor *ndesc)
+ {
+-    int desc_id = 0;
+-    for(int i=0; i<POLYPHONY; ++i, ++desc_id)
++    int desc_id;
++
++    for(desc_id = 0; desc_id != POLYPHONY; ++desc_id) {
+         if(ndesc[desc_id].off())
+             break;
++    }
+ 
+     if(desc_id != 0) {
+         auto &nd = ndesc[desc_id-1];
+@@ -110,7 +112,7 @@ static int getMergeableDescriptor(note_t note, uint8_t sendto, bool legato,
+     }
+ 
+     //Out of free descriptors
+-    if(desc_id >= POLYPHONY || !ndesc[desc_id].off()) {
++    if(desc_id == POLYPHONY || !ndesc[desc_id].off()) {
+         return -1;
+     }
+ 
+-- 
+2.47.0
+

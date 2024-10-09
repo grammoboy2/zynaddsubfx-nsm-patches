@@ -1,0 +1,25 @@
+From d42ba1c4a5f843431a1dc27a195fbe64a2650103 Mon Sep 17 00:00:00 2001
+From: Pierre Martin <hickscorp@users.noreply.github.com>
+Date: Sun, 15 Sep 2019 19:02:17 +0100
+Subject: [PATCH 1426/1936] Removes occurences to missing HISTORY.txt.
+
+---
+ CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b000e598..210c461f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -35,7 +35,7 @@ include(CTestConfig.cmake)
+ add_subdirectory(src)
+ add_subdirectory(doc) # Doxygen only
+ 
+-install(FILES AUTHORS.txt COPYING HISTORY.txt README.adoc
++install(FILES AUTHORS.txt COPYING README.adoc
+ 	DESTINATION share/doc/zynaddsubfx
+ 	)
+ install(FILES zynaddsubfx-jack-multi.desktop zynaddsubfx-jack.desktop zynaddsubfx-alsa.desktop zynaddsubfx-oss.desktop
+-- 
+2.47.0
+

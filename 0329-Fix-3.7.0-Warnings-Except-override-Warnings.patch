@@ -1,0 +1,202 @@
+From fd48567d6ab8dcbe63634855b9afeb0be78e0547 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 19 Feb 2015 11:46:41 -0500
+Subject: [PATCH 0329/1936] Fix 3.7.0 Warnings (Except override Warnings)
+
+---
+ src/Misc/PresetExtractor.cpp |  2 +-
+ src/UI/BankView.cpp          |  7 -------
+ src/UI/BankView.h            |  1 -
+ src/UI/Connection.cpp        |  2 +-
+ src/UI/Fl_Osc_Choice.cpp     | 13 +------------
+ src/UI/Fl_Osc_DialF.cpp      | 13 +------------
+ src/UI/Fl_Osc_Output.cpp     |  2 +-
+ src/UI/Fl_Osc_Slider.H       |  1 -
+ src/UI/Fl_Osc_VSlider.H      |  3 +--
+ src/UI/Fl_Osc_Value.cpp      |  5 ++++-
+ src/UI/SUBnoteUI.fl          |  2 +-
+ 11 files changed, 11 insertions(+), 40 deletions(-)
+
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index 37e8ed66..5572fd08 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -41,7 +41,7 @@ class Capture:public rtosc::RtData
+         virtual void reply(const char *path, const char *args, ...)
+         {
+             printf("reply(%p)(%s)(%s)...\n", msgbuf, path, args);
+-            printf("size is %d\n", sizeof(msgbuf));
++            //printf("size is %d\n", sizeof(msgbuf));
+             va_list va;
+             va_start(va,args);
+             char *buffer = msgbuf;
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index aecfc2fb..69aa3b65 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -150,13 +150,6 @@ static int modeCb(const char *label)
+     return -1;
+ }
+ 
+-static void control_widget_cb(Fl_Light_Button *button, void *bvc_)
+-{
+-    BankViewControls *bvc = (BankViewControls*)bvc_;
+-    bvc->mode(modeCb(button->label()));
+-    //TODO removeselection?
+-}
+-
+ BankViewControls::BankViewControls(int x, int y, int w, int h, const char *label)
+     :Fl_Group(x,y,w,h,label)
+ {
+diff --git a/src/UI/BankView.h b/src/UI/BankView.h
+index 112b3e80..94e87ba4 100644
+--- a/src/UI/BankView.h
++++ b/src/UI/BankView.h
+@@ -88,7 +88,6 @@ class BankView: public Fl_Group, public Fl_Osc_Widget
+         std::string loc;
+ 
+         //XXX TODO locked banks...
+-        int mode;
+         int nselected;
+         int *npart;
+ };
+diff --git a/src/UI/Connection.cpp b/src/UI/Connection.cpp
+index 621f5ba3..d5f74793 100644
+--- a/src/UI/Connection.cpp
++++ b/src/UI/Connection.cpp
+@@ -104,7 +104,7 @@ static rtosc::Ports ports = {
+         ui->showUI();
+     } END
+     BEGIN("alert:s") {
+-        fl_alert(a0.s);
++        fl_alert("%s",a0.s);
+     } END
+     BEGIN("session-type:s") {
+         if(strcmp(a0.s,"LASH"))
+diff --git a/src/UI/Fl_Osc_Choice.cpp b/src/UI/Fl_Osc_Choice.cpp
+index 28dd46be..c7e5f902 100644
+--- a/src/UI/Fl_Osc_Choice.cpp
++++ b/src/UI/Fl_Osc_Choice.cpp
+@@ -7,18 +7,7 @@
+ #include <cassert>
+ #include <sstream>
+ 
+-static Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w)
+-{
+-    if(!w)
+-        return NULL;
+-
+-    Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(w->parent());
+-    if(pane)
+-        return pane;
+-    return fetch_osc_pane(w->parent());
+-}
+-
+-static void callback_fn(Fl_Widget *w, void *v)
++static void callback_fn(Fl_Widget *w, void *)
+ {
+     ((Fl_Osc_Choice*)w)->cb();
+ }
+diff --git a/src/UI/Fl_Osc_DialF.cpp b/src/UI/Fl_Osc_DialF.cpp
+index 18f1ad8d..72500a3f 100644
+--- a/src/UI/Fl_Osc_DialF.cpp
++++ b/src/UI/Fl_Osc_DialF.cpp
+@@ -18,22 +18,11 @@ B string_cast(const A &a)
+     return b;
+ }
+ 
+-static void callback_fn(Fl_Widget *w, void *v)
++static void callback_fn(Fl_Widget *w, void *)
+ {
+     ((Fl_Osc_DialF*)w)->cb();
+ }
+ 
+-static Fl_Osc_Pane *fetch_osc_pane(Fl_Widget *w)
+-{
+-    if(!w)
+-        return NULL;
+-
+-    Fl_Osc_Pane *pane = dynamic_cast<Fl_Osc_Pane*>(w->parent());
+-    if(pane)
+-        return pane;
+-    return fetch_osc_pane(w->parent());
+-}
+-
+ Fl_Osc_DialF::Fl_Osc_DialF(int X, int Y, int W, int H, const char *label)
+     :WidgetPDial(X,Y,W,H, label), Fl_Osc_Widget()
+ {
+diff --git a/src/UI/Fl_Osc_Output.cpp b/src/UI/Fl_Osc_Output.cpp
+index 727e94ae..dbd44f30 100644
+--- a/src/UI/Fl_Osc_Output.cpp
++++ b/src/UI/Fl_Osc_Output.cpp
+@@ -5,7 +5,7 @@
+ #include <cassert>
+ #include <sstream>
+ 
+-static void callback_fn(Fl_Widget *w, void *v)
++static void callback_fn(Fl_Widget *w, void *)
+ {
+     ((Fl_Osc_Output*)w)->cb();
+ }
+diff --git a/src/UI/Fl_Osc_Slider.H b/src/UI/Fl_Osc_Slider.H
+index b2afe0a8..09d7e5e8 100644
+--- a/src/UI/Fl_Osc_Slider.H
++++ b/src/UI/Fl_Osc_Slider.H
+@@ -24,7 +24,6 @@ class Fl_Osc_Slider:public Fl_Slider, public Fl_Osc_Widget
+         void cb(void);
+         static void _cb(Fl_Widget *w, void *);
+     private:
+-        double real_value;
+         char osc_type;
+         std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/Fl_Osc_VSlider.H b/src/UI/Fl_Osc_VSlider.H
+index 4277adf8..5cf23682 100644
+--- a/src/UI/Fl_Osc_VSlider.H
++++ b/src/UI/Fl_Osc_VSlider.H
+@@ -13,7 +13,7 @@ class Fl_Osc_VSlider:public Fl_Value_Slider, public Fl_Osc_Widget
+         void OSC_value(char);
+         void OSC_value(int);
+         void OSC_value(float);
+-	void init(std::string, char type = 'i');
++        void init(std::string, char type = 'i');
+ 
+         //Refetch parameter information
+         void update(void);
+@@ -22,7 +22,6 @@ class Fl_Osc_VSlider:public Fl_Value_Slider, public Fl_Osc_Widget
+         void cb(void);
+         static void _cb(Fl_Widget *w, void *);
+     private:
+-        double real_value;
+         char osc_type;
+         std::pair<Fl_Callback*, void*> cb_data;
+ };
+diff --git a/src/UI/Fl_Osc_Value.cpp b/src/UI/Fl_Osc_Value.cpp
+index af9ecdbb..87ae32f3 100644
+--- a/src/UI/Fl_Osc_Value.cpp
++++ b/src/UI/Fl_Osc_Value.cpp
+@@ -9,4 +9,7 @@ Fl_Osc_Value::~Fl_Osc_Value(void)
+ {}
+ 
+ void Fl_Osc_Value::init(const char *path)
+-{}
++{
++    (void)path;
++}
++
+diff --git a/src/UI/SUBnoteUI.fl b/src/UI/SUBnoteUI.fl
+index 22fd9e66..5733692e 100644
+--- a/src/UI/SUBnoteUI.fl
++++ b/src/UI/SUBnoteUI.fl
+@@ -73,7 +73,7 @@ return(1);} {}
+   }
+   Function {rebase(std::string new_base)} {return_type void
+   } {
+-      code {} {}
++      code {(void) new_base;} {}
+       }
+   Function {update()} {return_type void
+   } {
+-- 
+2.47.0
+

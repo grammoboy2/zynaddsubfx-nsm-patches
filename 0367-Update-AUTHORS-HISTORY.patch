@@ -1,0 +1,69 @@
+From bca8608816fc4567b11e523baff9f253492b5ba4 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 25 Feb 2015 13:30:20 -0500
+Subject: [PATCH 0367/1936] Update AUTHORS/HISTORY
+
+---
+ AUTHORS.txt |  7 ++++---
+ HISTORY.txt | 19 +++++++++++++++++++
+ 2 files changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/AUTHORS.txt b/AUTHORS.txt
+index 4c196ae5..aa7fa505 100644
+--- a/AUTHORS.txt
++++ b/AUTHORS.txt
+@@ -1,9 +1,9 @@
+ Main author:
+         Nasca Octavian Paul
+ 
+-Developers:
++Active Developers:
+         Mark McCurry
+-        Harald Hvaal
++        Hans Petter Selasky (BSD Compat)
+ 
+ Contributors:
+         Gerald Folcher (legato, mono notes memory)
+@@ -23,10 +23,11 @@ Contributors:
+         Lieven Moors (Spike/Circle waveform)
+         Olaf Schulz (MIDI Aftertouch support)
+         Jonathan Liles (NSM & NTK support)
+-        Johannes Lorenz (Effect Documentation)
++        Johannes Lorenz (Effect Documentation, PID Files)
+         Ilario Glasgo (Italian Doc Translation)
+         Christopher Oliver (Unison + presets fix, mousewheel support,
+                             SUBnote overtones, unison enhancements, ...)
+         Filipe Coelho (Globals Cleanup)
+         Andre Sklenar (UI Pixmaps)
++        Harald Hvaal (General Code Modernization)
+ 
+diff --git a/HISTORY.txt b/HISTORY.txt
+index 2631914e..30f71670 100644
+--- a/HISTORY.txt
++++ b/HISTORY.txt
+@@ -1,3 +1,22 @@
++2.5.0 (27 Feb 2015)
++        - Add Rtosc
++        - Add tlsf RT Memory Allocator
++        - Add --dump-oscdoc Flag
++        - Add OSC API
++        - Add Jack-OSC Support
++        - Add MIDI Learn
++        - Add Undo/Redo
++        - Add Multi-Out JACK Engine
++        - Add Multi-Out OSS Engine
++        - Add Top Level Window Icon
++        - Add OSS env Vars MIDI_DEVICE/DSP_DEVICE
++        - Add OSC port/PID file
++        - Remove Master::mutex
++        - Remove Almost All RT Unsafe Actions
++        - Disable (temporarily) DSSI
++        - Disable (temporarily) Copy/Paste
++        - Massive Internal Refactoring
++
+ 2.4.4 (28 Jun 2014)
+         - Add UI Mousewheel Support
+         - Add Spectral Adjust Parameter Rescaling
+-- 
+2.47.0
+

@@ -1,0 +1,46 @@
+From 60141a61d8d5d1d103145f660060b43e46c2ce70 Mon Sep 17 00:00:00 2001
+From: Daniel Sheeler <dsheeler@pobox.com>
+Date: Sun, 24 Mar 2019 19:51:09 -0500
+Subject: [PATCH 1344/1936] Cleanup volume parameter callback code.
+
+---
+ src/Misc/Master.cpp | 7 ++++---
+ src/Misc/Master.h   | 2 +-
+ 2 files changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index b92e513c..3f2f8153 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -439,11 +439,12 @@ static const Ports master_ports = {
+     {"volume::i", rShort("volume") rProp(parameter) rLinear(0,127)
+            rDoc("Master Volume"), 0,
+            [](const char *m, rtosc::RtData &d) {
++           Master *master = (Master *)d.obj;
+            if(rtosc_narguments(m)==0) {
+-                d.reply(d.loc, "i", (int) roundf(96.0f * ((Master*)d.obj)->Volume / 40.0f + 96.0f));
++                d.reply(d.loc, "i", (int) roundf(96.0f * master->Volume / 40.0f + 96.0f));
+             } else if (rtosc_narguments(m)==1 && rtosc_type(m,0)=='i') {
+-               ((Master *)d.obj)->Volume  = ((Master *)d.obj)->volume127ToFloat(limit<unsigned char>(rtosc_argument(m, 0).i, 0, 127));
+-                 d.broadcast(d.loc, "i", limit<char>(rtosc_argument(m, 0).i, 0, 127));
++               master->Volume  = master->volume127ToFloat(limit<unsigned char>(rtosc_argument(m, 0).i, 0, 127));
++               d.broadcast(d.loc, "i", limit<char>(rtosc_argument(m, 0).i, 0, 127));
+            }}},
+     rParamF(Volume, rShort("volume"), rDefault(-6.66667f), rLinear(-40.0f,12.917f),
+              rUnit(dB), "Master Volume"),
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 28f7ec70..28405015 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -149,7 +149,7 @@ class Master
+         unsigned char Psysefxsend[NUM_SYS_EFX][NUM_SYS_EFX];
+ 
+         //parameters control
+-        float volume127ToFloat(unsigned char volume_);
++        static float volume127ToFloat(unsigned char volume_);
+         void setPkeyshift(char Pkeyshift_);
+         void setPsysefxvol(int Ppart, int Pefx, char Pvol);
+         void setPsysefxsend(int Pefxfrom, int Pefxto, char Pvol);
+-- 
+2.47.0
+

@@ -1,0 +1,25 @@
+From ab08b528c7361df094540c5831b93f75217ea4d4 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Fri, 14 Aug 2020 21:11:56 +0200
+Subject: [PATCH 1599/1936] OscilGen: Document ADvsPAD
+
+---
+ src/Synth/OscilGen.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Synth/OscilGen.h b/src/Synth/OscilGen.h
+index 1ac33222..7f3b3743 100644
+--- a/src/Synth/OscilGen.h
++++ b/src/Synth/OscilGen.h
+@@ -105,7 +105,7 @@ class OscilGen:public Presets
+         //this should be called every note on event
+         void newrandseed(unsigned int randseed);
+ 
+-        bool ADvsPAD; //if it is used by ADsynth or by PADsynth
++        bool ADvsPAD; //!< true if it is used by PADsynth instead of ADsynth
+ 
+         static const rtosc::MergePorts ports;
+         static const rtosc::Ports      non_realtime_ports;
+-- 
+2.47.0
+

@@ -1,0 +1,37 @@
+From 3823bf151e524612ea7b2c3ca9d266e8d3f02a08 Mon Sep 17 00:00:00 2001
+From: ORL - AMMD <orl@ammd.net>
+Date: Mon, 24 Jan 2022 23:48:30 +0100
+Subject: [PATCH 1818/1936] use of NSL naming for alsa port as well (#174)
+
+Add NSM client naming support for ALSA port as well
+
+PR #174
+---
+ src/Nio/AlsaEngine.cpp | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index ff559ded..7d9d278a 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -23,6 +23,8 @@
+ #include "Compressor.h"
+ #include "Nio.h"
+ 
++extern char *instance_name;
++
+ using namespace std;
+ 
+ namespace zyn {
+@@ -242,6 +244,8 @@ bool AlsaEngine::openMidi()
+         return false;
+ 
+     string clientname = "ZynAddSubFX";
++    if(instance_name)
++      clientname = (string) instance_name;
+     string postfix = Nio::getPostfix();
+     if (!postfix.empty())
+         clientname += "_" + postfix;
+-- 
+2.47.0
+

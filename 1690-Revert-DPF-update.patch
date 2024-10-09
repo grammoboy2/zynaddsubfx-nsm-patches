@@ -1,0 +1,21 @@
+From 9eafdbfd51e90ef93dddcedce71d1e6416788abf Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 9 Jan 2021 12:47:40 -0500
+Subject: [PATCH 1690/1936] Revert DPF update
+
+While the new version compiled, something was not working when it came
+to the plugin host side. Further debugging needed...
+---
+ DPF | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/DPF b/DPF
+index 9243625a..e0d8e14a 160000
+--- a/DPF
++++ b/DPF
+@@ -1 +1 @@
+-Subproject commit 9243625aacb9fb8dd9fe4bd479b227149eb37959
++Subproject commit e0d8e14a14d407648768da7e34bcf31812245387
+-- 
+2.47.0
+

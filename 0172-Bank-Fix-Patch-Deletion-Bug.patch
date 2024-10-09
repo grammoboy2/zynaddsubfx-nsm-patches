@@ -1,0 +1,27 @@
+From 610292f4d73b22c5ec7e8c56ad3e80d1decc1f29 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 6 May 2014 15:28:51 -0400
+Subject: [PATCH 0172/1936] Bank: Fix Patch Deletion Bug
+
+Fixed invalid upper bound.
+Thanks to Christopher Oliver for spotting the bug.
+---
+ src/Misc/Bank.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Misc/Bank.cpp b/src/Misc/Bank.cpp
+index 220d0b78..cdca243d 100644
+--- a/src/Misc/Bank.cpp
++++ b/src/Misc/Bank.cpp
+@@ -457,7 +457,7 @@ bool Bank::isPADsynth_used(unsigned int ninstrument)
+ 
+ void Bank::deletefrombank(int pos)
+ {
+-    if((pos < 0) || (pos >= (int) banks.size()))
++    if((pos < 0) || (pos >= BANK_SIZE))
+         return;
+     ins[pos] = ins_t();
+ }
+-- 
+2.47.0
+

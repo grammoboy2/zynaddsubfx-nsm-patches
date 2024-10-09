@@ -1,0 +1,50 @@
+From c1ec34e759b2404ff5ac3b90a0f010da16cd8c86 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Thu, 10 Oct 2019 11:58:54 +0200
+Subject: [PATCH 1433/1936] Fix ALSA regression issue. The ALSA sequencer
+ library has an internal event buffer. Empty that first before polling. Else
+ events may arrive a bit late.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/AlsaEngine.cpp | 22 ++++++++++------------
+ 1 file changed, 10 insertions(+), 12 deletions(-)
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index 00e3dcaa..6b57f174 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -114,20 +114,18 @@ void *AlsaEngine::MidiThread(void)
+     while(1) {
+         if(midi.exiting)
+             break;
+-        error = snd_seq_poll_descriptors(midi.handle, pfd, 4, POLLIN);
+-        if(error <= 0)
+-            break;
+-        error = poll(pfd, error, 1000 /* ms */);
+-        if(error < 0) {
+-          if(errno == EAGAIN || errno == EINTR)
+-              continue;
+-          break;
+-        }
+         error = snd_seq_event_input(midi.handle, &event);
+         if (error < 0) {
+-          if(error == -EAGAIN || error == -EINTR)
+-              continue;
+-          break;
++            if(error != -EAGAIN && error != -EINTR)
++                break;
++            error = snd_seq_poll_descriptors(midi.handle, pfd, 4, POLLIN);
++            if(error <= 0)
++                break;
++            error = poll(pfd, error, 1000 /* ms */);
++            if(error < 0 &&
++               errno != EAGAIN && errno != EINTR)
++	        break;
++            continue;
+         }
+         //ensure ev is empty
+         ev.channel = 0;
+-- 
+2.47.0
+

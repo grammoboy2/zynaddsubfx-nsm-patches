@@ -1,0 +1,226 @@
+From de13515e4c89db823e1c4ed65ece1bf9e8813250 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 6 Oct 2015 14:37:58 -0400
+Subject: [PATCH 0574/1936] Extract TipWin from its WidgetPDial prison
+
+---
+ src/UI/CMakeLists.txt  |  1 +
+ src/UI/TipWin.cpp      | 72 +++++++++++++++++++++++++++++++++++++
+ src/UI/TipWin.h        | 17 +++++++++
+ src/UI/WidgetPDial.cpp | 82 +-----------------------------------------
+ 4 files changed, 91 insertions(+), 81 deletions(-)
+ create mode 100644 src/UI/TipWin.cpp
+ create mode 100644 src/UI/TipWin.h
+
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index 7b0d85b7..56a054b9 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -58,6 +58,7 @@ add_library(zynaddsubfx_gui STATIC
+ 	${UI_objs}
+ 	${zynaddsubfx_gui_FLTK_UI_SRCS}
+         NioUI.cpp
++	TipWin.cpp
+         WidgetPDial.cpp
+         PartNameButton.cpp
+         Fl_Osc_Pane.cpp
+diff --git a/src/UI/TipWin.cpp b/src/UI/TipWin.cpp
+new file mode 100644
+index 00000000..6eff41a3
+--- /dev/null
++++ b/src/UI/TipWin.cpp
+@@ -0,0 +1,72 @@
++#include <cstdio>
++#include <iostream>
++#include <cmath>
++#include <string>
++#include <FL/Fl_Tooltip.H>
++#include <FL/Fl_Menu_Window.H>
++#include <FL/fl_draw.H>
++#include "TipWin.h"
++
++TipWin::TipWin():Fl_Menu_Window(1, 1)
++{
++    set_override();
++    end();
++}
++
++void TipWin::draw()
++{
++    //setup window
++    draw_box(FL_BORDER_BOX, 0, 0, w(), h(), Fl_Color(175));
++    fl_color(Fl_Tooltip::textcolor());
++    fl_font(labelfont(), labelsize());
++
++    //Draw the current string
++    fl_draw(getStr(), 3, 3, w() - 6, h() - 6,
++            Fl_Align(FL_ALIGN_LEFT | FL_ALIGN_WRAP));
++}
++
++void TipWin::showValue(float f)
++{
++    //convert the value to a string
++    char tmp[10];
++    snprintf(tmp, 9, "%.2f", f);
++    tip = tmp;
++
++    textmode = false;
++    redraw();
++    show();
++}
++
++void TipWin::setText(const char *c)
++{
++    text     = c;
++    textmode = true;
++    redraw();
++}
++
++void TipWin::showText()
++{
++    if(!text.empty()) {
++        textmode = true;
++        redraw();
++        show();
++    }
++}
++
++void TipWin::redraw()
++{
++    // Recalc size of window
++    fl_font(labelfont(), labelsize());
++    int W = 0, H = 0;
++    fl_measure(getStr(), W, H, 0);
++    //provide a bit of extra space
++    W += 8;
++    H += 4;
++    size(W, H);
++    Fl_Menu_Window::redraw();
++}
++
++const char *TipWin::getStr() const
++{
++    return (textmode ? text : tip).c_str();
++}
+diff --git a/src/UI/TipWin.h b/src/UI/TipWin.h
+new file mode 100644
+index 00000000..fe1698cb
+--- /dev/null
++++ b/src/UI/TipWin.h
+@@ -0,0 +1,17 @@
++using namespace std;
++
++class TipWin:public Fl_Menu_Window
++{
++    public:
++        TipWin();
++        void draw();
++        void showValue(float f);
++        void setText(const char *c);
++        void showText();
++    private:
++        void redraw();
++        const char *getStr() const;
++        string tip;
++        string text;
++        bool   textmode;
++};
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index a1d6c98d..0123a671 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -10,90 +10,10 @@
+ #include <FL/Fl_Group.H>
+ #include <FL/Fl_Menu_Window.H>
+ #include "../Misc/Util.h"
++#include "TipWin.h"
+ //Copyright (c) 2003-2005 Nasca Octavian Paul
+ //License: GNU GPL version 2 or later
+ 
+-using namespace std;
+-
+-class TipWin:public Fl_Menu_Window
+-{
+-    public:
+-        TipWin();
+-        void draw();
+-        void showValue(float f);
+-        void setText(const char *c);
+-        void showText();
+-    private:
+-        void redraw();
+-        const char *getStr() const;
+-        string tip;
+-        string text;
+-        bool   textmode;
+-};
+-
+-TipWin::TipWin():Fl_Menu_Window(1, 1)
+-{
+-    set_override();
+-    end();
+-}
+-
+-void TipWin::draw()
+-{
+-    //setup window
+-    draw_box(FL_BORDER_BOX, 0, 0, w(), h(), Fl_Color(175));
+-    fl_color(Fl_Tooltip::textcolor());
+-    fl_font(labelfont(), labelsize());
+-
+-    //Draw the current string
+-    fl_draw(getStr(), 3, 3, w() - 6, h() - 6,
+-            Fl_Align(FL_ALIGN_LEFT | FL_ALIGN_WRAP));
+-}
+-
+-void TipWin::showValue(float f)
+-{
+-    //convert the value to a string
+-    char tmp[10];
+-    snprintf(tmp, 9, "%.2f", f);
+-    tip = tmp;
+-
+-    textmode = false;
+-    redraw();
+-    show();
+-}
+-
+-void TipWin::setText(const char *c)
+-{
+-    text     = c;
+-    textmode = true;
+-    redraw();
+-}
+-
+-void TipWin::showText()
+-{
+-    if(!text.empty()) {
+-        textmode = true;
+-        redraw();
+-        show();
+-    }
+-}
+-
+-void TipWin::redraw()
+-{
+-    // Recalc size of window
+-    fl_font(labelfont(), labelsize());
+-    int W = 0, H = 0;
+-    fl_measure(getStr(), W, H, 0);
+-    //provide a bit of extra space
+-    W += 8;
+-    H += 4;
+-    size(W, H);
+-    Fl_Menu_Window::redraw();
+-}
+-
+-const char *TipWin::getStr() const
+-{
+-    return (textmode ? text : tip).c_str();
+-}
+ 
+ //static int numobj = 0;
+ 
+-- 
+2.47.0
+

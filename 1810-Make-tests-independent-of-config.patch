@@ -1,0 +1,67 @@
+From 5a728d7c21d261cb57c43042dcb7c6710893bf30 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sat, 8 Jan 2022 21:22:20 +0100
+Subject: [PATCH 1810/1936] Make tests independent of config
+
+This uses a fixed config in tests, instead of relying on the user
+config.
+
+For `MiddleWare::saveParams`, the second master (which controls the
+saving) must have the same config values for `SaveFullXml` as the first
+master (the original one). Otherwise, they dump different XMLs which can
+not be compared.
+---
+ src/Misc/MiddleWare.cpp  | 3 +++
+ src/Tests/PluginTest.cpp | 2 ++
+ src/Tests/SaveOSC.cpp    | 4 ++++
+ 3 files changed, 9 insertions(+)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 36614c2b..48552aab 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -746,10 +746,13 @@ public:
+             // after the savefile will have been saved, it will be loaded into this
+             // dummy master, and then the two masters will be compared
+             zyn::Config config;
++            config.cfg.SaveFullXml = master->SaveFullXml;
++
+             zyn::SYNTH_T* synth = new zyn::SYNTH_T;
+             synth->buffersize = master->synth.buffersize;
+             synth->samplerate = master->synth.samplerate;
+             synth->alias();
++
+             zyn::Master master2(*synth, &config);
+             master->copyMasterCbTo(&master2);
+             master2.frozenState = true;
+diff --git a/src/Tests/PluginTest.cpp b/src/Tests/PluginTest.cpp
+index 3be5ad1d..665a7311 100644
+--- a/src/Tests/PluginTest.cpp
++++ b/src/Tests/PluginTest.cpp
+@@ -168,6 +168,8 @@ class PluginTest
+         struct FFTCleaner { ~FFTCleaner() { FFT_cleanup(); } } cleaner;
+         Config config;
+         void setUp() {
++            config.cfg.SaveFullXml = false;
++
+             synth = new SYNTH_T;
+             synth->buffersize = 256;
+             synth->samplerate = 48000;
+diff --git a/src/Tests/SaveOSC.cpp b/src/Tests/SaveOSC.cpp
+index 1d5898f8..a3fa1791 100644
+--- a/src/Tests/SaveOSC.cpp
++++ b/src/Tests/SaveOSC.cpp
+@@ -43,6 +43,10 @@ class SaveOSCTest
+         }
+ 
+         void setUp() {
++            // this might be set to true in the future
++            // when saving will work better
++            config.cfg.SaveFullXml = false;
++
+             synth = new zyn::SYNTH_T;
+             synth->buffersize = 256;
+             synth->samplerate = 48000;
+-- 
+2.47.0
+

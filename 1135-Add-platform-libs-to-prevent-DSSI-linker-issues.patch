@@ -1,0 +1,24 @@
+From 10ee5750ddb401d1b76c30a46089017f8be3cb7b Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Wed, 26 Apr 2017 21:06:09 +0200
+Subject: [PATCH 1135/1936] Add platform libs to prevent DSSI linker issues
+
+---
+ src/CMakeLists.txt | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 58af057f..c2d86f7c 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -518,6 +518,7 @@ if (DssiEnable)
+ 		zynaddsubfx_core
+ 		${OS_LIBRARIES}
+ 		${LIBLO_LIBRARIES}
++		${PLATFORM_LIBRARIES}
+ 		-Wl,--no-undefined
+ 		)
+     install(TARGETS zynaddsubfx_dssi LIBRARY DESTINATION ${PluginLibDir}/dssi/)
+-- 
+2.47.0
+

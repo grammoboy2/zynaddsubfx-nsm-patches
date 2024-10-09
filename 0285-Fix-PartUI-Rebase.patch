@@ -1,0 +1,24 @@
+From e8732c8dcb220ba583d494f9a022593a0300f482 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 3 Nov 2014 23:36:19 -0500
+Subject: [PATCH 0285/1936] Fix PartUI Rebase
+
+---
+ src/UI/PartUI.fl | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 1ef32e13..8872b578 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -389,7 +389,6 @@ if (event==FL_RIGHT_MOUSE){
+ val=atoi(o->text());
+ osc->write("/setkeylimit", "i", val);} open
+           tooltip {Key Limit} xywh {215 155 50 20} down_box BORDER_BOX labelsize 10 align 8 textfont 1 textsize 10
+-          class Fl_Osc_Choice
+         } {}
+         Fl_Choice {} {
+           label {Mode :}
+-- 
+2.47.0
+

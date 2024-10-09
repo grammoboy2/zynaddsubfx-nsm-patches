@@ -1,0 +1,39 @@
+From 2aa5060f390059b430fa7a62c05b7ff239adffba Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 16 Apr 2023 22:17:59 +0200
+Subject: [PATCH 1878/1936] OscilGen: Skip no-ops for custom base funcs
+
+This skips an unnecessary re-computation of OscilGen's `basefuncFFTfreqs`.
+
+Before this patch, not only runtime is wasted, but the redundant FFT can
+slightly modify the base func FFT freqs, which can cause issues when
+comparing savefiles.
+---
+ src/Synth/OscilGen.cpp | 11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index df28af38..bdb9e598 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -622,9 +622,14 @@ void OscilGen::oscilfilter(fft_t *freqs) const
+ void OscilGen::changebasefunction(OscilGenBuffers& bfrs) const
+ {
+     if(Pcurrentbasefunc != 0) {
+-        getbasefunction(bfrs, bfrs.tmpsmps);
+-        if(fft)
+-            fft->smps2freqs_noconst_input(bfrs.tmpsmps, bfrs.basefuncFFTfreqs);
++        if(Pcurrentbasefunc == 127 && !Pbasefuncmodulation) {
++            // this would be a no-op, skip it
++        }
++        else {
++            getbasefunction(bfrs, bfrs.tmpsmps);
++            if(fft)
++                fft->smps2freqs_noconst_input(bfrs.tmpsmps, bfrs.basefuncFFTfreqs);
++        }
+         clearDC(bfrs.basefuncFFTfreqs.data);
+     }
+     else //in this case bfrs.basefuncFFTfreqs are not used
+-- 
+2.47.0
+

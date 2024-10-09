@@ -1,0 +1,76 @@
+From 814f409d430aeac8b73a4ff8e6aaee9e2d9ab9c2 Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Fri, 3 Apr 2020 15:30:54 +0200
+Subject: [PATCH 1502/1936] Make sure SUBnote filters are updated on
+ legatonote.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Synth/SUBnote.cpp | 10 +++++++---
+ src/Synth/SUBnote.h   |  1 +
+ 2 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/Synth/SUBnote.cpp b/src/Synth/SUBnote.cpp
+index 844239b8..d0b22ccc 100644
+--- a/src/Synth/SUBnote.cpp
++++ b/src/Synth/SUBnote.cpp
+@@ -47,7 +47,8 @@ SUBnote::SUBnote(const SUBnoteParameters *parameters, SynthParams &spars,
+     GlobalFilter(nullptr),
+     GlobalFilterEnvelope(nullptr),
+     NoteEnabled(true),
+-    lfilter(nullptr), rfilter(nullptr)
++    lfilter(nullptr), rfilter(nullptr),
++    filterupdate(false)
+ {
+     setup(spars.frequency, spars.velocity, spars.portamento, spars.note_log2_freq, false, wm, prefix);
+ }
+@@ -116,7 +117,6 @@ void SUBnote::setup(float freq,
+         firsttick = 1;
+     }
+ 
+-
+     if(pars.Pfixedfreq == 0)
+         basefreq = freq;
+     else {
+@@ -312,6 +312,8 @@ void SUBnote::initfilter(bpfilter &filter,
+ 
+     if (!automation)
+         computefiltercoefs(filter, freq, bw, 1.0f);
++    else
++        filterupdate = true;
+ }
+ 
+ /*
+@@ -441,7 +443,8 @@ void SUBnote::computecurrentparameters()
+     if(FreqEnvelope || BandWidthEnvelope
+        || (oldpitchwheel != ctl.pitchwheel.data)
+        || (oldbandwidth != ctl.bandwidth.data)
+-       || portamento) {
++       || portamento
++       || filterupdate) {
+         float envfreq = 1.0f;
+         float envbw   = 1.0f;
+ 
+@@ -482,6 +485,7 @@ void SUBnote::computecurrentparameters()
+ 
+         oldbandwidth  = ctl.bandwidth.data;
+         oldpitchwheel = ctl.pitchwheel.data;
++        filterupdate = false;
+     }
+     newamplitude = volume * AmpEnvelope->envout_dB() * 2.0f;
+ 
+diff --git a/src/Synth/SUBnote.h b/src/Synth/SUBnote.h
+index 0f82c378..1f871b51 100644
+--- a/src/Synth/SUBnote.h
++++ b/src/Synth/SUBnote.h
+@@ -104,6 +104,7 @@ class SUBnote:public SynthNote
+ 
+         int   oldpitchwheel, oldbandwidth;
+         float velocity;
++        bool filterupdate;
+ };
+ 
+ }
+-- 
+2.47.0
+

@@ -1,0 +1,97 @@
+From 85f161bababd519145cd98f4210a20072b881d99 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 17 Apr 2015 13:48:12 -0400
+Subject: [PATCH 0419/1936] UI/OSC: Fix PartNameButton/Pkeylimit
+
+---
+ src/Misc/Part.cpp |  4 +++-
+ src/UI/PartUI.fl  | 36 ++++++++++--------------------------
+ 2 files changed, 13 insertions(+), 27 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index aa2199a3..1413d6c7 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -57,6 +57,9 @@ static Ports partPorts = {
+ #define rChangeCb obj->setPvolume(obj->Pvolume);
+     rParamZyn(Pvolume, "Part Volume"),
+ #undef rChangeCb
++#define rChangeCb obj->setkeylimit(obj->Pkeylimit);
++    rParamZyn(Pkeylimit,   "Key limit per part"),
++#undef rChangeCb
+ #define rChangeCb
+     rParamZyn(Pminkey, "Min Used Key"),
+     rParamZyn(Pmaxkey, "Max Used Key"),
+@@ -71,7 +74,6 @@ static Ports partPorts = {
+     rToggle(Pdrummode, "Drum mode enable"),
+     rToggle(Ppolymode,  "Polyphoney mode"),
+     rToggle(Plegatomode, "Legato enable"),
+-    rParamZyn(Pkeylimit,   "Key limit per part"),
+     rParamZyn(info.Ptype, "Class of Instrument"),
+     rString(info.Pauthor, MAX_INFO_TEXT_SIZE, "Instrument Author"),
+     rString(info.Pcomments, MAX_INFO_TEXT_SIZE, "Instrument Comments"),
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 1ed388cc..f0e04703 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -280,7 +280,8 @@ class PartUI {open : {public Fl_Osc_Group}
+           callback {int event=Fl::event_button();
+ if (event==FL_RIGHT_MOUSE){
+    fprintf(stderr, "Unimplemented...\\n");
+-   /*const char *tmp=fl_input("Instrument name:",(const char *)part->Pname);*/
++   const char *tmp=fl_input("Instrument name:",o->label());
++   o->oscWrite("Pname", "s", tmp);
+    /*if (tmp!=NULL) snprintf((char *)part->Pname,PART_MAX_NAME_LEN,"%s",tmp);*/
+ } else {
+   if (event==FL_LEFT_MOUSE) bankui->show();
+@@ -382,14 +383,14 @@ if (event==FL_RIGHT_MOUSE){
+           code1 {o->init("Prcvchn");}
+           class Fl_Osc_Choice
+         } {}
+-        Fl_Choice keylimitlist {
++        Fl_Counter keylimitlist {
+           label KLmt
+-          callback {//TODO special case
+-          int val=0;
+-val=atoi(o->text());
+-osc->write("/setkeylimit", "i", val);} open
+-          tooltip {Key Limit} xywh {215 155 50 20} down_box BORDER_BOX labelsize 10 align 8 textfont 1 textsize 10
+-        } {}
++          tooltip {Key Limit} xywh {215 155 50 20} labelsize 10 align 8 textfont 1 textsize 10
++          code0 {o->init("Pkeylimit",'i');}
++          code1 {o->step(1.0,10.0);}
++          code2 {o->range(0,127);}
++          class Fl_Osc_Counter
++        }
+         Fl_Choice {} {
+           label {Mode :}
+           tooltip {Poly, Mono or Legato mode} xywh {80 130 64 18} down_box BORDER_BOX labelfont 1 labelsize 11 textfont 1 textsize 10
+@@ -1014,24 +1015,7 @@ end();
+ 
+ 
+ //if (config.ui.showinstrumentinfo!=0) instrumenteditwindow->show();
+-
+-int klimits[]={1,2,3,4,5,6,7,8,9,10,15,20,30,50,100,0};
+-
+-keylimitlist->add("OFF");
+-int k=0;
+-int val=-1;
+-char tmp[10];
+-while (klimits[k]!=0){
+-	sprintf(tmp,"%d",klimits[k]);
+-	keylimitlist->add(tmp);
+-	if (val==-1){
+-		/*if (klimits[k]>part->Pkeylimit) val=k;*/
+-	};
+-	k++;
+-};
+-
+-if (val==-1) val=k;
+-keylimitlist->value(val);} {}
++} {}
+   }
+   Function {showparameters(int kititem,int engine)} {open
+   } {
+-- 
+2.47.0
+

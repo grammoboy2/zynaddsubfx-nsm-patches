@@ -1,0 +1,25 @@
+From 8f16f8d6f2a10dfa532f81ad22b46f955072ded6 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 16 Oct 2016 09:30:03 -0400
+Subject: [PATCH 1064/1936] Update Formant Vowel Clearness Metadata
+
+---
+ src/Params/FilterParams.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index d4ea76b4..eb852196 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -78,7 +78,7 @@ const rtosc::Ports FilterParams::ports = {
+     rParamZyn(Pformantslowness, rShort("slew"),
+             "Rate that formants change"),
+     rParamZyn(Pvowelclearness,  rShort("clarity"),
+-            "Cost for mixing vowels"),
++            "How much each vowel is smudged with the next in sequence. A high clarity will avoid smudging."),
+     rParamZyn(Pcenterfreq,      rShort("cutoff"),
+             "Center Freq (formant)"),
+     rParamZyn(Poctavesfreq,     rShort("octaves"),
+-- 
+2.47.0
+

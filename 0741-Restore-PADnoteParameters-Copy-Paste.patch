@@ -1,0 +1,219 @@
+From 96902a8bebc0011f7f105fb4603e4433fa3f9703 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 20 Nov 2015 22:47:50 -0500
+Subject: [PATCH 0741/1936] Restore PADnoteParameters Copy/Paste
+
+---
+ src/Misc/Util.h                  |  7 ++-
+ src/Params/PADnoteParameters.cpp | 93 ++++++++++++++++++++++++++++++--
+ src/Params/PADnoteParameters.h   |  3 ++
+ src/Tests/MessageTest.h          | 32 ++++++++++-
+ 4 files changed, 129 insertions(+), 6 deletions(-)
+
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 682894cc..7fb9f15b 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -161,11 +161,14 @@ char *rtosc_splat(const char *path, std::set<std::string>);
+     [](const char *, rtosc::RtData &d){ \
+         d.reply(d.loc, "b", sizeof(d.obj), &d.obj);}}\
+ 
+-#define rPaste \
++#define rPresetType \
+ {"preset-type:", rProp(internal) rDoc("clipboard type of object"), 0, \
+     [](const char *, rtosc::RtData &d){ \
+         rObject *obj = (rObject*)d.obj; \
+-        d.reply(d.loc, "s", obj->type);}},\
++        d.reply(d.loc, "s", obj->type);}}
++
++#define rPaste \
++rPresetType, \
+ {"paste:b", rProp(internal) rDoc("paste port"), 0, \
+     [](const char *m, rtosc::RtData &d){ \
+         printf("rPaste...\n"); \
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 18c2e481..62d30ab5 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -35,7 +35,7 @@ using namespace rtosc;
+ 
+ 
+ #define rObject PADnoteParameters
+-static const rtosc::Ports realtime_ports = 
++static const rtosc::Ports realtime_ports =
+ {
+     rRecurp(FreqLfo, "Frequency LFO"),
+     rRecurp(AmpLfo,   "Amplitude LFO"),
+@@ -119,10 +119,24 @@ static const rtosc::Ports realtime_ports =
+                 obj->PCoarseDetune = k + (obj->PCoarseDetune/1024)*1024;
+             }
+         }},
++    {"paste:b", rProp(internal) rDoc("paste port"), 0,
++    [](const char *m, rtosc::RtData &d){
++        rObject &paste = **(rObject **)rtosc_argument(m,0).b.data;
++        rObject &o = *(rObject*)d.obj;
++        o.pasteRT(paste);}}
+ 
+ };
+ static const rtosc::Ports non_realtime_ports =
+ {
++    rSelf(PADnoteParameters),
++    rPresetType,
++    {"paste:b", rProp(internal) rDoc("paste port"), 0,
++    [](const char *m, rtosc::RtData &d){
++        rObject &paste = **(rObject **)rtosc_argument(m,0).b.data;
++        rObject &o = *(rObject*)d.obj;
++        o.paste(paste);
++        //avoid the match to forward the request along
++        d.matches--;}},
+     //Harmonic Source Distribution
+     rRecurp(oscilgen, "Oscillator"),
+     rRecurp(resonance, "Resonance"),
+@@ -227,8 +241,8 @@ const rtosc::Ports &PADnoteParameters::realtime_ports     = ::realtime_ports;
+ 
+ const rtosc::MergePorts PADnoteParameters::ports =
+ {
+-    &non_realtime_ports,
+-    &realtime_ports
++    &realtime_ports,
++    &non_realtime_ports
+ };
+ 
+ 
+@@ -1119,3 +1133,76 @@ void PADnoteParameters::getfromXML(XMLwrapper& xml)
+         xml.exitbranch();
+     }
+ }
++
++#define COPY(y) this->y = x.y
++void PADnoteParameters::paste(PADnoteParameters &x)
++{
++    COPY(Pmode);
++
++    COPY(Php.base.type);
++    COPY(Php.base.par1);
++    COPY(Php.freqmult);
++    COPY(Php.modulator.par1);
++    COPY(Php.modulator.freq);
++    COPY(Php.width);
++    COPY(Php.amp.mode);
++    COPY(Php.amp.type);
++    COPY(Php.amp.par1);
++    COPY(Php.amp.par2);
++    COPY(Php.autoscale);
++    COPY(Php.onehalf);
++
++    COPY(Pbandwidth);
++    COPY(Pbwscale);
++
++    COPY(Phrpos.type);
++    COPY(Phrpos.par1);
++    COPY(Phrpos.par2);
++    COPY(Phrpos.par3);
++
++    COPY(Pquality.samplesize);
++    COPY(Pquality.basenote);
++    COPY(Pquality.oct);
++    COPY(Pquality.smpoct);
++
++    oscilgen->paste(*x.oscilgen);
++    resonance->paste(*x.resonance);
++}
++
++void PADnoteParameters::pasteRT(PADnoteParameters &x)
++{
++    //Realtime stuff
++
++    COPY(Pfixedfreq);
++
++    COPY(PfixedfreqET);
++    COPY(PDetune);
++    COPY(PCoarseDetune);
++    COPY(PDetuneType);
++
++    FreqEnvelope->paste(*x.FreqEnvelope);
++    FreqLfo->paste(*x.FreqLfo);
++
++    COPY(PStereo);
++    COPY(PPanning);
++    COPY(PVolume);
++    COPY(PAmpVelocityScaleFunction);
++
++    AmpEnvelope->paste(*x.AmpEnvelope);
++    AmpLfo->paste(*x.AmpLfo);
++
++    COPY(Fadein_adjustment);
++    COPY(PPunchStrength);
++    COPY(PPunchTime);
++    COPY(PPunchStretch);
++    COPY(PPunchVelocitySensing);
++
++    GlobalFilter->paste(*x.GlobalFilter);
++
++    COPY(PFilterVelocityScale);
++    COPY(PFilterVelocityScaleFunction);
++
++    FilterEnvelope->paste(*x.FilterEnvelope);
++    FilterLfo->paste(*x.FilterLfo);
++}
++#undef COPY
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index eb69e0a8..9bae972e 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -49,6 +49,9 @@ class PADnoteParameters:public Presets
+         void add2XML(XMLwrapper& xml);
+         void getfromXML(XMLwrapper& xml);
+ 
++        void paste(PADnoteParameters &p);
++        void pasteRT(PADnoteParameters &p);
++
+         //returns a value between 0.0f-1.0f that represents the estimation perceived bandwidth
+         float getprofile(float *smp, int size);
+ 
+diff --git a/src/Tests/MessageTest.h b/src/Tests/MessageTest.h
+index 5995c8c4..5486b789 100644
+--- a/src/Tests/MessageTest.h
++++ b/src/Tests/MessageTest.h
+@@ -220,7 +220,37 @@ class MessageTest:public CxxTest::TestSuite
+ 
+             TS_ASSERT_EQUALS(ms->part[0]->kit[0].adpars->GlobalPar.FreqLfo->Pfreqrand, 32);
+         }
+-        
++
++        void testPadPaste(void)
++        {
++            mw->transmitMsg("/part0/kit0/Ppadenabled", "T");
++            run_realtime();
++
++            start_realtime();
++
++            auto &field1 = ms->part[0]->kit[0].padpars->PVolume;
++            auto &field2 = ms->part[0]->kit[0].padpars->oscilgen->Pfilterpar1;
++            field1 = 32;
++            TS_ASSERT_EQUALS(field1, 32);
++            field2 = 35;
++            TS_ASSERT_EQUALS(field2, 35);
++
++            //Copy
++            mw->transmitMsg("/presets/copy", "s", "/part0/kit0/padpars/");
++
++            field1 = 99;
++            TS_ASSERT_EQUALS(field1, 99);
++            field2 = 95;
++            TS_ASSERT_EQUALS(field2, 95);
++
++            //Paste
++            mw->transmitMsg("/presets/paste", "s", "/part0/kit0/padpars/");
++            stop_realtime();
++
++            TS_ASSERT_EQUALS(field1, 32);
++            TS_ASSERT_EQUALS(field2, 35);
++        }
++
+ 
+     private:
+         SYNTH_T     *synth;
+-- 
+2.47.0
+

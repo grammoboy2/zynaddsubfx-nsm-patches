@@ -1,0 +1,293 @@
+From 5eda551878a5e99bcef0c8e3d2afef66b40bc1f2 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Fri, 15 Jul 2016 19:19:32 +0200
+Subject: [PATCH 0945/1936] Locate version in one central place:
+ CMakeLists.txt.
+
+---
+ CMakeLists.txt                         |  4 ++-
+ src/CMakeLists.txt                     |  4 +++
+ src/Misc/XMLwrapper.cpp                | 21 +++++-------
+ src/Misc/XMLwrapper.h                  |  8 ++---
+ src/Plugin/AbstractFX.hpp              |  4 +--
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp |  4 +--
+ src/main.cpp                           |  3 +-
+ src/version.cpp                        | 33 ++++++++++++++++++
+ src/version.h.in                       | 47 ++++++++++++++++++++++++++
+ 9 files changed, 103 insertions(+), 25 deletions(-)
+ create mode 100644 src/version.cpp
+ create mode 100644 src/version.h.in
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 989d6173..898d6b4e 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,7 +1,9 @@
+ cmake_minimum_required(VERSION 2.8)
+ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+-set(VERSION "2.5.4")
++set(VERSION_MAJOR "2")
++set(VERSION_MINOR "5")
++set(VERSION_REVISION "4")
+ 
+ 
+ #Include RTOSC
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index a91034f1..fbc69fc9 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -362,6 +362,9 @@ endif()
+ # Following this should be only general compilation code, and no mention
+ # of module-specific variables
+ 
++configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.h.in
++	${CMAKE_CURRENT_BINARY_DIR}/version.h)
++
+ link_directories(${AUDIO_LIBRARY_DIRS} ${ZLIB_LIBRARY_DIRS} ${FFTW_LIBRARY_DIRS} ${MXML_LIBRARY_DIRS} ${FLTK_LIBRARY_DIRS} ${NTK_LIBRARY_DIRS})
+ 
+ include_directories(
+@@ -389,6 +392,7 @@ add_subdirectory(Nio)
+ add_subdirectory(Plugin)
+ 
+ add_library(zynaddsubfx_core STATIC
++    version.cpp
+     globals.cpp
+     ../tlsf/tlsf.c
+     Containers/ScratchString.cpp
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index 6e08666c..78fb0bae 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -87,10 +87,6 @@ const char *mxmlElementGetAttr(const mxml_node_t *node, const char *name)
+ 
+ XMLwrapper::XMLwrapper()
+ {
+-    version.Major    = 2;
+-    version.Minor    = 5;
+-    version.Revision = 4;
+-
+     minimal = true;
+ 
+     node = tree = mxmlNewElement(MXML_NO_PARENT,
+@@ -106,11 +102,11 @@ XMLwrapper::XMLwrapper()
+ 
+     node = root = addparams("ZynAddSubFX-data", 4,
+                             "version-major", stringFrom<int>(
+-                                version.Major).c_str(),
++                                version.major()).c_str(),
+                             "version-minor", stringFrom<int>(
+-                                version.Minor).c_str(),
++                                version.minor()).c_str(),
+                             "version-revision",
+-                            stringFrom<int>(version.Revision).c_str(),
++                            stringFrom<int>(version.revision()).c_str(),
+                             "ZynAddSubFX-author", "Nasca Octavian Paul");
+ 
+     //make the empty branch that will contain the information parameters
+@@ -327,14 +323,13 @@ int XMLwrapper::loadXMLfile(const string &filename)
+         return -3;  //the XML doesnt embbed zynaddsubfx data
+ 
+     //fetch version information
+-    version.Major    = stringTo<int>(mxmlElementGetAttr(root, "version-major"));
+-    version.Minor    = stringTo<int>(mxmlElementGetAttr(root, "version-minor"));
+-    version.Revision =
+-        stringTo<int>(mxmlElementGetAttr(root, "version-revision"));
++    fileversion.set_major(stringTo<int>(mxmlElementGetAttr(root, "version-major")));
++    fileversion.set_minor(stringTo<int>(mxmlElementGetAttr(root, "version-minor")));
++    fileversion.set_revision(
++        stringTo<int>(mxmlElementGetAttr(root, "version-revision")));
+ 
+     if(verbose)
+-        cout << "loadXMLfile() version: " << version.Major << '.'
+-             << version.Minor << '.' << version.Revision << endl;
++        cout << "loadXMLfile() version: " << fileversion << endl;
+ 
+     return 0;
+ }
+diff --git a/src/Misc/XMLwrapper.h b/src/Misc/XMLwrapper.h
+index 536015c3..3b67b5a3 100644
+--- a/src/Misc/XMLwrapper.h
++++ b/src/Misc/XMLwrapper.h
+@@ -16,6 +16,7 @@
+ #include <mxml.h>
+ #include <string>
+ #include <vector>
++#include "../version.h"
+ 
+ #ifndef XML_WRAPPER_H
+ #define XML_WRAPPER_H
+@@ -272,12 +273,7 @@ class XMLwrapper
+         mxml_node_t *addparams(const char *name, unsigned int params,
+                                ...) const;
+ 
+-        /**@todo keep these numbers up to date*/
+-        struct {
+-            int Major; /**<major version number.*/
+-            int Minor; /**<minor version number.*/
+-            int Revision; /**<version revision number.*/
+-        } version;
++        version_type fileversion;
+ };
+ 
+ #endif
+diff --git a/src/Plugin/AbstractFX.hpp b/src/Plugin/AbstractFX.hpp
+index dc1533e6..c2e657ae 100644
+--- a/src/Plugin/AbstractFX.hpp
++++ b/src/Plugin/AbstractFX.hpp
+@@ -29,6 +29,7 @@
+ // ZynAddSubFX includes
+ #include "Effects/Effect.h"
+ #include "Misc/Allocator.h"
++#include "version.h"
+ 
+ /* ------------------------------------------------------------------------------------------------------------
+  * Abstract plugin class */
+@@ -96,8 +97,7 @@ protected:
+     */
+     uint32_t getVersion() const noexcept override
+     {
+-        // TODO: use config.h or globals.h
+-        return d_version(2, 5, 4);
++    return d_version(version.major(), version.minor(), version.revision());
+     }
+ 
+    /* --------------------------------------------------------------------------------------------------------
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index 3e34eaa6..8d6ad2c8 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -15,6 +15,7 @@
+ #include "DistrhoPlugin.hpp"
+ 
+ // ZynAddSubFX includes
++#include "version.h"
+ #include "Misc/Master.h"
+ #include "Misc/MiddleWare.h"
+ #include "Misc/Part.h"
+@@ -190,8 +191,7 @@ protected:
+     */
+     uint32_t getVersion() const noexcept override
+     {
+-        // TODO: use config.h or globals.h
+-        return d_version(2, 5, 4);
++    return d_version(version.major(), version.minor(), version.revision());
+     }
+ 
+    /**
+diff --git a/src/main.cpp b/src/main.cpp
+index a4a92c67..7b90854e 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -35,6 +35,7 @@
+ #include "Misc/Master.h"
+ #include "Misc/Part.h"
+ #include "Misc/Util.h"
++#include "version.h"
+ 
+ //Nio System
+ #include "Nio/Nio.h"
+@@ -364,7 +365,7 @@ int main(int argc, char *argv[])
+     synth.alias();
+ 
+     if(exitwithversion) {
+-        cout << "Version: " << VERSION << endl;
++        cout << "Version: " << version << endl;
+         return 0;
+     }
+     if(exitwithhelp != 0) {
+diff --git a/src/version.cpp b/src/version.cpp
+new file mode 100644
+index 00000000..908d8bc9
+--- /dev/null
++++ b/src/version.cpp
+@@ -0,0 +1,33 @@
++#include <iostream>
++
++#include "version.h"
++
++constexpr int version_type::v_strcmp(const version_type& v2, int i) const
++{
++    return (i == sizeof(version))
++        ? 0
++        : ((version[i] == v2.version[i])
++            ? v_strcmp(v2, i+1)
++            : (version[i] - v2.version[i]));
++}
++
++constexpr bool version_type::operator<(const version_type& other) const
++{
++    return v_strcmp(other, 0) < 0;
++}
++
++std::ostream& operator<< (std::ostream& os,
++    const version_type& v)
++{
++    return os << v.major() << '.'
++        << v.minor() << '.'
++        << v.revision();
++}
++
++static_assert(!(version_type(3,1,1) < version_type(1,3,3)),
++    "version operator failed");
++static_assert(version_type(2,9,9) < version_type(3,4,3),
++    "version operator failed");
++static_assert(!(version_type(2,4,3) < version_type(2,4,3)),
++    "version operator failed");
++
+diff --git a/src/version.h.in b/src/version.h.in
+new file mode 100644
+index 00000000..423b8c27
+--- /dev/null
++++ b/src/version.h.in
+@@ -0,0 +1,47 @@
++#ifndef VERSION_H
++#define VERSION_H
++
++#include <iosfwd>
++
++//! class containing a zynaddsubfx version
++class version_type
++{
++    char version[3];
++
++    // strcmp-like comparison against another version_type
++    constexpr int v_strcmp(const version_type& v2, int i) const;
++
++public:
++    constexpr version_type(char maj, char min, char rev) :
++        version{maj, min, rev}
++    {
++    }
++
++    //! constructs the current zynaddsubfx version
++    constexpr version_type() :
++        version_type(${VERSION_MAJOR},
++                     ${VERSION_MINOR},
++                     ${VERSION_REVISION})
++    {
++    }
++
++    void set_major(int maj) { version[0] = maj; }
++    void set_minor(int min) { version[1] = min; }
++    void set_revision(int rev) { version[2] = rev; }
++
++    int major() const { return version[0]; }
++    int minor() const { return version[1]; }
++    int revision() const { return version[2]; }
++
++    constexpr bool operator<(const version_type& other) const;
++
++    //! prints version as <major>.<minor>.<revision>
++    friend std::ostream& operator<< (std::ostream& os,
++                                     const version_type& v);
++};
++
++//! the current zynaddsubfx version
++constexpr version_type version;
++
++#endif
++
+-- 
+2.47.0
+

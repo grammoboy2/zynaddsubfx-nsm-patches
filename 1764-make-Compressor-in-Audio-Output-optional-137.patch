@@ -1,0 +1,405 @@
+From 2516a21fdd8d724bd6e0d1c641db477a7f94b778 Mon Sep 17 00:00:00 2001
+From: friedolino78 <34608315+friedolino78@users.noreply.github.com>
+Date: Sun, 5 Sep 2021 18:04:43 +0200
+Subject: [PATCH 1764/1936] make Compressor in Audio Output optional (#137)
+
+* disable Compressor in Audio Output
+
+* make output audio compressor optional
+
+* remove printf and whitespaces
+
+* add stubs for new Nio functions
+
+* add AudioOutCompressor to global settings
+
+* fix of the segfault
+
+* fix copy past bug in cfg.AudioOutputCompressor
+
+Co-authored-by: Friedolino <mkirchn@freenet.de>
+---
+ src/Misc/Config.cpp                    |  7 +++++++
+ src/Misc/Config.h                      |  1 +
+ src/Misc/Master.cpp                    |  4 ++++
+ src/Misc/Master.h                      |  1 +
+ src/Misc/MiddleWare.cpp                |  5 +++++
+ src/Nio/AlsaEngine.cpp                 |  3 ++-
+ src/Nio/AudioOut.h                     |  3 +++
+ src/Nio/JackEngine.cpp                 | 11 +++++++----
+ src/Nio/JackMultiEngine.cpp            | 24 +++++++++++++-----------
+ src/Nio/Nio.cpp                        | 10 ++++++++++
+ src/Nio/Nio.h                          |  3 +++
+ src/Nio/OssEngine.cpp                  |  3 ++-
+ src/Nio/OssMultiEngine.cpp             |  6 ++++--
+ src/Nio/OutMgr.cpp                     | 10 ++++++++++
+ src/Nio/OutMgr.h                       |  3 +++
+ src/Output/DSSIaudiooutput.cpp         |  2 ++
+ src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp |  2 ++
+ src/main.cpp                           |  5 ++++-
+ 18 files changed, 83 insertions(+), 20 deletions(-)
+
+diff --git a/src/Misc/Config.cpp b/src/Misc/Config.cpp
+index ef1e4b5d..1160f77a 100644
+--- a/src/Misc/Config.cpp
++++ b/src/Misc/Config.cpp
+@@ -47,6 +47,7 @@ static const rtosc::Ports ports = {
+     rParamI(cfg.SoundBufferSize, "Size of processed audio buffer"),
+     rParamI(cfg.OscilSize, "Size Of Oscillator Wavetable"),
+     rToggle(cfg.SwapStereo, "Swap Left And Right Channels"),
++    rToggle(cfg.AudioOutputCompressor, "Apply Compressor to Audio Output"),
+     rToggle(cfg.BankUIAutoClose, "Automatic Closing of BackUI After Patch Selection"),
+     rParamI(cfg.GzipCompression, "Level of Gzip Compression For Save Files"),
+     rParamI(cfg.Interpolation, "Level of Interpolation, Linear/Cubic"),
+@@ -193,6 +194,7 @@ void Config::init()
+     cfg.SoundBufferSize = 256;
+     cfg.OscilSize  = 1024;
+     cfg.SwapStereo = 0;
++    cfg.AudioOutputCompressor = 0;
+ 
+     cfg.oss_devs.linux_wave_out = new char[MAX_STRING_SIZE];
+     snprintf(cfg.oss_devs.linux_wave_out, MAX_STRING_SIZE, "/dev/dsp");
+@@ -320,6 +322,10 @@ void Config::readConfig(const char *filename)
+                                        cfg.SwapStereo,
+                                        0,
+                                        1);
++        cfg.AudioOutputCompressor = xmlcfg.getpar("audio_output_compressor",
++                                       cfg.AudioOutputCompressor,
++                                       0,
++                                       1);
+         cfg.BankUIAutoClose = xmlcfg.getpar("bank_window_auto_close",
+                                             cfg.BankUIAutoClose,
+                                             0,
+@@ -411,6 +417,7 @@ void Config::saveConfig(const char *filename) const
+     xmlcfg->addpar("sound_buffer_size", cfg.SoundBufferSize);
+     xmlcfg->addpar("oscil_size", cfg.OscilSize);
+     xmlcfg->addpar("swap_stereo", cfg.SwapStereo);
++    xmlcfg->addpar("audio_output_compressor", cfg.AudioOutputCompressor);
+     xmlcfg->addpar("bank_window_auto_close", cfg.BankUIAutoClose);
+ 
+     xmlcfg->addpar("gzip_compression", cfg.GzipCompression);
+diff --git a/src/Misc/Config.h b/src/Misc/Config.h
+index f307cc1d..a2ead1ce 100644
+--- a/src/Misc/Config.h
++++ b/src/Misc/Config.h
+@@ -42,6 +42,7 @@ class Config
+         struct {
+             oss_devs_t oss_devs;
+             int   SampleRate, SoundBufferSize, OscilSize, SwapStereo;
++            bool  AudioOutputCompressor;
+             int   WindowsWaveOutId, WindowsMidiInId;
+             int   BankUIAutoClose;
+             int   GzipCompression;
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 78866501..f687a8f2 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -1139,6 +1139,10 @@ bool Master::hasMasterCb() const
+     return !!mastercb;
+ }
+ 
++void Master::setAudioCompressor(bool enabled)
++{
++    Nio::setAudioCompressor(enabled);
++}
+ 
+ #if 0
+ template <class T>
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 3622ed97..6588c24a 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -140,6 +140,7 @@ class Master
+         //Copy callback to other master
+         void copyMasterCbTo(Master* dest);
+         bool hasMasterCb() const;
++        void setAudioCompressor(bool enabled);
+ 
+         /**parts \todo see if this can be made to be dynamic*/
+         class Part * part[NUM_MIDI_PARTS];
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 2f6a2662..63b1bff2 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -513,6 +513,11 @@ namespace Nio
+                     d.reply(d.loc, "s", Nio::getSink().c_str());
+                 else
+                     Nio::setSink(rtosc_argument(msg,0).s);}},
++        {"audio-compressor::T:F", 0, 0, [](const char *msg, rtosc::RtData &d) {
++                if(rtosc_narguments(msg) == 0)
++                    d.reply(d.loc, Nio::getAudioCompressor() ? "T" : "F");
++                else
++                    Nio::setAudioCompressor(rtosc_argument(msg,0).T);}},
+     };
+ }
+ 
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index 35466b68..ff559ded 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -292,7 +292,8 @@ short *AlsaEngine::interleave(const Stereo<float *> &smps)
+     for(int frame = 0; frame < bufferSize; ++frame) { // with a nod to libsamplerate ...
+         float l = smps.l[frame];
+         float r = smps.r[frame];
+-        stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
++        if(isOutputCompressionEnabled)
++            stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
+ 
+         scaled = l * (8.0f * 0x10000000);
+         shortInterleaved[idx++] = (short int)(lrint(scaled) >> 16);
+diff --git a/src/Nio/AudioOut.h b/src/Nio/AudioOut.h
+index a9730b09..52d9f208 100644
+--- a/src/Nio/AudioOut.h
++++ b/src/Nio/AudioOut.h
+@@ -41,6 +41,8 @@ class AudioOut:public virtual Engine
+ 
+         virtual void setAudioEn(bool nval) = 0;
+         virtual bool getAudioEn() const    = 0;
++        
++        bool isOutputCompressionEnabled = 0;
+ 
+     protected:
+         /**Get the next sample for output.
+@@ -50,6 +52,7 @@ class AudioOut:public virtual Engine
+         const SYNTH_T &synth;
+         int samplerate;
+         int bufferSize;
++        
+ };
+ 
+ }
+diff --git a/src/Nio/JackEngine.cpp b/src/Nio/JackEngine.cpp
+index be2c2ea6..be40cd99 100644
+--- a/src/Nio/JackEngine.cpp
++++ b/src/Nio/JackEngine.cpp
+@@ -348,10 +348,13 @@ bool JackEngine::processAudio(jack_nframes_t nframes)
+     memcpy(audio.portBuffs[1], smp.r, bufferSize * sizeof(float));
+ 
+     //Make sure the audio output doesn't overflow
+-    for(int frame = 0; frame != bufferSize; ++frame) {
+-        float &l = audio.portBuffs[0][frame];
+-        float &r = audio.portBuffs[1][frame];
+-        stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
++    if(isOutputCompressionEnabled)
++    {
++        for(int frame = 0; frame != bufferSize; ++frame) {
++            float &l = audio.portBuffs[0][frame];
++            float &r = audio.portBuffs[1][frame];
++            stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
++        }
+     }
+     return true;
+ }
+diff --git a/src/Nio/JackMultiEngine.cpp b/src/Nio/JackMultiEngine.cpp
+index 41b1e62f..6c76b46c 100644
+--- a/src/Nio/JackMultiEngine.cpp
++++ b/src/Nio/JackMultiEngine.cpp
+@@ -154,12 +154,13 @@ int JackMultiEngine::processAudio(jack_nframes_t nframes)
+     const int maxFrames = (synth.bufferbytes / sizeof(float));
+ 
+     //Make sure the audio output doesn't overflow
+-    for(int frame = 0; frame != maxFrames; ++frame) {
+-	float &p = impl->peaks[0];
+-	float &l = buffers[0][frame];
+-	float &r = buffers[1][frame];
+-	stereoCompressor(synth.samplerate, p, l, r);
+-    }
++    if(isOutputCompressionEnabled)
++        for(int frame = 0; frame != maxFrames; ++frame) {
++            float &p = impl->peaks[0];
++            float &l = buffers[0][frame];
++            float &r = buffers[1][frame];
++            stereoCompressor(synth.samplerate, p, l, r);
++        }
+ 
+     //Gather other samples from individual parts
+     Master &master = *middleware->spawnMaster();
+@@ -170,11 +171,12 @@ int JackMultiEngine::processAudio(jack_nframes_t nframes)
+         memcpy(buffers[2*i + 3], master.part[i]->partoutr, synth.bufferbytes);
+ 
+         //Make sure the audio output doesn't overflow
+-        for(int frame = 0; frame != maxFrames; ++frame) {
+-            float &l = buffers[2*i + 2][frame];
+-            float &r = buffers[2*i + 3][frame];
+-            stereoCompressor(synth.samplerate, p, l, r);
+-        }
++        if(isOutputCompressionEnabled)
++            for(int frame = 0; frame != maxFrames; ++frame) {
++                float &l = buffers[2*i + 2][frame];
++                float &r = buffers[2*i + 3][frame];
++                stereoCompressor(synth.samplerate, p, l, r);
++            }
+     }
+ 
+     return false;
+diff --git a/src/Nio/Nio.cpp b/src/Nio/Nio.cpp
+index cd7831a8..eaea42f7 100644
+--- a/src/Nio/Nio.cpp
++++ b/src/Nio/Nio.cpp
+@@ -187,4 +187,14 @@ void Nio::waveEnd(void)
+     out->wave->destroyFile();
+ }
+ 
++void Nio::setAudioCompressor(bool isEnabled)
++{
++    out->setAudioCompressor(isEnabled);
++}
++
++bool Nio::getAudioCompressor(void)
++{
++    return out->getAudioCompressor();
++}
++
+ }
+diff --git a/src/Nio/Nio.h b/src/Nio/Nio.h
+index d2821cae..32a9f27b 100644
+--- a/src/Nio/Nio.h
++++ b/src/Nio/Nio.h
+@@ -56,6 +56,9 @@ namespace Nio
+     void waveStart(void);
+     void waveStop(void);
+     void waveEnd(void);
++    
++    void setAudioCompressor(bool isEnabled);
++    bool getAudioCompressor(void);
+ 
+     extern bool autoConnect;
+     extern bool pidInClientName;
+diff --git a/src/Nio/OssEngine.cpp b/src/Nio/OssEngine.cpp
+index 7d4ccd8d..168ce5e9 100644
+--- a/src/Nio/OssEngine.cpp
++++ b/src/Nio/OssEngine.cpp
+@@ -415,7 +415,8 @@ void *OssEngine::audioThreadCb()
+         for(int i = 0; i < synth.buffersize; ++i) {
+             float l = smps.l[i];
+             float r = smps.r[i];
+-            stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
++            if(isOutputCompressionEnabled)
++                stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
+ 
+             if (audio.is32bit) {
+                 audio.smps.ps32[i * 2]     = (int) (l * 2147483647.0f);
+diff --git a/src/Nio/OssMultiEngine.cpp b/src/Nio/OssMultiEngine.cpp
+index 5a9e9f1e..6f9b255d 100644
+--- a/src/Nio/OssMultiEngine.cpp
++++ b/src/Nio/OssMultiEngine.cpp
+@@ -239,7 +239,8 @@ OssMultiEngine :: audioThreadCb()
+                 for (y = 0; y != synth.buffersize; y++) {
+                     float l = part->partoutl[y];
+                     float r = part->partoutr[y];
+-                    stereoCompressor(synth.samplerate, peaks[x/2], l, r);
++                    if(isOutputCompressionEnabled)
++                        stereoCompressor(synth.samplerate, peaks[x/2], l, r);
+                     smps.ps32[y * channels + x] = (int)(l * 2147483647.0f);
+                     smps.ps32[y * channels + x + 1] = (int)(r * 2147483647.0f);
+                 }
+@@ -247,7 +248,8 @@ OssMultiEngine :: audioThreadCb()
+                 for (y = 0; y != synth.buffersize; y++) {
+                     float l = part->partoutl[y];
+                     float r = part->partoutr[y];
+-                    stereoCompressor(synth.samplerate, peaks[x/2], l, r);
++                    if(isOutputCompressionEnabled)
++                        stereoCompressor(synth.samplerate, peaks[x/2], l, r);
+                     smps.ps16[y * channels + x] = (short int)(l * 32767.0f);
+                     smps.ps16[y * channels + x + 1] = (short int)(r * 32767.0f);
+                 }
+diff --git a/src/Nio/OutMgr.cpp b/src/Nio/OutMgr.cpp
+index 30d05041..cc265b36 100644
+--- a/src/Nio/OutMgr.cpp
++++ b/src/Nio/OutMgr.cpp
+@@ -125,6 +125,16 @@ string OutMgr::getSink() const
+     return "ERROR";
+ }
+ 
++void OutMgr::setAudioCompressor(bool isEnabled)
++{
++    currentOut->isOutputCompressionEnabled=isEnabled;
++}
++
++bool OutMgr::getAudioCompressor(void)
++{
++    return currentOut->isOutputCompressionEnabled;
++}
++
+ void OutMgr::setMaster(Master *master_)
+ {
+     master=master_;
+diff --git a/src/Nio/OutMgr.h b/src/Nio/OutMgr.h
+index a14fd09c..e0ccb86e 100644
+--- a/src/Nio/OutMgr.h
++++ b/src/Nio/OutMgr.h
+@@ -51,6 +51,9 @@ class OutMgr
+         bool setSink(std::string name);
+ 
+         std::string getSink() const;
++        
++        void setAudioCompressor(bool isEnabled);
++        bool getAudioCompressor(void);
+ 
+         class WavEngine * wave;     /**<The Wave Recorder*/
+         friend class EngineMgr;
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index 75bb56ab..29435c7d 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -47,6 +47,8 @@ namespace Nio {
+     set<string> getSinks(void){return set<string>();}
+     string getSource(void){return "";}
+     string getSink(void){return "";}
++    void setAudioCompressor(bool){}
++    bool getAudioCompressor(void){return false;}
+ }
+ } // namespace zyn
+ 
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+index cf892cec..f4769bbc 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX.cpp
+@@ -606,5 +606,7 @@ namespace Nio {
+    void waveNew(WavFile*){}
+    void waveStart(){}
+    void waveStop(){}
++   void setAudioCompressor(bool){}
++   bool getAudioCompressor(void){return false;}
+ }
+ }
+diff --git a/src/main.cpp b/src/main.cpp
+index 44d36798..d87a9ac2 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -68,6 +68,7 @@ MiddleWare *middleware;
+ 
+ Master   *master;
+ int       swaplr = 0; //1 for left-right swapping
++bool      compr = false; // enables output audio compressor
+ 
+ // forward declarations of namespace zyn
+ namespace zyn
+@@ -241,6 +242,7 @@ int main(int argc, char *argv[])
+     synth.buffersize = config.cfg.SoundBufferSize;
+     synth.oscilsize  = config.cfg.OscilSize;
+     swaplr = config.cfg.SwapStereo;
++    compr = config.cfg.AudioOutputCompressor;
+ 
+     Nio::preferredSampleRate(synth.samplerate);
+ 
+@@ -607,6 +609,7 @@ int main(int argc, char *argv[])
+     if(altered_master)
+         middleware->updateResources(master);
+ 
++    
+     //Run the Nio system
+     printf("[INFO] Nio::start()\n");
+     bool ioGood = Nio::start();
+@@ -619,7 +622,7 @@ int main(int argc, char *argv[])
+     }
+ 
+     InitWinMidi(wmidi);
+-
++    master->setAudioCompressor(compr);
+ 
+     gui = NULL;
+ 
+-- 
+2.47.0
+

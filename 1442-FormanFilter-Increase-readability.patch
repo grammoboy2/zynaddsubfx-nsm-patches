@@ -1,0 +1,78 @@
+From c4e8d94c7c6a1675d26ed6220c74e84888ef9e6b Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Tue, 29 Oct 2019 21:59:26 +0100
+Subject: [PATCH 1442/1936] FormanFilter: Increase readability
+
+---
+ src/DSP/FormantFilter.cpp | 12 ++++++------
+ src/DSP/FormantFilter.h   |  3 ++-
+ 2 files changed, 8 insertions(+), 7 deletions(-)
+
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index ffb96dc6..06b1243a 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -66,7 +66,7 @@ FormantFilter::FormantFilter(const FilterParams *pars, Allocator *alloc, unsigne
+     oldinput   = -1.0f;
+     Qfactor = pars->getq();
+     oldQfactor = Qfactor;
+-    firsttime  = 1;
++    firsttime  = true;
+ }
+ 
+ FormantFilter::~FormantFilter()
+@@ -93,7 +93,7 @@ void FormantFilter::setpos(float frequency)
+     //Convert form real freq[Hz]
+     const float input = log_2(frequency) - 9.96578428f; //log2(1000)=9.95748f.
+ 
+-    if(firsttime != 0)
++    if(firsttime)
+         slowinput = input;
+     else
+         slowinput = slowinput
+@@ -101,8 +101,8 @@ void FormantFilter::setpos(float frequency)
+ 
+     if((fabsf(oldinput - input) < 0.001f) && (fabsf(slowinput - input) < 0.001f)
+        && (fabsf(Qfactor - oldQfactor) < 0.001f)) {
+-        //	oldinput=input; daca setez asta, o sa faca probleme la schimbari foarte lente
+-        firsttime = 0;
++        //	oldinput=input; setting this will cause problems at very slow changes
++        firsttime = false;
+         return;
+     }
+     else
+@@ -126,7 +126,7 @@ void FormantFilter::setpos(float frequency)
+     p1 = sequence[p1].nvowel;
+     p2 = sequence[p2].nvowel;
+ 
+-    if(firsttime != 0) {
++    if(firsttime) {
+         for(int i = 0; i < numformants; ++i) {
+             currentformants[i].freq =
+                 formantpar[p1][i].freq
+@@ -140,7 +140,7 @@ void FormantFilter::setpos(float frequency)
+                                       currentformants[i].q * Qfactor);
+             oldformantamp[i] = currentformants[i].amp;
+         }
+-        firsttime = 0;
++        firsttime = false;
+     }
+     else
+         for(int i = 0; i < numformants; ++i) {
+diff --git a/src/DSP/FormantFilter.h b/src/DSP/FormantFilter.h
+index 0c3ed8af..dd4e3617 100644
+--- a/src/DSP/FormantFilter.h
++++ b/src/DSP/FormantFilter.h
+@@ -49,7 +49,8 @@ class FormantFilter:public Filter
+ 
+         float oldformantamp[FF_MAX_FORMANTS];
+ 
+-        int   sequencesize, numformants, firsttime;
++        int   sequencesize, numformants;
++        bool  firsttime;
+         float oldinput, slowinput;
+         float Qfactor, formantslowness, oldQfactor;
+         float vowelclearness, sequencestretch;
+-- 
+2.47.0
+

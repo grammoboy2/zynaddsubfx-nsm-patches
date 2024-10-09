@@ -1,0 +1,63 @@
+From 56baa23fbc4d5a63e795c57b873c29d7fffc085a Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Tue, 10 Mar 2020 19:25:19 +0100
+Subject: [PATCH 1475/1936] part stores its xiz filename, /savexml saves there
+
+---
+ src/Misc/Part.cpp | 13 +++++++++++--
+ src/Misc/Part.h   |  1 +
+ 2 files changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 14302462..c5119f58 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -165,8 +165,12 @@ static const Ports partPorts = {
+ 
+             //d.broadcast("/damage", "s", part_loc);
+         }},
+-
+-
++        {"savexml:", rProp(internal) rDoc("Save Part to the file it has been loaded from"), 0,
++        [](const char *, RtData &d)
++        {
++            Part *p = (Part*)d.obj;
++            p->saveXML(p->loaded_file);
++        }},
+     //{"kit#16::T:F", "::Enables or disables kit item", 0,
+     //    [](const char *m, RtData &d) {
+     //        auto loc = d.loc;
+@@ -1038,6 +1042,7 @@ int Part::saveXML(const char *filename)
+     xml.endbranch();
+ 
+     int result = xml.saveXMLfile(filename, gzip_compression);
++    strcpy(loaded_file,filename);
+     return result;
+ }
+ 
+@@ -1050,6 +1055,10 @@ int Part::loadXMLinstrument(const char *filename)
+ 
+     if(xml.enterbranch("INSTRUMENT") == 0)
+         return -10;
++
++    // store filename in member variable
++    strcpy(loaded_file,filename);
++
+     getfromXMLinstrument(xml);
+     xml.exitbranch();
+ 
+diff --git a/src/Misc/Part.h b/src/Misc/Part.h
+index aa5df984..a8ec0513 100644
+--- a/src/Misc/Part.h
++++ b/src/Misc/Part.h
+@@ -159,6 +159,7 @@ class Part
+         bool Pefxbypass[NUM_PART_EFX]; //if the effects are bypassed
+ 
+         int lastnote;
++        char loaded_file[256];
+ 
+         const static rtosc::Ports &ports;
+ 
+-- 
+2.47.0
+

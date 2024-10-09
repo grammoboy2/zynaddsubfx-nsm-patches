@@ -1,0 +1,27 @@
+From 8084ac0d7c85a8930949ac813bdee5dd25840655 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 22 Sep 2016 09:40:35 -0400
+Subject: [PATCH 1031/1936] Add FMDetune Range Metadata
+
+---
+ src/Params/ADnoteParameters.cpp | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 35e515fc..2a5576fd 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -127,7 +127,9 @@ static const Ports voicePorts = {
+     rParamZyn(PFMVolume,                rShort("vol."),   "Modulator Magnitude"),
+     rParamZyn(PFMVolumeDamp,            rShort("damp."),  "Modulator HF dampening"),
+     rParamZyn(PFMVelocityScaleFunction, rShort("sense"),  "Modulator Velocity Function"),
+-    rParamI(PFMDetune,                  rShort("fine"),   "Modulator Fine Detune"),
++    //nominally -8192..8191
++    rParamI(PFMDetune,                  rShort("fine"),
++            rLinear(0, 16383), "Modulator Fine Detune"),
+     rParamI(PFMCoarseDetune,            rShort("coarse"), "Modulator Coarse Detune"),
+     rParamZyn(PFMDetuneType,            rShort("type"),
+             rOptions(L35cents, L10cents, E100cents, E1200cents),
+-- 
+2.47.0
+

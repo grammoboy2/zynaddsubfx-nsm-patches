@@ -1,0 +1,117 @@
+From 0134df8b4c08eacaed4a47d3cddfd88692313d8d Mon Sep 17 00:00:00 2001
+From: Jonathan Moore Liles <j.liles@unix.net>
+Date: Sun, 10 Jun 2012 15:12:13 -0700
+Subject: [PATCH 0018/1936] Move NSM stuff to UI library to avoid cyclical
+ dependency.
+
+---
+ src/Misc/CMakeLists.txt       | 7 -------
+ src/UI/CMakeLists.txt         | 4 ++++
+ src/UI/MasterUI.fl            | 2 +-
+ src/{Misc => UI}/NSM.C        | 4 ++--
+ src/{Misc => UI}/NSM.H        | 0
+ src/{Misc => UI}/NSM/Client.C | 0
+ src/{Misc => UI}/NSM/Client.H | 0
+ src/main.cpp                  | 2 +-
+ 8 files changed, 8 insertions(+), 11 deletions(-)
+ rename src/{Misc => UI}/NSM.C (98%)
+ rename src/{Misc => UI}/NSM.H (100%)
+ rename src/{Misc => UI}/NSM/Client.C (100%)
+ rename src/{Misc => UI}/NSM/Client.H (100%)
+
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index ae6eda02..ade2ca3f 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -19,16 +19,9 @@ set(zynaddsubfx_misc_SRCS
+ if(LashEnable)
+     set(zynaddsubfx_misc_SRCS ${zynaddsubfx_misc_SRCS} LASHClient.cpp)
+ endif()
+-if(LibloEnable)
+-    set(zynaddsubfx_misc_SRCS ${zynaddsubfx_misc_SRCS} NSM.C NSM/Client.C)
+-endif()
+ 
+ add_library(zynaddsubfx_misc STATIC
+ 	${zynaddsubfx_misc_SRCS}
+ 	)
+ 
+-if(LibloEnable)
+-    add_dependencies(zynaddsubfx_misc zynaddsubfx_gui)
+-endif()
+-
+ target_link_libraries(zynaddsubfx_misc zynaddsubfx_nio)
+diff --git a/src/UI/CMakeLists.txt b/src/UI/CMakeLists.txt
+index eb43eebf..aa6aeb7f 100644
+--- a/src/UI/CMakeLists.txt
++++ b/src/UI/CMakeLists.txt
+@@ -22,6 +22,10 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
+ set_source_files_properties(UI/MasterUI.h PROPERTIES GENERATED 1)
+ fltk_wrap_ui(zynaddsubfx_gui ${UI_fl_files})
+ 
++if(LibloEnable)
++    set(zynaddsubfx_gui_FLTK_UI_SRCS ${zynaddsubfx_gui_FLTK_UI_SRCS} NSM.C NSM/Client.C)
++endif()
++
+ add_library(zynaddsubfx_gui STATIC
+ 	${UI_objs}
+ 	${zynaddsubfx_gui_FLTK_UI_SRCS}
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 966b2f55..b98080b0 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -58,7 +58,7 @@ decl {\#include "../Misc/Util.h"} {public
+ } 
+ 
+ decl {\#if USE_NSM
+-\#include "../Misc/NSM.H"
++\#include "NSM.H"
+ extern NSM_Client *nsm;
+ \#endif} {public
+ } 
+diff --git a/src/Misc/NSM.C b/src/UI/NSM.C
+similarity index 98%
+rename from src/Misc/NSM.C
+rename to src/UI/NSM.C
+index 191d8e96..9c7bbd57 100644
+--- a/src/Misc/NSM.C
++++ b/src/UI/NSM.C
+@@ -20,9 +20,9 @@
+ 
+ #include "NSM.H"
+ 
+-#include <Nio/Nio.h>
++#include "../Nio/Nio.h"
+ 
+-#include "../UI/MasterUI.h"
++#include "MasterUI.h"
+ #include <FL/Fl.H>
+ #include <stdio.h>
+ #include <sys/stat.h>
+diff --git a/src/Misc/NSM.H b/src/UI/NSM.H
+similarity index 100%
+rename from src/Misc/NSM.H
+rename to src/UI/NSM.H
+diff --git a/src/Misc/NSM/Client.C b/src/UI/NSM/Client.C
+similarity index 100%
+rename from src/Misc/NSM/Client.C
+rename to src/UI/NSM/Client.C
+diff --git a/src/Misc/NSM/Client.H b/src/UI/NSM/Client.H
+similarity index 100%
+rename from src/Misc/NSM/Client.H
+rename to src/UI/NSM/Client.H
+diff --git a/src/main.cpp b/src/main.cpp
+index da25330e..649fa367 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -73,7 +73,7 @@ LASHClient *lash = NULL;
+ #endif
+ 
+ #if USE_NSM
+-#include "Misc/NSM.H"
++#include "UI/NSM.H"
+ 
+ NSM_Client *nsm = 0;
+ #endif
+-- 
+2.47.0
+

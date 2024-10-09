@@ -1,0 +1,26 @@
+From 0533a78f3ef5511f5948d2e5fd91cf2ce0578a22 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 3 Aug 2015 15:05:56 -0400
+Subject: [PATCH 0526/1936] Fix Fl_Osc_DialF Rebase Bug
+
+Fixes bug #84
+---
+ src/UI/Fl_Osc_DialF.H | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/Fl_Osc_DialF.H b/src/UI/Fl_Osc_DialF.H
+index 46116cdc..e68d6145 100644
+--- a/src/UI/Fl_Osc_DialF.H
++++ b/src/UI/Fl_Osc_DialF.H
+@@ -4,7 +4,7 @@
+ #include "Fl_Osc_Widget.H"
+ #include <string>
+ 
+-class Fl_Osc_DialF:public WidgetPDial, Fl_Osc_Widget
++class Fl_Osc_DialF:public WidgetPDial, public Fl_Osc_Widget
+ {
+ 
+     public:
+-- 
+2.47.0
+

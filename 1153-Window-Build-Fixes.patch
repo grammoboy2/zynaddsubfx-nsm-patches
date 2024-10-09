@@ -1,0 +1,329 @@
+From d00131001c095a094ce09c738d429cd454318e10 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 6 Jul 2017 12:00:49 -0400
+Subject: [PATCH 1153/1936] Window Build Fixes
+
+---
+ src/Misc/BankDb.cpp                           | 10 +++-
+ src/Misc/MiddleWare.cpp                       |  6 +--
+ src/Plugin/ZynAddSubFX/CMakeLists.txt         | 35 +++++++++-----
+ .../ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp       | 46 +++++++++++++++++--
+ src/main.cpp                                  | 33 +++++++++++++
+ 5 files changed, 110 insertions(+), 20 deletions(-)
+
+diff --git a/src/Misc/BankDb.cpp b/src/Misc/BankDb.cpp
+index cefed4ce..3aeb2519 100644
+--- a/src/Misc/BankDb.cpp
++++ b/src/Misc/BankDb.cpp
+@@ -231,10 +231,18 @@ BankEntry BankDb::processXiz(std::string filename,
+ 
+     //Grab a timestamp
+     struct stat st;
+-    int ret  = lstat(fname.c_str(), &st);
+     int time = 0;
++
++    //gah windows, just implement the darn standard APIs
++#ifndef WIN32
++    int ret  = lstat(fname.c_str(), &st);
+     if(ret != -1)
+         time = st.st_mtim.tv_sec;
++#else
++    int ret = 0;
++    time = rand();
++#endif
++    
+ 
+     //quickly check if the file exists in the cache and if it is up-to-date
+     if(cache.find(fname) != cache.end() &&
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 485e5d1c..86380c89 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -887,9 +887,9 @@ static std::vector<std::string> getFiles(const char *folder, bool finddir)
+         }
+ #else
+         std::string darn_windows = folder + std::string("/") + std::string(fn->d_name);
+-        printf("attr on <%s> => %x\n", darn_windows.c_str(), GetFileAttributes(darn_windows.c_str()));
+-        printf("desired mask =  %x\n", mask);
+-        printf("error = %x\n", INVALID_FILE_ATTRIBUTES);
++        //printf("attr on <%s> => %x\n", darn_windows.c_str(), GetFileAttributes(darn_windows.c_str()));
++        //printf("desired mask =  %x\n", mask);
++        //printf("error = %x\n", INVALID_FILE_ATTRIBUTES);
+         bool is_dir = GetFileAttributes(darn_windows.c_str()) & FILE_ATTRIBUTE_DIRECTORY;
+ #endif
+         if(finddir == is_dir && strcmp(".", fn->d_name))
+diff --git a/src/Plugin/ZynAddSubFX/CMakeLists.txt b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+index 07751250..f685a38a 100644
+--- a/src/Plugin/ZynAddSubFX/CMakeLists.txt
++++ b/src/Plugin/ZynAddSubFX/CMakeLists.txt
+@@ -48,6 +48,7 @@ add_library(ZynAddSubFX_vst SHARED
+ elseif(ZestGui)
+ 
+ # UI Enabled using Zest: internal only
++if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+ add_library(ZynAddSubFX_lv2 SHARED
+     ${CMAKE_SOURCE_DIR}/src/globals.cpp
+     ${CMAKE_SOURCE_DIR}/src/UI/ConnectionDummy.cpp
+@@ -61,6 +62,7 @@ add_library(ZynAddSubFX_lv2_ui SHARED
+     ${CMAKE_SOURCE_DIR}/DPF/dgl/src/Application.cpp
+     ${CMAKE_SOURCE_DIR}/DPF/distrho/DistrhoUIMain.cpp
+     ZynAddSubFX-UI-Zest.cpp)
++endif()
+ 
+ add_library(ZynAddSubFX_vst SHARED
+     ${CMAKE_SOURCE_DIR}/src/globals.cpp
+@@ -91,10 +93,12 @@ add_library(ZynAddSubFX_vst SHARED
+ 
+ endif()
+ 
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES OUTPUT_NAME "ZynAddSubFX")
+-set_target_properties(ZynAddSubFX_lv2 PROPERTIES PREFIX "")
++if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
++    set_target_properties(ZynAddSubFX_lv2 PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_LV2")
++    set_target_properties(ZynAddSubFX_lv2 PROPERTIES LIBRARY_OUTPUT_DIRECTORY "lv2")
++    set_target_properties(ZynAddSubFX_lv2 PROPERTIES OUTPUT_NAME "ZynAddSubFX")
++    set_target_properties(ZynAddSubFX_lv2 PROPERTIES PREFIX "")
++endif()
+ 
+ set_target_properties(ZynAddSubFX_vst PROPERTIES COMPILE_DEFINITIONS "DISTRHO_PLUGIN_TARGET_VST")
+ set_target_properties(ZynAddSubFX_vst PROPERTIES LIBRARY_OUTPUT_DIRECTORY "vst")
+@@ -104,6 +108,9 @@ set_target_properties(ZynAddSubFX_vst PROPERTIES PREFIX "")
+ if(${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+     set(PLATFORM_LIBRARIES ws2_32
+             winmm
++            glu32 
++            gdi32
++            opengl32
+             wsock32
+             "-static" iphlpapi
+             "-static" winpthread)
+@@ -113,20 +120,24 @@ else()
+     set(PLATFORM_LIBRARIES X11 rt)
+ endif()
+ 
+-target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+-    ${PLATFORM_LIBRARIES})
++if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
++    target_link_libraries(ZynAddSubFX_lv2 zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
++        ${PLATFORM_LIBRARIES})
++endif()
+ target_link_libraries(ZynAddSubFX_vst zynaddsubfx_core ${OS_LIBRARIES} ${LIBLO_LIBRARIES}
+     ${PLATFORM_LIBRARIES})
+-if(ZestGui)
++if(ZestGui AND NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
+     target_link_libraries(ZynAddSubFX_lv2_ui X11 GL)
+ endif()
+ 
+-install(TARGETS ZynAddSubFX_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
+-install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
++if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Windows")
++    install(TARGETS ZynAddSubFX_lv2 LIBRARY DESTINATION ${PluginLibDir}/lv2/ZynAddSubFX.lv2/)
++    install(TARGETS ZynAddSubFX_vst LIBRARY DESTINATION ${PluginLibDir}/vst/)
+ 
+-add_custom_command(TARGET ZynAddSubFX_lv2 POST_BUILD
+-    COMMAND ../../lv2-ttl-generator $<TARGET_FILE:ZynAddSubFX_lv2>
+-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lv2)
++    add_custom_command(TARGET ZynAddSubFX_lv2 POST_BUILD
++        COMMAND ../../lv2-ttl-generator $<TARGET_FILE:ZynAddSubFX_lv2>
++        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lv2)
++endif()
+ 
+ install(FILES
+     ${CMAKE_CURRENT_BINARY_DIR}/lv2/manifest.ttl
+diff --git a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+index 8ae8b01d..ac88f5e4 100644
+--- a/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
++++ b/src/Plugin/ZynAddSubFX/ZynAddSubFX-UI-Zest.cpp
+@@ -13,7 +13,12 @@
+ 
+ // DPF includes
+ #include "DistrhoUI.hpp"
++#ifdef WIN32
++#include <windows.h>
++#else
++#define __USE_GNU
+ #include <dlfcn.h>
++#endif
+ 
+ typedef void *zest_t;
+ struct zest_handles {
+@@ -41,13 +46,37 @@ public:
+         : UI(1181, 659)
+     {
+         printf("[INFO] Opened the zynaddsubfx UI...\n");
+-        handle = dlopen("/opt/zyn-fusion/libzest.so", RTLD_LAZY);
++#ifdef WIN32
++        char path[1024];
++        GetModuleFileName(GetModuleHandle("ZynAddSubFX.dll"), path, sizeof(path));
++        if(strstr(path, "ZynAddSubFX.dll"))
++            strstr(path, "ZynAddSubFX.dll")[0] = 0;
++        strcat(path, "libzest.dll");
++        printf("[DEBUG] Loading zest library from <%s>\n", path);
++        handle = LoadLibrary(path);
++        if(!handle)
++            handle = LoadLibrary("./libzest.dll");
++        if(!handle)
++            handle = LoadLibrary("libzest.dll");
++#else
++        handle = dlopen("./libzest.so", RTLD_LAZY);
++        if(!handle)
++            handle = dlopen("/opt/zyn-fusion/libzest.so", RTLD_LAZY);
++        if(!handle)
++            handle = dlopen("libzest.so", RTLD_LAZY);
++#endif
+         if(!handle) {
+             printf("[ERROR] Cannot Open libzest.so\n");
++#ifndef WIN32
+             printf("[ERROR] '%s'\n", dlerror());
++#endif
+         }
+         memset(&z, 0, sizeof(z));
++#ifdef WIN32
++#define get_sym(x) z.zest_##x = (decltype(z.zest_##x))GetProcAddress(handle, "zest_"#x)
++#else
+ #define get_sym(x) z.zest_##x = (decltype(z.zest_##x))dlsym(handle, "zest_"#x)
++#endif
+         if(handle) {
+             get_sym(open);
+             get_sym(setup);
+@@ -70,8 +99,11 @@ public:
+         printf("[INFO:Zyn] zest_close()\n");
+         if(z.zest)
+             z.zest_close(z.zest);
++#ifdef WIN32
++#else
+         if(handle)
+-            dlclose(handle);
++        dlclose(handle);
++#endif
+     }
+ 
+ protected:
+@@ -156,13 +188,15 @@ protected:
+         if(!z.zest) {
+             if(!z.zest_open)
+                 return;
+-            //printf("[INFO:Zyn] zest_open()\n");
++if(!oscPort)
++    return;
++            printf("[INFO:Zyn] zest_open()\n");
+             char address[1024];
+             snprintf(address, sizeof(address), "osc.udp://127.0.0.1:%d",oscPort);
+             printf("[INFO:Zyn] zest_open(%s)\n", address);
+ 
+             z.zest = z.zest_open(address);
+-            printf("[INFO:Zyn] zest_setup()\n");
++            printf("[INFO:Zyn] zest_setup(%s)\n", address);
+             z.zest_setup(z.zest);
+         }
+ 
+@@ -195,7 +229,11 @@ protected:
+ private:
+     int oscPort;
+     zest_handles z;
++#ifdef WIN32
++    HMODULE handle;
++#else
+     void *handle;
++#endif
+ 
+ 
+     DISTRHO_DECLARE_NON_COPY_CLASS(ZynAddSubFXUI)
+diff --git a/src/main.cpp b/src/main.cpp
+index c72902dd..e7112c4f 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -21,7 +21,9 @@
+ #include <algorithm>
+ #include <signal.h>
+ 
++#ifndef WIN32
+ #include <err.h>
++#endif
+ #include <unistd.h>
+ #include <pthread.h>
+ 
+@@ -48,8 +50,10 @@
+ GUI::ui_handle_t gui;
+ 
+ #ifdef ZEST_GUI
++#ifndef WIN32
+ #include <sys/wait.h>
+ #endif
++#endif
+ 
+ //Glue Layer
+ #include "Misc/MiddleWare.h"
+@@ -135,7 +139,9 @@ void exitprogram(const Config& config)
+ #ifdef WIN32
+ #include <windows.h>
+ #include <mmsystem.h>
++namespace zyn{
+ extern InMgr  *in;
++}
+ HMIDIIN winmidiinhandle = 0;
+ 
+ void CALLBACK WinMidiInProc(HMIDIIN hMidiIn,UINT wMsg,DWORD dwInstance,
+@@ -644,10 +650,13 @@ int wmidi = -1;
+     }
+ 
+ #ifdef ZEST_GUI
++#ifndef WIN32
+     pid_t gui_pid = 0;
++#endif
+     if(!noui) {
+         printf("[INFO] Launching Zyn-Fusion...\n");
+         const char *addr = middleware->getServerAddress();
++#ifndef WIN32
+         gui_pid = fork();
+         if(gui_pid == 0) {
+             execlp("zyn-fusion", "zyn-fusion", addr, "--builtin", "--no-hotload",  0);
+@@ -655,6 +664,28 @@ int wmidi = -1;
+ 
+             err(1,"Failed to launch Zyn-Fusion");
+         }
++#else
++        STARTUPINFO si;
++PROCESS_INFORMATION pi;
++memset(&si, 0, sizeof(si));
++memset(&pi, 0, sizeof(pi));
++char *why_windows = strrchr(addr, ':');
++char *seriously_why = why_windows + 1;
++char start_line[256] = {0};
++if(why_windows)
++    snprintf(start_line, sizeof(start_line), "zyn-fusion.exe osc.udp://127.0.0.1:%s", seriously_why);
++else {
++    printf("COULD NOT PARSE <%s>\n", addr);
++    exit(1);
++}
++printf("[INFO] starting subprocess via <%s>\n", start_line);
++if(!CreateProcess(NULL, start_line,
++NULL, NULL, 0, 0, NULL, NULL, &si, &pi)) {
++    printf("Failed to launch Zyn-Fusion...\n");
++    exit(1);
++}
++
++#endif
+     }
+ #endif
+ 
+@@ -698,12 +729,14 @@ done:
+ #endif
+ 
+ #ifdef ZEST_GUI
++#ifndef WIN32
+         if(!noui) {
+             int status = 0;
+             int ret = waitpid(gui_pid, &status, WNOHANG);
+             if(ret == gui_pid)
+                 Pexitprogram = 1;
+         }
++#endif
+ #endif
+     }
+ 
+-- 
+2.47.0
+

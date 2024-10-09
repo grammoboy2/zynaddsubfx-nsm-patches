@@ -1,0 +1,39 @@
+From 57efbd11656fc5ab4f00ef41d279f64dffdb3e91 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sat, 6 Feb 2016 11:57:23 -0500
+Subject: [PATCH 0845/1936] Update Version To 2.5.3
+
+---
+ CMakeLists.txt          | 2 +-
+ src/Misc/XMLwrapper.cpp | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 3db06857..392e9fa4 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,7 +1,7 @@
+ cmake_minimum_required(VERSION 2.8)
+ set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
+ project(zynaddsubfx)
+-set(VERSION "2.5.2")
++set(VERSION "2.5.3")
+ 
+ 
+ #Include RTOSC
+diff --git a/src/Misc/XMLwrapper.cpp b/src/Misc/XMLwrapper.cpp
+index 8ae71d5a..aae5543a 100644
+--- a/src/Misc/XMLwrapper.cpp
++++ b/src/Misc/XMLwrapper.cpp
+@@ -98,7 +98,7 @@ XMLwrapper::XMLwrapper()
+ {
+     version.Major    = 2;
+     version.Minor    = 5;
+-    version.Revision = 2;
++    version.Revision = 3;
+ 
+     minimal = true;
+ 
+-- 
+2.47.0
+

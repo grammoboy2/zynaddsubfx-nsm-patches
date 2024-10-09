@@ -1,0 +1,285 @@
+From ff3109aa103513ca1b6263eaded490e13529b4ac Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 24 Oct 2012 22:22:44 -0400
+Subject: [PATCH 0032/1936] CMake: Reworking compilation order
+
+Previously the overfall sequence of linking could result in a sequence that
+generated linking errors even with all of the correct libraries specified.
+This commit should fix this error as it appears with gcc 4.6.x
+---
+ src/CMakeLists.txt         | 29 +++++++++++++++++------------
+ src/DSP/CMakeLists.txt     | 19 +++++++------------
+ src/Effects/CMakeLists.txt | 29 ++++++++++++-----------------
+ src/Misc/CMakeLists.txt    | 37 +++++++++++++++++++------------------
+ src/Nio/CMakeLists.txt     |  2 --
+ src/Params/CMakeLists.txt  | 28 +++++++++++-----------------
+ src/Synth/CMakeLists.txt   | 24 +++++++++---------------
+ src/Tests/CMakeLists.txt   |  6 +-----
+ 8 files changed, 76 insertions(+), 98 deletions(-)
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index da431f34..58621e0d 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -272,27 +272,32 @@ if(CompileTests)
+ endif(CompileTests)
+ add_subdirectory(Nio)
+ 
+-set(zynaddsubfx_SRCS
+-	main.cpp
++add_library(zynaddsubfx_core STATIC
++	${zynaddsubfx_dsp_SRCS}
++	${zynaddsubfx_effect_SRCS}
++	${zynaddsubfx_misc_SRCS}
++	${zynaddsubfx_params_SRCS}
++	${zynaddsubfx_synth_SRCS}
+ 	)
+ 
++target_link_libraries(zynaddsubfx_core
++	${ZLIB_LIBRARIES}
++	${FFTW_LIBRARIES}
++	${MXML_LIBRARIES}
++	${OS_LIBRARIES}
++	pthread)
++
+ message(STATUS "using link directories: ${AUDIO_LIBRARY_DIRS} ${ZLIB_LIBRARY_DIRS} ${FFTW_LIBRARY_DIRS} ${MXML_LIBRARY_DIRS} ${FLTK_LIBRARY_DIRS}")
+ 
+ 
+-add_executable(zynaddsubfx
+-	${zynaddsubfx_SRCS}
+-)
++add_executable(zynaddsubfx main.cpp)
+ 
+ target_link_libraries(zynaddsubfx
+-	${NONGUI_LIBRARIES}
++	zynaddsubfx_nio
++    zynaddsubfx_core
+ 	${GUI_LIBRARIES}
+-	${ZLIB_LIBRARIES}
+-	${FFTW_LIBRARIES}
+-	${MXML_LIBRARIES}
+ 	${NIO_LIBRARIES}
+ 	${AUDIO_LIBRARIES}
+-	${OS_LIBRARIES}
+-	pthread
+ 	)
+ 
+ if (DssiEnable)
+@@ -301,7 +306,7 @@ if (DssiEnable)
+ 		)
+ 
+ 	target_link_libraries(zynaddsubfx_dssi
+-		${NONGUI_LIBRARIES}
++        zynaddsubfx_lib
+ 		${ZLIB_LIBRARIES}
+ 		${FFTW_LIBRARY}
+         ${MXML_LIBRARIES}
+diff --git a/src/DSP/CMakeLists.txt b/src/DSP/CMakeLists.txt
+index 263a1bab..84ac3853 100644
+--- a/src/DSP/CMakeLists.txt
++++ b/src/DSP/CMakeLists.txt
+@@ -1,14 +1,9 @@
+ set(zynaddsubfx_dsp_SRCS
+-	AnalogFilter.cpp
+-	FFTwrapper.cpp
+-	Filter.cpp
+-	FormantFilter.cpp
+-	SVFilter.cpp
+-        Unison.cpp
++    DSP/AnalogFilter.cpp
++    DSP/FFTwrapper.cpp
++    DSP/Filter.cpp
++    DSP/FormantFilter.cpp
++    DSP/SVFilter.cpp
++    DSP/Unison.cpp
++    PARENT_SCOPE
+ )
+-
+-add_library(zynaddsubfx_dsp STATIC
+-	${zynaddsubfx_dsp_SRCS} 
+-	)
+-
+-target_link_libraries(zynaddsubfx_dsp)
+diff --git a/src/Effects/CMakeLists.txt b/src/Effects/CMakeLists.txt
+index 0c15dfa8..803cbca1 100644
+--- a/src/Effects/CMakeLists.txt
++++ b/src/Effects/CMakeLists.txt
+@@ -1,19 +1,14 @@
+ set(zynaddsubfx_effect_SRCS
+-	Alienwah.cpp
+-	Chorus.cpp
+-	Distorsion.cpp
+-	DynamicFilter.cpp
+-	Echo.cpp
+-	Effect.cpp
+-	EffectLFO.cpp
+-	EffectMgr.cpp
+-	EQ.cpp
+-	Phaser.cpp
+-	Reverb.cpp
++    Effects/Alienwah.cpp
++	Effects/Chorus.cpp
++	Effects/Distorsion.cpp
++	Effects/DynamicFilter.cpp
++	Effects/Echo.cpp
++	Effects/Effect.cpp
++	Effects/EffectLFO.cpp
++	Effects/EffectMgr.cpp
++	Effects/EQ.cpp
++	Effects/Phaser.cpp
++	Effects/Reverb.cpp
++    PARENT_SCOPE
+ )
+-
+-add_library(zynaddsubfx_effect STATIC
+-	${zynaddsubfx_effect_SRCS} 
+-	)
+-
+-target_link_libraries(zynaddsubfx_effect)
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index ade2ca3f..eab8ca05 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -1,27 +1,28 @@
+ include_directories(${MXML_INCLUDE_DIR})
+ 
+ set(zynaddsubfx_misc_SRCS
+-	Bank.cpp
+-	Config.cpp
+-	Dump.cpp
+-	Master.cpp
+-	Microtonal.cpp
+-	Part.cpp
+-	Util.cpp
+-	XMLwrapper.cpp
+-	Recorder.cpp
+-	WavFile.cpp
+-	WaveShapeSmps.cpp
++	Misc/Bank.cpp
++	Misc/Config.cpp
++	Misc/Dump.cpp
++	Misc/Master.cpp
++	Misc/Microtonal.cpp
++	Misc/Part.cpp
++	Misc/Util.cpp
++	Misc/XMLwrapper.cpp
++	Misc/Recorder.cpp
++	Misc/WavFile.cpp
++	Misc/WaveShapeSmps.cpp
+ )
+ 
+ 
+ 
+ if(LashEnable)
+-    set(zynaddsubfx_misc_SRCS ${zynaddsubfx_misc_SRCS} LASHClient.cpp)
++	set(zynaddsubfx_misc_SRCS
++		${zynaddsubfx_misc_SRCS}
++		Misc/LASHClient.cpp
++		PARENT_SCOPE)
++else()
++	set(zynaddsubfx_misc_SRCS
++		${zynaddsubfx_misc_SRCS}
++		PARENT_SCOPE)
+ endif()
+-
+-add_library(zynaddsubfx_misc STATIC
+-	${zynaddsubfx_misc_SRCS}
+-	)
+-
+-target_link_libraries(zynaddsubfx_misc zynaddsubfx_nio)
+diff --git a/src/Nio/CMakeLists.txt b/src/Nio/CMakeLists.txt
+index c4882a36..9386610b 100644
+--- a/src/Nio/CMakeLists.txt
++++ b/src/Nio/CMakeLists.txt
+@@ -45,5 +45,3 @@ endif(OssEnable)
+ add_library(zynaddsubfx_nio STATIC
+     ${zynaddsubfx_nio_SRCS} 
+     )
+-
+-target_link_libraries(zynaddsubfx_nio zynaddsubfx_misc) #for WavFile
+diff --git a/src/Params/CMakeLists.txt b/src/Params/CMakeLists.txt
+index 85ab4c83..d5758aff 100644
+--- a/src/Params/CMakeLists.txt
++++ b/src/Params/CMakeLists.txt
+@@ -1,19 +1,13 @@
+ set(zynaddsubfx_params_SRCS
+-	ADnoteParameters.cpp
+-	Controller.cpp
+-	EnvelopeParams.cpp
+-	FilterParams.cpp
+-	LFOParams.cpp
+-	PADnoteParameters.cpp
+-	Presets.cpp
+-	PresetsArray.cpp
+-	PresetsStore.cpp
+-	SUBnoteParameters.cpp
+-
++	Params/ADnoteParameters.cpp
++	Params/Controller.cpp
++	Params/EnvelopeParams.cpp
++	Params/FilterParams.cpp
++	Params/LFOParams.cpp
++	Params/PADnoteParameters.cpp
++	Params/Presets.cpp
++	Params/PresetsArray.cpp
++	Params/PresetsStore.cpp
++	Params/SUBnoteParameters.cpp
++	PARENT_SCOPE
+ )
+-
+-add_library(zynaddsubfx_params STATIC
+-	${zynaddsubfx_params_SRCS} 
+-	)
+-
+-target_link_libraries(zynaddsubfx_params zynaddsubfx_misc)
+diff --git a/src/Synth/CMakeLists.txt b/src/Synth/CMakeLists.txt
+index 34b02238..ce45fa54 100644
+--- a/src/Synth/CMakeLists.txt
++++ b/src/Synth/CMakeLists.txt
+@@ -1,17 +1,11 @@
+ set(zynaddsubfx_synth_SRCS
+-	SynthNote.cpp
+-	ADnote.cpp
+-	Envelope.cpp
+-	LFO.cpp
+-	OscilGen.cpp
+-	PADnote.cpp
+-	Resonance.cpp
+-	SUBnote.cpp
++	Synth/SynthNote.cpp
++	Synth/ADnote.cpp
++	Synth/Envelope.cpp
++	Synth/LFO.cpp
++	Synth/OscilGen.cpp
++	Synth/PADnote.cpp
++	Synth/Resonance.cpp
++	Synth/SUBnote.cpp
++	PARENT_SCOPE
+ )
+-
+-add_library(zynaddsubfx_synth STATIC
+-	${zynaddsubfx_synth_SRCS} 
+-	)
+-
+-target_link_libraries(zynaddsubfx_synth)
+-
+diff --git a/src/Tests/CMakeLists.txt b/src/Tests/CMakeLists.txt
+index 5e00417e..c1f860f7 100644
+--- a/src/Tests/CMakeLists.txt
++++ b/src/Tests/CMakeLists.txt
+@@ -14,11 +14,7 @@ CXXTEST_ADD_TEST(RandTest RandTest.cpp ${CMAKE_CURRENT_SOURCE_DIR}/RandTest.h)
+ 
+ #Extra libraries added to make test and full compilation use the same library
+ #links for quirky compilers
+-set(test_lib ${NONGUI_LIBRARIES} ${ZLIB_LIBRARY} ${FFTW_LIBRARIES} ${MXML_LIBRARIES}
+-	${NIO_LIBRARIES}
+-	${AUDIO_LIBRARIES}
+-	${OS_LIBRARIES}
+-    pthread)
++set(test_lib zynaddsubfx_core ${ZLIB_LIBRARY} ${FFTW_LIBRARIES} ${MXML_LIBRARIES} pthread)
+ 
+ message(STATUS "Linking tests with: ${test_lib}")
+ target_link_libraries(ADnoteTest     ${test_lib})
+-- 
+2.47.0
+

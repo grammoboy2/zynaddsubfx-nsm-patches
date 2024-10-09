@@ -1,0 +1,355 @@
+From bba65e13266db4bb200828d4bd7c046e7e627271 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 16 Oct 2016 09:33:38 -0400
+Subject: [PATCH 1065/1936] Add Offline Mode To Middleware For Plugin Version
+
+Middleware assumes that the realtime thread is consistently running.
+If a plugin host 'intelligently' decides to disable running the audio
+thread then middleware previously assumed the thread must have crashed.
+As a workaround if the audio thread doesn't respond to timing pulses fast
+enough, then it's assumed to be offline and Middleware pumps the OSC queue
+manually and it performs read only operations without waiting.
+
+This commit is the first pass at implementing this feature and some bugs
+are to be expected.
+---
+ src/Misc/Master.cpp     |  70 ++++++++++---------
+ src/Misc/Master.h       |   8 +++
+ src/Misc/MiddleWare.cpp | 149 +++++++++++++++++++++++++++++++++++++++-
+ 3 files changed, 194 insertions(+), 33 deletions(-)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index c2df3ba4..c00522d6 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -682,27 +682,8 @@ void dump_msg(const char* ptr, std::ostream& os = std::cerr)
+ #endif
+ int msg_id=0;
+ 
+-/*
+- * Master audio out (the final sound)
+- */
+-bool Master::AudioOut(float *outr, float *outl)
++bool Master::runOSC(float *outl, float *outr, bool offline)
+ {
+-    //Danger Limits
+-    if(memory->lowMemory(2,1024*1024))
+-        printf("QUITE LOW MEMORY IN THE RT POOL BE PREPARED FOR WEIRD BEHAVIOR!!\n");
+-    //Normal Limits
+-    if(!pendingMemory && memory->lowMemory(4,1024*1024)) {
+-        printf("Requesting more memory\n");
+-        bToU->write("/request-memory", "");
+-        pendingMemory = true;
+-    }
+-
+-
+-    //Handle watch points
+-    if(bToU)
+-        watcher.write_back = bToU;
+-    watcher.tick();
+-
+     //Handle user events TODO move me to a proper location
+     char loc_buf[1024];
+     DataObj d{loc_buf, 1024, this, bToU};
+@@ -714,7 +695,8 @@ bool Master::AudioOut(float *outr, float *outl)
+         if(!strcmp(msg, "/load-master")) {
+             Master *this_master = this;
+             Master *new_master  = *(Master**)rtosc_argument(msg, 0).b.data;
+-            new_master->AudioOut(outl, outr);
++            if(!offline)
++                new_master->AudioOut(outl, outr);
+             Nio::masterSwap(new_master);
+             if (mastercb)
+                 mastercb(mastercb_ptr, new_master);
+@@ -733,8 +715,6 @@ bool Master::AudioOut(float *outr, float *outl)
+         events++;
+         if(!d.matches) {
+             //workaround for requesting voice status
+-            //gtk_hscale_new_with_range
+-            //
+             int a=0, b=0, c=0;
+             char e=0;
+             if(4 == sscanf(msg, "/part%d/kit%d/adpars/VoicePar%d/Enable%c", &a, &b, &c, &e)) {
+@@ -744,21 +724,44 @@ bool Master::AudioOut(float *outr, float *outl)
+         }
+         if(!d.matches) {// && !ports.apropos(msg)) {
+             fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 1, 7 + 30, 0 + 40);
+-            fprintf(stderr, "Unknown address<BACKEND> '%s:%s'\n", uToB->peak(), rtosc_argument_string(uToB->peak()));
+-#if 0
+-            if(strstr(msg, "PFMVelocity"))
+-                dump_msg(msg);
+-            if(ports.apropos(msg))
+-                fprintf(stderr, "  -> best match: '%s'\n", ports.apropos(msg)->name);
+-            if(ports.apropos(msg+1))
+-                fprintf(stderr, "  -> best match: '%s'\n", ports.apropos(msg+1)->name);
+-#endif
++            fprintf(stderr, "Unknown address<BACKEND:%s> '%s:%s'\n", 
++                    offline ? "offline" : "online",
++                    uToB->peak(),
++                    rtosc_argument_string(uToB->peak()));
+             fprintf(stderr, "%c[%d;%d;%dm", 0x1B, 0, 7 + 30, 0 + 40);
+         }
+     }
+     if(events>1 && false)
+         fprintf(stderr, "backend: %d events per cycle\n",events);
+ 
++    return true;
++}
++
++/*
++ * Master audio out (the final sound)
++ */
++bool Master::AudioOut(float *outr, float *outl)
++{
++    //Danger Limits
++    if(memory->lowMemory(2,1024*1024))
++        printf("QUITE LOW MEMORY IN THE RT POOL BE PREPARED FOR WEIRD BEHAVIOR!!\n");
++    //Normal Limits
++    if(!pendingMemory && memory->lowMemory(4,1024*1024)) {
++        printf("Requesting more memory\n");
++        bToU->write("/request-memory", "");
++        pendingMemory = true;
++    }
++
++    //work through events
++    if(!runOSC(outl, outr, false))
++        return false;
++
++
++    //Handle watch points
++    if(bToU)
++        watcher.write_back = bToU;
++    watcher.tick();
++
+ 
+     //Swaps the Left channel with Right Channel
+     if(swaplr)
+@@ -914,6 +917,9 @@ bool Master::AudioOut(float *outr, float *outl)
+     }
+ #endif
+ 
++    //Update pulse
++    last_ack = last_beat;
++
+ 
+     return true;
+ }
+diff --git a/src/Misc/Master.h b/src/Misc/Master.h
+index 1256bd8b..db5853d5 100644
+--- a/src/Misc/Master.h
++++ b/src/Misc/Master.h
+@@ -91,6 +91,9 @@ class Master
+ 
+         void vuUpdate(const float *outl, const float *outr);
+ 
++        //Process a set of OSC events in the bToU buffer
++        bool runOSC(float *outl, float *outr, bool offline=false);
++
+         /**Audio Output*/
+         bool AudioOut(float *outl, float *outr) REALTIME;
+         /**Audio Output (for callback mode).
+@@ -175,6 +178,11 @@ class Master
+         bool pendingMemory;
+         const SYNTH_T &synth;
+         const int& gzip_compression; //!< value from config
++
++        //Heartbeat for identifying plugin offline modes
++        //in units of 10 ms (done s.t. overflow is in 497 days)
++        uint32_t last_beat;
++        uint32_t last_ack;
+     private:
+         float  sysefxvol[NUM_SYS_EFX][NUM_MIDI_PARTS];
+         float  sysefxsend[NUM_SYS_EFX][NUM_SYS_EFX];
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 4491d725..d2d1de1a 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -463,8 +463,16 @@ public:
+                    int preferred_port);
+     ~MiddleWareImpl(void);
+ 
++    //Check offline vs online mode in plugins
++    void heartBeat(Master *m);
++    int64_t start_time_sec;
++    int64_t start_time_nsec;
++    bool offline;
++
+     //Apply function while parameters are write locked
+     void doReadOnlyOp(std::function<void()> read_only_fn);
++    void doReadOnlyOpPlugin(std::function<void()> read_only_fn);
++    bool doReadOnlyOpNormal(std::function<void()> read_only_fn, bool canfail=false);
+ 
+     void savePart(int npart, const char *filename)
+     {
+@@ -493,7 +501,7 @@ public:
+         assert(actual_load[npart] <= pending_load[npart]);
+ 
+         //load part in async fashion when possible
+-#if 0
++#ifndef WIN32
+         auto alloc = std::async(std::launch::async,
+                 [master,filename,this,npart](){
+                 Part *p = new Part(*master->memory, synth,
+@@ -667,6 +675,13 @@ public:
+         }
+ 
+         autoSave.tick();
++
++        heartBeat(master);
++
++        //XXX This might have problems with a master swap operation
++        if(offline)
++            master->runOSC(0,0,true);
++
+     }
+ 
+ 
+@@ -1537,6 +1552,14 @@ MiddleWareImpl::MiddleWareImpl(MiddleWare *mw, SYNTH_T synth_,
+             rtosc_message(buf, 1024, "/undo_resume","");
+             handleMsg(buf);
+             });
++
++    //Setup starting time
++    struct timespec time;
++    clock_gettime(CLOCK_MONOTONIC, &time);
++    start_time_sec  = time.tv_sec;
++    start_time_nsec = time.tv_nsec;
++
++    offline = false;
+ }
+ 
+ MiddleWareImpl::~MiddleWareImpl(void)
+@@ -1611,6 +1634,130 @@ void MiddleWareImpl::doReadOnlyOp(std::function<void()> read_only_fn)
+     }
+ }
+ 
++//Offline detection code:
++// - Assume that the audio callback should be run at least once every 50ms
++// - Atomically provide the number of ms since start to Master
++// - Every time middleware ticks provide a heart beat
++// - If when the heart beat is provided the backend is more than 200ms behind
++//   the last heartbeat then it must be offline
++// - When marked offline the backend doesn't receive another heartbeat until it
++//   registers the current beat that it's behind on
++void MiddleWareImpl::heartBeat(Master *master)
++{
++    //Current time
++    //Last provided beat
++    //Last acknowledged beat
++    //Current offline status
++    
++    struct timespec time;
++    clock_gettime(CLOCK_MONOTONIC, &time);
++    uint32_t now = (time.tv_sec-start_time_sec)*100 +
++                   (time.tv_nsec-start_time_nsec)*1e-9*100;
++    int32_t last_ack   = master->last_ack;
++    int32_t last_beat  = master->last_beat;
++
++    //everything is considered online for the first second
++    if(now < 100)
++        return;
++
++    if(offline) {
++        if(last_beat == last_ack) {
++            //XXX INSERT MESSAGE HERE ABOUT TRANSITION TO ONLINE
++            offline = false;
++
++            //Send new heart beat
++            master->last_beat = now;
++        }
++    } else {
++        //it's unquestionably alive
++        if(last_beat == last_ack) {
++
++            //Send new heart beat
++            master->last_beat = now;
++            return;
++        }
++
++        //it's pretty likely dead
++        if(last_beat-last_ack > 0 && now-last_beat > 20) {
++            //The backend has had 200 ms to acquire a new beat
++            //The backend instead has an older beat
++            //XXX INSERT MESSAGE HERE ABOUT TRANSITION TO OFFLINE
++            offline = true;
++            return;
++        }
++
++        //who knows if it's alive or not here, give it a few ms to acquire or
++        //not
++    }
++
++}
++
++void MiddleWareImpl::doReadOnlyOpPlugin(std::function<void()> read_only_fn)
++{
++    assert(uToB);
++    int offline = 0;
++    if(offline) {
++        std::atomic_thread_fence(std::memory_order_acquire);
++
++        //Now it is safe to do any read only operation
++        read_only_fn();
++    } else if(!doReadOnlyOpNormal(read_only_fn, true)) {
++        //check if we just transitioned to offline mode
++
++        std::atomic_thread_fence(std::memory_order_acquire);
++
++        //Now it is safe to do any read only operation
++        read_only_fn();
++    }
++}
++
++bool MiddleWareImpl::doReadOnlyOpNormal(std::function<void()> read_only_fn, bool canfail)
++{
++    assert(uToB);
++    uToB->write("/freeze_state","");
++
++    std::list<const char *> fico;
++    int tries = 0;
++    while(tries++ < 2000) {
++        if(!bToU->hasNext()) {
++            usleep(500);
++            continue;
++        }
++        const char *msg = bToU->read();
++        if(!strcmp("/state_frozen", msg))
++            break;
++        size_t bytes = rtosc_message_length(msg, bToU->buffer_size());
++        char *save_buf = new char[bytes];
++        memcpy(save_buf, msg, bytes);
++        fico.push_back(save_buf);
++    }
++
++    if(canfail) {
++        //Now to resume normal operations
++        uToB->write("/thaw_state","");
++        for(auto x:fico) {
++            uToB->raw_write(x);
++            delete [] x;
++        }
++        return false;
++    }
++
++    assert(tries < 10000);//if this happens, the backend must be dead
++
++    std::atomic_thread_fence(std::memory_order_acquire);
++
++    //Now it is safe to do any read only operation
++    read_only_fn();
++
++    //Now to resume normal operations
++    uToB->write("/thaw_state","");
++    for(auto x:fico) {
++        uToB->raw_write(x);
++        delete [] x;
++    }
++    return true;
++}
++
+ void MiddleWareImpl::broadcastToRemote(const char *rtmsg)
+ {
+     //Always send to the local UI
+-- 
+2.47.0
+

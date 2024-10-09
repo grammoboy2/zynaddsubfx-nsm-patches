@@ -1,0 +1,75 @@
+From b93cad0853c2e83e3237ebe5c608a0ff6344a3a4 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Sun, 23 Apr 2023 21:22:02 +0200
+Subject: [PATCH 1883/1936] Don't load invalid values from XML savefiles
+
+* Part.cpp: keylimit is 100 in some old savefiles
+* ADnoteParameters.cpp: unison size was 0 or >50 while
+  developing the zest UI
+* FilterParams.cpp: basefreq was sometimes slightly lower than "min"
+  (rounding errors)
+---
+ src/Misc/Part.cpp               | 3 ++-
+ src/Params/ADnoteParameters.cpp | 5 ++++-
+ src/Params/FilterParams.cpp     | 2 ++
+ src/UI/PartUI.fl                | 1 -
+ 4 files changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index a8342412..bb8cbadc 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -1470,7 +1470,8 @@ void Part::getfromXML(XMLwrapper& xml)
+     Plegatomode = xml.getparbool("legato_mode", Plegatomode); //older versions
+     if(!Plegatomode)
+         Plegatomode = xml.getpar127("legato_mode", Plegatomode);
+-    Pkeylimit = xml.getpar127("key_limit", Pkeylimit);
++    int keylimit_max = std::atoi(ports["Pkeylimit"]->meta()["max"]);
++    Pkeylimit = std::min(keylimit_max, xml.getpar127("key_limit", Pkeylimit));
+     Pvoicelimit = xml.getpar127("voice_limit", Pvoicelimit);
+ 
+ 
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index f6a5ff68..d560c61a 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -1242,7 +1242,10 @@ void ADnoteGlobalParam::paste(ADnoteGlobalParam &a)
+ void ADnoteVoiceParam::getfromXML(XMLwrapper& xml, unsigned nvoice)
+ {
+     Enabled     = xml.getparbool("enabled", 0);
+-    Unison_size = xml.getpar127("unison_size", Unison_size);
++    unsigned char unison_in_file = xml.getpar127("unison_size", Unison_size);
++    unsigned char unison_min = std::atoi(ports["Unison_size"]->meta()["min"]);
++    unsigned char unison_max = std::atoi(ports["Unison_size"]->meta()["max"]);
++    Unison_size = std::min(std::max(unison_in_file, unison_min), unison_max);
+     Unison_frequency_spread = xml.getpar127("unison_frequency_spread",
+                                              Unison_frequency_spread);
+     Unison_stereo_spread = xml.getpar127("unison_stereo_spread",
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index e5c12aef..f2087ce4 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -661,6 +661,8 @@ void FilterParams::getfromXML(XMLwrapper& xml)
+         gain         = xml.getparreal("gain",       0);
+         freqtracking = xml.getparreal("freq_tracking", 0);
+     }
++    float basefreq_min = std::atof(ports["basefreq"]->meta()["min"]);
++    basefreq = std::max(basefreq, basefreq_min);
+ 
+     //formant filter parameters
+     if(xml.enterbranch("FORMANT_FILTER")) {
+diff --git a/src/UI/PartUI.fl b/src/UI/PartUI.fl
+index 2ea25359..c7314ab0 100644
+--- a/src/UI/PartUI.fl
++++ b/src/UI/PartUI.fl
+@@ -415,7 +415,6 @@ if (event==FL_RIGHT_MOUSE){
+           tooltip {Key Limit} xywh {215 155 50 20} labelsize 10 align 8 textfont 1 textsize 10
+           code0 {o->init("Pkeylimit",'i');}
+           code1 {o->step(1.0,10.0);}
+-          code2 {o->range(0,127);}
+           class Fl_Osc_Counter
+         }
+         Fl_Choice {} {
+-- 
+2.47.0
+

@@ -1,0 +1,40 @@
+From 991ec478bb9f72298901b4efbb96348fa22b998c Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 27 Jun 2016 12:26:32 -0400
+Subject: [PATCH 0933/1936] Add OSC Response For /bank/msb and /bank/lsb
+
+---
+ src/Misc/MiddleWare.cpp | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 4f406aa2..9c54ad5c 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -977,13 +977,19 @@ const rtosc::Ports bankPorts = {
+             d.reply("/alert", "s",
+                     "Failed To Clear Bank Slot, please check file permissions");
+         rEnd},
+-    {"msb:i", 0, 0,
++    {"msb::i", 0, 0,
+         rBegin;
+-        impl.setMsb(rtosc_argument(msg, 0).i);
++        if(rtosc_narguments(msg))
++            impl.setMsb(rtosc_argument(msg, 0).i);
++        else
++            d.reply(d.loc, "i", impl.bank_msb);
+         rEnd},
+-    {"lsb:i", 0, 0,
++    {"lsb::i", 0, 0,
+         rBegin;
+-        impl.setLsb(rtosc_argument(msg, 0).i);
++        if(rtosc_narguments(msg))
++            impl.setLsb(rtosc_argument(msg, 0).i);
++        else
++            d.reply(d.loc, "i", impl.bank_lsb);
+         rEnd},
+     {"newbank:s", 0, 0,
+         rBegin;
+-- 
+2.47.0
+

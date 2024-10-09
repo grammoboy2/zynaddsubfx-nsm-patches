@@ -1,0 +1,292 @@
+From 6fa2121c0c1bd96c58ce0a6debea39b04670f43b Mon Sep 17 00:00:00 2001
+From: Hans Petter Selasky <hps@selasky.org>
+Date: Wed, 18 May 2016 15:30:20 +0200
+Subject: [PATCH 0908/1936] Implement audio compressor for ALSA and OSS
+ drivers.
+
+The purpose of the compressor is to avoid DC clipping when the signal
+goes beyond the limits of the sample format.
+
+Signed-off-by: Hans Petter Selasky <hps@selasky.org>
+---
+ src/Nio/AlsaEngine.cpp     | 10 +++++--
+ src/Nio/AlsaEngine.h       |  1 +
+ src/Nio/Compressor.h       | 59 ++++++++++++++++++++++++++++++++++++++
+ src/Nio/OssEngine.cpp      | 21 +++++---------
+ src/Nio/OssEngine.h        |  4 +++
+ src/Nio/OssMultiEngine.cpp | 35 +++++++++-------------
+ src/Nio/OssMultiEngine.h   |  3 ++
+ 7 files changed, 95 insertions(+), 38 deletions(-)
+ create mode 100644 src/Nio/Compressor.h
+
+diff --git a/src/Nio/AlsaEngine.cpp b/src/Nio/AlsaEngine.cpp
+index 89e0b784..de5ed32b 100644
+--- a/src/Nio/AlsaEngine.cpp
++++ b/src/Nio/AlsaEngine.cpp
+@@ -20,6 +20,7 @@ using namespace std;
+ #include "../Misc/Config.h"
+ #include "InMgr.h"
+ #include "AlsaEngine.h"
++#include "Compressor.h"
+ #include "Nio.h"
+ 
+ AlsaEngine::AlsaEngine(const SYNTH_T &synth)
+@@ -28,6 +29,7 @@ AlsaEngine::AlsaEngine(const SYNTH_T &synth)
+     audio.buffer = new short[synth.buffersize * 2];
+     name = "ALSA";
+     audio.handle = NULL;
++    audio.peaks[0] = 0;
+ 
+     midi.handle  = NULL;
+     midi.alsaId  = -1;
+@@ -251,9 +253,13 @@ short *AlsaEngine::interleave(const Stereo<float *> &smps)
+     int    idx = 0; //possible off by one error here
+     double scaled;
+     for(int frame = 0; frame < bufferSize; ++frame) { // with a nod to libsamplerate ...
+-        scaled = smps.l[frame] * (8.0f * 0x10000000);
++        float l = smps.l[frame];
++        float r = smps.r[frame];
++        stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
++
++        scaled = l * (8.0f * 0x10000000);
+         shortInterleaved[idx++] = (short int)(lrint(scaled) >> 16);
+-        scaled = smps.r[frame] * (8.0f * 0x10000000);
++        scaled = r * (8.0f * 0x10000000);
+         shortInterleaved[idx++] = (short int)(lrint(scaled) >> 16);
+     }
+     return shortInterleaved;
+diff --git a/src/Nio/AlsaEngine.h b/src/Nio/AlsaEngine.h
+index 7a6240a7..c263f934 100644
+--- a/src/Nio/AlsaEngine.h
++++ b/src/Nio/AlsaEngine.h
+@@ -67,6 +67,7 @@ class AlsaEngine:public AudioOut, MidiIn
+             unsigned int      periods;
+             short    *buffer;
+             pthread_t pThread;
++            float peaks[1];
+         } audio;
+ 
+         void *processAudio();
+diff --git a/src/Nio/Compressor.h b/src/Nio/Compressor.h
+new file mode 100644
+index 00000000..f473e8a9
+--- /dev/null
++++ b/src/Nio/Compressor.h
+@@ -0,0 +1,59 @@
++/*
++   ZynAddSubFX - a software synthesizer
++
++   Compressor.h - simple audio compressor macros
++   Copyright (C) 2016 Hans Petter Selasky
++
++  This program is free software; you can redistribute it and/or
++  modify it under the terms of the GNU General Public License
++  as published by the Free Software Foundation; either version 2
++  of the License, or (at your option) any later version.
++*/
++
++#ifndef _COMPRESSOR_H_
++#define	_COMPRESSOR_H_
++
++#define	floatIsValid(x) ({			\
++      float __r = (x) * 0.0;			\
++      __r == 0.0 || __r == -0.0;		\
++})
++
++#define	stereoCompressor(div,pv,l,r) do {	\
++  /*						\
++   * Don't max the output range to avoid	\
++   * overflowing sample rate conversion and	\
++   * equalizer filters in the DSP's output	\
++   * path. Keep one 10th, 1dB, reserved.	\
++   */						\
++  const float __limit = 1.0 - (1.0 / 10.0);	\
++  float __peak;					\
++						\
++  /* sanity checks */				\
++  __peak = (pv);				\
++  if (!floatIsValid(__peak))			\
++	__peak = 0.0;				\
++  if (!floatIsValid(l))				\
++	(l) = 0.0;				\
++  if (!floatIsValid(r))				\
++	(r) = 0.0;				\
++  /* compute maximum */				\
++  if ((l) < -__peak)				\
++    __peak = -(l);				\
++  else if ((l) > __peak)			\
++    __peak = (l);				\
++  if ((r) < -__peak)				\
++    __peak = -(r);				\
++  else if ((r) > __peak)			\
++    __peak = (r);				\
++  /* compressor */				\
++  if (__peak > __limit) {			\
++    (l) /= __peak;				\
++    (r) /= __peak;				\
++    (l) *= __limit;				\
++    (r) *= __limit;				\
++    __peak -= __peak / (div);			\
++  }						\
++  (pv) = __peak;				\
++} while (0)
++
++#endif			/* _COMPRESSOR_H_ */
+diff --git a/src/Nio/OssEngine.cpp b/src/Nio/OssEngine.cpp
+index 7bdffb38..3e113c24 100644
+--- a/src/Nio/OssEngine.cpp
++++ b/src/Nio/OssEngine.cpp
+@@ -12,6 +12,8 @@
+ */
+ 
+ #include "OssEngine.h"
++#include "Compressor.h"
++
+ #include "../Misc/Util.h"
+ #include "../Misc/Config.h"
+ #include "../globals.h"
+@@ -186,6 +188,8 @@ OssEngine::OssEngine(const SYNTH_T &synth,
+     audio.smps.ps32 = new int[synth.buffersize * 2];
+     memset(audio.smps.ps32, 0, sizeof(int) * synth.buffersize * 2);
+     memset(&midi.state, 0, sizeof(midi.state));
++
++    audio.peaks[0] = 0;
+ }
+ 
+ OssEngine::~OssEngine()
+@@ -401,21 +405,10 @@ void *OssEngine::audioThreadCb()
+     while(getAudioEn()) {
+         const Stereo<float *> smps = getNext();
+ 
+-        float l, r;
+         for(int i = 0; i < synth.buffersize; ++i) {
+-            l = smps.l[i];
+-            r = smps.r[i];
+-
+-            if(l < -1.0f)
+-                l = -1.0f;
+-            else
+-                if(l > 1.0f)
+-                    l = 1.0f;
+-            if(r < -1.0f)
+-                r = -1.0f;
+-            else
+-                if(r > 1.0f)
+-                    r = 1.0f;
++            float l = smps.l[i];
++            float r = smps.r[i];
++            stereoCompressor(synth.samplerate, audio.peaks[0], l, r);
+ 
+             if (audio.is32bit) {
+                 audio.smps.ps32[i * 2]     = (int) (l * 2147483647.0f);
+diff --git a/src/Nio/OssEngine.h b/src/Nio/OssEngine.h
+index dd0e027e..b5be7cd6 100644
+--- a/src/Nio/OssEngine.h
++++ b/src/Nio/OssEngine.h
+@@ -71,6 +71,10 @@ class OssEngine:public AudioOut, MidiIn
+                 short int *ps16;
+                 int *ps32;
+             } smps;
++
++            /* peak values used for compressor */
++            float peaks[1];
++
+             bool en;
+             bool is32bit;
+         } audio;
+diff --git a/src/Nio/OssMultiEngine.cpp b/src/Nio/OssMultiEngine.cpp
+index 837d3d30..d6229e66 100644
+--- a/src/Nio/OssMultiEngine.cpp
++++ b/src/Nio/OssMultiEngine.cpp
+@@ -29,6 +29,7 @@
+ #include "../Misc/Util.h"
+ 
+ #include "OssMultiEngine.h"
++#include "Compressor.h"
+ 
+ extern MiddleWare *middleware;
+ 
+@@ -53,12 +54,18 @@ OssMultiEngine :: OssMultiEngine(const SYNTH_T &synth,
+     /* allocate buffer */
+     smps.ps32 = new int[maxbuffersize / sizeof(int)];
+     memset(smps.ps32, 0, maxbuffersize);
++
++    /* setup compressor */
++    unsigned peaksize = NUM_MIDI_PARTS * sizeof(float);
++    peaks = new float[peaksize / sizeof(float)];
++    memset(peaks, 0, peaksize);
+ }
+ 
+ OssMultiEngine :: ~OssMultiEngine()
+ {
+     Stop();
+     delete [] smps.ps32;
++    delete [] peaks;
+ }
+ 
+     bool
+@@ -213,8 +220,6 @@ OssMultiEngine :: audioThreadCb()
+ 
+     while(getAudioEn()) {
+         int error;
+-        float l;
+-        float r;
+         int x;
+         int y;
+ 
+@@ -227,32 +232,18 @@ OssMultiEngine :: audioThreadCb()
+ 
+             if (is32bit) {
+                 for (y = 0; y != synth.buffersize; y++) {
+-                    l = part->partoutl[y];
+-                    if (l < -1.0f)
+-                        l = -1.0f;
+-                    else if (l > 1.0f)
+-                        l = 1.0f;
++                    float l = part->partoutl[y];
++                    float r = part->partoutr[y];
++                    stereoCompressor(synth.samplerate, peaks[x/2], l, r);
+                     smps.ps32[y * channels + x] = (int)(l * 2147483647.0f);
+-                    r = part->partoutr[y];
+-                    if (r < -1.0f)
+-                        r = -1.0f;
+-                    else if (r > 1.0f)
+-                        r = 1.0f;
+                     smps.ps32[y * channels + x + 1] = (int)(r * 2147483647.0f);
+                 }
+             } else {
+                 for (y = 0; y != synth.buffersize; y++) {
+-                    l = part->partoutl[y];
+-                    if (l < -1.0f)
+-                        l = -1.0f;
+-                    else if (l > 1.0f)
+-                        l = 1.0f;
++                    float l = part->partoutl[y];
++                    float r = part->partoutr[y];
++                    stereoCompressor(synth.samplerate, peaks[x/2], l, r);
+                     smps.ps16[y * channels + x] = (short int)(l * 32767.0f);
+-                    r = part->partoutr[y];
+-                    if (r < -1.0f)
+-                        r = -1.0f;
+-                    else if (r > 1.0f)
+-                        r = 1.0f;
+                     smps.ps16[y * channels + x + 1] = (short int)(r * 32767.0f);
+                 }
+             }
+diff --git a/src/Nio/OssMultiEngine.h b/src/Nio/OssMultiEngine.h
+index fba2cfa1..b77c9934 100644
+--- a/src/Nio/OssMultiEngine.h
++++ b/src/Nio/OssMultiEngine.h
+@@ -52,6 +52,9 @@ class OssMultiEngine : public AudioOut
+             int *ps32;
+         } smps;
+ 
++        /* peak values used for compressor */
++        float *peaks;
++
+         bool en;
+         bool is32bit;
+ 
+-- 
+2.47.0
+

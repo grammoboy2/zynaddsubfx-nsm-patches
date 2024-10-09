@@ -1,0 +1,28 @@
+From 0532b699ba74c29930137e62dbe787bb4a241b06 Mon Sep 17 00:00:00 2001
+From: "Wladimir J. van der Laan" <laanwj@gmail.com>
+Date: Sun, 20 Jul 2014 15:04:30 +0200
+Subject: [PATCH 0214/1936] BankSlot: add necessary redraw command
+
+With NTK, slots in the instrument editor were not being redrawn
+after selecting a new bank.
+---
+ src/UI/BankView.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/UI/BankView.cpp b/src/UI/BankView.cpp
+index eab1d598..5bd8c3e9 100644
+--- a/src/UI/BankView.cpp
++++ b/src/UI/BankView.cpp
+@@ -80,6 +80,9 @@ void BankSlot::update(const char *name__, const char *fname__)
+     label(labelstr);
+    
+     color(empty() ? 46 : 51);
++#ifdef NTK_GUI
++    redraw();
++#endif
+ }
+ 
+ bool BankSlot::empty(void) const
+-- 
+2.47.0
+

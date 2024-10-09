@@ -1,0 +1,24 @@
+From ace1a2b9147fd11ce9fb198b5501f19cebe70b8c Mon Sep 17 00:00:00 2001
+From: Friedolino <mkirchn@freenet.de>
+Date: Sun, 28 Jun 2020 21:48:33 +0200
+Subject: [PATCH 1572/1936] print the filename to console at savexml port
+
+---
+ src/Misc/Part.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 7af8c938..e2f36bd5 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -176,6 +176,7 @@ static const Ports partPorts = {
+                 strftime (p->loaded_file,23,"%F_%R.xiz",timeinfo); 
+             }
+             p->saveXML(p->loaded_file);
++            fprintf(stderr, "Part %d saved to %s\n", (p->partno + 1), p->loaded_file);
+         }},
+     //{"kit#16::T:F", "::Enables or disables kit item", 0,
+     //    [](const char *m, RtData &d) {
+-- 
+2.47.0
+

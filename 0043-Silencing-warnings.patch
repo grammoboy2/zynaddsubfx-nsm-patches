@@ -1,0 +1,51 @@
+From eb064d3bc45f2b67d6c818cdb990b8911e9435eb Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Mon, 12 Nov 2012 11:13:16 -0500
+Subject: [PATCH 0043/1936] Silencing warnings
+
+- Fixes unused goto when NSM is disabled
+- Fixes unused variable in padnote UI
+---
+ src/UI/PADnoteUI.fl | 4 ----
+ src/main.cpp        | 2 ++
+ 2 files changed, 2 insertions(+), 4 deletions(-)
+
+diff --git a/src/UI/PADnoteUI.fl b/src/UI/PADnoteUI.fl
+index 70d26c0f..b7c79e8a 100644
+--- a/src/UI/PADnoteUI.fl
++++ b/src/UI/PADnoteUI.fl
+@@ -94,8 +94,6 @@ fl_line(ox+lx/2,oy,ox+lx/2,oy+ly);
+ 
+ //draw the graph
+ fl_line_style(FL_SOLID);
+-int old=0;
+-
+    if (active) fl_color(180,210,240);
+       else fl_color(150,150,155);
+ 
+@@ -117,8 +115,6 @@ for (int i=0;i<lx;i++){
+ //	 fl_vertex(ox+i-1,oy+ly-2-old);
+ //	fl_vertex(ox+i,oy+ly-2-val);
+ //	}
+-
+-   old=val;   
+ };
+ fl_vertex( ox + w(), oy + h() );
+ fl_end_polygon();
+diff --git a/src/main.cpp b/src/main.cpp
+index 0ebde8bf..b90c5cce 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -530,7 +530,9 @@ int main(int argc, char *argv[])
+         }
+ #endif //LASH
+ 
++#if USE_NSM
+ done:
++#endif
+ 
+         Fl::wait(0.02f);
+ #else
+-- 
+2.47.0
+

@@ -1,0 +1,28 @@
+From 62e76de2b5e9f67167a83b289214842cf80950e2 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 20 Nov 2016 11:28:12 -0500
+Subject: [PATCH 1090/1936] Make Post Demo Time Version Fully Quiet
+
+---
+ src/Misc/Master.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index c00522d6..1d6e90b5 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -914,6 +914,11 @@ bool Master::AudioOut(float *outr, float *outl)
+     double seconds = time.time()*synth.buffersize_f/synth.samplerate_f;
+     if(seconds > 10*60) {//10 minute trial
+         shutup = true;
++        for(int i = 0; i < synth.buffersize; ++i) {
++            float tmp = (synth.buffersize_f - i) / synth.buffersize_f;
++            outl[i] *= 0.0f;
++            outr[i] *= 0.0f;
++        }
+     }
+ #endif
+ 
+-- 
+2.47.0
+

@@ -1,0 +1,57 @@
+From b957dcc32959b46dc2c4cb0554abcd309108c892 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Mon, 16 Nov 2015 20:40:59 -0500
+Subject: [PATCH 0729/1936] Changed oscilgen clr button to a fltk Check_Button.
+
+NTK cairo theme makes the indicator for Light_Buttons nearly impossible
+to discern.
+---
+ src/UI/BankView.h    | 8 ++++----
+ src/UI/OscilGenUI.fl | 4 ++--
+ 2 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/src/UI/BankView.h b/src/UI/BankView.h
+index 97494afe..49f48df1 100644
+--- a/src/UI/BankView.h
++++ b/src/UI/BankView.h
+@@ -11,7 +11,7 @@
+ 
+ class Bank;
+ class BankView;
+-class Fl_Light_Button;
++class Fl_Check_Button;
+ 
+ class BankList : public Fl_Osc_Choice
+ {
+@@ -63,9 +63,9 @@ class BankViewControls: public Fl_Group
+         //4 -> swap
+         int mode_;
+ 
+-        static void cb_clearbutton(Fl_Light_Button*, void*);
+-        static void cb_readbutton(Fl_Light_Button*, void*);
+-        static void cb_writebutton(Fl_Light_Button*, void*);
++        static void cb_clearbutton(Fl_Check_Button*, void*);
++        static void cb_readbutton(Fl_Check_Button*, void*);
++        static void cb_writebutton(Fl_Check_Button*, void*);
+ };
+ 
+ class BankView: public Fl_Group, public Fl_Osc_Widget
+diff --git a/src/UI/OscilGenUI.fl b/src/UI/OscilGenUI.fl
+index 9fca9b13..7884dcd1 100644
+--- a/src/UI/OscilGenUI.fl
++++ b/src/UI/OscilGenUI.fl
+@@ -644,9 +644,9 @@ redrawoscil();}
+             code0 {o->value(wshpar->value());}
+           }
+         }
+-        Fl_Light_Button autoclearbutton {
++        Fl_Check_Button autoclearbutton {
+           label {Clr.}
+-          tooltip {Auto clear when using the oscillator as base function} xywh {100 318 35 20} box THIN_UP_BOX value 1 labelfont 1 labelsize 10
++          tooltip {Auto clear when using the oscillator as base function} xywh {98 318 40 20} box THIN_UP_BOX value 1 labelfont 1 labelsize 10
+         }
+         Fl_Group {} {
+           xywh {290 313 155 30} box UP_FRAME
+-- 
+2.47.0
+

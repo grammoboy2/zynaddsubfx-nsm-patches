@@ -1,0 +1,57 @@
+From 3d7f0277500dd185e7e1e80e89c64c833959849a Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 20 Oct 2015 14:03:34 -0400
+Subject: [PATCH 0620/1936] Move log freq conversion to setpos. Both setfreq
+ and setfreq_and_q need conversion.
+
+Closes Godfrey's BubblesZyn2-2-1.xiz regression.
+---
+ src/DSP/FormantFilter.cpp | 20 ++++++++++----------
+ 1 file changed, 10 insertions(+), 10 deletions(-)
+
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index ad21fc97..a771d0de 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -173,9 +173,17 @@ void FormantFilter::setpos(float input)
+     oldQfactor = Qfactor;
+ }
+ 
++inline float log_2(float x)
++{
++    return logf(x) / logf(2.0f);
++}
++
+ void FormantFilter::setfreq(float frequency)
+ {
+-    setpos(frequency);
++    //Convert form real freq[Hz]
++    const float freq = log_2(frequency) - 9.96578428f; //log2(1000)=9.95748f.
++
++    setpos(freq);
+ }
+ 
+ void FormantFilter::setq(float q_)
+@@ -188,18 +196,10 @@ void FormantFilter::setq(float q_)
+ void FormantFilter::setgain(float /*dBgain*/)
+ {}
+ 
+-inline float log_2(float x)
+-{
+-    return logf(x) / logf(2.0f);
+-}
+-
+ void FormantFilter::setfreq_and_q(float frequency, float q_)
+ {
+-    //Convert form real freq[Hz]
+-    const float freq = log_2(frequency) - 9.96578428f; //log2(1000)=9.95748f.
+-
+     Qfactor = q_;
+-    setpos(freq);
++    setpos(frequency);
+ }
+ 
+ 
+-- 
+2.47.0
+

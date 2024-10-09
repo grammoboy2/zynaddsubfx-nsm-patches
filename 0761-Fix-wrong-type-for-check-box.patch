@@ -1,0 +1,25 @@
+From cb975edc5b414f1a8f0b88bb70fa98f93d4af3d6 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Fri, 27 Nov 2015 18:27:57 -0500
+Subject: [PATCH 0761/1936] Fix wrong type for check box
+
+---
+ src/Params/ADnoteParameters.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index efedefd2..10ef281f 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -258,7 +258,7 @@ static const Ports globalPorts = {
+ 
+ 
+     //Resonance
+-    rParamZyn(Hrandgrouping, "How randomness is applied to multiple voices using the same oscil"),
++    rToggle(Hrandgrouping, "How randomness is applied to multiple voices using the same oscil"),
+ 
+     //weird stuff for PCoarseDetune
+     {"detunevalue:", rMap(unit,cents) rDoc("Get detune in cents"), NULL,
+-- 
+2.47.0
+

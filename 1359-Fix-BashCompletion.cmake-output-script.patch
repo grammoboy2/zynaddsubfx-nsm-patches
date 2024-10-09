@@ -1,0 +1,26 @@
+From 23e9180804583cc9cefa73bbace79c71918fa015 Mon Sep 17 00:00:00 2001
+From: nick87720z <nick87720z@gmail.com>
+Date: Fri, 3 May 2019 17:40:49 +0500
+Subject: [PATCH 1359/1936] Fix BashCompletion.cmake output script
+
+BASHCOMP_PKG_PATH is supposed to replace BASHCOMP_USER_PATH if set, rather than be existing file/dir, since it is created.
+---
+ cmake/BashCompletion.cmake | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/cmake/BashCompletion.cmake b/cmake/BashCompletion.cmake
+index 2c08bf31..0eb16fff 100644
+--- a/cmake/BashCompletion.cmake
++++ b/cmake/BashCompletion.cmake
+@@ -74,7 +74,7 @@ ELSE()
+ #!${BASH}\n\
+ set -e\n\
+ BASHCOMP_PKG_PATH=\"${BASHCOMP_USER_PATH}\"\n\
+-if [ -w \"${BASHCOMP_PKG_PATH}\" ]; then\n\
++if [ -n \"${BASHCOMP_PKG_PATH}\" ]; then\n\
+   BASHCOMP_PKG_PATH=\"${BASHCOMP_PKG_PATH}\"\n\
+ fi\n\
+ echo -e \"\\nInstalling bash completion...\\n\"\n\
+-- 
+2.47.0
+

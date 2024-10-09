@@ -1,0 +1,78 @@
+From d5fddf5b9598c743c271424adf93b1284e6f8543 Mon Sep 17 00:00:00 2001
+From: Ricard Wanderlof <polluxsynth@butoba.net>
+Date: Tue, 15 Mar 2022 00:11:23 +0100
+Subject: [PATCH 1837/1936] AnalogFilter: Always grab latest Q when
+ recalculating coeffs (#347)
+
+Even though a Q change only forces a recompute if the Q has
+changed by more than 10%, if for whatever reason (like a frequency
+change) we need to recalculate the filter coeffs, grab the latest
+set Q value, regardless if it is more than 10% from the previous
+value or not.
+---
+ src/DSP/AnalogFilter.cpp | 10 ++++++----
+ src/DSP/AnalogFilter.h   |  1 +
+ 2 files changed, 7 insertions(+), 4 deletions(-)
+
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index d70af0f9..6c661836 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -35,6 +35,7 @@ AnalogFilter::AnalogFilter(unsigned char Ftype,
+       stages(Fstages),
+       freq(Ffreq),
+       q(Fq),
++      newq(Fq),
+      gain(1.0),
+      recompute(true),
+      freqbufsize(bufsize/8)
+@@ -292,6 +293,8 @@ void AnalogFilter::setfreq(float frequency)
+         freq = frequency;
+         recompute = true;
+     }
++    if (recompute)
++        q = newq;
+     
+     if (beforeFirstTick) {
+         freq_smoothing.reset( freq );
+@@ -301,22 +304,21 @@ void AnalogFilter::setfreq(float frequency)
+ 
+ void AnalogFilter::setfreq_and_q(float frequency, float q_)
+ {
++    newq = q_;
+     /*
+      * Only recompute based on Q change if change is more than 10%
+      * from current value (or the old or new Q is 0, which normally
+      * won't occur, but better to handle it than potentially
+      * fail on division by zero or assert).
+      */
+-    if (q == 0.0 || q_ == 0.0 || ((q > q_ ? q / q_ : q_ / q) > 1.1)) {
+-        q = q_;
++    if (q == 0.0 || q_ == 0.0 || ((q > q_ ? q / q_ : q_ / q) > 1.1))
+         recompute = true;
+-    }
+     setfreq(frequency);
+ }
+ 
+ void AnalogFilter::setq(float q_)
+ {
+-    q = q_;
++    newq = q = q_;
+     computefiltercoefs(freq,q);
+ }
+ 
+diff --git a/src/DSP/AnalogFilter.h b/src/DSP/AnalogFilter.h
+index a52a8545..8373b72d 100644
+--- a/src/DSP/AnalogFilter.h
++++ b/src/DSP/AnalogFilter.h
+@@ -69,6 +69,7 @@ class AnalogFilter:public Filter
+         int   stages; //how many times the filter is applied (0->1,1->2,etc.)
+         float freq;   //Frequency given in Hz
+         float q;      //Q factor (resonance or Q factor)
++        float newq;   //New target Q
+         float gain;   //the gain of the filter (if are shelf/peak) filters
+         bool recompute; // need to recompute coeff.
+         int order; //the order of the filter (number of poles)
+-- 
+2.47.0
+

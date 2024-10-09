@@ -1,0 +1,80 @@
+From 7cfd5e5916573ab29d8eaee45812f96bb8abdb6d Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 3 Feb 2016 14:09:00 -0500
+Subject: [PATCH 0841/1936] Fix Sustain+Mono Interaction
+
+Mono notes are released when sustain is active
+---
+ src/Containers/NotePool.cpp |  2 +-
+ src/Tests/KitTest.h         | 42 +++++++++++++++++++++++++++++++++++++
+ 2 files changed, 43 insertions(+), 1 deletion(-)
+
+diff --git a/src/Containers/NotePool.cpp b/src/Containers/NotePool.cpp
+index e493bfb7..80f4d8eb 100644
+--- a/src/Containers/NotePool.cpp
++++ b/src/Containers/NotePool.cpp
+@@ -279,7 +279,7 @@ void NotePool::enforceKeyLimit(int limit)
+ void NotePool::releasePlayingNotes(void)
+ {
+     for(auto &d:activeDesc()) {
+-        if(d.playing()) {
++        if(d.playing() || d.sustained()) {
+             d.setStatus(KEY_RELEASED);
+             for(auto s:activeNotes(d))
+                 s.note->releasekey();
+diff --git a/src/Tests/KitTest.h b/src/Tests/KitTest.h
+index 1b1d5e74..3a2ce644 100644
+--- a/src/Tests/KitTest.h
++++ b/src/Tests/KitTest.h
+@@ -130,6 +130,48 @@ class KitTest:public CxxTest::TestSuite
+                     .legatoMirror=false}));
+         }
+ 
++        void testMonoSustain() {
++            //enable sustain
++            part->ctl.setsustain(127);
++            part->Ppolymode   = false;
++
++            part->NoteOn(64, 127, 0);
++            part->NoteOff(64);
++            part->NoteOn(65, 127, 0);
++
++            part->notePool.dump();
++
++            //first note has moved to release state
++            //second note has stayed in playing state
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[0],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=64,
++                    .sendto=0,
++                    .size=1,
++                    .status=KEY_RELEASED,
++                    .legatoMirror=false}));
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[1],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=65,
++                    .sendto=0,
++                    .size=1,
++                    .status=KEY_PLAYING,
++                    .legatoMirror=false}));
++
++            TS_ASSERT_EQUALS(part->notePool.ndesc[2],
++                    (NotePool::NoteDescriptor{
++                    .age=0,
++                    .note=0,
++                    .sendto=0,
++                    .size=0,
++                    .status=0,
++                    .legatoMirror=false}));
++        }
++
+         //Enumerate cases of:
+         //Legato = {disabled,enabled}
+         //Mono   = {diabled, enabled}
+-- 
+2.47.0
+

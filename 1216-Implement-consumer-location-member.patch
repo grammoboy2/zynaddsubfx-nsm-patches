@@ -1,0 +1,740 @@
+From cd9255e790f0280609b63a9e9e83dba392a2a642 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <johannes89@ist-einmalig.de>
+Date: Thu, 19 Oct 2017 20:49:42 +0200
+Subject: [PATCH 1216/1936] Implement consumer location member
+
+Features:
+* Add location consumer_location_t member to LFOParams and FilterParams
+* Add default values to
+  * Master's sysefx matrix
+  * VoicePar#N/Enabled::T:F
+  * FilterParams
+
+Bugfixes:
+* Fix OscilGen::Phmag from reading Phmag wrong
+* Fix EffectMgr::preset from being uninitialized
+* Fix rEffParCommon from discarding its varargs
+---
+ rtosc                            |  2 +-
+ src/Effects/Effect.h             |  2 +-
+ src/Effects/EffectMgr.cpp        |  1 +
+ src/Misc/Master.cpp              |  6 +--
+ src/Params/ADnoteParameters.cpp  | 35 ++++++-------
+ src/Params/EnvelopeParams.cpp    | 52 ++++++++++---------
+ src/Params/EnvelopeParams.h      | 21 +-------
+ src/Params/FilterParams.cpp      | 52 +++++++++++++++----
+ src/Params/FilterParams.h        |  7 ++-
+ src/Params/LFOParams.cpp         | 87 +++++++++++++++++++++++---------
+ src/Params/LFOParams.h           | 11 +++-
+ src/Params/PADnoteParameters.cpp | 14 ++---
+ src/Params/Presets.h             | 29 +++++++++++
+ src/Params/SUBnoteParameters.cpp | 10 ++--
+ src/Synth/LFO.cpp                | 14 ++---
+ src/Synth/OscilGen.cpp           |  2 +-
+ 16 files changed, 222 insertions(+), 123 deletions(-)
+
+diff --git a/rtosc b/rtosc
+index f0a5bb06..0ac9069c 160000
+--- a/rtosc
++++ b/rtosc
+@@ -1 +1 @@
+-Subproject commit f0a5bb068f275d681fdcd862c2361d704fbb33c5
++Subproject commit 0ac9069cd855228dbbc9d32953ae4d0c31cab43e
+diff --git a/src/Effects/Effect.h b/src/Effects/Effect.h
+index d03f28f7..17198a3a 100644
+--- a/src/Effects/Effect.h
++++ b/src/Effects/Effect.h
+@@ -46,7 +46,7 @@
+ 
+ #define rEffParCommon(pname, rshort, rdoc, idx, ...) \
+ {STRINGIFY(pname) "::i", rProp(parameter) rLinear(0,127) \
+-    rShort(rshort) rDoc(rdoc), \
++    rShort(rshort) DOC(__VA_ARGS__, rdoc), \
+     0, \
+     [](const char *msg, rtosc::RtData &d) \
+     { \
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index 4a29cff6..467aa433 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -206,6 +206,7 @@ void EffectMgr::changeeffectrt(int _nefx, bool avoidSmash)
+     if(nefx == _nefx && efx != NULL)
+         return;
+     nefx = _nefx;
++    preset = 0;
+     memset(efxoutl, 0, synth.bufferbytes);
+     memset(efxoutr, 0, synth.bufferbytes);
+     memory.dealloc(efx);
+diff --git a/src/Misc/Master.cpp b/src/Misc/Master.cpp
+index 9e2b4a47..3b3e5ae5 100644
+--- a/src/Misc/Master.cpp
++++ b/src/Misc/Master.cpp
+@@ -49,7 +49,7 @@ namespace zyn {
+ 
+ static const Ports sysefxPort =
+ {
+-    {"part#" STRINGIFY(NUM_MIDI_PARTS) "::i", rProp(parameter)
++    {"part#" STRINGIFY(NUM_MIDI_PARTS) "::i", rProp(parameter) rDefault([0...])
+         rDoc("gain on part to sysefx routing"), 0,
+         [](const char *m, RtData&d)
+         {
+@@ -85,8 +85,8 @@ static const Ports sysefxPort =
+ 
+ static const Ports sysefsendto =
+ {
+-    {"to#" STRINGIFY(NUM_SYS_EFX) "::i",
+-        rProp(parameter) rDoc("sysefx to sysefx routing gain"), 0, [](const char *m, RtData&d)
++    {"to#" STRINGIFY(NUM_SYS_EFX) "::i", rProp(parameter)  rDefault([0...])
++        rDoc("sysefx to sysefx routing gain"), 0, [](const char *m, RtData&d)
+         {
+             //same workaround as before
+             //go backto the '/'
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index ef3179b7..1233ef77 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -371,7 +371,8 @@ static const Ports adPorts = {//XXX 16 should not be hard coded
+     rArrayPaste,
+     rRecurs(VoicePar, NUM_VOICES),
+     {"VoicePar#" STRINGIFY(NUM_VOICES) "/Enabled::T:F",
+-     rProp(parameter) rShort("enable") rDoc("Voice Enable"),
++     rProp(parameter) rShort("enable") rDoc("Voice Enable")
++     rDefault([true false false ...]),
+      NULL, rArrayTCbMember(VoicePar, Enabled)},
+     rRecur(GlobalPar, "Adnote Parameters"),
+ };
+@@ -401,17 +402,17 @@ ADnoteGlobalParam::ADnoteGlobalParam(const AbsTime *time_) :
+         time(time_), last_update_timestamp(0)
+ {
+     FreqEnvelope = new EnvelopeParams(0, 0, time_);
+-    FreqEnvelope->init(EnvelopeParams::ad_global_freq_env);
+-    FreqLfo = new LFOParams(70, 0, 64, 0, 0, 0, 0, 0, time_);
++    FreqEnvelope->init(ad_global_freq);
++    FreqLfo = new LFOParams(ad_global_freq, time_);
+ 
+     AmpEnvelope = new EnvelopeParams(64, 1, time_);
+-    AmpEnvelope->init(EnvelopeParams::ad_global_amp_env);
+-    AmpLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 1, time_);
++    AmpEnvelope->init(ad_global_amp);
++    AmpLfo = new LFOParams(ad_global_amp, time_);
+ 
+-    GlobalFilter   = new FilterParams(2, 94, 40, time_);
++    GlobalFilter   = new FilterParams(ad_global_filter, time_);
+     FilterEnvelope = new EnvelopeParams(0, 1, time_);
+-    FilterEnvelope->init(EnvelopeParams::ad_global_filter_env);
+-    FilterLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 2, time_);
++    FilterEnvelope->init(ad_global_filter);
++    FilterLfo = new LFOParams(ad_global_filter, time_);
+     Reson     = new Resonance();
+ }
+ 
+@@ -557,22 +558,22 @@ void ADnoteVoiceParam::enable(const SYNTH_T &synth, FFTwrapper *fft,
+     FMSmp    = new OscilGen(synth, fft, NULL);
+ 
+     AmpEnvelope = new EnvelopeParams(64, 1, time);
+-    AmpEnvelope->init(EnvelopeParams::ad_voice_amp_env);
+-    AmpLfo = new LFOParams(90, 32, 64, 0, 0, 30, 0, 1, time);
++    AmpEnvelope->init(ad_voice_amp);
++    AmpLfo = new LFOParams(ad_voice_amp, time);
+ 
+     FreqEnvelope = new EnvelopeParams(0, 0, time);
+-    FreqEnvelope->init(EnvelopeParams::ad_voice_freq_env);
+-    FreqLfo = new LFOParams(50, 40, 0, 0, 0, 0, 0, 0, time);
++    FreqEnvelope->init(ad_voice_freq);
++    FreqLfo = new LFOParams(ad_voice_freq, time);
+ 
+-    VoiceFilter    = new FilterParams(2, 50, 60, time);
++    VoiceFilter    = new FilterParams(ad_voice_filter, time);
+     FilterEnvelope = new EnvelopeParams(0, 0, time);
+-    FilterEnvelope->init(EnvelopeParams::ad_voice_filter_env);
+-    FilterLfo = new LFOParams(50, 20, 64, 0, 0, 0, 0, 2, time);
++    FilterEnvelope->init(ad_voice_filter);
++    FilterLfo = new LFOParams(ad_voice_filter, time);
+ 
+     FMFreqEnvelope = new EnvelopeParams(0, 0, time);
+-    FMFreqEnvelope->init(EnvelopeParams::ad_voice_fm_freq_env);
++    FMFreqEnvelope->init(ad_voice_fm_freq);
+     FMAmpEnvelope = new EnvelopeParams(64, 1, time);
+-    FMAmpEnvelope->init(EnvelopeParams::ad_voice_fm_amp_env);
++    FMAmpEnvelope->init(ad_voice_fm_amp);
+ }
+ 
+ /*
+diff --git a/src/Params/EnvelopeParams.cpp b/src/Params/EnvelopeParams.cpp
+index 073807f3..39fd451b 100644
+--- a/src/Params/EnvelopeParams.cpp
++++ b/src/Params/EnvelopeParams.cpp
+@@ -41,48 +41,48 @@ static const rtosc::Ports localPorts = {
+ #undef  rChangeCb
+ #define rChangeCb if(!obj->Pfreemode) obj->converttofree(); \
+                   if(obj->time) { obj->last_update_timestamp = obj->time->time(); }
+-    rOption(envelope_type, rProp(internal),
++    rOption(loc, rProp(internal),
+             rOptions(ad_global_amp, ad_global_freq, ad_global_filter,
+                      ad_voice_amp, ad_voice_freq, ad_voice_filter,
+                      ad_voice_fm_freq, ad_voice_fm_amp,
+                      sub_freq_env, sub_bandwidth_env), "function of the envelope"),
+-    rParamZyn(Penvpoints, rProp(internal), rDefaultDepends(envelope_type),
++    rParamZyn(Penvpoints, rProp(internal), rDefaultDepends(loc),
+             rPresets(4, 3, 4, 4, 3, 4, 3, 4, 3, 3),
+             "Number of points in complex definition"),
+-    rParamZyn(Penvsustain, rDefaultDepends(envelope_type),
++    rParamZyn(Penvsustain, rDefaultDepends(loc),
+             rPresets(2, 1, 2, 2, 1, 2, 1, 2, 1, 1),
+             "Location of the sustain point"),
+     rParams(Penvdt,  MAX_ENVELOPE_POINTS, "Envelope Delay Times"),
+     rParams(Penvval, MAX_ENVELOPE_POINTS, "Envelope Values"),
+-    rParamZyn(Penvstretch,  rShort("stretch"), rDefaultDepends(envelope_type),
++    rParamZyn(Penvstretch,  rShort("stretch"), rDefaultDepends(loc),
+             rPresets(64, 0, 0, 64, 0, 0, 0, 64, 64, 64),
+             "Stretch with respect to frequency"),
+-    rToggle(Pforcedrelease, rShort("frcr"), rDefaultDepends(envelope_type),
++    rToggle(Pforcedrelease, rShort("frcr"), rDefaultDepends(loc),
+             rPresets(true, false, true, true, false,
+                      false, false, true, false, false),
+             "Force Envelope to fully evaluate"),
+     rToggle(Plinearenvelope, rShort("lin/log"), rDefault(false),
+             "Linear or Logarithmic Envelopes"),
+-    rParamZyn(PA_dt,  rShort("a.dt"), rDefaultDepends(envelope_type),
++    rParamZyn(PA_dt,  rShort("a.dt"), rDefaultDepends(loc),
+               rPresets(0, 50, 40, 0, 40, 70, 90, 80, 50, 70),
+               "Attack Time"),
+-    rParamZyn(PA_val, rShort("a.val"), rDefaultDepends(envelope_type),
++    rParamZyn(PA_val, rShort("a.val"), rDefaultDepends(loc),
+               rDefault(64), rPresetsAt(4, 30, 90, 20, 64, 30, 100),
+               "Attack Value"),
+-    rParamZyn(PD_dt,  rShort("d.dt"),  rDefaultDepends(envelope_type),
++    rParamZyn(PD_dt,  rShort("d.dt"),  rDefaultDepends(loc),
+               rDefault(10), rPresets(40, 10, 70, 100, 10, 70, 10, 90),
+               "Decay Time"),
+-    rParamZyn(PD_val, rShort("d.val"), rDefaultDepends(envelope_type),
++    rParamZyn(PD_val, rShort("d.val"), rDefaultDepends(loc),
+               rDefault(64), rPresetsAt(5, 40),
+               "Decay Value"),
+-    rParamZyn(PS_val, rShort("s.val"), rDefaultDepends(envelope_type),
++    rParamZyn(PS_val, rShort("s.val"), rDefaultDepends(loc),
+               rDefault(64),
+               rPresets(127), rPresetsAt(3, 127), rPresetsAt(7, 127),
+               "Sustain Value"),
+-    rParamZyn(PR_dt,  rShort("r.dt"),  rDefaultDepends(envelope_type),
++    rParamZyn(PR_dt,  rShort("r.dt"),  rDefaultDepends(loc),
+               rPresets(25, 60, 60, 100, 60, 10, 80, 100, 60, 60),
+               "Release Time"),
+-    rParamZyn(PR_val, rShort("r.val"), rDefaultDepends(envelope_type),
++    rParamZyn(PR_val, rShort("r.val"), rDefaultDepends(loc),
+               rDefault(64), rPresetsAt(5, 40, 40),
+               "Release Value"),
+ 
+@@ -229,24 +229,26 @@ void EnvelopeParams::paste(const EnvelopeParams &ep)
+ }
+ #undef COPY
+ 
+-void EnvelopeParams::init(EnvelopeParams::envelope_type_t etype)
++void EnvelopeParams::init(zyn::consumer_location_t _loc)
+ {
+-    switch(etype)
++    switch(loc = _loc)
+     {
+-        case ad_global_amp_env:    ADSRinit_dB(0, 40, 127, 25); break;
+-        case ad_global_freq_env:   ASRinit(64, 50, 64, 60); break;
+-        case ad_global_filter_env: ADSRinit_filter(64, 40, 64, 70, 60, 64);
++        case ad_global_amp:    ADSRinit_dB(0, 40, 127, 25); break;
++        case ad_global_freq:   ASRinit(64, 50, 64, 60); break;
++        case ad_global_filter:
++        case sub_filter:
++            ADSRinit_filter(64, 40, 64, 70, 60, 64);
+             break;
+-        case ad_voice_amp_env:     ADSRinit_dB(0, 100, 127, 100); break;
+-        case ad_voice_freq_env:    ASRinit(30, 40, 64, 60); break;
+-        case ad_voice_filter_env:  ADSRinit_filter(90, 70, 40, 70, 10, 40);
++        case ad_voice_amp:     ADSRinit_dB(0, 100, 127, 100); break;
++        case ad_voice_freq:    ASRinit(30, 40, 64, 60); break;
++        case ad_voice_filter:  ADSRinit_filter(90, 70, 40, 70, 10, 40);
+             break;
+-        case ad_voice_fm_freq_env: ASRinit(20, 90, 40, 80); break;
+-        case ad_voice_fm_amp_env:  ADSRinit(80, 90, 127, 100); break;
+-        case sub_freq_env:         ASRinit(30, 50, 64, 60); break;
+-        case sub_bandwidth_env:    ASRinit_bw(100, 70, 64, 60); break;
++        case ad_voice_fm_freq: ASRinit(20, 90, 40, 80); break;
++        case ad_voice_fm_amp:  ADSRinit(80, 90, 127, 100); break;
++        case sub_freq:         ASRinit(30, 50, 64, 60); break;
++        case sub_bandwidth:    ASRinit_bw(100, 70, 64, 60); break;
++        default: throw std::logic_error("Invalid envelope consumer location");
+     };
+-    envelope_type = etype;
+ }
+ 
+ float EnvelopeParams::getdt(char i) const
+diff --git a/src/Params/EnvelopeParams.h b/src/Params/EnvelopeParams.h
+index 1c4ff0c0..eeb8350a 100644
+--- a/src/Params/EnvelopeParams.h
++++ b/src/Params/EnvelopeParams.h
+@@ -23,28 +23,13 @@ namespace zyn {
+ class EnvelopeParams:public Presets
+ {
+     public:
+-        enum envelope_type_t
+-        {
+-            ad_global_amp_env,     // ADSRinit_dB(0, 40, 127, 25);
+-            ad_global_freq_env,    // ASRinit(64, 50, 64, 60);
+-            ad_global_filter_env,  // ADSRinit_filter(64, 40, 64, 70, 60, 64)
+-
+-            ad_voice_amp_env,      // ADSRinit_dB(0, 100, 127, 100);
+-            ad_voice_freq_env,     // ASRinit(30, 40, 64, 60);
+-            ad_voice_filter_env,   // ADSRinit_filter(90, 70, 40, 70, 10, 40);
+-            ad_voice_fm_freq_env,  // ASRinit(20, 90, 40, 80);
+-            ad_voice_fm_amp_env,   // ADSRinit(80, 90, 127, 100)
+-            sub_freq_env,          // ASRinit(30, 50, 64, 60);
+-            sub_bandwidth_env,     // ASRinit_bw(100, 70, 64, 60)
+-        };
+-
+         EnvelopeParams(unsigned char Penvstretch_=64,
+                        unsigned char Pforcedrelease_=0,
+                        const AbsTime *time_ = nullptr);
+         ~EnvelopeParams();
+         void paste(const EnvelopeParams &ep);
+ 
+-        void init(envelope_type_t etype);
++        void init(consumer_location_t loc);
+         void converttofree();
+ 
+         void add2XML(XMLwrapper& xml);
+@@ -55,9 +40,7 @@ class EnvelopeParams:public Presets
+         static float dt(char val);
+         static char inv_dt(float val);
+ 
+-        //! Defines where it is used and its default settings.
+-	//! Corresponds to envelope_type_t
+-        int envelope_type;
++        int loc; //!< consumer location
+ 
+         /* MIDI Parameters */
+         unsigned char Pfreemode; //1 for free mode, 0 otherwise
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index 9a881605..471eaa55 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -64,15 +64,17 @@ const rtosc::Ports FilterParams::ports = {
+     rPaste,
+     rArrayPaste,
+     rOption(Pcategory,          rShort("class"),
+-            rOptions(analog, formant, st.var.), "Class of filter"),
++            rOptions(analog, formant, st.var.), rDefault(analog),
++            "Class of filter"),
+     rOption(Ptype,              rShort("type"),
+             rOptions(LP1, HP1, LP2, HP2, BP, notch, peak,
+-                l.shelf, h.shelf), "Filter Type"),
++                l.shelf, h.shelf), rDefault(2), "Filter Type"),
+     rParamI(Pstages,            rShort("stages"),
+             rLinear(0,5),  "Filter Stages"),
+     rParamF(baseq,               rShort("q"),      rUnit(none),  rLog(0.1, 1000),
+             "Quality Factor (resonance/bandwidth)"),
+-    rParamF(basefreq,           rShort("cutoff"),  rUnit(Hz),    rLog(31.25, 32000),
++    rParamF(basefreq,           rShort("cutoff"),
++            rUnit(Hz),    rLog(31.25, 32000),
+             "Base cutoff frequency"),
+     rParamF(freqtracking,       rShort("f.track"), rUnit(%),     rLinear(-100, 100),
+             "Frequency Tracking amount"),
+@@ -291,23 +293,51 @@ const rtosc::Ports FilterParams::ports = {
+ 
+ 
+ 
++void FilterParams::setup()
++{
++    setpresettype("Pfilter");
++
++    changed = false;
++    defaults();
++}
++
+ FilterParams::FilterParams(const AbsTime *time_)
+-    :FilterParams(0,64,64, time_)
++    :FilterParams(0,64,64, unspecified, time_)
+ {
+ }
++
+ FilterParams::FilterParams(unsigned char Ptype_,
+                            unsigned char Pfreq_,
+                            unsigned char Pq_,
++                           consumer_location_t loc,
+                            const AbsTime *time_):
+-        time(time_), last_update_timestamp(0)
++        loc(loc), time(time_), last_update_timestamp(0),
++        Dtype(Ptype_), Dfreq(Pfreq_), Dq(Pq_)
+ {
+-    setpresettype("Pfilter");
+-    Dtype = Ptype_;
+-    Dfreq = Pfreq_;
+-    Dq    = Pq_;
++    setup();
++}
+ 
+-    changed = false;
+-    defaults();
++FilterParams::FilterParams(consumer_location_t loc,
++                           const AbsTime *time_):
++        loc(loc), time(time_), last_update_timestamp(0)
++{
++    auto init =
++        [&](unsigned char Ptype_, unsigned char Pfreq_, unsigned char Pq_)
++    {
++        Dtype = Ptype_;
++        Dfreq = Pfreq_;
++        Dq    = Pq_;
++    };
++
++    switch(loc)
++    {
++        case ad_global_filter:  init(2, 94, 40); break;
++        case ad_voice_filter:   init(2, 50, 60); break;
++        case sub_filter:        init(2, 80, 40); break;
++        default: throw std::logic_error("Invalid filter consumer location");
++    }
++
++    setup();
+ }
+ 
+ FilterParams::~FilterParams()
+diff --git a/src/Params/FilterParams.h b/src/Params/FilterParams.h
+index 2fa23eff..021d8a59 100644
+--- a/src/Params/FilterParams.h
++++ b/src/Params/FilterParams.h
+@@ -27,6 +27,9 @@ class FilterParams:public PresetsArray
+         FilterParams(unsigned char Ptype_,
+                      unsigned char Pfreq,
+                      unsigned char Pq_,
++                     consumer_location_t loc,
++                     const AbsTime *time_ = nullptr);
++        FilterParams(consumer_location_t loc,
+                      const AbsTime *time_ = nullptr);
+         ~FilterParams();
+ 
+@@ -89,7 +92,7 @@ class FilterParams:public PresetsArray
+ 
+         void defaults(int n);
+ 
+-
++        int loc; //!< consumer location
+         bool changed;
+ 
+         const AbsTime *time;
+@@ -98,6 +101,8 @@ class FilterParams:public PresetsArray
+ 
+         static const rtosc::Ports ports;
+     private:
++        // common
++        void setup();
+ 
+         //stored default parameters
+         unsigned char Dtype;
+diff --git a/src/Params/LFOParams.cpp b/src/Params/LFOParams.cpp
+index 1088d1ea..21ea6689 100644
+--- a/src/Params/LFOParams.cpp
++++ b/src/Params/LFOParams.cpp
+@@ -70,20 +70,37 @@ static const rtosc::Ports _ports = {
+ 
+ const rtosc::Ports &LFOParams::ports = _ports;
+ 
+-LFOParams::LFOParams(const AbsTime *time_) : time(time_)
++void LFOParams::setup()
+ {
+-    Dfreq       = 64;
+-    Dintensity  = 0;
+-    Dstartphase = 0;
+-    DLFOtype    = 0;
+-    Drandomness = 0;
+-    Ddelay      = 0;
+-    Dcontinous  = 0;
+-    fel  = 0;
++    switch(loc) {
++        case unspecified:
++            fel =consumer_location_type_t::unspecified;
++            break;
++        case ad_global_freq:
++        case ad_voice_freq:
++            fel = consumer_location_type_t::freq;
++            setpresettype("Plfofrequency");
++            break;
++        case ad_global_amp:
++        case ad_voice_amp:
++            fel = consumer_location_type_t::amp;
++            setpresettype("Plfoamplitude");
++            break;
++        default:
++            fel = consumer_location_type_t::filter;
++            setpresettype("Plfofilter");
++            break;
++    }
+ 
+     defaults();
+ }
+ 
++// TODO: reuse
++LFOParams::LFOParams(const AbsTime *time_) :
++    LFOParams(64, 0, 0, 0, 0, 0, 0, consumer_location_t::unspecified, time_)
++{
++}
++
+ LFOParams::LFOParams(char Pfreq_,
+                      char Pintensity_,
+                      char Pstartphase_,
+@@ -91,20 +108,10 @@ LFOParams::LFOParams(char Pfreq_,
+                      char Prandomness_,
+                      char Pdelay_,
+                      char Pcontinous_,
+-                     char fel_,
+-                     const AbsTime *time_) : time(time_),
++                     consumer_location_t loc,
++                     const AbsTime *time_) : loc(loc),
++                                             time(time_),
+                                              last_update_timestamp(0) {
+-    switch(fel_) {
+-        case 0:
+-            setpresettype("Plfofrequency");
+-            break;
+-        case 1:
+-            setpresettype("Plfoamplitude");
+-            break;
+-        case 2:
+-            setpresettype("Plfofilter");
+-            break;
+-    }
+     Dfreq       = Pfreq_;
+     Dintensity  = Pintensity_;
+     Dstartphase = Pstartphase_;
+@@ -112,9 +119,41 @@ LFOParams::LFOParams(char Pfreq_,
+     Drandomness = Prandomness_;
+     Ddelay      = Pdelay_;
+     Dcontinous  = Pcontinous_;
+-    fel  = fel_;
+ 
+-    defaults();
++    setup();
++}
++
++LFOParams::LFOParams(consumer_location_t loc,
++                     const AbsTime *time_) : loc(loc),
++                                             time(time_),
++                                             last_update_timestamp(0) {
++
++    auto init =
++        [&](char Pfreq_, char Pintensity_, char Pstartphase_, char PLFOtype_,
++            char Prandomness_, char Pdelay_, char Pcontinous_)
++    {
++        Dfreq       = Pfreq_;
++        Dintensity  = Pintensity_;
++        Dstartphase = Pstartphase_;
++        DLFOtype    = PLFOtype_;
++        Drandomness = Prandomness_;
++        Ddelay      = Pdelay_;
++        Dcontinous  = Pcontinous_;
++    };
++
++    switch(loc)
++    {
++        case ad_global_amp:    init(80, 0, 64, 0, 0, 0, 0); break;
++        case ad_global_freq:   init(70, 0, 64, 0, 0, 0, 0); break;
++        case ad_global_filter: init(80, 0, 64, 0, 0, 0, 0);
++            break;
++        case ad_voice_amp:     init(90, 32, 64, 0, 0, 30, 0); break;
++        case ad_voice_freq:    init(50, 40,  0, 0, 0,  0, 0); break;
++        case ad_voice_filter:  init(50, 20, 64, 0, 0,  0, 0); break;
++        default: throw std::logic_error("Invalid LFO consumer location");
++    }
++
++    setup();
+ }
+ 
+ LFOParams::~LFOParams()
+diff --git a/src/Params/LFOParams.h b/src/Params/LFOParams.h
+index eceecd50..50c24203 100644
+--- a/src/Params/LFOParams.h
++++ b/src/Params/LFOParams.h
+@@ -35,6 +35,8 @@ class LFOParams:public Presets
+ {
+     public:
+         LFOParams(const AbsTime* time_ = nullptr);
++        LFOParams(consumer_location_t loc,
++                  const AbsTime* time_ = nullptr);
+         LFOParams(char Pfreq_,
+                   char Pintensity_,
+                   char Pstartphase_,
+@@ -42,7 +44,7 @@ class LFOParams:public Presets
+                   char Prandomness_,
+                   char Pdelay_,
+                   char Pcontinous,
+-                  char fel_,
++                  consumer_location_t loc,
+                   const AbsTime* time_ = nullptr);
+         ~LFOParams();
+ 
+@@ -63,13 +65,18 @@ class LFOParams:public Presets
+         unsigned char Pcontinous; /**<1 if LFO is continous*/
+         unsigned char Pstretch; /**<how the LFO is "stretched" according the note frequency (64=no stretch)*/
+ 
+-        int fel; //what kind is the LFO (0 - frequency, 1 - amplitude, 2 - filter)
++        //! what kind is the LFO (0 - frequency, 1 - amplitude, 2 - filter)
++        consumer_location_type_t fel;
++        int loc; //!< consumer location
+ 
+         const AbsTime *time;
+         int64_t last_update_timestamp;
+ 
+         static const rtosc::Ports &ports;
+     private:
++        //! common functionality of ctors
++        void setup();
++
+         /* Default parameters */
+         unsigned char Dfreq;
+         unsigned char Dintensity;
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index e1f7d579..ddbee247 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -311,17 +311,17 @@ PADnoteParameters::PADnoteParameters(const SYNTH_T &synth_, FFTwrapper *fft_,
+     oscilgen->ADvsPAD = true;
+ 
+     FreqEnvelope = new EnvelopeParams(0, 0, time_);
+-    FreqEnvelope->init(EnvelopeParams::ad_global_freq_env);
+-    FreqLfo = new LFOParams(70, 0, 64, 0, 0, 0, 0, 0, time_);
++    FreqEnvelope->init(ad_global_freq);
++    FreqLfo = new LFOParams(ad_global_freq, time_);
+ 
+     AmpEnvelope = new EnvelopeParams(64, 1, time_);
+-    AmpEnvelope->init(EnvelopeParams::ad_global_amp_env);
+-    AmpLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 1, time_);
++    AmpEnvelope->init(ad_global_amp);
++    AmpLfo = new LFOParams(ad_global_amp, time_);
+ 
+-    GlobalFilter   = new FilterParams(2, 94, 40, time_);
++    GlobalFilter   = new FilterParams(ad_global_filter, time_);
+     FilterEnvelope = new EnvelopeParams(0, 1, time_);
+-    FilterEnvelope->init(EnvelopeParams::ad_global_filter_env);
+-    FilterLfo = new LFOParams(80, 0, 64, 0, 0, 0, 0, 2, time_);
++    FilterEnvelope->init(ad_global_filter);
++    FilterLfo = new LFOParams(ad_global_filter, time_);
+ 
+     for(int i = 0; i < PAD_MAX_SAMPLES; ++i)
+         sample[i].smp = NULL;
+diff --git a/src/Params/Presets.h b/src/Params/Presets.h
+index 144f7875..a3c5e129 100644
+--- a/src/Params/Presets.h
++++ b/src/Params/Presets.h
+@@ -43,6 +43,35 @@ class Presets
+         //virtual void defaults() = 0;
+ };
+ 
++/**
++    Location where a "consumer" in zyn is located, where
++    consumers are envelopes, LFOs and filters.
++    Note that the AD synth global consumers correspond to those of PAD synth
++ */
++enum consumer_location_t
++{
++    ad_global_amp,
++    ad_global_freq,
++    ad_global_filter,
++
++    ad_voice_amp,
++    ad_voice_freq,
++    ad_voice_filter,
++    ad_voice_fm_freq,
++    ad_voice_fm_amp,
++
++    sub_freq,
++    sub_filter,
++    sub_bandwidth,
++
++    unspecified
++};
++
++enum class consumer_location_type_t
++{
++    freq, amp, filter, unspecified
++};
++
+ }
+ 
+ #endif
+diff --git a/src/Params/SUBnoteParameters.cpp b/src/Params/SUBnoteParameters.cpp
+index 245ac33f..33ac51e5 100644
+--- a/src/Params/SUBnoteParameters.cpp
++++ b/src/Params/SUBnoteParameters.cpp
+@@ -201,15 +201,15 @@ SUBnoteParameters::SUBnoteParameters(const AbsTime *time_)
+ {
+     setpresettype("Psubsynth");
+     AmpEnvelope = new EnvelopeParams(64, 1, time_);
+-    AmpEnvelope->init(EnvelopeParams::ad_global_amp_env);
++    AmpEnvelope->init(ad_global_amp);
+     FreqEnvelope = new EnvelopeParams(64, 0, time_);
+-    FreqEnvelope->init(EnvelopeParams::sub_freq_env);
++    FreqEnvelope->init(sub_freq);
+     BandWidthEnvelope = new EnvelopeParams(64, 0, time_);
+-    BandWidthEnvelope->init(EnvelopeParams::sub_bandwidth_env);
++    BandWidthEnvelope->init(sub_bandwidth);
+ 
+-    GlobalFilter = new FilterParams(2, 80, 40, time_);
++    GlobalFilter = new FilterParams(sub_filter, time_);
+     GlobalFilterEnvelope = new EnvelopeParams(0, 1, time_);
+-    GlobalFilterEnvelope->init(EnvelopeParams::ad_global_filter_env);
++    GlobalFilterEnvelope->init(sub_filter);
+ 
+     defaults();
+ }
+diff --git a/src/Synth/LFO.cpp b/src/Synth/LFO.cpp
+index 7519c017..26b5b70f 100644
+--- a/src/Synth/LFO.cpp
++++ b/src/Synth/LFO.cpp
+@@ -62,13 +62,14 @@ LFO::LFO(const LFOParams &lfopars, float basefreq, const AbsTime &t, WatchManage
+     lfofreqrnd = powf(lfopars.Pfreqrand / 127.0f, 2.0f) * 4.0f;
+ 
+     switch(lfopars.fel) {
+-        case 1:
++        case consumer_location_type_t::amp:
+             lfointensity = lfopars.Pintensity / 127.0f;
+             break;
+-        case 2:
++        case consumer_location_type_t::filter:
+             lfointensity = lfopars.Pintensity / 127.0f * 4.0f;
+             break; //in octave
+-        default:
++        case consumer_location_type_t::freq:
++        case consumer_location_type_t::unspecified:
+             lfointensity = powf(2, lfopars.Pintensity / 127.0f * 11.0f) - 1.0f; //in centi
+             phase -= 0.25f; //chance the starting phase
+             break;
+@@ -133,13 +134,14 @@ float LFO::lfoout()
+         phaseInc = fabs(lfofreq) * dt_;
+ 
+         switch(lfopars_.fel) {
+-            case 1:
++            case consumer_location_type_t::amp:
+                 lfointensity = lfopars_.Pintensity / 127.0f;
+                 break;
+-            case 2:
++            case consumer_location_type_t::filter:
+                 lfointensity = lfopars_.Pintensity / 127.0f * 4.0f;
+                 break; //in octave
+-            default:
++            case consumer_location_type_t::freq:
++            case consumer_location_type_t::unspecified:
+                 lfointensity = powf(2, lfopars_.Pintensity / 127.0f * 11.0f) - 1.0f; //in centi
+                 //x -= 0.25f; //chance the starting phase
+                 break;
+diff --git a/src/Synth/OscilGen.cpp b/src/Synth/OscilGen.cpp
+index 3c5cf865..ce3a12e0 100644
+--- a/src/Synth/OscilGen.cpp
++++ b/src/Synth/OscilGen.cpp
+@@ -1403,7 +1403,7 @@ void OscilGen::getfromXML(XMLwrapper& xml)
+ 
+ 
+     if(xml.enterbranch("HARMONICS")) {
+-        Phmag[0]   = 127; // TODO: correct?
++        Phmag[0]   = 64;
+         Phphase[0] = 64;
+         for(int n = 0; n < MAX_AD_HARMONICS; ++n) {
+             if(xml.enterbranch("HARMONIC", n + 1) == 0)
+-- 
+2.47.0
+

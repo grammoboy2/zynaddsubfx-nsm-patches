@@ -1,0 +1,25 @@
+From 01794c4ce5e446b27bc02b3a0bcaa67e9a169932 Mon Sep 17 00:00:00 2001
+From: Olivier Humbert <trebmuh@users.noreply.github.com>
+Date: Mon, 11 Dec 2017 18:40:11 +0100
+Subject: [PATCH 1231/1936] Update year on the copyright credit for the GUI
+
+---
+ src/UI/MasterUI.fl | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 97bf447d..abfbf628 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -869,7 +869,7 @@ panelwindow->show();}
+       xywh {411 344 365 280} type Double hide
+     } {
+       Fl_Box {} {
+-        label {Copyright (c) 2002-2009 Nasca O. PAUL, 2009-2016 Mark McCurry, and others. Please read AUTHORS.txt}
++        label {Copyright (c) 2002-2009 Nasca O. PAUL, 2009-2017 Mark McCurry, and others. Please read AUTHORS.txt}
+         xywh {15 35 335 55} labeltype EMBOSSED_LABEL labelsize 15 align 208
+       }
+       Fl_Box {} {
+-- 
+2.47.0
+

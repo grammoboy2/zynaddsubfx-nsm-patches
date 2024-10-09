@@ -1,0 +1,483 @@
+From 70678af0705b2c3e6be2c7397a8d05643a9a1747 Mon Sep 17 00:00:00 2001
+From: Olivier Jolly <olivier@pcedev.com>
+Date: Mon, 30 Nov 2015 17:31:26 +0100
+Subject: [PATCH 0776/1936] DSSI: allow multiple independant instances to run
+ within a single host process and be controlled separately
+
+Until now, the returned DSSI instance was a static instance and DSSI controls were incorrectly shared among all plugin instanciations within a single host process.
+Thanks to taktik@renoise for pointing it out.
+---
+ src/CMakeLists.txt                    | 11 +++--
+ src/Output/DSSIControl.cpp            | 28 ++++++++++++
+ src/Output/DSSIControl.h              | 66 +++++++++++++++++++++++++++
+ src/Output/DSSIControlDescription.cpp | 39 ++++++++++++++++
+ src/Output/DSSIControlDescription.h   | 66 +++++++++++++++++++++++++++
+ src/Output/DSSIaudiooutput.cpp        | 57 +++++++++++------------
+ src/Output/DSSIaudiooutput.h          | 63 ++-----------------------
+ 7 files changed, 235 insertions(+), 95 deletions(-)
+ create mode 100644 src/Output/DSSIControl.cpp
+ create mode 100644 src/Output/DSSIControl.h
+ create mode 100644 src/Output/DSSIControlDescription.cpp
+ create mode 100644 src/Output/DSSIControlDescription.h
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 7f1e65eb..e105ed33 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -428,10 +428,13 @@ target_link_libraries(zynaddsubfx
+ 
+ if (DssiEnable)
+ 	add_library(zynaddsubfx_dssi SHARED
+-        UI/ConnectionDummy.cpp
+-		Output/DSSIaudiooutput.cpp
+-		globals.cpp
+-		)
++			UI/ConnectionDummy.cpp
++			Output/DSSIaudiooutput.cpp
++			globals.cpp
++			Output/DSSIControl.cpp
++			Output/DSSIControl.h
++			Output/DSSIControlDescription.cpp
++			Output/DSSIControlDescription.h)
+ 
+ 	target_link_libraries(zynaddsubfx_dssi
+         zynaddsubfx_core
+diff --git a/src/Output/DSSIControl.cpp b/src/Output/DSSIControl.cpp
+new file mode 100644
+index 00000000..21bb9990
+--- /dev/null
++++ b/src/Output/DSSIControl.cpp
+@@ -0,0 +1,28 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DSSIControl.cpp - DSSI control ports "controller"
++  Copyright (C) 2015 Olivier Jolly
++  Author: Olivier Jolly
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#include "DSSIControl.h"
++#include "../Misc/Master.h"
++
++void DSSIControl::forward_control(Master *master) {
++    master->setController(0, description.controller_code, get_scaled_data());
++}
+diff --git a/src/Output/DSSIControl.h b/src/Output/DSSIControl.h
+new file mode 100644
+index 00000000..9f9d5730
+--- /dev/null
++++ b/src/Output/DSSIControl.h
+@@ -0,0 +1,66 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DSSIControl.h - DSSI control ports "controller"
++  Copyright (C) 2015 Olivier Jolly
++  Author: Olivier Jolly
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef ZYNADDSUBFX_DSSICONTROL_H
++#define ZYNADDSUBFX_DSSICONTROL_H
++
++
++#include "DSSIControlDescription.h"
++
++struct DSSIControl {
++
++    DSSIControlDescription description;
++
++    float *data; /// pointer to the value for this controller which is updated by the DSSI host
++
++    /**
++     * Ctr for a DSSIControl based on a DSSIControl description
++     * @param controller_code the controller code
++     * @param name the human readable code name
++     */
++    DSSIControl(DSSIControlDescription description) : description(description) { }
++
++    /**
++     * update the current control to the Master in charge of dispatching them to the parts, effects, ...
++     * @param master the controller master in charge of further dispatch
++     */
++    void forward_control(Master *master);
++
++    /**
++     * scale the incoming value refereced by data in the hinted range to one expected by the Master dispatcher.
++     * Boolean are toggled to 0 or 127, ...
++     */
++    int get_scaled_data() {
++        if (LADSPA_IS_HINT_TOGGLED(description.port_range_hint.HintDescriptor)) {
++            return *data <= 0 ? 0 : 127;
++        } else if (description.port_range_hint.UpperBound < 127) {
++            // when not using 127 or 128 as upper bound, scale the input using the port range hint to 0 .. 128
++            return 128 * (*data - description.port_range_hint.LowerBound) /
++                   (description.port_range_hint.UpperBound - description.port_range_hint.LowerBound);
++        } else {
++            return *data;
++        }
++    }
++
++};
++
++#endif //ZYNADDSUBFX_DSSICONTROL_H
+diff --git a/src/Output/DSSIControlDescription.cpp b/src/Output/DSSIControlDescription.cpp
+new file mode 100644
+index 00000000..75da0fb8
+--- /dev/null
++++ b/src/Output/DSSIControlDescription.cpp
+@@ -0,0 +1,39 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DSSIControlDescription.cpp - Description of DSSI control ports
++  Copyright (C) 2015 Olivier Jolly
++  Author: Olivier Jolly
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#include "DSSIControlDescription.h"
++
++// Mapping from dssi control index to midi CC
++const DSSIControlDescription dssi_control_description[DSSIControlDescription::MAX_DSSI_CONTROLS] = {
++    { C_modwheel, "Modwheel", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MIDDLE, 1, 127 }},
++    { C_volume, "Volume", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MAXIMUM, 1, 127 }},
++    { C_panning, "Panning"},
++    { C_expression, "Expression", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MAXIMUM, 1, 127 }},
++    { C_sustain, "Sustain", {LADSPA_HINT_TOGGLED| LADSPA_HINT_DEFAULT_0, 0, 1}},
++    { C_portamento, "Portamento", {LADSPA_HINT_TOGGLED| LADSPA_HINT_DEFAULT_0, 0, 1}},
++    { C_filterq, "Filter Q", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MIDDLE, 0, 128 }},
++    { C_filtercutoff, "Filter cutoff", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_0, -1, 1 }},
++    { C_bandwidth, "Bandwidth"},
++    { C_fmamp, "FM amplification", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MAXIMUM, 1, 127 }},
++    { C_resonance_center, "Renonance center", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_0, -1, 1 }},
++    { C_resonance_bandwidth, "Resonance bandwidth", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_0, -1, 1 }},
++};
+diff --git a/src/Output/DSSIControlDescription.h b/src/Output/DSSIControlDescription.h
+new file mode 100644
+index 00000000..56bf3fcd
+--- /dev/null
++++ b/src/Output/DSSIControlDescription.h
+@@ -0,0 +1,66 @@
++/*
++  ZynAddSubFX - a software synthesizer
++
++  DSSIControlDescription.h - Description of DSSI control ports
++  Copyright (C) 2015 Olivier Jolly
++  Author: Olivier Jolly
++
++  This program is free software; you can redistribute it and/or modify
++  it under the terms of version 2 of the GNU General Public License
++  as published by the Free Software Foundation.
++
++  This program is distributed in the hope that it will be useful,
++  but WITHOUT ANY WARRANTY; without even the implied warranty of
++  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++  GNU General Public License (version 2 or later) for more details.
++
++  You should have received a copy of the GNU General Public License (version 2)
++  along with this program; if not, write to the Free Software Foundation,
++  Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
++
++*/
++
++#ifndef ZYNADDSUBFX_DSSICONTROLDESCRIPTION_H
++#define ZYNADDSUBFX_DSSICONTROLDESCRIPTION_H
++
++
++#include <globals.h>
++#include <ladspa.h>
++
++/**
++ * DSSIControlDescription represent one instance of DSSI control used to describe accepted values to the DSSI host
++ * and to forward DSSI host value change to ZynAddSubFx controller
++ */
++struct DSSIControlDescription {
++
++    const static int MAX_DSSI_CONTROLS = 12;
++
++    const MidiControllers controller_code; /// controler code, as accepted by the Controller class
++    const char *name; /// human readable name of this control
++
++    /** hint about usable range of value for this control, defaulting to 0-128, initially at 64 */
++    const LADSPA_PortRangeHint port_range_hint = {
++            LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_DEFAULT_MIDDLE, 0, 128};
++
++    /**
++     * Ctr for a DSSIControlDescription using the default hint (0-128 starting at 64)
++     * @param controller_code the controller code
++     * @param name the human readable code name
++     */
++    DSSIControlDescription(MidiControllers controller_code, const char *name) : controller_code(controller_code),
++                                                                                name(name) { }
++
++    /**
++     * Ctr for a DSSIControlDescription
++     * @param controller_code the controller code
++     * @param name the human readable code name
++     * @param port_range_hint the accepted range of values
++     */
++    DSSIControlDescription(MidiControllers controller_code, const char *name, LADSPA_PortRangeHint port_range_hint) :
++            controller_code(controller_code), name(name), port_range_hint(port_range_hint) { }
++
++};
++
++extern const DSSIControlDescription dssi_control_description[DSSIControlDescription::MAX_DSSI_CONTROLS];
++
++#endif //ZYNADDSUBFX_DSSICONTROLDESCRIPTION_H
+diff --git a/src/Output/DSSIaudiooutput.cpp b/src/Output/DSSIaudiooutput.cpp
+index 1bc35baf..6927bc38 100644
+--- a/src/Output/DSSIaudiooutput.cpp
++++ b/src/Output/DSSIaudiooutput.cpp
+@@ -37,22 +37,6 @@ using std::set;
+ using std::string;
+ using std::vector;
+ 
+-// Mapping from dssi control index to midi CC
+-DSSIaudiooutput::DSSIControl dssi_control[DSSIaudiooutput::MAX_DSSI_CONTROLS] = {
+-    { C_modwheel, "Modwheel", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MIDDLE, 1, 127 }},
+-    { C_volume, "Volume", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MAXIMUM, 1, 127 }},
+-    { C_panning, "Panning"},
+-    { C_expression, "Expression", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MAXIMUM, 1, 127 }},
+-    { C_sustain, "Sustain", {LADSPA_HINT_TOGGLED| LADSPA_HINT_DEFAULT_0, 0, 1}},
+-    { C_portamento, "Portamento", {LADSPA_HINT_TOGGLED| LADSPA_HINT_DEFAULT_0, 0, 1}},
+-    { C_filterq, "Filter Q", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MIDDLE, 0, 128 }},
+-    { C_filtercutoff, "Filter cutoff", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_0, -1, 1 }},
+-    { C_bandwidth, "Bandwidth"},
+-    { C_fmamp, "FM amplification", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_MAXIMUM, 1, 127 }},
+-    { C_resonance_center, "Renonance center", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_0, -1, 1 }},
+-    { C_resonance_bandwidth, "Resonance bandwidth", {LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_DEFAULT_0, -1, 1 }},
+-};
+-
+ //Dummy variables and functions for linking purposes
+ const char *instance_name = 0;
+ class WavFile;
+@@ -211,7 +195,7 @@ void DSSIaudiooutput::connectPort(unsigned long port, LADSPA_Data *data)
+             outr = data;
+             break;
+         default:
+-            if ( port - 2 < MAX_DSSI_CONTROLS ) {
++            if ( port - 2 < DSSIControlDescription::MAX_DSSI_CONTROLS ) {
+                 dssi_control[port - 2].data = data;
+             }
+             break;
+@@ -450,7 +434,8 @@ void DSSIaudiooutput::runSynth(unsigned long sample_count,
+     Master *master = middleware->spawnMaster();
+ 
+     // forward all dssi control values to the middleware
+-    for (size_t dssi_control_index = 0; dssi_control_index < MAX_DSSI_CONTROLS; ++ dssi_control_index) {
++    for (size_t dssi_control_index = 0;
++         dssi_control_index < DSSIControlDescription::MAX_DSSI_CONTROLS; ++dssi_control_index) {
+         dssi_control[dssi_control_index].forward_control(master);
+     }
+ 
+@@ -523,10 +508,10 @@ void DSSIaudiooutput::runSynth(unsigned long sample_count,
+  */
+ const DSSI_Descriptor *DSSIaudiooutput::getDssiDescriptor(unsigned long index)
+ {
+-    if((index > 0) || (dssiDescriptor == NULL))
++    if(index > 0)
+         return NULL;
+     else
+-        return dssiDescriptor;
++        return initDssiDescriptor();
+ }
+ 
+ //
+@@ -556,19 +541,21 @@ DSSI_Descriptor *DSSIaudiooutput::initDssiDescriptor()
+     newLadspaDescriptor->Maker =
+         "Nasca Octavian Paul <zynaddsubfx@yahoo.com>";
+     newLadspaDescriptor->Copyright = "GNU General Public License v2 or later";
+-    newLadspaDescriptor->PortCount = 2 + MAX_DSSI_CONTROLS;
++    newLadspaDescriptor->PortCount = 2 + DSSIControlDescription::MAX_DSSI_CONTROLS;
+     newPortNames    = new const char *[newLadspaDescriptor->PortCount];
+     newPortNames[0] = "Output L";
+     newPortNames[1] = "Output R";
+-    for (size_t dssi_control_index = 0; dssi_control_index < MAX_DSSI_CONTROLS; ++ dssi_control_index) {
+-        newPortNames[2 + dssi_control_index] = dssi_control[dssi_control_index].name;
++    for (size_t dssi_control_index = 0;
++         dssi_control_index < DSSIControlDescription::MAX_DSSI_CONTROLS; ++dssi_control_index) {
++        newPortNames[2 + dssi_control_index] = dssi_control_description[dssi_control_index].name;
+     }
+     newLadspaDescriptor->PortNames = newPortNames;
+     newPortDescriptors =
+         new LADSPA_PortDescriptor[newLadspaDescriptor->PortCount];
+     newPortDescriptors[0] = LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO;
+     newPortDescriptors[1] = LADSPA_PORT_OUTPUT | LADSPA_PORT_AUDIO;
+-    for (size_t dssi_control_index = 0; dssi_control_index < MAX_DSSI_CONTROLS; ++ dssi_control_index) {
++    for (size_t dssi_control_index = 0;
++         dssi_control_index < DSSIControlDescription::MAX_DSSI_CONTROLS; ++dssi_control_index) {
+         newPortDescriptors[2 + dssi_control_index] = LADSPA_PORT_INPUT | LADSPA_PORT_CONTROL;
+     }
+     newLadspaDescriptor->PortDescriptors = newPortDescriptors;
+@@ -576,8 +563,9 @@ DSSI_Descriptor *DSSIaudiooutput::initDssiDescriptor()
+         new LADSPA_PortRangeHint[newLadspaDescriptor->PortCount];
+     newPortRangeHints[0].HintDescriptor = 0;
+     newPortRangeHints[1].HintDescriptor = 0;
+-    for (size_t dssi_control_index = 0; dssi_control_index < MAX_DSSI_CONTROLS; ++ dssi_control_index) {
+-        newPortRangeHints[2 + dssi_control_index] = dssi_control[dssi_control_index].port_range_hint;
++    for (size_t dssi_control_index = 0;
++         dssi_control_index < DSSIControlDescription::MAX_DSSI_CONTROLS; ++dssi_control_index) {
++        newPortRangeHints[2 + dssi_control_index] = dssi_control_description[dssi_control_index].port_range_hint;
+     }
+     newLadspaDescriptor->PortRangeHints = newPortRangeHints;
+     newLadspaDescriptor->activate     = stub_activate;
+@@ -624,7 +612,18 @@ DSSIaudiooutput *DSSIaudiooutput::getInstance(LADSPA_Handle instance)
+  * @param sampleRate [in] the sample rate to be used by the synth.
+  * @return
+  */
+-DSSIaudiooutput::DSSIaudiooutput(unsigned long sampleRate)
++DSSIaudiooutput::DSSIaudiooutput(unsigned long sampleRate) : dssi_control({dssi_control_description[0],
++                                                                           dssi_control_description[1],
++                                                                           dssi_control_description[2],
++                                                                           dssi_control_description[3],
++                                                                           dssi_control_description[4],
++                                                                           dssi_control_description[5],
++                                                                           dssi_control_description[6],
++                                                                           dssi_control_description[7],
++                                                                           dssi_control_description[8],
++                                                                           dssi_control_description[9],
++                                                                           dssi_control_description[10],
++                                                                           dssi_control_description[11]})
+ {
+     SYNTH_T synth;
+     synth.samplerate = sampleRate;
+@@ -708,7 +707,3 @@ bool DSSIaudiooutput::mapNextBank()
+         return true;
+     }
+ }
+-
+-void DSSIaudiooutput::DSSIControl::forward_control(Master *master) {
+-    master->setController(0, controller_code, get_scaled_data());
+-}
+diff --git a/src/Output/DSSIaudiooutput.h b/src/Output/DSSIaudiooutput.h
+index a11feea6..ab279e7f 100644
+--- a/src/Output/DSSIaudiooutput.h
++++ b/src/Output/DSSIaudiooutput.h
+@@ -27,6 +27,8 @@
+ #include "../globals.h"
+ #include "../Misc/Config.h"
+ #include "../Misc/MiddleWare.h"
++#include "DSSIControlDescription.h"
++#include "DSSIControl.h"
+ 
+ #include <dssi.h>
+ #include <ladspa.h>
+@@ -91,66 +93,6 @@ class DSSIaudiooutput
+             std::string   name;
+         };
+ 
+-        /*
+-         * DSSI Controls mapping
+-         */
+-        const static int MAX_DSSI_CONTROLS = 12;
+-
+-        /**
+-         * DSSIControl represent one instance of DSSI control used to describe accepted values to the DSSI host
+-         * and to forward DSSI host value change to ZynAddSubFx controller
+-         */
+-        class DSSIControl {
+-        public:
+-            const MidiControllers controller_code; /// controler code, as accepted by the Controller class
+-            const char *name; /// human readable name of this control
+-
+-            /** hint about usable range of value for this control, defaulting to 0-128, initially at 64 */
+-            const LADSPA_PortRangeHint port_range_hint = {
+-                    LADSPA_HINT_BOUNDED_BELOW | LADSPA_HINT_BOUNDED_ABOVE | LADSPA_HINT_DEFAULT_MIDDLE, 0, 128};
+-
+-
+-            float *data; /// pointer to the value for this controller which is updated by the DSSI host
+-
+-            /**
+-             * Ctr for a DSSIControl using the default hint (0-128 starting at 64)
+-             * @param controller_code the controller code
+-             * @param name the human readable code name
+-             */
+-            DSSIControl(MidiControllers controller_code, const char *name) : controller_code(controller_code), name(name) {}
+-
+-            /**
+-             * Ctr for a DSSIControl
+-             * @param controller_code the controller code
+-             * @param name the human readable code name
+-             * @param port_range_hint the accepted range of values
+-             */
+-            DSSIControl(MidiControllers controller_code, const char *name, LADSPA_PortRangeHint port_range_hint) :
+-                    controller_code(controller_code), name(name), port_range_hint(port_range_hint) {}
+-
+-            /**
+-             * update the current control to the Master in charge of dispatching them to the parts, effects, ...
+-             * @param master the controller master in charge of further dispatch
+-             */
+-            void forward_control(Master *master);
+-
+-            /**
+-             * scale the incoming value refereced by data in the hinted range to one expected by the Master dispatcher.
+-             * Boolean are toggled to 0 or 127, ...
+-             */
+-            int get_scaled_data() {
+-                if (LADSPA_IS_HINT_TOGGLED(port_range_hint.HintDescriptor)) {
+-                    return *data <= 0 ? 0 : 127;
+-                } else if (port_range_hint.UpperBound < 127) {
+-                    // when not using 127 or 128 as upper bound, scale the input using the port range hint to 0 .. 128
+-                    return 128 * ( *data - port_range_hint.LowerBound ) / ( port_range_hint.UpperBound - port_range_hint.LowerBound );
+-                } else {
+-                    return *data;
+-                }
+-            }
+-
+-        };
+-
+     private:
+ 
+         DSSIaudiooutput(unsigned long sampleRate);
+@@ -169,6 +111,7 @@ class DSSIaudiooutput
+         static std::string      bankDirNames[];
+         static
+         std::vector<ProgramDescriptor> programMap;
++        DSSIControl dssi_control[DSSIControlDescription::MAX_DSSI_CONTROLS];
+ 
+         /**
+          * Flag controlling the list of bank directories
+-- 
+2.47.0
+

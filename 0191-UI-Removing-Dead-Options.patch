@@ -1,0 +1,73 @@
+From 589611cf2660341ad7f62f106927ca980535c2df Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Fri, 20 Jun 2014 13:13:11 -0400
+Subject: [PATCH 0191/1936] UI: Removing Dead Options
+
+---
+ src/UI/ConfigUI.fl | 45 +--------------------------------------------
+ 1 file changed, 1 insertion(+), 44 deletions(-)
+
+diff --git a/src/UI/ConfigUI.fl b/src/UI/ConfigUI.fl
+index 83dc2fd1..b81c54a8 100644
+--- a/src/UI/ConfigUI.fl
++++ b/src/UI/ConfigUI.fl
+@@ -1,5 +1,5 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0300 
++version 1.0302 
+ header_name {.h} 
+ code_name {.cc}
+ decl {//Copyright (c) 2002-2005 Nasca Octavian Paul} {private local
+@@ -188,49 +188,6 @@ dump.startnow();//this has effect only if this option was disabled}
+               code0 {o->value(config.cfg.DumpAppend);}
+             }
+           }
+-          Fl_Group {} {
+-            xywh {255 45 245 260} box ENGRAVED_FRAME
+-          } {
+-            Fl_Box {} {
+-              label {Note: Not all the following settings are used (this depends on the operating system, etc..)}
+-              xywh {260 50 235 45} labelfont 1 labelsize 11 align 128
+-            }
+-            Fl_Group {} {
+-              label Linux
+-              xywh {260 110 235 115} box ENGRAVED_BOX labelfont 1 labelsize 13 align 5
+-            } {
+-              Fl_File_Input {} {
+-                label {OSS Sequencer Device (/dev/...)}
+-                callback {snprintf(config.cfg.LinuxOSSSeqInDev,config.maxstringsize,"%s",o->value());}
+-                xywh {265 180 225 35} align 5
+-                code0 {o->insert(config.cfg.LinuxOSSSeqInDev);}
+-              }
+-              Fl_File_Input {} {
+-                label {OSS Wave Out Device (/dev/...)}
+-                callback {snprintf(config.cfg.LinuxOSSWaveOutDev,config.maxstringsize,"%s",o->value());}
+-                xywh {265 130 225 35} align 5
+-                code0 {o->insert(config.cfg.LinuxOSSWaveOutDev);}
+-              }
+-            }
+-            Fl_Group {} {
+-              label Windows
+-              xywh {260 250 235 50} box ENGRAVED_BOX labelfont 1 labelsize 13 align 5
+-            } {
+-              Fl_Counter {} {
+-                label {Midi In Dev}
+-                callback {config.cfg.WindowsMidiInId=(int) o->value();
+-midiinputnamebox->label(config.winmididevices[config.cfg.WindowsMidiInId].name);}
+-                xywh {270 270 65 20} type Simple labelsize 11 align 1 minimum 0 maximum 100 step 1
+-                code0 {o->maximum(config.winmidimax-1);}
+-                code1 {o->value(config.cfg.WindowsMidiInId);}
+-              }
+-              Fl_Box midiinputnamebox {
+-                label {Midi input device name}
+-                xywh {340 260 150 35} labelfont 1 labelsize 11 align 212
+-                code0 {o->label(config.winmididevices[config.cfg.WindowsMidiInId].name);}
+-              }
+-            }
+-          }
+           Fl_Counter {} {
+             label {XML compression level}
+             callback {config.cfg.GzipCompression=(int) o->value();}
+-- 
+2.47.0
+

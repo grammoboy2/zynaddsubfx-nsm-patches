@@ -1,0 +1,343 @@
+From da28599609314fe3845b6d9b7730e51f46d2a01f Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 7 May 2015 16:55:15 -0400
+Subject: [PATCH 0442/1936] Fix Array Based Presets Copy/Paste
+
+---
+ src/Misc/PresetExtractor.cpp    | 45 +++++++++++++--------
+ src/Misc/Util.h                 |  4 +-
+ src/Params/ADnoteParameters.cpp |  2 +-
+ src/Params/FilterParams.cpp     |  1 +
+ src/UI/FilterUI.fl              |  6 +--
+ src/UI/PresetsUI.fl             | 72 ++++++++++++++++++++++++++++-----
+ 6 files changed, 97 insertions(+), 33 deletions(-)
+
+diff --git a/src/Misc/PresetExtractor.cpp b/src/Misc/PresetExtractor.cpp
+index b56dbf2d..da421be0 100644
+--- a/src/Misc/PresetExtractor.cpp
++++ b/src/Misc/PresetExtractor.cpp
+@@ -227,32 +227,29 @@ void doPaste(MiddleWare &mw, string url, string type, XMLwrapper &xml, Ts&&... a
+ }
+ 
+ template<class T>
+-std::string doArrayCopy(MiddleWare &mw, int field, string url)
++std::string doArrayCopy(MiddleWare &mw, int field, string url, string name)
+ {
+     XMLwrapper xml;
+-    mw.doReadOnlyOp([&xml, url, field, &mw](){
++    printf("Getting info from '%s'<%d>\n", url.c_str(), field);
++    mw.doReadOnlyOp([&xml, url, field, name, &mw](){
+         Master *m = mw.spawnMaster();
+         //Get the pointer
+         T *t = (T*)capture<void*>(m, url+"self");
+         //Extract Via mxml
+-        t->copy(presetsstore, field, NULL);
++        t->copy(presetsstore, field, name.empty()?NULL:name.c_str());
+     });
+ 
+     return "";//xml.getXMLdata();
+ }
+ 
+ template<class T, typename... Ts>
+-void doArrayPaste(MiddleWare &mw, int field, string url, string type, string data, Ts&&... args)
++void doArrayPaste(MiddleWare &mw, int field, string url, string type,
++        XMLwrapper &xml, Ts&&... args)
+ {
+-    if(data.length() < 20)
+-        return;
+-
+     //Generate a new object
+     T *t = new T(std::forward<Ts>(args)...);
+ 
+-    XMLwrapper xml;
+-    xml.putXMLdata(data.c_str());
+-    if(xml.enterbranch(type) == 0) {
++    if(xml.enterbranch(type+"n") == 0) {
+         delete t;
+         return;
+     }
+@@ -266,7 +263,7 @@ void doArrayPaste(MiddleWare &mw, int field, string url, string type, string dat
+     rtosc_message(buffer, 1024, path.c_str(), "bi", sizeof(void*), &t, field);
+     if(!Master::ports.apropos(path.c_str()))
+         fprintf(stderr, "Warning: Missing Paste URL: '%s'\n", path.c_str());
+-    printf("Sending info to '%s'\n", buffer);
++    printf("Sending info to '%s'<%d>\n", buffer, field);
+     mw.transmitMsg(buffer);
+ 
+     //Let the pointer be reclaimed later
+@@ -328,7 +325,8 @@ std::string doClassCopy(std::string type, MiddleWare &mw, string url, string nam
+     return "UNDEF";
+ }
+ 
+-void doClassArrayPaste(std::string type, std::string type_, int field, MiddleWare &mw, string url, string data)
++void doClassArrayPaste(std::string type, std::string type_, int field, MiddleWare &mw, string url,
++        XMLwrapper &data)
+ {
+     if(type == "FilterParams")
+         doArrayPaste<FilterParams>(mw, field, url, type_, data);
+@@ -336,12 +334,12 @@ void doClassArrayPaste(std::string type, std::string type_, int field, MiddleWar
+         doArrayPaste<ADnoteParameters>(mw, field, url, type_, data, (FFTwrapper*)NULL);
+ }
+ 
+-std::string doClassArrayCopy(std::string type, int field, MiddleWare &mw, string url)
++std::string doClassArrayCopy(std::string type, int field, MiddleWare &mw, string url, string name)
+ {
+     if(type == "FilterParams")
+-        return doArrayCopy<FilterParams>(mw, field, url);
++        return doArrayCopy<FilterParams>(mw, field, url, name);
+     else if(type == "ADnoteParameters")
+-        return doArrayCopy<ADnoteParameters>(mw, field, url);
++        return doArrayCopy<ADnoteParameters>(mw, field, url, name);
+     return "UNDEF";
+ }
+ 
+@@ -428,13 +426,26 @@ void presetCopyArray(MiddleWare &mw, std::string url, int field, std::string nam
+ {
+     (void) name;
+     printf("PresetArrayCopy()\n");
+-    doClassArrayCopy(getUrlType(url), field, mw, url);
++    doClassArrayCopy(getUrlType(url), field, mw, url, name);
+ }
+ void presetPasteArray(MiddleWare &mw, std::string url, int field, std::string name)
+ {
+     (void) name;
+     printf("PresetArrayPaste()\n");
+-    doClassArrayPaste(getUrlType(url), getUrlPresetType(url, mw), field, mw, url, presetsstore.clipboard.data);
++    string data = "";
++    XMLwrapper xml;
++    if(name.empty()) {
++        data = presetsstore.clipboard.data;
++        if(data.length() < 20)
++            return;
++        if(!xml.putXMLdata(data.c_str()))
++            return;
++    } else {
++        if(xml.loadXMLfile(name))
++            return;
++    }
++    printf("Performing Paste...\n");
++    doClassArrayPaste(getUrlType(url), getUrlPresetType(url, mw), field, mw, url, xml);
+ }
+ #if 0
+ void presetPaste(std::string url, int)
+diff --git a/src/Misc/Util.h b/src/Misc/Util.h
+index 8cfb9d97..aaf5aa19 100644
+--- a/src/Misc/Util.h
++++ b/src/Misc/Util.h
+@@ -177,11 +177,11 @@ static inline void arrayNullify(T &t) {delete [] t; t = NULL; }
+         o.paste(paste);}}
+ 
+ #define rArrayPaste \
+-{"array-paste:ib", rProp(internal) rDoc("array paste port"), 0, \
++{"paste-array:bi", rProp(internal) rDoc("array paste port"), 0, \
+     [](const char *m, rtosc::RtData &d){ \
+         printf("rArrayPaste...\n"); \
+         rObject &paste = **(rObject **)rtosc_argument(m,0).b.data; \
+-        int field = rtosc_argument(m,1).d; \
++        int field = rtosc_argument(m,1).i; \
+         rObject &o = *(rObject*)d.obj;\
+         o.pasteArray(paste,field);}}
+ 
+diff --git a/src/Params/ADnoteParameters.cpp b/src/Params/ADnoteParameters.cpp
+index 37bc047a..e05c66c0 100644
+--- a/src/Params/ADnoteParameters.cpp
++++ b/src/Params/ADnoteParameters.cpp
+@@ -908,7 +908,7 @@ void ADnoteParameters::pasteArray(ADnoteParameters &a, int nvoice)
+     if(nvoice >= NUM_VOICES)
+         return;
+ 
+-    VoicePar[nvoice].paste(a.VoicePar[0]);
++    VoicePar[nvoice].paste(a.VoicePar[nvoice]);
+ }
+ 
+ #define copy(x) this->x = a.x
+diff --git a/src/Params/FilterParams.cpp b/src/Params/FilterParams.cpp
+index b9695a74..ac406cac 100644
+--- a/src/Params/FilterParams.cpp
++++ b/src/Params/FilterParams.cpp
+@@ -506,6 +506,7 @@ void FilterParams::paste(FilterParams &x)
+ 
+ void FilterParams::pasteArray(FilterParams &x, int nvowel)
+ {
++    printf("FilterParameters::pasting-an-array<%d>\n", nvowel);
+     for(int nformant = 0; nformant < FF_MAX_FORMANTS; ++nformant) {
+         auto &self   = Pvowels[nvowel].formants[nformant];
+         auto &update = x.Pvowels[nvowel].formants[nformant];
+diff --git a/src/UI/FilterUI.fl b/src/UI/FilterUI.fl
+index bb8066f8..d4c66fe7 100644
+--- a/src/UI/FilterUI.fl
++++ b/src/UI/FilterUI.fl
+@@ -85,7 +85,7 @@ delete (formantparswindow);} {}
+     } {
+       Fl_Button {} {
+         label P
+-        callback {/*presetsui->paste(pars,this);*/}
++        callback {presetsui->paste(filterui->loc(),this);}
+         xywh {203 5 15 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 10 labelcolor 7
+       }
+       Fl_Group filterparamswindow {
+@@ -254,7 +254,7 @@ delete (formantparswindow);} {}
+     } {
+       Fl_Button {} {
+         label P
+-        callback {presetsui->paste(loc(),this,nvowel);}
++        callback {presetsui->paste(filterui->loc(),this,nvowel);}
+         xywh {665 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 7
+         code0 {formantparswindow->osc = osc;}
+         code1 {formantparswindow->base = loc();}
+@@ -413,7 +413,7 @@ formantfiltergraph->redraw();}
+       }
+       Fl_Button {} {
+         label C
+-        callback {presetsui->copy(formantparsgroup->loc(),nvowel);}
++        callback {presetsui->copy(filterui->loc(),nvowel);}
+         xywh {635 25 25 15} box THIN_UP_BOX color 179 labelfont 1 labelsize 11 labelcolor 55
+       }
+       Fl_Box {} {
+diff --git a/src/UI/PresetsUI.fl b/src/UI/PresetsUI.fl
+index 69422396..47e25ce9 100644
+--- a/src/UI/PresetsUI.fl
++++ b/src/UI/PresetsUI.fl
+@@ -33,7 +33,9 @@ class PresetsUI_ {} {
+ 
+ class PresetsUI {} {
+     Function {PresetsUI(Fl_Osc_Interface *osc_):listmodel(osc_), datamodel(osc_)} {} {
+-        code {osc = osc_;make_window();
++        code {osc = osc_;
++            arraymode = false;
++            make_window();
+             listmodel.callback = [this](Osc_ListModel::list_t list) {
+                 copybrowse->clear();
+                 pastebrowse->clear();
+@@ -43,8 +45,11 @@ class PresetsUI {} {
+                     return; 
+                 for(unsigned i=0;i<list.size();++i){
+                     std::string type = std::get<2>(list[i]);
+-                    bool same = datamodel.value.substr(1) == type;
+-                    same |= strstr(type.c_str(), "Plfo") && strstr(datamodel.value.c_str(), "Plfo");
++                    std::string comp = datamodel.value.substr(1);
++                    if(arraymode)
++                        comp += "n";
++                    bool same = comp == type;
++                    same |= strstr(type.c_str(), "Plfo") && strstr(comp.c_str(), "Plfo");
+                     if(!same)
+                         continue;
+                     files.push_back(std::get<0>(list[i]));
+@@ -82,7 +87,10 @@ class PresetsUI {} {
+                 callback {const char *tmp=presetname->value();
+                     if (tmp!=NULL) {
+                         if (strlen(tmp)>0){
+-                            osc->write("/presets/copy", "ss", url.c_str(), tmp);
++                            if(arraymode)
++                                osc->write("/presets/copy", "ssi", url.c_str(), tmp, arrayidx);
++                            else
++                                osc->write("/presets/copy", "ss", url.c_str(), tmp);
+                             copywin->hide();
+                         };
+                     };}
+@@ -91,7 +99,10 @@ class PresetsUI {} {
+             Fl_Button copybutton {
+                 label {Copy to Clipboard}
+                 callback {
+-                    osc->write("/presets/copy", "s", url.c_str());
++                    if(arraymode)
++                        osc->write("/presets/copy", "si", url.c_str(), arrayidx);
++                    else
++                        osc->write("/presets/copy", "s", url.c_str());
+                     copywin->hide();}
+                 xywh {25 385 90 35} box THIN_UP_BOX align 192
+             }
+@@ -138,7 +149,10 @@ class PresetsUI {} {
+                 label {Paste from Preset}
+                 callback {int n=pastebrowse->value()-1;
+                     if (n>=0){
+-                        osc->write("/presets/paste", "ss", url.c_str(), files[n].c_str());
++                        if(arraymode)
++                            osc->write("/presets/paste", "ssi", url.c_str(), files[n].c_str(), arrayidx);
++                        else
++                            osc->write("/presets/paste", "ss", url.c_str(), files[n].c_str());
+                     }
+                     pastewin->hide();
+                     pui->refresh();}
+@@ -147,7 +161,10 @@ class PresetsUI {} {
+             Fl_Button pastebutton {
+                 label {Paste from Clipboard}
+                 callback {
+-                    osc->write("/presets/paste", "s", url.c_str());
++                    if(arraymode)
++                        osc->write("/presets/paste", "si", url.c_str(), arrayidx);
++                    else
++                        osc->write("/presets/paste", "s", url.c_str());
+                     pastewin->hide();
+                     pui->refresh();}
+                 xywh {25 385 90 35} box THIN_UP_BOX align 192
+@@ -178,14 +195,44 @@ class PresetsUI {} {
+         }
+     }
+     Function {paste(std::string url_, PresetsUI_ *pui, int idx)} {} {code {
+-    printf("UNIMPLEMENTED PASTE\\n");
++    url = url_;
++    this->pui=pui;
++    bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
++    pastepbutton->deactivate();
++    deletepbutton->deactivate();
++    arraymode = true;
++    arrayidx  = idx;
++
++    if(but) {
++        osc->write("/presets/paste", "si", url.c_str(), idx);
++        pui->refresh();
++    } else {
++        rescan(url_);
++        pastewin->show();
++    }
+     } {}}
+     Function {copy(std::string url_, int idx)} {} {code {
+-    printf("UNIMPLEMENTED COPY\\n");
++        copybutton->activate();
++        copypbutton->deactivate();
++        arraymode = true;
++        arrayidx  = idx;
++        url = url_;
++        this->pui=NULL;
++        bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
++        presetname->cut(0,presetname->maximum_size());
++
++        if(but) {
++            osc->write("/presets/copy", "si", url_.c_str(), idx);
++        } else {
++            rescan(url_);
++            copywin->show();
++        }
+     } {}}
+     Function {copy(std::string url_)} {} {
+-        code {copybutton->activate();
++        code {
++            copybutton->activate();
+             copypbutton->deactivate();
++            arraymode = false;
+ 
+             url = url_;
+             this->pui=NULL;
+@@ -206,6 +253,7 @@ class PresetsUI {} {
+             bool but=(Fl::event_button()!=FL_LEFT_MOUSE);
+             pastepbutton->deactivate();
+             deletepbutton->deactivate();
++            arraymode = false;
+ 
+             if(but) {
+                 osc->write("/presets/paste", "s", url.c_str());
+@@ -233,6 +281,10 @@ class PresetsUI {} {
+     }
+     decl {std::vector<std::string> files;} {public local
+     }
++    decl {bool arraymode;} {public local
++    }
++    decl {int arrayidx;} {public local
++    }
+     decl {PresetsUI_ *pui;} {public local
+     }
+ } 
+-- 
+2.47.0
+

@@ -1,0 +1,68 @@
+From 651c6618255a2f1a7fceeff00d5e7bb849126469 Mon Sep 17 00:00:00 2001
+From: Johannes Lorenz <j.git@lorenz-ho.me>
+Date: Wed, 8 Apr 2020 19:04:55 +0200
+Subject: [PATCH 1525/1936] sampleGenerator: Take smp by rval-ref
+
+This lets sampleGenerator avoid unnecessary copies of the
+`PADnoteParameters::Sample` struct. Especially useful for
+`PADnoteParameters::applyparameters`.
+---
+ src/Misc/MiddleWare.cpp          | 2 +-
+ src/Params/PADnoteParameters.cpp | 6 +++---
+ src/Params/PADnoteParameters.h   | 2 +-
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/src/Misc/MiddleWare.cpp b/src/Misc/MiddleWare.cpp
+index 9d0cbdee..2605777c 100644
+--- a/src/Misc/MiddleWare.cpp
++++ b/src/Misc/MiddleWare.cpp
+@@ -199,7 +199,7 @@ void preparePadSynth(string path, PADnoteParameters *p, rtosc::RtData &d)
+ #else
+     std::mutex rtdata_mutex;
+     unsigned num = p->sampleGenerator([&rtdata_mutex, &path,&d]
+-                       (unsigned N, PADnoteParameters::Sample &s)
++                       (unsigned N, PADnoteParameters::Sample&& s)
+                        {
+                            //printf("sending info to '%s'\n",
+                            //       (path+to_s(N)).c_str());
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 4f5546ed..b268ae40 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -842,9 +842,9 @@ void PADnoteParameters::applyparameters(std::function<bool()> do_abort,
+     if(do_abort())
+         return;
+     unsigned num = sampleGenerator([this]
+-                       (unsigned N, PADnoteParameters::Sample &smp) {
++                       (unsigned N, PADnoteParameters::Sample&& smp) {
+                            delete[] sample[N].smp;
+-                           sample[N] = smp;
++                           sample[N] = std::move(smp);
+                        },
+                        do_abort, max_threads);
+ 
+@@ -965,7 +965,7 @@ int PADnoteParameters::sampleGenerator(PADnoteParameters::callback cb,
+             //yield new sample
+             newsample.size     = samplesize;
+             newsample.basefreq = basefreq * basefreqadjust;
+-            cb(nsample, newsample);
++            cb(nsample, std::move(newsample));
+         }
+ 
+         //Cleanup
+diff --git a/src/Params/PADnoteParameters.h b/src/Params/PADnoteParameters.h
+index 598a0d2b..8ea8224d 100644
+--- a/src/Params/PADnoteParameters.h
++++ b/src/Params/PADnoteParameters.h
+@@ -176,7 +176,7 @@ class PADnoteParameters:public Presets
+         //! RT sample data
+         Sample sample[PAD_MAX_SAMPLES];
+ 
+-        typedef std::function<void(int,PADnoteParameters::Sample&)> callback;
++        typedef std::function<void(int,PADnoteParameters::Sample&&)> callback;
+ 
+         //! PAD synth main function
+         //! Generate spectrum and run IFFTs on it
+-- 
+2.47.0
+

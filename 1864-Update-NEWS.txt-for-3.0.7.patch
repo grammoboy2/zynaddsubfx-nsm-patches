@@ -1,0 +1,31 @@
+From 3b8e14cf8de0a9d1adc89fce1f55fbe25304e7a9 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Thu, 3 Nov 2022 22:33:25 -0400
+Subject: [PATCH 1864/1936] Update NEWS.txt for 3.0.7
+
+---
+ NEWS.txt | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/NEWS.txt b/NEWS.txt
+index c503d88a..8ce5a73a 100644
+--- a/NEWS.txt
++++ b/NEWS.txt
+@@ -1,3 +1,14 @@
++3.0.7 (TBD)
++        - Add NSM renaming for alsa MIDI port
++        - Add portamento auto mode
++        - Add MIDI bank select to LV2/VST2 versions
++        - Add filter bypass
++        - Fix built in record wavefile saving
++        - Fix message corruption bug in rtosc
++        - Fix analog filter q update rate
++        - Fix all-note-off message with sustain pedals
++        - Increase parameter smoothing filter frequency
++
+ 3.0.6 (21 January 2022)
+         - Enhances watchpoint system for waveform views (GSOC michiboo)
+         - Add anti-alias mode to add synth oscillator interpolation
+-- 
+2.47.0
+

@@ -1,0 +1,34 @@
+From 7d5f91b2d91f00fbfc7dec704f80cbcdf564ffb4 Mon Sep 17 00:00:00 2001
+From: "Christopher A. Oliver" <caowasteland@gmail.com>
+Date: Tue, 6 Oct 2015 22:41:38 -0400
+Subject: [PATCH 0576/1936] Use the transform fn.  DRY.
+
+---
+ src/UI/WidgetPDial.cpp | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/src/UI/WidgetPDial.cpp b/src/UI/WidgetPDial.cpp
+index e1b8b1b3..f7304d27 100644
+--- a/src/UI/WidgetPDial.cpp
++++ b/src/UI/WidgetPDial.cpp
+@@ -55,7 +55,7 @@ int WidgetPDial::handle(int event)
+                 dragsize *= 10;
+ 
+             value(limit(oldvalue + my / dragsize * (max - min), min, max));
+-            tipwin->showValue(value()+value_offset);
++            tipwin->showValue(transform(value()));
+             value_damage();
+             if(this->when() != 0)
+                 do_callback();
+@@ -70,7 +70,7 @@ int WidgetPDial::handle(int event)
+                 dragsize *= 10;
+ 
+             value(limit(value() + my / dragsize * (max - min), min, max));
+-            tipwin->showValue(value()+value_offset);
++            tipwin->showValue(transform(value()));
+             value_damage();
+             if(this->when() != 0)
+                 do_callback();
+-- 
+2.47.0
+

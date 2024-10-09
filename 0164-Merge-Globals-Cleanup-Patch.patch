@@ -1,0 +1,1396 @@
+From d49da093a8a60afb1e971f08312b6eada9b14312 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 23 Mar 2014 17:03:30 -0400
+Subject: [PATCH 0164/1936] Merge Globals Cleanup Patch
+
+Merge patch from falktx which:
+1. make effects *never* use synth->...
+2. make SYNTH_T::numRandom static, so it can be used
+3. replace getTmpBuffer() with "float
+4. minor s/final/final_/ var name change, just for safety
+   because "final" is c++11 keyword
+
+In addition this fixes the Echo Test as it needed to be
+updated to the new API
+---
+ AUTHORS.txt                   |  1 +
+ src/DSP/AnalogFilter.cpp      | 37 ++++++++++++++++++-----------------
+ src/DSP/AnalogFilter.h        |  2 +-
+ src/DSP/Filter.cpp            | 21 ++++++++++++++++----
+ src/DSP/Filter.h              | 21 +++++++++++++++++++-
+ src/DSP/FormantFilter.cpp     | 23 +++++++++++-----------
+ src/DSP/FormantFilter.h       |  2 +-
+ src/DSP/SVFilter.cpp          | 22 ++++++++++-----------
+ src/DSP/SVFilter.h            |  3 ++-
+ src/DSP/Unison.cpp            | 15 +++++++-------
+ src/DSP/Unison.h              |  5 ++++-
+ src/Effects/Alienwah.cpp      |  9 +++++----
+ src/Effects/Alienwah.h        |  3 ++-
+ src/Effects/Chorus.cpp        | 19 +++++++++---------
+ src/Effects/Chorus.h          |  2 +-
+ src/Effects/Distorsion.cpp    | 24 +++++++++++------------
+ src/Effects/Distorsion.h      |  2 +-
+ src/Effects/DynamicFilter.cpp | 13 ++++++------
+ src/Effects/DynamicFilter.h   |  2 +-
+ src/Effects/EQ.cpp            | 10 +++++-----
+ src/Effects/EQ.h              |  2 +-
+ src/Effects/Echo.cpp          | 26 ++++++++++++------------
+ src/Effects/Echo.h            |  2 +-
+ src/Effects/Effect.cpp        | 11 ++++++++---
+ src/Effects/Effect.h          | 21 +++++++++++++++++++-
+ src/Effects/EffectLFO.cpp     |  8 +++++---
+ src/Effects/EffectLFO.h       |  6 +++++-
+ src/Effects/EffectMgr.cpp     | 16 +++++++--------
+ src/Effects/Phaser.cpp        | 30 +++++++++++++++++-----------
+ src/Effects/Phaser.h          |  2 +-
+ src/Effects/Reverb.cpp        | 31 ++++++++++++++---------------
+ src/Effects/Reverb.h          |  2 +-
+ src/Misc/Part.cpp             | 10 +++++-----
+ src/Misc/Util.cpp             |  2 +-
+ src/Tests/EchoTest.h          |  2 +-
+ src/globals.h                 |  2 +-
+ 36 files changed, 244 insertions(+), 165 deletions(-)
+
+diff --git a/AUTHORS.txt b/AUTHORS.txt
+index 2762c931..f245ac5f 100644
+--- a/AUTHORS.txt
++++ b/AUTHORS.txt
+@@ -26,4 +26,5 @@ Contributors:
+         Johannes Lorenz (Effect Documentation)
+         Ilario Glasgo (Italian Doc Translation)
+         Christopher Oliver (Unison Regrssion Fix, presets fix)
++        Filipe Coelho (Globals Cleanup)
+ 
+diff --git a/src/DSP/AnalogFilter.cpp b/src/DSP/AnalogFilter.cpp
+index 13c17b27..58f46a21 100644
+--- a/src/DSP/AnalogFilter.cpp
++++ b/src/DSP/AnalogFilter.cpp
+@@ -32,8 +32,10 @@
+ AnalogFilter::AnalogFilter(unsigned char Ftype,
+                            float Ffreq,
+                            float Fq,
+-                           unsigned char Fstages)
+-    :type(Ftype),
++                           unsigned char Fstages,
++                           unsigned int srate, int bufsize)
++    :Filter(srate, bufsize),
++      type(Ftype),
+       stages(Fstages),
+       freq(Ffreq),
+       q(Fq),
+@@ -75,8 +77,8 @@ void AnalogFilter::computefiltercoefs(void)
+ 
+     //do not allow frequencies bigger than samplerate/2
+     float freq = this->freq;
+-    if(freq > (synth->halfsamplerate_f - 500.0f)) {
+-        freq      = synth->halfsamplerate_f - 500.0f;
++    if(freq > (halfsamplerate_f - 500.0f)) {
++        freq      = halfsamplerate_f - 500.0f;
+         zerocoefs = true;
+     }
+     if(freq < 0.1f)
+@@ -99,7 +101,7 @@ void AnalogFilter::computefiltercoefs(void)
+     float *d = coeff.d;
+ 
+     //General Constants
+-    const float omega = 2 * PI * freq / synth->samplerate_f;
++    const float omega = 2 * PI * freq / samplerate_f;
+     const float sn    = sinf(omega), cs = cosf(omega);
+     float       alpha, beta;
+ 
+@@ -110,7 +112,7 @@ void AnalogFilter::computefiltercoefs(void)
+     switch(type) {
+         case 0: //LPF 1 pole
+             if(!zerocoefs)
+-                tmp = expf(-2.0f * PI * freq / synth->samplerate_f);
++                tmp = expf(-2.0f * PI * freq / samplerate_f);
+             else
+                 tmp = 0.0f;
+             c[0]  = 1.0f - tmp;
+@@ -122,7 +124,7 @@ void AnalogFilter::computefiltercoefs(void)
+             break;
+         case 1: //HPF 1 pole
+             if(!zerocoefs)
+-                tmp = expf(-2.0f * PI * freq / synth->samplerate_f);
++                tmp = expf(-2.0f * PI * freq / samplerate_f);
+             else
+                 tmp = 0.0f;
+             c[0]  = (1.0f + tmp) / 2.0f;
+@@ -277,7 +279,7 @@ void AnalogFilter::setfreq(float frequency)
+         rap = 1.0f / rap;
+ 
+     oldabovenq = abovenq;
+-    abovenq    = frequency > (synth->halfsamplerate_f - 500.0f);
++    abovenq    = frequency > (halfsamplerate_f - 500.0f);
+ 
+     bool nyquistthresh = (abovenq ^ oldabovenq);
+ 
+@@ -353,9 +355,9 @@ inline void AnalogBiquadFilterB(const float coeff[5], float &src, float work[4])
+ void AnalogFilter::singlefilterout(float *smp, fstage &hist,
+                                    const Coeff &coeff)
+ {
+-    assert((synth->buffersize % 8) == 0);
++    assert((buffersize % 8) == 0);
+     if(order == 1) {  //First order filter
+-        for(int i = 0; i < synth->buffersize; ++i) {
++        for(int i = 0; i < buffersize; ++i) {
+             float y0 = smp[i] * coeff.c[0] + hist.x1 * coeff.c[1]
+                        + hist.y1 * coeff.d[1];
+             hist.y1 = y0;
+@@ -365,7 +367,7 @@ void AnalogFilter::singlefilterout(float *smp, fstage &hist,
+     } else if(order == 2) {//Second order filter
+         const float coeff_[5] = {coeff.c[0], coeff.c[1], coeff.c[2],  coeff.d[1], coeff.d[2]};
+         float work[4]  = {hist.x1, hist.x2, hist.y1, hist.y2};
+-        for(int i = 0; i < synth->buffersize; i+=8) {
++        for(int i = 0; i < buffersize; i+=8) {
+             AnalogBiquadFilterA(coeff_, smp[i + 0], work);
+             AnalogBiquadFilterB(coeff_, smp[i + 1], work);
+             AnalogBiquadFilterA(coeff_, smp[i + 2], work);
+@@ -389,27 +391,26 @@ void AnalogFilter::filterout(float *smp)
+ 
+     if(needsinterpolation) {
+         //Merge Filter at old coeff with new coeff
+-        float *ismp = getTmpBuffer();
+-        memcpy(ismp, smp, synth->bufferbytes);
++        float ismp[buffersize];
++        memcpy(ismp, smp, bufferbytes);
+ 
+         for(int i = 0; i < stages + 1; ++i)
+             singlefilterout(ismp, oldHistory[i], oldCoeff);
+ 
+-        for(int i = 0; i < synth->buffersize; ++i) {
+-            float x = (float)i / synth->buffersize_f;
++        for(int i = 0; i < buffersize; ++i) {
++            float x = (float)i / buffersize_f;
+             smp[i] = ismp[i] * (1.0f - x) + smp[i] * x;
+         }
+-        returnTmpBuffer(ismp);
+         needsinterpolation = false;
+     }
+ 
+-    for(int i = 0; i < synth->buffersize; ++i)
++    for(int i = 0; i < buffersize; ++i)
+         smp[i] *= outgain;
+ }
+ 
+ float AnalogFilter::H(float freq)
+ {
+-    float fr = freq / synth->samplerate_f * PI * 2.0f;
++    float fr = freq / samplerate_f * PI * 2.0f;
+     float x  = coeff.c[0], y = 0.0f;
+     for(int n = 1; n < 3; ++n) {
+         x += cosf(n * fr) * coeff.c[n];
+diff --git a/src/DSP/AnalogFilter.h b/src/DSP/AnalogFilter.h
+index 5556c502..8a012d47 100644
+--- a/src/DSP/AnalogFilter.h
++++ b/src/DSP/AnalogFilter.h
+@@ -35,7 +35,7 @@ class AnalogFilter:public Filter
+ {
+     public:
+         AnalogFilter(unsigned char Ftype, float Ffreq, float Fq,
+-                     unsigned char Fstages);
++                     unsigned char Fstages, unsigned int srate, int bufsize);
+         ~AnalogFilter();
+         void filterout(float *smp);
+         void setfreq(float frequency);
+diff --git a/src/DSP/Filter.cpp b/src/DSP/Filter.cpp
+index 7c7e92c8..9487fb47 100644
+--- a/src/DSP/Filter.cpp
++++ b/src/DSP/Filter.cpp
+@@ -29,24 +29,37 @@
+ #include "SVFilter.h"
+ #include "../Params/FilterParams.h"
+ 
+-Filter *Filter::generate(FilterParams *pars)
++Filter::Filter(unsigned int srate, int bufsize)
++    : outgain(1.0f),
++      samplerate(srate),
++      buffersize(bufsize)
+ {
++    alias();
++}
++
++Filter *Filter::generate(FilterParams *pars, unsigned int srate, int bufsize)
++{
++    if (srate == 0)
++        srate = synth->samplerate;
++    if (bufsize == 0)
++        bufsize = synth->buffersize;
++
+     unsigned char Ftype   = pars->Ptype;
+     unsigned char Fstages = pars->Pstages;
+ 
+     Filter *filter;
+     switch(pars->Pcategory) {
+         case 1:
+-            filter = new FormantFilter(pars);
++            filter = new FormantFilter(pars, srate, bufsize);
+             break;
+         case 2:
+-            filter = new SVFilter(Ftype, 1000.0f, pars->getq(), Fstages);
++            filter = new SVFilter(Ftype, 1000.0f, pars->getq(), Fstages, srate, bufsize);
+             filter->outgain = dB2rap(pars->getgain());
+             if(filter->outgain > 1.0f)
+                 filter->outgain = sqrt(filter->outgain);
+             break;
+         default:
+-            filter = new AnalogFilter(Ftype, 1000.0f, pars->getq(), Fstages);
++            filter = new AnalogFilter(Ftype, 1000.0f, pars->getq(), Fstages, srate, bufsize);
+             if((Ftype >= 6) && (Ftype <= 8))
+                 filter->setgain(pars->getgain());
+             else
+diff --git a/src/DSP/Filter.h b/src/DSP/Filter.h
+index 41761e50..52e3675c 100644
+--- a/src/DSP/Filter.h
++++ b/src/DSP/Filter.h
+@@ -29,8 +29,9 @@ class Filter
+ {
+     public:
+         static float getrealfreq(float freqpitch);
+-        static Filter *generate(class FilterParams * pars);
++        static Filter *generate(class FilterParams * pars, unsigned int srate = 0, int bufsize = 0);
+ 
++        Filter(unsigned int srate, int bufsize);
+         virtual ~Filter() {}
+         virtual void filterout(float *smp)    = 0;
+         virtual void setfreq(float frequency) = 0;
+@@ -40,6 +41,24 @@ class Filter
+ 
+     protected:
+         float outgain;
++
++        // current setup
++        unsigned int samplerate;
++        int buffersize;
++
++        // alias for above terms
++        float samplerate_f;
++        float halfsamplerate_f;
++        float buffersize_f;
++        int   bufferbytes;
++
++        inline void alias()
++        {
++            samplerate_f     = samplerate;
++            halfsamplerate_f = samplerate_f / 2.0f;
++            buffersize_f     = buffersize;
++            bufferbytes      = buffersize * sizeof(float);
++        }
+ };
+ 
+ #endif
+diff --git a/src/DSP/FormantFilter.cpp b/src/DSP/FormantFilter.cpp
+index 5df27dfb..36db5f6d 100644
+--- a/src/DSP/FormantFilter.cpp
++++ b/src/DSP/FormantFilter.cpp
+@@ -27,11 +27,12 @@
+ #include "AnalogFilter.h"
+ #include "../Params/FilterParams.h"
+ 
+-FormantFilter::FormantFilter(FilterParams *pars)
++FormantFilter::FormantFilter(FilterParams *pars, unsigned int srate, int bufsize)
++    : Filter(srate, bufsize)
+ {
+     numformants = pars->Pnumformants;
+     for(int i = 0; i < numformants; ++i)
+-        formant[i] = new AnalogFilter(4 /*BPF*/, 1000.0f, 10.0f, pars->Pstages);
++        formant[i] = new AnalogFilter(4 /*BPF*/, 1000.0f, 10.0f, pars->Pstages, srate, bufsize);
+     cleanup();
+ 
+     for(int j = 0; j < FF_MAX_VOWELS; ++j)
+@@ -203,29 +204,27 @@ void FormantFilter::setfreq_and_q(float frequency, float q_)
+ 
+ void FormantFilter::filterout(float *smp)
+ {
+-    float *inbuffer = getTmpBuffer();
++    float inbuffer[buffersize];
+ 
+-    memcpy(inbuffer, smp, synth->bufferbytes);
+-    memset(smp, 0, synth->bufferbytes);
++    memcpy(inbuffer, smp, bufferbytes);
++    memset(smp, 0, bufferbytes);
+ 
+     for(int j = 0; j < numformants; ++j) {
+-        float *tmpbuf = getTmpBuffer();
+-        for(int i = 0; i < synth->buffersize; ++i)
++        float tmpbuf[buffersize];
++        for(int i = 0; i < buffersize; ++i)
+             tmpbuf[i] = inbuffer[i] * outgain;
+         formant[j]->filterout(tmpbuf);
+ 
+         if(ABOVE_AMPLITUDE_THRESHOLD(oldformantamp[j], currentformants[j].amp))
+-            for(int i = 0; i < synth->buffersize; ++i)
++            for(int i = 0; i < buffersize; ++i)
+                 smp[i] += tmpbuf[i]
+                           * INTERPOLATE_AMPLITUDE(oldformantamp[j],
+                                                   currentformants[j].amp,
+                                                   i,
+-                                                  synth->buffersize);
++                                                  buffersize);
+         else
+-            for(int i = 0; i < synth->buffersize; ++i)
++            for(int i = 0; i < buffersize; ++i)
+                 smp[i] += tmpbuf[i] * currentformants[j].amp;
+-        returnTmpBuffer(tmpbuf);
+         oldformantamp[j] = currentformants[j].amp;
+     }
+-    returnTmpBuffer(inbuffer);
+ }
+diff --git a/src/DSP/FormantFilter.h b/src/DSP/FormantFilter.h
+index 03b52cc6..715f00f0 100644
+--- a/src/DSP/FormantFilter.h
++++ b/src/DSP/FormantFilter.h
+@@ -30,7 +30,7 @@
+ class FormantFilter:public Filter
+ {
+     public:
+-        FormantFilter(class FilterParams *pars);
++        FormantFilter(class FilterParams *pars, unsigned int srate, int bufsize);
+         ~FormantFilter();
+         void filterout(float *smp);
+         void setfreq(float frequency);
+diff --git a/src/DSP/SVFilter.cpp b/src/DSP/SVFilter.cpp
+index 0431227d..3d198aad 100644
+--- a/src/DSP/SVFilter.cpp
++++ b/src/DSP/SVFilter.cpp
+@@ -29,8 +29,9 @@
+ #include "SVFilter.h"
+ 
+ SVFilter::SVFilter(unsigned char Ftype, float Ffreq, float Fq,
+-                   unsigned char Fstages)
+-    :type(Ftype),
++                   unsigned char Fstages, unsigned int srate, int bufsize)
++    :Filter(srate, bufsize),
++      type(Ftype),
+       stages(Fstages),
+       freq(Ffreq),
+       q(Fq),
+@@ -58,7 +59,7 @@ void SVFilter::cleanup()
+ 
+ void SVFilter::computefiltercoefs(void)
+ {
+-    par.f = freq / synth->samplerate_f * 4.0f;
++    par.f = freq / samplerate_f * 4.0f;
+     if(par.f > 0.99999f)
+         par.f = 0.99999f;
+     par.q      = 1.0f - atanf(sqrtf(q)) * 2.0f / PI;
+@@ -76,7 +77,7 @@ void SVFilter::setfreq(float frequency)
+         rap = 1.0f / rap;
+ 
+     oldabovenq = abovenq;
+-    abovenq    = frequency > (synth->samplerate_f / 2 - 500.0f);
++    abovenq    = frequency > (samplerate_f / 2 - 500.0f);
+ 
+     bool nyquistthresh = (abovenq ^ oldabovenq);
+ 
+@@ -144,7 +145,7 @@ void SVFilter::singlefilterout(float *smp, fstage &x, parameters &par)
+             errx(1, "Impossible SVFilter type encountered [%d]", type);
+     }
+ 
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         x.low   = x.low + par.f * x.band;
+         x.high  = par.q_sqrt * smp[i] - x.low - par.q * x.band;
+         x.band  = par.f * x.high + x.band;
+@@ -159,20 +160,19 @@ void SVFilter::filterout(float *smp)
+         singlefilterout(smp, st[i], par);
+ 
+     if(needsinterpolation) {
+-        float *ismp = getTmpBuffer();
+-        memcpy(ismp, smp, synth->bufferbytes);
++        float ismp[buffersize];
++        memcpy(ismp, smp, bufferbytes);
+ 
+         for(int i = 0; i < stages + 1; ++i)
+             singlefilterout(ismp, st[i], ipar);
+ 
+-        for(int i = 0; i < synth->buffersize; ++i) {
+-            float x = i / synth->buffersize_f;
++        for(int i = 0; i < buffersize; ++i) {
++            float x = i / buffersize_f;
+             smp[i] = ismp[i] * (1.0f - x) + smp[i] * x;
+         }
+-        returnTmpBuffer(ismp);
+         needsinterpolation = false;
+     }
+ 
+-    for(int i = 0; i < synth->buffersize; ++i)
++    for(int i = 0; i < buffersize; ++i)
+         smp[i] *= outgain;
+ }
+diff --git a/src/DSP/SVFilter.h b/src/DSP/SVFilter.h
+index 2a17f0cb..e9d002c7 100644
+--- a/src/DSP/SVFilter.h
++++ b/src/DSP/SVFilter.h
+@@ -32,7 +32,8 @@ class SVFilter:public Filter
+         SVFilter(unsigned char Ftype,
+                  float Ffreq,
+                  float Fq,
+-                 unsigned char Fstages);
++                 unsigned char Fstages,
++                 unsigned int srate, int bufsize);
+         ~SVFilter();
+         void filterout(float *smp);
+         void setfreq(float frequency);
+diff --git a/src/DSP/Unison.cpp b/src/DSP/Unison.cpp
+index 72c4e4fb..571a23ec 100644
+--- a/src/DSP/Unison.cpp
++++ b/src/DSP/Unison.cpp
+@@ -25,18 +25,19 @@
+ 
+ #include "Unison.h"
+ 
+-Unison::Unison(int update_period_samples_, float max_delay_sec_)
++Unison::Unison(int update_period_samples_, float max_delay_sec_, float srate_f)
+     :unison_size(0),
+       base_freq(1.0f),
+       uv(NULL),
+       update_period_samples(update_period_samples_),
+       update_period_sample_k(0),
+-      max_delay((int)(synth->samplerate_f * max_delay_sec_) + 1),
++      max_delay((int)(srate_f * max_delay_sec_) + 1),
+       delay_k(0),
+       first_time(false),
+       delay_buffer(NULL),
+       unison_amplitude_samples(0.0f),
+-      unison_bandwidth_cents(10.0f)
++      unison_bandwidth_cents(10.0f),
++      samplerate_f(srate_f)
+ {
+     if(max_delay < 10)
+         max_delay = 10;
+@@ -87,15 +88,15 @@ void Unison::updateParameters(void)
+ {
+     if(!uv)
+         return;
+-    float increments_per_second = synth->samplerate_f
++    float increments_per_second = samplerate_f
+                                   / (float) update_period_samples;
+ //	printf("#%g, %g\n",increments_per_second,base_freq);
+     for(int i = 0; i < unison_size; ++i) {
+-        float base = powf(UNISON_FREQ_SPAN, synth->numRandom() * 2.0f - 1.0f);
++        float base = powf(UNISON_FREQ_SPAN, SYNTH_T::numRandom() * 2.0f - 1.0f);
+         uv[i].relative_amplitude = base;
+         float period = base / base_freq;
+         float m      = 4.0f / (period * increments_per_second);
+-        if(synth->numRandom() < 0.5f)
++        if(SYNTH_T::numRandom() < 0.5f)
+             m = -m;
+         uv[i].step = m;
+ //		printf("%g %g\n",uv[i].relative_amplitude,period);
+@@ -103,7 +104,7 @@ void Unison::updateParameters(void)
+ 
+     float max_speed = powf(2.0f, unison_bandwidth_cents / 1200.0f);
+     unison_amplitude_samples = 0.125f * (max_speed - 1.0f)
+-                               * synth->samplerate_f / base_freq;
++                               * samplerate_f / base_freq;
+ 
+     //If functions exceed this limit, they should have requested a bigguer delay
+     //and thus are buggy
+diff --git a/src/DSP/Unison.h b/src/DSP/Unison.h
+index 9df94625..bca5ee85 100644
+--- a/src/DSP/Unison.h
++++ b/src/DSP/Unison.h
+@@ -30,7 +30,7 @@
+ class Unison
+ {
+     public:
+-        Unison(int update_period_samples_, float max_delay_sec_);
++        Unison(int update_period_samples_, float max_delay_sec_, float srate_f);
+         ~Unison();
+ 
+         void setSize(int new_size);
+@@ -69,5 +69,8 @@ class Unison
+         float *delay_buffer;
+         float  unison_amplitude_samples;
+         float  unison_bandwidth_cents;
++
++        // current setup
++        float samplerate_f;
+ };
+ #endif
+diff --git a/src/Effects/Alienwah.cpp b/src/Effects/Alienwah.cpp
+index b3110bac..fae1860b 100644
+--- a/src/Effects/Alienwah.cpp
++++ b/src/Effects/Alienwah.cpp
+@@ -23,8 +23,9 @@
+ #include <cmath>
+ #include "Alienwah.h"
+ 
+-Alienwah::Alienwah(bool insertion_, float *efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0),
++Alienwah::Alienwah(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize),
++      lfo(srate, bufsize),
+       oldl(NULL),
+       oldr(NULL)
+ {
+@@ -58,8 +59,8 @@ void Alienwah::out(const Stereo<float *> &smp)
+     clfol = complex<float>(cosf(lfol + phase) * fb, sinf(lfol + phase) * fb); //rework
+     clfor = complex<float>(cosf(lfor + phase) * fb, sinf(lfor + phase) * fb); //rework
+ 
+-    for(int i = 0; i < synth->buffersize; ++i) {
+-        float x  = ((float) i) / synth->buffersize_f;
++    for(int i = 0; i < buffersize; ++i) {
++        float x  = ((float) i) / buffersize_f;
+         float x1 = 1.0f - x;
+         //left
+         complex<float> tmp = clfol * x + oldclfol * x1;
+diff --git a/src/Effects/Alienwah.h b/src/Effects/Alienwah.h
+index 4e0ea0ac..52019ac9 100644
+--- a/src/Effects/Alienwah.h
++++ b/src/Effects/Alienwah.h
+@@ -44,7 +44,8 @@ class Alienwah:public Effect
+          */
+         Alienwah(bool insertion_,
+                  float *const efxoutl_,
+-                 float *const efxoutr_);
++                 float *const efxoutr_,
++                 unsigned int srate, int bufsize);
+         ~Alienwah();
+         void out(const Stereo<float *> &smp);
+ 
+diff --git a/src/Effects/Chorus.cpp b/src/Effects/Chorus.cpp
+index ad29df6e..7e95a215 100644
+--- a/src/Effects/Chorus.cpp
++++ b/src/Effects/Chorus.cpp
+@@ -26,9 +26,10 @@
+ 
+ using namespace std;
+ 
+-Chorus::Chorus(bool insertion_, float *const efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0),
+-      maxdelay((int)(MAX_CHORUS_DELAY / 1000.0f * synth->samplerate_f)),
++Chorus::Chorus(bool insertion_, float *const efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize),
++      lfo(srate, bufsize),
++      maxdelay((int)(MAX_CHORUS_DELAY / 1000.0f * samplerate_f)),
+       delaySample(new float[maxdelay], new float[maxdelay])
+ {
+     dlk = 0;
+@@ -51,7 +52,7 @@ Chorus::~Chorus()
+ float Chorus::getdelay(float xlfo)
+ {
+     float result =
+-        (Pflangemode) ? 0 : (delay + xlfo * depth) * synth->samplerate_f;
++        (Pflangemode) ? 0 : (delay + xlfo * depth) * samplerate_f;
+ 
+     //check if delay is too big (caused by bad setdelay() and setdepth()
+     if((result + 0.5f) >= maxdelay) {
+@@ -75,7 +76,7 @@ void Chorus::out(const Stereo<float *> &input)
+     dl2 = getdelay(lfol);
+     dr2 = getdelay(lfor);
+ 
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         float inL = input.l[i];
+         float inR = input.r[i];
+         //LRcross
+@@ -87,7 +88,7 @@ void Chorus::out(const Stereo<float *> &input)
+ 
+         //compute the delay in samples using linear interpolation between the lfo delays
+         float mdel =
+-            (dl1 * (synth->buffersize - i) + dl2 * i) / synth->buffersize_f;
++            (dl1 * (buffersize - i) + dl2 * i) / buffersize_f;
+         if(++dlk >= maxdelay)
+             dlk = 0;
+         float tmp = dlk - mdel + maxdelay * 2.0f; //where should I get the sample from
+@@ -105,7 +106,7 @@ void Chorus::out(const Stereo<float *> &input)
+         //Right channel
+ 
+         //compute the delay in samples using linear interpolation between the lfo delays
+-        mdel = (dr1 * (synth->buffersize - i) + dr2 * i) / synth->buffersize_f;
++        mdel = (dr1 * (buffersize - i) + dr2 * i) / buffersize_f;
+         if(++drk >= maxdelay)
+             drk = 0;
+         tmp = drk * 1.0f - mdel + maxdelay * 2.0f; //where should I get the sample from
+@@ -122,12 +123,12 @@ void Chorus::out(const Stereo<float *> &input)
+     }
+ 
+     if(Poutsub)
+-        for(int i = 0; i < synth->buffersize; ++i) {
++        for(int i = 0; i < buffersize; ++i) {
+             efxoutl[i] *= -1.0f;
+             efxoutr[i] *= -1.0f;
+         }
+ 
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         efxoutl[i] *= pangainL;
+         efxoutr[i] *= pangainR;
+     }
+diff --git a/src/Effects/Chorus.h b/src/Effects/Chorus.h
+index ac9e95a0..7772d466 100644
+--- a/src/Effects/Chorus.h
++++ b/src/Effects/Chorus.h
+@@ -32,7 +32,7 @@
+ class Chorus:public Effect
+ {
+     public:
+-        Chorus(bool insertion_, float *efxoutl_, float *efxoutr_);
++        Chorus(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize);
+         /**Destructor*/
+         ~Chorus();
+         void out(const Stereo<float *> &input);
+diff --git a/src/Effects/Distorsion.cpp b/src/Effects/Distorsion.cpp
+index 85d26452..5d5c8f6f 100644
+--- a/src/Effects/Distorsion.cpp
++++ b/src/Effects/Distorsion.cpp
+@@ -25,8 +25,8 @@
+ #include "../Misc/WaveShapeSmps.h"
+ #include <cmath>
+ 
+-Distorsion::Distorsion(bool insertion_, float *efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0),
++Distorsion::Distorsion(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize),
+       Pvolume(50),
+       Pdrive(90),
+       Plevel(64),
+@@ -37,10 +37,10 @@ Distorsion::Distorsion(bool insertion_, float *efxoutl_, float *efxoutr_)
+       Pstereo(0),
+       Pprefiltering(0)
+ {
+-    lpfl = new AnalogFilter(2, 22000, 1, 0);
+-    lpfr = new AnalogFilter(2, 22000, 1, 0);
+-    hpfl = new AnalogFilter(3, 20, 1, 0);
+-    hpfr = new AnalogFilter(3, 20, 1, 0);
++    lpfl = new AnalogFilter(2, 22000, 1, 0, srate, bufsize);
++    lpfr = new AnalogFilter(2, 22000, 1, 0, srate, bufsize);
++    hpfl = new AnalogFilter(3, 20, 1, 0, srate, bufsize);
++    hpfr = new AnalogFilter(3, 20, 1, 0, srate, bufsize);
+     setpreset(Ppreset);
+     cleanup();
+ }
+@@ -83,29 +83,29 @@ void Distorsion::out(const Stereo<float *> &smp)
+         inputvol *= -1.0f;
+ 
+     if(Pstereo) //Stereo
+-        for(int i = 0; i < synth->buffersize; ++i) {
++        for(int i = 0; i < buffersize; ++i) {
+             efxoutl[i] = smp.l[i] * inputvol * pangainL;
+             efxoutr[i] = smp.r[i] * inputvol * pangainR;
+         }
+     else //Mono
+-        for(int i = 0; i < synth->buffersize; ++i)
++        for(int i = 0; i < buffersize; ++i)
+             efxoutl[i] = (smp.l[i] * pangainL + smp.r[i] * pangainR) * inputvol;
+ 
+     if(Pprefiltering)
+         applyfilters(efxoutl, efxoutr);
+ 
+-    waveShapeSmps(synth->buffersize, efxoutl, Ptype + 1, Pdrive);
++    waveShapeSmps(buffersize, efxoutl, Ptype + 1, Pdrive);
+     if(Pstereo)
+-        waveShapeSmps(synth->buffersize, efxoutr, Ptype + 1, Pdrive);
++        waveShapeSmps(buffersize, efxoutr, Ptype + 1, Pdrive);
+ 
+     if(!Pprefiltering)
+         applyfilters(efxoutl, efxoutr);
+ 
+     if(!Pstereo)
+-        memcpy(efxoutr, efxoutl, synth->bufferbytes);
++        memcpy(efxoutr, efxoutl, bufferbytes);
+ 
+     float level = dB2rap(60.0f * Plevel / 127.0f - 40.0f);
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         float lout = efxoutl[i];
+         float rout = efxoutr[i];
+         float l    = lout * (1.0f - lrcross) + rout * lrcross;
+diff --git a/src/Effects/Distorsion.h b/src/Effects/Distorsion.h
+index eb06a9cc..9d577ddd 100644
+--- a/src/Effects/Distorsion.h
++++ b/src/Effects/Distorsion.h
+@@ -29,7 +29,7 @@
+ class Distorsion:public Effect
+ {
+     public:
+-        Distorsion(bool insertion, float *efxoutl_, float *efxoutr_);
++        Distorsion(bool insertion, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize);
+         ~Distorsion();
+         void out(const Stereo<float *> &smp);
+         void setpreset(unsigned char npreset);
+diff --git a/src/Effects/DynamicFilter.cpp b/src/Effects/DynamicFilter.cpp
+index 74731da0..650a882b 100644
+--- a/src/Effects/DynamicFilter.cpp
++++ b/src/Effects/DynamicFilter.cpp
+@@ -24,8 +24,9 @@
+ #include "DynamicFilter.h"
+ #include "../DSP/Filter.h"
+ 
+-DynamicFilter::DynamicFilter(bool insertion_, float *efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, new FilterParams(0, 64, 64), 0),
++DynamicFilter::DynamicFilter(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, new FilterParams(0, 64, 64), 0, srate, bufsize),
++      lfo(srate, bufsize),
+       Pvolume(110),
+       Pdepth(0),
+       Pampsns(90),
+@@ -61,7 +62,7 @@ void DynamicFilter::out(const Stereo<float *> &smp)
+     const float freq = filterpars->getfreq();
+     const float q    = filterpars->getq();
+ 
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         efxoutl[i] = smp.l[i];
+         efxoutr[i] = smp.r[i];
+ 
+@@ -85,7 +86,7 @@ void DynamicFilter::out(const Stereo<float *> &smp)
+     filterr->filterout(efxoutr);
+ 
+     //panning
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         efxoutl[i] *= pangainL;
+         efxoutr[i] *= pangainR;
+     }
+@@ -130,8 +131,8 @@ void DynamicFilter::reinitfilter(void)
+ {
+     delete filterl;
+     delete filterr;
+-    filterl = Filter::generate(filterpars);
+-    filterr = Filter::generate(filterpars);
++    filterl = Filter::generate(filterpars, samplerate, buffersize);
++    filterr = Filter::generate(filterpars, samplerate, buffersize);
+ }
+ 
+ void DynamicFilter::setpreset(unsigned char npreset)
+diff --git a/src/Effects/DynamicFilter.h b/src/Effects/DynamicFilter.h
+index 0b2c40d3..91d1f5e4 100644
+--- a/src/Effects/DynamicFilter.h
++++ b/src/Effects/DynamicFilter.h
+@@ -30,7 +30,7 @@
+ class DynamicFilter:public Effect
+ {
+     public:
+-        DynamicFilter(bool insertion_, float *efxoutl_, float *efxoutr_);
++        DynamicFilter(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize);
+         ~DynamicFilter();
+         void out(const Stereo<float *> &smp);
+ 
+diff --git a/src/Effects/EQ.cpp b/src/Effects/EQ.cpp
+index 8d354050..e03fcef7 100644
+--- a/src/Effects/EQ.cpp
++++ b/src/Effects/EQ.cpp
+@@ -24,8 +24,8 @@
+ #include "EQ.h"
+ #include "../DSP/AnalogFilter.h"
+ 
+-EQ::EQ(bool insertion_, float *efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0)
++EQ::EQ(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize)
+ {
+     for(int i = 0; i < MAX_EQ_BANDS; ++i) {
+         filter[i].Ptype   = 0;
+@@ -33,8 +33,8 @@ EQ::EQ(bool insertion_, float *efxoutl_, float *efxoutr_)
+         filter[i].Pgain   = 64;
+         filter[i].Pq      = 64;
+         filter[i].Pstages = 0;
+-        filter[i].l = new AnalogFilter(6, 1000.0f, 1.0f, 0);
+-        filter[i].r = new AnalogFilter(6, 1000.0f, 1.0f, 0);
++        filter[i].l = new AnalogFilter(6, 1000.0f, 1.0f, 0, srate, bufsize);
++        filter[i].r = new AnalogFilter(6, 1000.0f, 1.0f, 0, srate, bufsize);
+     }
+     //default values
+     Pvolume = 50;
+@@ -56,7 +56,7 @@ void EQ::cleanup(void)
+ //Effect output
+ void EQ::out(const Stereo<float *> &smp)
+ {
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         efxoutl[i] = smp.l[i] * volume;
+         efxoutr[i] = smp.r[i] * volume;
+     }
+diff --git a/src/Effects/EQ.h b/src/Effects/EQ.h
+index 9dd14fbf..b2e9e89a 100644
+--- a/src/Effects/EQ.h
++++ b/src/Effects/EQ.h
+@@ -29,7 +29,7 @@
+ class EQ:public Effect
+ {
+     public:
+-        EQ(bool insertion_, float *efxoutl_, float *efxoutr_);
++        EQ(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize);
+         ~EQ() {}
+         void out(const Stereo<float *> &smp);
+         void setpreset(unsigned char npreset);
+diff --git a/src/Effects/Echo.cpp b/src/Effects/Echo.cpp
+index 803bbf38..175b9424 100644
+--- a/src/Effects/Echo.cpp
++++ b/src/Effects/Echo.cpp
+@@ -27,8 +27,8 @@
+ 
+ #define MAX_DELAY 2
+ 
+-Echo::Echo(bool insertion_, float *efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0),
++Echo::Echo(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize),
+       Pvolume(50),
+       Pdelay(60),
+       Plrdelay(100),
+@@ -37,8 +37,8 @@ Echo::Echo(bool insertion_, float *efxoutl_, float *efxoutr_)
+       delayTime(1),
+       lrdelay(0),
+       avgDelay(0),
+-      delay(new float[(int)(MAX_DELAY * synth->samplerate)],
+-            new float[(int)(MAX_DELAY * synth->samplerate)]),
++      delay(new float[(int)(MAX_DELAY * srate)],
++            new float[(int)(MAX_DELAY * srate)]),
+       old(0.0f),
+       pos(0),
+       delta(1),
+@@ -57,8 +57,8 @@ Echo::~Echo()
+ //Cleanup the effect
+ void Echo::cleanup(void)
+ {
+-    memset(delay.l, 0, MAX_DELAY * synth->samplerate * sizeof(float));
+-    memset(delay.r, 0, MAX_DELAY * synth->samplerate * sizeof(float));
++    memset(delay.l, 0, MAX_DELAY * samplerate * sizeof(float));
++    memset(delay.r, 0, MAX_DELAY * samplerate * sizeof(float));
+     old = Stereo<float>(0.0f);
+ }
+ 
+@@ -77,14 +77,14 @@ void Echo::initdelays(void)
+     //number of seconds to delay right chan
+     float dr = avgDelay + lrdelay;
+ 
+-    ndelta.l = max(1, (int) (dl * synth->samplerate));
+-    ndelta.r = max(1, (int) (dr * synth->samplerate));
++    ndelta.l = max(1, (int) (dl * samplerate));
++    ndelta.r = max(1, (int) (dr * samplerate));
+ }
+ 
+ //Effect output
+ void Echo::out(const Stereo<float *> &input)
+ {
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         float ldl = delay.l[pos.l];
+         float rdl = delay.r[pos.r];
+         ldl = ldl * (1.0f - lrcross) + rdl * lrcross;
+@@ -97,9 +97,9 @@ void Echo::out(const Stereo<float *> &input)
+         rdl = input.r[i] * pangainR - rdl * fb;
+ 
+         //LowPass Filter
+-        old.l = delay.l[(pos.l + delta.l) % (MAX_DELAY * synth->samplerate)] =
++        old.l = delay.l[(pos.l + delta.l) % (MAX_DELAY * samplerate)] =
+                     ldl * hidamp + old.l * (1.0f - hidamp);
+-        old.r = delay.r[(pos.r + delta.r) % (MAX_DELAY * synth->samplerate)] =
++        old.r = delay.r[(pos.r + delta.r) % (MAX_DELAY * samplerate)] =
+                     rdl * hidamp + old.r * (1.0f - hidamp);
+ 
+         //increment
+@@ -107,8 +107,8 @@ void Echo::out(const Stereo<float *> &input)
+         ++pos.r; // += delta.r;
+ 
+         //ensure that pos is still in bounds
+-        pos.l %= MAX_DELAY * synth->samplerate;
+-        pos.r %= MAX_DELAY * synth->samplerate;
++        pos.l %= MAX_DELAY * samplerate;
++        pos.r %= MAX_DELAY * samplerate;
+ 
+         //adjust delay if needed
+         delta.l = (15 * delta.l + ndelta.l) / 16;
+diff --git a/src/Effects/Echo.h b/src/Effects/Echo.h
+index 6b79adcf..ffc04677 100644
+--- a/src/Effects/Echo.h
++++ b/src/Effects/Echo.h
+@@ -30,7 +30,7 @@
+ class Echo:public Effect
+ {
+     public:
+-        Echo(bool insertion_, float *efxoutl_, float *efxoutr_);
++        Echo(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize);
+         ~Echo();
+ 
+         void out(const Stereo<float *> &input);
+diff --git a/src/Effects/Effect.cpp b/src/Effects/Effect.cpp
+index 42eee79a..bc1c0b00 100644
+--- a/src/Effects/Effect.cpp
++++ b/src/Effects/Effect.cpp
+@@ -26,13 +26,18 @@
+ #include <cmath>
+ 
+ Effect::Effect(bool insertion_, float *efxoutl_, float *efxoutr_,
+-               FilterParams *filterpars_, unsigned char Ppreset_)
++               FilterParams *filterpars_, unsigned char Ppreset_,
++               unsigned int srate, int bufsize)
+     :Ppreset(Ppreset_),
+       efxoutl(efxoutl_),
+       efxoutr(efxoutr_),
+       filterpars(filterpars_),
+-      insertion(insertion_)
+-{}
++      insertion(insertion_),
++      samplerate(srate),
++      buffersize(bufsize)
++{
++    alias();
++}
+ 
+ void Effect::out(float *const smpsl, float *const smpsr)
+ {
+diff --git a/src/Effects/Effect.h b/src/Effects/Effect.h
+index d4d4a46c..d53bb9b7 100644
+--- a/src/Effects/Effect.h
++++ b/src/Effects/Effect.h
+@@ -43,7 +43,8 @@ class Effect
+          * @param Ppreset_ chosen preset
+          * @return Initialized Effect object*/
+         Effect(bool insertion_, float *efxoutl_, float *efxoutr_,
+-               FilterParams *filterpars_, unsigned char Ppreset_);
++               FilterParams *filterpars_, unsigned char Ppreset_,
++               unsigned int srate, int bufsize);
+         virtual ~Effect() {}
+         /**
+          * Choose a preset
+@@ -100,6 +101,24 @@ class Effect
+         float pangainR;
+         char  Plrcross; // L/R mix
+         float lrcross;
++
++        // current setup
++        unsigned int samplerate;
++        int buffersize;
++
++        // alias for above terms
++        float samplerate_f;
++        float halfsamplerate_f;
++        float buffersize_f;
++        int   bufferbytes;
++
++        inline void alias()
++        {
++            samplerate_f     = samplerate;
++            halfsamplerate_f = samplerate_f / 2.0f;
++            buffersize_f     = buffersize;
++            bufferbytes      = buffersize * sizeof(float);
++        }
+ };
+ 
+ #endif
+diff --git a/src/Effects/EffectLFO.cpp b/src/Effects/EffectLFO.cpp
+index f66b5fe0..1ec507a2 100644
+--- a/src/Effects/EffectLFO.cpp
++++ b/src/Effects/EffectLFO.cpp
+@@ -25,7 +25,7 @@
+ 
+ #include <cmath>
+ 
+-EffectLFO::EffectLFO(void)
++EffectLFO::EffectLFO(float srate_f, float bufsize_f)
+     :Pfreq(40),
+       Prandomness(0),
+       PLFOtype(0),
+@@ -36,7 +36,9 @@ EffectLFO::EffectLFO(void)
+       ampl2(RND),
+       ampr1(RND),
+       ampr2(RND),
+-      lfornd(0.0f)
++      lfornd(0.0f),
++      samplerate_f(srate_f),
++      buffersize_f(bufsize_f)
+ {
+     updateparams();
+ }
+@@ -47,7 +49,7 @@ EffectLFO::~EffectLFO() {}
+ void EffectLFO::updateparams(void)
+ {
+     float lfofreq = (powf(2.0f, Pfreq / 127.0f * 10.0f) - 1.0f) * 0.03f;
+-    incx = fabsf(lfofreq) * synth->buffersize_f / synth->samplerate_f;
++    incx = fabsf(lfofreq) * buffersize_f / samplerate_f;
+     if(incx > 0.49999999f)
+         incx = 0.499999999f;  //Limit the Frequency
+ 
+diff --git a/src/Effects/EffectLFO.h b/src/Effects/EffectLFO.h
+index e9571b8c..3df42ad9 100644
+--- a/src/Effects/EffectLFO.h
++++ b/src/Effects/EffectLFO.h
+@@ -28,7 +28,7 @@
+ class EffectLFO
+ {
+     public:
+-        EffectLFO();
++        EffectLFO(float srate_f, float bufsize_f);
+         ~EffectLFO();
+         void effectlfoout(float *outl, float *outr);
+         void updateparams(void);
+@@ -45,6 +45,10 @@ class EffectLFO
+         float lfointensity;
+         float lfornd;
+         char  lfotype;
++
++        // current setup
++        float samplerate_f;
++        float buffersize_f;
+ };
+ 
+ #endif
+diff --git a/src/Effects/EffectMgr.cpp b/src/Effects/EffectMgr.cpp
+index c2fce519..08d4f1d8 100644
+--- a/src/Effects/EffectMgr.cpp
++++ b/src/Effects/EffectMgr.cpp
+@@ -76,28 +76,28 @@ void EffectMgr::changeeffect(int _nefx)
+     delete efx;
+     switch(nefx) {
+         case 1:
+-            efx = new Reverb(insertion, efxoutl, efxoutr);
++            efx = new Reverb(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         case 2:
+-            efx = new Echo(insertion, efxoutl, efxoutr);
++            efx = new Echo(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         case 3:
+-            efx = new Chorus(insertion, efxoutl, efxoutr);
++            efx = new Chorus(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         case 4:
+-            efx = new Phaser(insertion, efxoutl, efxoutr);
++            efx = new Phaser(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         case 5:
+-            efx = new Alienwah(insertion, efxoutl, efxoutr);
++            efx = new Alienwah(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         case 6:
+-            efx = new Distorsion(insertion, efxoutl, efxoutr);
++            efx = new Distorsion(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         case 7:
+-            efx = new EQ(insertion, efxoutl, efxoutr);
++            efx = new EQ(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         case 8:
+-            efx = new DynamicFilter(insertion, efxoutl, efxoutr);
++            efx = new DynamicFilter(insertion, efxoutl, efxoutr, synth->samplerate, synth->buffersize);
+             break;
+         //put more effect here
+         default:
+diff --git a/src/Effects/Phaser.cpp b/src/Effects/Phaser.cpp
+index 1dd26be1..66a9283e 100644
+--- a/src/Effects/Phaser.cpp
++++ b/src/Effects/Phaser.cpp
+@@ -39,8 +39,8 @@ using namespace std;
+ #define ONE_  0.99999f        // To prevent LFO ever reaching 1.0f for filter stability purposes
+ #define ZERO_ 0.00001f        // Same idea as above.
+ 
+-Phaser::Phaser(const int &insertion_, float *efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0), old(NULL), xn1(NULL),
++Phaser::Phaser(const int &insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize), lfo(srate, bufsize), old(NULL), xn1(NULL),
+       yn1(NULL), diff(0.0f), oldgain(0.0f), fb(0.0f)
+ {
+     analog_setup();
+@@ -72,16 +72,20 @@ void Phaser::analog_setup()
+     Rmx       = Rmin / Rmax;
+     Rconst    = 1.0f + Rmx; // Handle parallel resistor relationship
+     C         = 0.00000005f; // 50 nF
+-    CFs       = 2.0f * synth->samplerate_f * C;
+-    invperiod = 1.0f / synth->buffersize_f;
++    CFs       = 2.0f * samplerate_f * C;
++    invperiod = 1.0f / buffersize_f;
+ }
+ 
+ Phaser::~Phaser()
+ {
++    if(old.l)
++        delete[] old.l;
+     if(xn1.l)
+         delete[] xn1.l;
+     if(yn1.l)
+         delete[] yn1.l;
++    if(old.r)
++        delete[] old.r;
+     if(xn1.r)
+         delete[] xn1.r;
+     if(yn1.r)
+@@ -129,7 +133,7 @@ void Phaser::AnalogPhase(const Stereo<float *> &input)
+     g = oldgain;
+     oldgain = mod;
+ 
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         g.l += diff.l; // Linear interpolation between LFO samples
+         g.r += diff.r;
+ 
+@@ -151,8 +155,8 @@ void Phaser::AnalogPhase(const Stereo<float *> &input)
+     }
+ 
+     if(Poutsub) {
+-        invSignal(efxoutl, synth->buffersize);
+-        invSignal(efxoutr, synth->buffersize);
++        invSignal(efxoutl, buffersize);
++        invSignal(efxoutr, buffersize);
+     }
+ }
+ 
+@@ -202,8 +206,8 @@ void Phaser::normalPhase(const Stereo<float *> &input)
+     gain.l = limit(gain.l, ZERO_, ONE_);
+     gain.r = limit(gain.r, ZERO_, ONE_);
+ 
+-    for(int i = 0; i < synth->buffersize; ++i) {
+-        float x  = (float) i / synth->buffersize_f;
++    for(int i = 0; i < buffersize; ++i) {
++        float x  = (float) i / buffersize_f;
+         float x1 = 1.0f - x;
+         //TODO think about making panning an external feature
+         Stereo<float> xn(input.l[i] * pangainL + fb.l,
+@@ -227,8 +231,8 @@ void Phaser::normalPhase(const Stereo<float *> &input)
+     oldgain = gain;
+ 
+     if(Poutsub) {
+-        invSignal(efxoutl, synth->buffersize);
+-        invSignal(efxoutr, synth->buffersize);
++        invSignal(efxoutl, buffersize);
++        invSignal(efxoutr, buffersize);
+     }
+ }
+ 
+@@ -299,10 +303,14 @@ void Phaser::setoffset(unsigned char Poffset)
+ 
+ void Phaser::setstages(unsigned char Pstages)
+ {
++    if(old.l)
++        delete[] old.l;
+     if(xn1.l)
+         delete[] xn1.l;
+     if(yn1.l)
+         delete[] yn1.l;
++    if(old.r)
++        delete[] old.r;
+     if(xn1.r)
+         delete[] xn1.r;
+     if(yn1.r)
+diff --git a/src/Effects/Phaser.h b/src/Effects/Phaser.h
+index dd8a400a..47961870 100644
+--- a/src/Effects/Phaser.h
++++ b/src/Effects/Phaser.h
+@@ -35,7 +35,7 @@
+ class Phaser:public Effect
+ {
+     public:
+-        Phaser(const int &insertion_, float *efxoutl_, float *efxoutr_);
++        Phaser(const int &insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize);
+         ~Phaser();
+         void out(const Stereo<float *> &input);
+         void setpreset(unsigned char npreset);
+diff --git a/src/Effects/Reverb.cpp b/src/Effects/Reverb.cpp
+index 2d7884ea..8cebfe8a 100644
+--- a/src/Effects/Reverb.cpp
++++ b/src/Effects/Reverb.cpp
+@@ -28,8 +28,8 @@
+ 
+ //todo: EarlyReflections, Prdelay, Perbalance
+ 
+-Reverb::Reverb(bool insertion_, float *efxoutl_, float *efxoutr_)
+-    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0),
++Reverb::Reverb(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize)
++    :Effect(insertion_, efxoutl_, efxoutr_, NULL, 0, srate, bufsize),
+       // defaults
+       Pvolume(48),
+       Ptime(64),
+@@ -116,7 +116,7 @@ void Reverb::processmono(int ch, float *output, float *inputbuf)
+         const int comblength = comblen[j];
+         float    &lpcombj    = lpcomb[j];
+ 
+-        for(int i = 0; i < synth->buffersize; ++i) {
++        for(int i = 0; i < buffersize; ++i) {
+             float fbout = comb[j][ck] * combfb[j];
+             fbout   = fbout * (1.0f - lohifb) + lpcombj * lohifb;
+             lpcombj = fbout;
+@@ -132,7 +132,7 @@ void Reverb::processmono(int ch, float *output, float *inputbuf)
+     for(int j = REV_APS * ch; j < REV_APS * (1 + ch); ++j) {
+         int &ak = apk[j];
+         const int aplength = aplen[j];
+-        for(int i = 0; i < synth->buffersize; ++i) {
++        for(int i = 0; i < buffersize; ++i) {
+             float tmp = ap[j][ak];
+             ap[j][ak] = 0.7f * tmp + output[i];
+             output[i] = tmp - 0.7f * ap[j][ak];
+@@ -148,12 +148,12 @@ void Reverb::out(const Stereo<float *> &smp)
+     if(!Pvolume && insertion)
+         return;
+ 
+-    float *inputbuf = getTmpBuffer();
+-    for(int i = 0; i < synth->buffersize; ++i)
++    float inputbuf[buffersize];
++    for(int i = 0; i < buffersize; ++i)
+         inputbuf[i] = (smp.l[i] + smp.r[i]) / 2.0f;
+ 
+     if(idelay)
+-        for(int i = 0; i < synth->buffersize; ++i) {
++        for(int i = 0; i < buffersize; ++i) {
+             //Initial delay r
+             float tmp = inputbuf[i] + idelay[idelayk] * idelayfb;
+             inputbuf[i]     = idelay[idelayk];
+@@ -164,7 +164,7 @@ void Reverb::out(const Stereo<float *> &smp)
+         }
+ 
+     if(bandwidth)
+-        bandwidth->process(synth->buffersize, inputbuf);
++        bandwidth->process(buffersize, inputbuf);
+ 
+     if(lpf)
+         lpf->filterout(inputbuf);
+@@ -173,7 +173,6 @@ void Reverb::out(const Stereo<float *> &smp)
+ 
+     processmono(0, efxoutl, inputbuf); //left
+     processmono(1, efxoutr, inputbuf); //right
+-    returnTmpBuffer(inputbuf);
+ 
+     float lvol = rs / REV_COMBS * pangainL;
+     float rvol = rs / REV_COMBS * pangainR;
+@@ -181,7 +180,7 @@ void Reverb::out(const Stereo<float *> &smp)
+         lvol *= 2.0f;
+         rvol *= 2.0f;
+     }
+-    for(int i = 0; i < synth->buffersize; ++i) {
++    for(int i = 0; i < buffersize; ++i) {
+         efxoutl[i] *= lvol;
+         efxoutr[i] *= rvol;
+     }
+@@ -210,7 +209,7 @@ void Reverb::settime(unsigned char _Ptime)
+ 
+     for(int i = 0; i < REV_COMBS * 2; ++i)
+         combfb[i] =
+-            -expf((float)comblen[i] / synth->samplerate_f * logf(0.001f) / t);
++            -expf((float)comblen[i] / samplerate_f * logf(0.001f) / t);
+     //the feedback is negative because it removes the DC
+ }
+ 
+@@ -241,7 +240,7 @@ void Reverb::setidelay(unsigned char _Pidelay)
+         delete [] idelay;
+     idelay = NULL;
+ 
+-    idelaylen = (int) (synth->samplerate_f * delay / 1000);
++    idelaylen = (int) (samplerate_f * delay / 1000);
+     if(idelaylen > 1) {
+         idelayk = 0;
+         idelay  = new float[idelaylen];
+@@ -266,7 +265,7 @@ void Reverb::sethpf(unsigned char _Phpf)
+     else {
+         float fr = expf(powf(Phpf / 127.0f, 0.5f) * logf(10000.0f)) + 20.0f;
+         if(hpf == NULL)
+-            hpf = new AnalogFilter(3, fr, 1, 0);
++            hpf = new AnalogFilter(3, fr, 1, 0, samplerate, buffersize);
+         else
+             hpf->setfreq(fr);
+     }
+@@ -283,7 +282,7 @@ void Reverb::setlpf(unsigned char _Plpf)
+     else {
+         float fr = expf(powf(Plpf / 127.0f, 0.5f) * logf(25000.0f)) + 40.0f;
+         if(!lpf)
+-            lpf = new AnalogFilter(2, fr, 1, 0);
++            lpf = new AnalogFilter(2, fr, 1, 0, samplerate, buffersize);
+         else
+             lpf->setfreq(fr);
+     }
+@@ -315,7 +314,7 @@ void Reverb::settype(unsigned char _Ptype)
+         Ptype = NUM_TYPES - 1;
+ 
+     // adjust the combs according to the samplerate
+-    float samplerate_adjust = synth->samplerate_f / 44100.0f;
++    float samplerate_adjust = samplerate_f / 44100.0f;
+     float tmp;
+     for(int i = 0; i < REV_COMBS * 2; ++i) {
+         if(Ptype == 0)
+@@ -360,7 +359,7 @@ void Reverb::settype(unsigned char _Ptype)
+         //not been verified yet.
+         //As this cannot be resized in a RT context, a good upper bound should
+         //be found
+-        bandwidth = new Unison(synth->buffersize / 4 + 1, 2.0f);
++        bandwidth = new Unison(buffersize / 4 + 1, 2.0f, samplerate_f);
+         bandwidth->setSize(50);
+         bandwidth->setBaseFrequency(1.0f);
+     }
+diff --git a/src/Effects/Reverb.h b/src/Effects/Reverb.h
+index f84d806d..10712299 100644
+--- a/src/Effects/Reverb.h
++++ b/src/Effects/Reverb.h
+@@ -32,7 +32,7 @@
+ class Reverb:public Effect
+ {
+     public:
+-        Reverb(bool insertion_, float *efxoutl_, float *efxoutr_);
++        Reverb(bool insertion_, float *efxoutl_, float *efxoutr_, unsigned int srate, int bufsize);
+         ~Reverb();
+         void out(const Stereo<float *> &smp);
+         void cleanup(void);
+diff --git a/src/Misc/Part.cpp b/src/Misc/Part.cpp
+index 1cf5f7b5..c6f70f2a 100644
+--- a/src/Misc/Part.cpp
++++ b/src/Misc/Part.cpp
+@@ -153,21 +153,21 @@ void Part::defaultsinstrument()
+ /*
+  * Cleanup the part
+  */
+-void Part::cleanup(bool final)
++void Part::cleanup(bool final_)
+ {
+     for(int k = 0; k < POLIPHONY; ++k)
+         KillNotePos(k);
+     for(int i = 0; i < synth->buffersize; ++i) {
+-        partoutl[i] = final ? 0.0f : denormalkillbuf[i];
+-        partoutr[i] = final ? 0.0f : denormalkillbuf[i];
++        partoutl[i] = final_ ? 0.0f : denormalkillbuf[i];
++        partoutr[i] = final_ ? 0.0f : denormalkillbuf[i];
+     }
+     ctl.resetall();
+     for(int nefx = 0; nefx < NUM_PART_EFX; ++nefx)
+         partefx[nefx]->cleanup();
+     for(int n = 0; n < NUM_PART_EFX + 1; ++n)
+         for(int i = 0; i < synth->buffersize; ++i) {
+-            partfxinputl[n][i] = final ? 0.0f : denormalkillbuf[i];
+-            partfxinputr[n][i] = final ? 0.0f : denormalkillbuf[i];
++            partfxinputl[n][i] = final_ ? 0.0f : denormalkillbuf[i];
++            partfxinputr[n][i] = final_ ? 0.0f : denormalkillbuf[i];
+         }
+ }
+ 
+diff --git a/src/Misc/Util.cpp b/src/Misc/Util.cpp
+index 87f44ff2..0f795834 100644
+--- a/src/Misc/Util.cpp
++++ b/src/Misc/Util.cpp
+@@ -203,7 +203,7 @@ void clearTmpBuffers(void)
+     pool.clear();
+ }
+ 
+-float SYNTH_T::numRandom() const
++float SYNTH_T::numRandom()
+ {
+     return RND;
+ }
+diff --git a/src/Tests/EchoTest.h b/src/Tests/EchoTest.h
+index bf94b972..c0a295ed 100644
+--- a/src/Tests/EchoTest.h
++++ b/src/Tests/EchoTest.h
+@@ -45,7 +45,7 @@ class EchoTest:public CxxTest::TestSuite
+                                         new float[synth->buffersize]);
+             for(int i = 0; i < synth->buffersize; ++i)
+                 input->l[i] = input->r[i] = 0.0f;
+-            testFX = new Echo(true, outL, outR);
++            testFX = new Echo(true, outL, outR, 44100, 256);
+         }
+ 
+         void tearDown() {
+diff --git a/src/globals.h b/src/globals.h
+index e0ec5c43..6490d313 100644
+--- a/src/globals.h
++++ b/src/globals.h
+@@ -242,7 +242,7 @@ struct SYNTH_T {
+         bufferbytes      = buffersize * sizeof(float);
+         oscilsize_f      = oscilsize;
+     }
+-    float numRandom(void) const; //defined in Util.cpp for now
++    static float numRandom(void); //defined in Util.cpp for now
+ };
+ 
+ extern SYNTH_T *synth;
+-- 
+2.47.0
+

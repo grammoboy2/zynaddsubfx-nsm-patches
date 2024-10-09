@@ -1,0 +1,29 @@
+From c87573c05afb422d1c7f0f060ab9cf959b266a69 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Sun, 3 Jan 2021 20:50:47 -0500
+Subject: [PATCH 1687/1936] Attempt to re-embed zest GUI
+
+Likely mitigates the missing zynaddsubfx_ui.ttl file which causes
+zyn-fusion-build to die at the zynaddsubfx install stage.
+---
+ src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+index 34c54ed1..197f4b23 100644
+--- a/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
++++ b/src/Plugin/ZynAddSubFX/DistrhoPluginInfo.h
+@@ -27,7 +27,10 @@
+  #define DISTRHO_PLUGIN_HAS_EMBED_UI    0
+  #define DISTRHO_PLUGIN_HAS_EXTERNAL_UI 1
+ #elif defined(ZEST_GUI)
++ #define DGL_OPENGL                     1
++ #define HAVE_OPENGL                    1
+  #define DISTRHO_PLUGIN_HAS_UI          1
++ #define DISTRHO_PLUGIN_HAS_EMBED_UI    1
+ #else
+  #define DISTRHO_PLUGIN_HAS_UI          0
+ #endif
+-- 
+2.47.0
+

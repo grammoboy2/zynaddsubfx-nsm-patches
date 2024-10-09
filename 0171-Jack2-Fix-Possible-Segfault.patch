@@ -1,0 +1,36 @@
+From f2aaa533e6a4f5d5804f0d36f670d38d70c8fbb5 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Tue, 6 May 2014 15:18:56 -0400
+Subject: [PATCH 0171/1936] Jack2: Fix Possible Segfault
+
+Jack2 resulted in somewhat less available stack space compared to jack1.
+This resulted in a possible segfault when initializing padsynth parameters due
+to a stack overflow after an VLA creation.
+---
+ src/Params/PADnoteParameters.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/src/Params/PADnoteParameters.cpp b/src/Params/PADnoteParameters.cpp
+index 407e0aa0..9a493f0f 100644
+--- a/src/Params/PADnoteParameters.cpp
++++ b/src/Params/PADnoteParameters.cpp
+@@ -560,7 +560,7 @@ void PADnoteParameters::applyparameters(bool lockmutex)
+ {
+     const int samplesize   = (((int) 1) << (Pquality.samplesize + 14));
+     int       spectrumsize = samplesize / 2;
+-    float     spectrum[spectrumsize];
++    float    *spectrum     = new float[spectrumsize];
+     int       profilesize = 512;
+     float     profile[profilesize];
+ 
+@@ -649,6 +649,7 @@ void PADnoteParameters::applyparameters(bool lockmutex)
+     }
+     delete (fft);
+     delete[] fftfreqs;
++    delete[] spectrum;
+ 
+     //delete the additional samples that might exists and are not useful
+     if(lockmutex) {
+-- 
+2.47.0
+
