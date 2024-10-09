@@ -1,0 +1,1628 @@
+From 6e708327ad2fc901dbecfa3ae7d2218774e60bc8 Mon Sep 17 00:00:00 2001
+From: fundamental <mark.d.mccurry@gmail.com>
+Date: Wed, 18 Apr 2012 16:15:41 -0400
+Subject: [PATCH] NSM: Applied Non Session Manager patch
+
+- Basic NSM support now enabled
+- Patch from Jonathan Liles
+---
+ src/CMakeLists.txt      |  12 +-
+ src/Misc/CMakeLists.txt |   9 ++
+ src/Misc/NSM.C          | 126 +++++++++++++++++
+ src/Misc/NSM.H          |  42 ++++++
+ src/Misc/NSM/Client.C   | 297 ++++++++++++++++++++++++++++++++++++++++
+ src/Misc/NSM/Client.H   | 109 +++++++++++++++
+ src/Nio/JackEngine.cpp  |  26 +++-
+ src/Nio/Nio.cpp         |   7 +-
+ src/Nio/Nio.h           |   1 +
+ src/UI/MasterUI.fl      | 270 +++++++++++++++++++++++-------------
+ src/main.cpp            | 209 +++++++++++++++-------------
+ 11 files changed, 911 insertions(+), 197 deletions(-)
+ create mode 100644 src/Misc/NSM.C
+ create mode 100644 src/Misc/NSM.H
+ create mode 100644 src/Misc/NSM/Client.C
+ create mode 100644 src/Misc/NSM/Client.H
+
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index a2de3b15..5c5a2f76 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -21,6 +21,8 @@ pkg_search_module(LASH lash-1.0)
+ mark_as_advanced(LASH_LIBRARIES)
+ pkg_search_module(DSSI dssi>=0.9.0)
+ mark_as_advanced(DSSI_LIBRARIES)
++pkg_search_module(LIBLO liblo>=0.26)
++mark_as_advanced(LIBLO_LIBRARIES)
+ 
+ ######### Settings ###########
+ # NOTE: These cache variables should normally not be changed in this
+@@ -42,7 +44,8 @@ SET (LashEnable ${LASH_FOUND} CACHE BOOL
+     "Enable LASH Audio Session Handler")
+ SET (DssiEnable ${DSSI_FOUND} CACHE BOOL
+     "Enable DSSI Plugin compilation")
+-
++SET (LibloEnable ${LIBLO_FOUND} CACHE BOOL
++    "Enable Liblo")
+ 
+ # Now, handle the incoming settings and set define flags/variables based
+ # on this
+@@ -129,6 +132,13 @@ if(LashEnable)
+ 	list(APPEND AUDIO_LIBRARY_DIRS ${LASH_LIBRARY_DIRS})
+ 	message(STATUS "Compiling with lash")
+ endif()
++if(LibloEnable)
++	include_directories(${LIBLO_INCLUDE_DIRS})
++	add_definitions(-DUSE_NSM=1)
++	list(APPEND AUDIO_LIBRARIES ${LIBLO_LIBRARIES})
++	list(APPEND AUDIO_LIBRARY_DIRS ${LIBLO_LIBRARY_DIRS})
++	message(STATUS "Compiling with liblo")
++endif()
+ 
+ # other include directories
+ include_directories(${ZLIB_INCLUDE_DIRS} ${MXML_INCLUDE_DIRS})
+diff --git a/src/Misc/CMakeLists.txt b/src/Misc/CMakeLists.txt
+index 4d16e267..ae6eda02 100644
+--- a/src/Misc/CMakeLists.txt
++++ b/src/Misc/CMakeLists.txt
+@@ -14,12 +14,21 @@ set(zynaddsubfx_misc_SRCS
+ 	WaveShapeSmps.cpp
+ )
+ 
++
++
+ if(LashEnable)
+     set(zynaddsubfx_misc_SRCS ${zynaddsubfx_misc_SRCS} LASHClient.cpp)
+ endif()
++if(LibloEnable)
++    set(zynaddsubfx_misc_SRCS ${zynaddsubfx_misc_SRCS} NSM.C NSM/Client.C)
++endif()
+ 
+ add_library(zynaddsubfx_misc STATIC
+ 	${zynaddsubfx_misc_SRCS}
+ 	)
+ 
++if(LibloEnable)
++    add_dependencies(zynaddsubfx_misc zynaddsubfx_gui)
++endif()
++
+ target_link_libraries(zynaddsubfx_misc zynaddsubfx_nio)
+diff --git a/src/Misc/NSM.C b/src/Misc/NSM.C
+new file mode 100644
+index 00000000..017aab38
+--- /dev/null
++++ b/src/Misc/NSM.C
+@@ -0,0 +1,126 @@
++
++/*******************************************************************************/
++/* Copyright (C) 2012 Jonathan Moore Liles                                     */
++/*                                                                             */
++/* This program is free software; you can redistribute it and/or modify it     */
++/* under the terms of the GNU General Public License as published by the       */
++/* Free Software Foundation; either version 2 of the License, or (at your      */
++/* option) any later version.                                                  */
++/*                                                                             */
++/* This program is distributed in the hope that it will be useful, but WITHOUT */
++/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or       */
++/* FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for   */
++/* more details.                                                               */
++/*                                                                             */
++/* You should have received a copy of the GNU General Public License along     */
++/* with This program; see the file COPYING.  If not,write to the Free Software */
++/* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
++/*******************************************************************************/
++
++
++#include "NSM.H"
++
++#include <Nio/Nio.h>
++
++#include "../UI/MasterUI.h"
++#include <FL/Fl.H>
++#include <stdio.h>
++#include <sys/stat.h>
++#include <sys/types.h>
++#include <unistd.h>
++
++extern int Pexitprogram;
++extern MasterUI *ui;
++
++extern NSM_Client *nsm;
++extern char *instance_name;
++
++NSM_Client::NSM_Client ( )
++{
++    project_filename = 0;
++    display_name = 0;
++}
++
++int command_open ( const char *name, const char *display_name, const char *client_id, char **out_msg );
++int command_save ( char **out_msg );
++
++int
++NSM_Client::command_save ( char **out_msg )
++{
++    int r = ERR_OK;
++
++    ui->do_save_master( project_filename );
++    
++    return r;
++}
++
++int
++NSM_Client::command_open ( const char *name, const char *display_name, const char *client_id, char **out_msg )
++{
++    Nio::stop();
++
++    if ( instance_name )
++        free( instance_name );
++    
++    instance_name = strdup( client_id );
++
++    Nio::start();
++
++    char *new_filename;
++    
++    asprintf( &new_filename, "%s.xmz", name );
++
++    struct stat st;
++
++    int r = ERR_OK;
++
++    if ( 0 == stat( new_filename, &st ) )
++    {
++        if ( ui->do_load_master_unconditional( new_filename, display_name ) < 0 )
++        {
++            *out_msg = strdup( "Failed to load for unknown reason" );
++            r = ERR_GENERAL;
++
++            return r;
++        }
++    }
++    else
++    {
++        ui->do_new_master_unconditional();
++    }
++
++    if ( project_filename )
++        free( project_filename );
++
++    if ( this->display_name )
++        free( this->display_name );
++        
++    project_filename = new_filename;
++
++    this->display_name = strdup( display_name );
++
++    return r;
++}
++
++void
++NSM_Client::command_active ( bool active )
++{
++    if ( active )
++    {
++        const_cast<Fl_Menu_Item *>( ui->mastermenu->find_item( "&File/&Open Parameters..." ) )->deactivate();
++        const_cast<Fl_Menu_Item *>( ui->simplemastermenu->find_item( "&File/&Open Parameters..." ) )->deactivate();
++        ui->sm_indicator1->value(1);
++        ui->sm_indicator2->value(1);
++        ui->sm_indicator1->tooltip( session_manager_name() );
++        ui->sm_indicator2->tooltip( session_manager_name() );
++    }
++    else
++    {
++        const_cast<Fl_Menu_Item *>( ui->mastermenu->find_item( "&File/&Open Parameters..." ) )->activate();
++        const_cast<Fl_Menu_Item *>( ui->simplemastermenu->find_item( "&File/&Open Parameters..." ) )->activate();
++        ui->sm_indicator1->value(0);
++        ui->sm_indicator2->value(0);
++        ui->sm_indicator1->tooltip( NULL );
++        ui->sm_indicator2->tooltip( NULL );
++    }
++}
+diff --git a/src/Misc/NSM.H b/src/Misc/NSM.H
+new file mode 100644
+index 00000000..049bab34
+--- /dev/null
++++ b/src/Misc/NSM.H
+@@ -0,0 +1,42 @@
++
++/*******************************************************************************/
++/* Copyright (C) 2012 Jonathan Moore Liles                                     */
++/*                                                                             */
++/* This program is free software; you can redistribute it and/or modify it     */
++/* under the terms of the GNU General Public License as published by the       */
++/* Free Software Foundation; either version 2 of the License, or (at your      */
++/* option) any later version.                                                  */
++/*                                                                             */
++/* This program is distributed in the hope that it will be useful, but WITHOUT */
++/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or       */
++/* FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for   */
++/* more details.                                                               */
++/*                                                                             */
++/* You should have received a copy of the GNU General Public License along     */
++/* with This program; see the file COPYING.  If not,write to the Free Software */
++/* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
++/*******************************************************************************/
++
++#pragma once
++
++#if USE_NSM
++#include "NSM/Client.H"
++
++class NSM_Client : public NSM::Client
++{
++public:
++
++    char *project_filename;
++    char *display_name;
++
++    NSM_Client ( );
++    ~NSM_Client ( ) { };
++    
++protected:
++
++    int command_open ( const char *name, const char *display_name, const char *client_id, char **out_msg );
++    int command_save ( char **out_msg );
++
++    void command_active ( bool active );
++};
++#endif
+diff --git a/src/Misc/NSM/Client.C b/src/Misc/NSM/Client.C
+new file mode 100644
+index 00000000..a925e686
+--- /dev/null
++++ b/src/Misc/NSM/Client.C
+@@ -0,0 +1,297 @@
++
++/*******************************************************************************/
++/* Copyright (C) 2012 Jonathan Moore Liles                                     */
++/*                                                                             */
++/* This program is free software; you can redistribute it and/or modify it     */
++/* under the terms of the GNU General Public License as published by the       */
++/* Free Software Foundation; either version 2 of the License, or (at your      */
++/* option) any later version.                                                  */
++/*                                                                             */
++/* This program is distributed in the hope that it will be useful, but WITHOUT */
++/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or       */
++/* FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for   */
++/* more details.                                                               */
++/*                                                                             */
++/* You should have received a copy of the GNU General Public License along     */
++/* with This program; see the file COPYING.  If not,write to the Free Software */
++/* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
++/*******************************************************************************/
++
++#include "Client.H"
++#include <string.h>
++#include <sys/types.h>
++#include <unistd.h>
++#include <stdlib.h>
++
++#pragma GCC diagnostic ignored "-Wunused-parameter"
++
++namespace NSM
++{
++
++/************************/
++/* OSC Message Handlers */
++/************************/
++
++#undef OSC_REPLY
++#undef OSC_REPLY_ERR
++
++#define OSC_REPLY( value ) lo_send_from( ((NSM::Client*)user_data)->nsm_addr, ((NSM::Client*)user_data)->_server, LO_TT_IMMEDIATE, "/reply", "ss", path, value )
++
++#define OSC_REPLY_ERR( errcode, value ) lo_send_from( ((NSM::Client*)user_data)->nsm_addr, ((NSM::Client*)user_data)->_server, LO_TT_IMMEDIATE, "/error", "sis", path, errcode, value )
++
++    Client::Client ( )
++    {
++        nsm_addr = 0;
++        nsm_client_id = 0;
++        _session_manager_name = 0;
++        nsm_is_active = false;
++        _server = 0;
++        _st = 0;
++    }
++
++    Client::~Client ( )
++    {
++        if ( _st )
++            stop();
++        
++        if ( _st )
++            lo_server_thread_free( _st );
++        else
++            lo_server_free ( _server );
++    }
++
++    void
++    Client::announce ( const char *application_name, const char *capabilities, const char *process_name )
++    {
++        // MESSAGE( "Announcing to NSM" );
++
++        lo_address to = lo_address_new_from_url( nsm_url );
++
++        if ( ! to )
++        {
++        //    MESSAGE( "Bad address" );
++            return;
++        }
++
++        int pid = (int)getpid();
++
++        lo_send_from( to, _server, LO_TT_IMMEDIATE, "/nsm/server/announce", "sssiii",
++                            application_name,
++                            capabilities,
++                            process_name,
++                            1, /* api_major_version */
++                            0, /* api_minor_version */
++                            pid );
++
++        lo_address_free( to );
++    }
++
++    void
++    Client::progress ( float p )
++    {
++        if ( nsm_is_active )
++        {
++            lo_send_from( nsm_addr, _server, LO_TT_IMMEDIATE, "/nsm/client/progress", "f", p );
++        }
++    }
++
++    void
++    Client::is_dirty ( void )
++    {
++        if ( nsm_is_active )
++        {
++            lo_send_from( nsm_addr, _server, LO_TT_IMMEDIATE, "/nsm/client/is_dirty", "" );
++        }
++    }
++
++    void
++    Client::is_clean ( void )
++    {
++        if ( nsm_is_active )
++        {
++            lo_send_from( nsm_addr, _server, LO_TT_IMMEDIATE, "/nsm/client/is_clean", "" );
++        }
++    }
++
++    void
++    Client::message ( int priority, const char *msg )
++    {
++        if ( nsm_is_active )
++        {
++            lo_send_from( nsm_addr, _server, LO_TT_IMMEDIATE, "/nsm/client/message", "is", priority, msg );
++        }
++    }
++
++    
++    void
++    Client::broadcast ( lo_message msg )
++    {
++        if ( nsm_is_active )
++        {
++            lo_send_message_from( nsm_addr, _server, "/nsm/server/broadcast", msg );
++        }
++    }
++
++    void
++    Client::check ( int timeout )
++    {
++        if ( lo_server_wait( _server, timeout ) )
++            while ( lo_server_recv_noblock( _server, 0 ) ) {}
++    }
++
++    void
++    Client::start ( )
++    {
++        lo_server_thread_start( _st );
++    }
++
++    void
++    Client::stop ( )
++    {
++        lo_server_thread_stop( _st );
++    }
++
++    int
++    Client::init ( const char *nsm_url )
++    {
++        this->nsm_url = nsm_url;
++
++        lo_address addr = lo_address_new_from_url( nsm_url );
++        int proto = lo_address_get_protocol( addr );
++        lo_address_free( addr );
++
++        _server = lo_server_new_with_proto( NULL, proto, NULL );
++
++        if ( ! _server )
++            return -1;
++
++        lo_server_add_method( _server, "/error", "sis", &Client::osc_error, this );
++        lo_server_add_method( _server, "/reply", "ssss", &Client::osc_announce_reply, this );
++        lo_server_add_method( _server, "/nsm/client/open", "sss", &Client::osc_open, this );
++        lo_server_add_method( _server, "/nsm/client/save", "", &Client::osc_save, this );
++        lo_server_add_method( _server, "/nsm/client/session_is_loaded", "", &Client::osc_session_is_loaded, this );
++        lo_server_add_method( _server, NULL, NULL, &Client::osc_broadcast, this );
++
++        return 0;
++    }
++
++    int
++    Client::init_thread ( const char *nsm_url )
++    {
++        this->nsm_url = nsm_url;
++
++        lo_address addr = lo_address_new_from_url( nsm_url );
++        int proto = lo_address_get_protocol( addr );
++        lo_address_free( addr );
++        
++        _st = lo_server_thread_new_with_proto( NULL, proto, NULL );
++        _server = lo_server_thread_get_server( _st );
++        
++        if ( ! _server || ! _st )
++            return -1;
++
++        lo_server_thread_add_method( _st, "/error", "sis", &Client::osc_error, this );
++        lo_server_thread_add_method( _st, "/reply", "ssss", &Client::osc_announce_reply, this );
++        lo_server_thread_add_method( _st, "/nsm/client/open", "sss", &Client::osc_open, this );
++        lo_server_thread_add_method( _st, "/nsm/client/save", "", &Client::osc_save, this );
++        lo_server_thread_add_method( _st, "/nsm/client/session_is_loaded", "", &Client::osc_session_is_loaded, this );
++        lo_server_thread_add_method( _st, NULL, NULL, &Client::osc_broadcast, this );
++        
++        return 0;
++    }
++
++/************************/
++/* OSC Message Handlers */
++/************************/
++
++    int
++    Client::osc_broadcast ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data )
++    {
++        return ((NSM::Client*)user_data)->command_broadcast( path, msg );
++    }
++
++    int
++    Client::osc_save ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data )
++    {
++        char *out_msg = NULL;
++        
++        int r = ((NSM::Client*)user_data)->command_save(&out_msg);
++
++        if ( r )
++            OSC_REPLY_ERR( r, ( out_msg ? out_msg : "") );
++        else
++            OSC_REPLY( "OK" );
++
++        if ( out_msg )
++            free( out_msg );
++
++         return 0;
++    }
++
++    int
++    Client::osc_open ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data )
++    {
++        char *out_msg = NULL;
++
++        NSM::Client *nsm = (NSM::Client*)user_data;
++        
++        nsm->nsm_client_id = strdup( &argv[2]->s );
++
++        int r = ((NSM::Client*)user_data)->command_open( &argv[0]->s, &argv[1]->s, &argv[2]->s, &out_msg);
++        
++        if ( r )
++            OSC_REPLY_ERR( r, ( out_msg ? out_msg : "") );
++        else
++            OSC_REPLY( "OK" );
++
++        if ( out_msg )
++            free( out_msg );
++
++        return 0;
++    }
++
++    int
++    Client::osc_session_is_loaded ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data )
++    {
++        NSM::Client *nsm = (NSM::Client*)user_data;
++
++        nsm->command_session_is_loaded();
++
++        return 0;
++    }
++
++    int
++    Client::osc_error ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data )
++    {
++        if ( strcmp( &argv[0]->s, "/nsm/server/announce" ) )
++            return -1;
++        
++        NSM::Client *nsm = (NSM::Client*)user_data;
++
++
++//        WARNING( "Failed to register with NSM: %s", &argv[2]->s );
++        nsm->nsm_is_active = false;
++        
++        nsm->command_active( nsm->nsm_is_active );
++
++        return 0;
++    }
++
++    int
++    Client::osc_announce_reply ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data )
++    {
++        if ( strcmp( &argv[0]->s, "/nsm/server/announce" ) )
++            return -1;
++       
++        NSM::Client *nsm = (NSM::Client*)user_data;
++
++//        MESSAGE( "Successfully registered. NSM says: %s", &argv[1]->s );
++        nsm->nsm_is_active = true;
++        nsm->_session_manager_name = strdup( &argv[2]->s );
++        nsm->nsm_addr = lo_address_new_from_url( lo_address_get_url( lo_message_get_source( msg ) ));   
++    
++        nsm->command_active( nsm->nsm_is_active );
++
++        return 0;
++    }
++};
+diff --git a/src/Misc/NSM/Client.H b/src/Misc/NSM/Client.H
+new file mode 100644
+index 00000000..f4179444
+--- /dev/null
++++ b/src/Misc/NSM/Client.H
+@@ -0,0 +1,109 @@
++
++/*******************************************************************************/
++/* Copyright (C) 2012 Jonathan Moore Liles                                     */
++/*                                                                             */
++/* This program is free software; you can redistribute it and/or modify it     */
++/* under the terms of the GNU General Public License as published by the       */
++/* Free Software Foundation; either version 2 of the License, or (at your      */
++/* option) any later version.                                                  */
++/*                                                                             */
++/* This program is distributed in the hope that it will be useful, but WITHOUT */
++/* ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or       */
++/* FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for   */
++/* more details.                                                               */
++/*                                                                             */
++/* You should have received a copy of the GNU General Public License along     */
++/* with This program; see the file COPYING.  If not,write to the Free Software */
++/* Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.  */
++/*******************************************************************************/
++
++#pragma once
++
++#include <lo/lo.h>
++
++namespace NSM
++{
++
++    class Client
++    {
++
++    private:
++
++        const char *nsm_url;
++
++        lo_server _server;
++        lo_server_thread _st;
++        lo_address nsm_addr;
++
++        bool nsm_is_active;
++        char *nsm_client_id;
++        char *_session_manager_name;
++
++    public:
++
++        enum
++        {
++            ERR_OK = 0,
++            ERR_GENERAL    = -1,
++            ERR_INCOMPATIBLE_API = -2,
++            ERR_BLACKLISTED      = -3,
++            ERR_LAUNCH_FAILED    = -4,
++            ERR_NO_SUCH_FILE     = -5,
++            ERR_NO_SESSION_OPEN  = -6,
++            ERR_UNSAVED_CHANGES  = -7,
++            ERR_NOT_NOW          = -8
++        };
++
++        Client ( );
++        virtual ~Client ( );
++
++        bool is_active ( void ) { return nsm_is_active; }
++
++        const char *session_manager_name ( void ) { return _session_manager_name; }
++
++        /* Client->Server methods */
++        void is_dirty ( void );
++        void is_clean ( void );
++        void progress ( float f );
++        void message( int priority, const char *msg );
++        void announce ( const char *appliction_name, const char *capabilities, const char *process_name );
++
++        void broadcast ( lo_message msg );
++
++        /* init without threading */
++        int init ( const char *nsm_url );
++        /* init with threading */
++        int init_thread ( const char *nsm_url );
++        
++        /* call this periodically to check for new messages */
++        void check ( int timeout = 0 );
++
++        /* or call these to start and stop a thread (must do your own locking in handler!) */
++        void start ( void );
++        void stop ( void );
++
++    protected:
++
++        /* Server->Client methods */
++        virtual int command_open ( const char *name, const char *display_name, const char *client_id, char **out_msg ) = 0;
++        virtual int command_save ( char **out_msg ) = 0;
++
++        virtual void command_active ( bool ) { }
++
++        virtual void command_session_is_loaded ( void ) { }
++
++        /* invoked when an unrecognized message is received. Should return 0 if you handled it, -1 otherwise. */
++        virtual int command_broadcast ( const char *, lo_message ) { return -1; }
++
++    private:
++
++        /* osc handlers */
++        static int osc_open ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data );
++        static int osc_save ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data );
++        static int osc_announce_reply ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data );
++        static int osc_error ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data );
++        static int osc_session_is_loaded ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data );
++        static int osc_broadcast ( const char *path, const char *types, lo_arg **argv, int argc, lo_message msg, void *user_data );
++
++    };
++};
+diff --git a/src/Nio/JackEngine.cpp b/src/Nio/JackEngine.cpp
+index d4d0f8ae..eb7862de 100644
+--- a/src/Nio/JackEngine.cpp
++++ b/src/Nio/JackEngine.cpp
+@@ -32,6 +32,8 @@
+ 
+ using namespace std;
+ 
++extern char *instance_name;
++
+ JackEngine::JackEngine()
+     :AudioOut(), jackClient(NULL)
+ {
+@@ -51,7 +53,6 @@ bool JackEngine::connectServer(string server)
+     if(jackClient)
+         return true;
+ 
+-
+     string clientname = "zynaddsubfx";
+     string postfix    = Nio::getPostfix();
+     if(!postfix.empty())
+@@ -59,15 +60,25 @@ bool JackEngine::connectServer(string server)
+     jack_status_t jackstatus;
+     bool use_server_name = server.size() && server.compare("default") != 0;
+     jack_options_t jopts = (jack_options_t)
+-                           (((use_server_name) ? JackServerName :
++                           (((! instance_name && use_server_name) ? JackServerName :
+                              JackNullOption)
+                             | ((autostart_jack) ? JackNullOption :
+                                JackNoStartServer));
+-    if(use_server_name)
+-        jackClient = jack_client_open(clientname.c_str(), jopts, &jackstatus,
+-                                      server.c_str());
++
++    if ( instance_name )
++    {
++            jackClient = jack_client_open(instance_name, jopts, &jackstatus);
++    }
+     else
+-        jackClient = jack_client_open(clientname.c_str(), jopts, &jackstatus);
++    {
++        if(use_server_name)
++            jackClient = jack_client_open(clientname.c_str(), jopts, &jackstatus,
++                                          server.c_str());
++        else
++            jackClient = jack_client_open(clientname.c_str(), jopts, &jackstatus);
++    }
++
++
+     if(NULL != jackClient)
+         return true;
+     else
+@@ -107,6 +118,9 @@ bool JackEngine::connectJack()
+ void JackEngine::disconnectJack()
+ {
+     if(jackClient) {
++        cout << "Deactivating and closing JACK client" << endl;
++
++        jack_deactivate(jackClient);
+         jack_client_close(jackClient);
+         jackClient = NULL;
+     }
+diff --git a/src/Nio/Nio.cpp b/src/Nio/Nio.cpp
+index d512dfec..4e124ef4 100644
+--- a/src/Nio/Nio.cpp
++++ b/src/Nio/Nio.cpp
+@@ -20,11 +20,16 @@ bool   Nio::autoConnect = false;
+ string Nio::defaultSource;
+ string Nio::defaultSink;
+ 
+-bool Nio::start()
++void Nio::init ( void )
+ {
+     in  = &InMgr::getInstance(); //Enable input wrapper
+     out = &OutMgr::getInstance(); //Initialize the Output Systems
+     eng = &EngineMgr::getInstance(); //Initialize The Engines
++}
++
++bool Nio::start()
++{
++    init();
+     return eng->start();
+ }
+ 
+diff --git a/src/Nio/Nio.h b/src/Nio/Nio.h
+index f8914785..cf06b21a 100644
+--- a/src/Nio/Nio.h
++++ b/src/Nio/Nio.h
+@@ -8,6 +8,7 @@
+  * Should be only externally included header */
+ namespace Nio
+ {
++    void init(void);
+     bool start(void);
+     void stop(void);
+ 
+diff --git a/src/UI/MasterUI.fl b/src/UI/MasterUI.fl
+index 19e312f6..1cce7ad0 100644
+--- a/src/UI/MasterUI.fl
++++ b/src/UI/MasterUI.fl
+@@ -1,66 +1,74 @@
+ # data file for the Fltk User Interface Designer (fluid)
+-version 1.0110 
++version 1.0300 
+ header_name {.h} 
+ code_name {.cc}
+-decl {//Copyright (c) 2002-2009 Nasca Octavian Paul} {} 
++decl {//Copyright (c) 2002-2009 Nasca Octavian Paul} {private local
++} 
+ 
+-decl {//License: GNU GPL version 2 or later} {} 
++decl {//License: GNU GPL version 2 or later} {private local
++} 
+ 
+-decl {\#include <stdlib.h>} {public
++decl {\#include <stdlib.h>} {public local
+ } 
+ 
+-decl {\#include <stdio.h>} {public
++decl {\#include <stdio.h>} {public local
+ } 
+ 
+-decl {\#include <string.h>} {public
++decl {\#include <string.h>} {public local
+ } 
+ 
+-decl {\#include "WidgetPDial.h"} {public
++decl {\#include "WidgetPDial.h"} {public local
+ } 
+ 
+-decl {\#include "ADnoteUI.h"} {public
++decl {\#include "ADnoteUI.h"} {public local
+ } 
+ 
+-decl {\#include "SUBnoteUI.h"} {public
++decl {\#include "SUBnoteUI.h"} {public local
+ } 
+ 
+-decl {\#include "EffUI.h"} {public
++decl {\#include "EffUI.h"} {public local
+ } 
+ 
+-decl {\#include "VirKeyboard.h"} {public
++decl {\#include "VirKeyboard.h"} {public local
+ } 
+ 
+-decl {\#include "ConfigUI.h"} {public
++decl {\#include "ConfigUI.h"} {public local
+ } 
+ 
+-decl {\#include "BankUI.h"} {public
++decl {\#include "BankUI.h"} {public local
+ } 
+ 
+-decl {\#include "PartUI.h"} {public
++decl {\#include "PartUI.h"} {public local
+ } 
+ 
+-decl {\#include "MicrotonalUI.h"} {public
++decl {\#include "MicrotonalUI.h"} {public local
+ } 
+ 
+-decl {\#include "PresetsUI.h"} {public
++decl {\#include "PresetsUI.h"} {public local
+ } 
+ 
+ decl {\#include "NioUI.h"} {public global
+ } 
+ 
+-decl {\#include "../Misc/Master.h"} {public
++decl {\#include "../Misc/Master.h"} {public local
++} 
++
++decl {\#include "../Misc/Part.h"} {public local
+ } 
+ 
+-decl {\#include "../Misc/Part.h"} {public
++decl {\#include "../Misc/Util.h"} {public local
+ } 
+ 
+-decl {\#include "../Misc/Util.h"} {public
++decl {\#if USE_NSM
++\#include "../Misc/NSM.H"
++extern NSM_Client *nsm;
++\#endif} {public local
+ } 
+ 
+-decl {\#include "../globals.h"} {public
++decl {\#include "../globals.h"} {public local
+ } 
+ 
+-class VUMeter {selected : {public Fl_Box}
++class VUMeter {: {public Fl_Box}
+ } {
+   Function {VUMeter(int x,int y, int w, int h, const char *label=0):Fl_Box(x,y,w,h,label)} {} {
+     code {master=NULL;
+@@ -231,7 +239,7 @@ float  tmp=ly*1.0/MIN_DB;
+   Function {tick(void *v)} {return_type {static void}
+   } {
+     code {tickdraw((VUMeter *) v);
+-Fl::add_timeout(1.0/60.0,tick,v);//60 fps} {}
++Fl::add_timeout(1.0/18.0,tick,v);//18 fps} {}
+   }
+   Function {handle(int event)} {return_type int
+   } {
+@@ -251,10 +259,14 @@ Fl::add_timeout(1.0/60.0,tick,v);//60 fps} {}
+ };
+ return(1);} {}
+   }
+-  decl {Master *master;} {}
+-  decl {int npart;} {}
+-  decl {float olddbl,olddbr;} {}
+-  decl {float oldrmsdbl,oldrmsdbr;} {}
++  decl {Master *master;} {private local
++  }
++  decl {int npart;} {private local
++  }
++  decl {float olddbl,olddbr;} {private local
++  }
++  decl {float oldrmsdbl,oldrmsdbr;} {private local
++  }
+ } 
+ 
+ class SysEffSend {: {public WidgetPDial}
+@@ -290,9 +302,12 @@ this->copy_label(tmp);} {}
+ 
+ return(WidgetPDial::handle(event));} {}
+   }
+-  decl {Master *master;} {}
+-  decl {int neff1;} {}
+-  decl {int neff2;} {}
++  decl {Master *master;} {private local
++  }
++  decl {int neff1;} {private local
++  }
++  decl {int neff2;} {private local
++  }
+ } 
+ 
+ class Panellistitem {: {public Fl_Group}
+@@ -300,11 +315,11 @@ class Panellistitem {: {public Fl_Group}
+   Function {make_window()} {private
+   } {
+     Fl_Window panellistitem {
+-      private xywh {315 213 70 260} type Double labeltype NORMAL_LABEL align 80 hide
++      private xywh {315 213 70 260} type Double hide
+       class Fl_Group
+     } {
+       Fl_Group panellistitemgroup {
+-        private xywh {0 20 70 240} box PLASTIC_THIN_UP_BOX
++        private xywh {0 20 70 240} box THIN_UP_BOX
+         code0 {if (master->part[npart]->Penabled==0) o->deactivate();}
+       } {
+         Fl_Group {} {
+@@ -343,7 +358,7 @@ bankui->show();}
+    bankui->cbwig->value(npart+1);
+    bankui->cbwig->do_callback();
+ };}
+-          xywh {15 235 40 20} box PLASTIC_UP_BOX labelsize 10
++          xywh {15 235 40 20} labelsize 10
+         }
+         Fl_Choice partrcv {
+           callback {master->part[npart]->Prcvchn=(int) o->value();}
+@@ -410,24 +425,35 @@ panellistitemgroup->redraw();} {}
+     code {panellistitem->hide();
+ //delete(panellistitem);} {}
+   }
+-  decl {int npart;} {}
+-  decl {Master *master;} {}
+-  decl {BankUI *bankui;} {}
++  decl {int npart;} {private local
++  }
++  decl {Master *master;} {private local
++  }
++  decl {BankUI *bankui;} {private local
++  }
+ } 
+ 
+-class MasterUI {} {
+-  Function {make_window()} {} {
++class MasterUI {open
++} {
++  Function {make_window()} {open
++  } {
+     Fl_Window masterwindow {
+       label zynaddsubfx
+       callback {\#ifdef VSTAUDIOOUT
+ fl_alert("ZynAddSubFX could not be closed this way, because it's a VST plugin. Please use the host aplication to close it.");
+ \#else
+-if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
++if (
++\#if USE_NSM 
++nsm && nsm->is_active()
++\#else
++0
++\#endif
++ || fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
+     config.save();
+     *exitprogram=1;
+ };
+-\#endif}
+-      xywh {450 306 390 465} type Double align 80 hide xclass zynaddsubfx
++\#endif} open
++      xywh {1333 248 390 465} type Double xclass zynaddsubfx visible
+     } {
+       Fl_Menu_Bar mastermenu {
+         xywh {-5 0 690 25}
+@@ -448,7 +474,16 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
+           }
+           MenuItem {} {
+             label {&Save All Parameters...}
+-            callback {do_save_master();}
++            callback {\#if USE_NSM
++            if ( nsm && nsm->is_active() )
++            {
++                do_save_master( nsm->project_filename );
++            }
++            else
++\#endif
++            {
++                 do_save_master();
++            }}
+             xywh {10 10 100 20} divider
+           }
+           MenuItem {} {
+@@ -670,7 +705,7 @@ if (result!=0) fl_alert("Error: Could not save the file.");}
+ pthread_mutex_lock(&master->mutex);
+ master->shutup=1;
+ pthread_mutex_unlock(&master->mutex);}
+-        xywh {293 29 92 31} box PLASTIC_UP_BOX color 231 labelfont 1
++        xywh {293 29 92 31} color 231 labelfont 1
+       }
+       Fl_Group partuigroup {
+         xywh {0 242 390 183} box ENGRAVED_FRAME
+@@ -888,7 +923,7 @@ pthread_mutex_unlock(&master->mutex);}
+       Fl_Button {} {
+         label Scales
+         callback {microtonalui->show();}
+-        xywh {330 80 56 19} box PLASTIC_UP_BOX color 231 labeltype ENGRAVED_LABEL labelfont 1
++        xywh {330 80 56 19} color 231 labeltype ENGRAVED_LABEL labelfont 1
+       }
+       Fl_Group {} {
+         xywh {172 30 117 45} box ENGRAVED_BOX
+@@ -968,7 +1003,7 @@ simplenpartcounter->do_callback();}
+       Fl_Button {} {
+         label vK
+         callback {virkeyboard->show();}
+-        tooltip {Virtual Keyboard} xywh {292 80 35 19} box PLASTIC_UP_BOX color 231 labeltype ENGRAVED_LABEL labelfont 1
++        tooltip {Virtual Keyboard} xywh {292 80 35 19} color 231 labeltype ENGRAVED_LABEL labelfont 1
+       }
+       Fl_Button {} {
+         label {R.D.}
+@@ -987,12 +1022,16 @@ globalfinedetuneslider->do_callback();}
+         label {Panel Window}
+         callback {updatepanel();
+ panelwindow->show();}
+-        tooltip {Panel Window} xywh {293 62 92 16} box PLASTIC_UP_BOX color 183 labelfont 1 labelsize 10
++        tooltip {Panel Window} xywh {293 62 92 16} color 183 labelfont 1 labelsize 10
++      }
++      Fl_Button sm_indicator1 {
++        label SM selected
++        xywh {350 5 35 15} box ROUNDED_BOX down_box ROUNDED_BOX color 45 selection_color 93 labelfont 3 labelcolor 39 deactivate
+       }
+     }
+     Fl_Window aboutwindow {
+       label {Copyright...}
+-      xywh {411 344 365 280} type Double labeltype NORMAL_LABEL align 80 hide
++      xywh {411 344 365 280} type Double hide
+     } {
+       Fl_Box {} {
+         label {Copyright (c) 2002-2009 Nasca O. PAUL and others. Please read AUTHORS.txt}
+@@ -1019,7 +1058,7 @@ GNU General Public License for details.}
+     }
+     Fl_Window syseffsendwindow {
+       label {System Effects Send}
+-      xywh {171 234 120 250} type Double labeltype NORMAL_LABEL align 80 hide resizable
++      xywh {171 234 120 250} type Double hide resizable
+     } {
+       Fl_Scroll {} {open
+         xywh {0 45 120 170} box FLAT_BOX resizable
+@@ -1038,7 +1077,7 @@ GNU General Public License for details.}
+     }
+     Fl_Window panelwindow {
+       label {ZynAddSubFX Panel}
+-      xywh {89 59 630 635} type Double labeltype NORMAL_LABEL align 80 hide
++      xywh {89 59 630 635} type Double hide
+     } {
+       Fl_Scroll {} {
+         xywh {0 5 570 310} type HORIZONTAL box THIN_UP_BOX
+@@ -1077,10 +1116,10 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
+ 	config.save();
+ 	*exitprogram=1;
+ };
+-\#endif}
+-      xywh {400 405 600 335} type Double labeltype NORMAL_LABEL align 80 hide
++\#endif} open
++      xywh {672 121 600 335} type Double visible
+     } {
+-      Fl_Menu_Bar {} {
++      Fl_Menu_Bar simplemastermenu {
+         xywh {0 0 690 25}
+       } {
+         Submenu {} {
+@@ -1099,7 +1138,16 @@ if (fl_choice("Exit and leave the unsaved data?","No","Yes",NULL)) {
+           }
+           MenuItem {} {
+             label {&Save All Parameters...}
+-            callback {do_save_master();}
++            callback {\#if USE_NSM
++            if ( nsm && nsm->is_active() )
++            {
++                do_save_master( nsm->project_filename );
++            }
++            else
++\#endif
++            {
++                 do_save_master();
++            }}
+             xywh {20 20 100 20} divider
+           }
+           MenuItem {} {
+@@ -1179,7 +1227,7 @@ if (result==-10) fl_alert("Error: Could not load the file\\nbecause it is not an
+    bankui->cbwig->do_callback();
+ };
+ bankui->show();}
+-          xywh {130 72 205 18} box PLASTIC_THIN_DOWN_BOX down_box FLAT_BOX color 247 labelfont 1 labelsize 11 align 208
++          xywh {130 72 205 18} box THIN_DOWN_BOX down_box FLAT_BOX color 247 labelfont 1 labelsize 11 align 208
+         }
+         Fl_Slider partpanning {
+           label Pan
+@@ -1412,7 +1460,7 @@ if (master->Pinsparts[ninseff]!=-1) {
+ master->insefx[ninseff]->changeeffect((int) o->value());
+ pthread_mutex_unlock(&master->mutex);
+ simpleinseffectui->refresh(master->insefx[ninseff]);
+-simpleinseffectui->show();} selected
++simpleinseffectui->show();}
+               xywh {515 80 70 15} down_box BORDER_BOX labelsize 10 align 5
+               code0 {o->value(master->insefx[ninseff]->geteffect());}
+               code1 {if (master->Pinsparts[ninseff]== -1) o->deactivate();}
+@@ -1522,7 +1570,7 @@ pthread_mutex_unlock(&master->mutex);}
+ pthread_mutex_lock(&master->mutex);
+ master->shutup=1;
+ pthread_mutex_unlock(&master->mutex);}
+-        xywh {5 149 115 31} box PLASTIC_UP_BOX color 231 labelfont 1 labelsize 11
++        xywh {5 149 115 31} color 231 labelfont 1 labelsize 11
+       }
+       Fl_Button {} {
+         label Reset
+@@ -1556,11 +1604,15 @@ virkeys->take_focus();}
+         tooltip {Midi Octave} xywh {5 195 55 20} type Simple labelsize 11 align 8 when 6 minimum 0 maximum 5 step 1 textfont 1 textsize 11
+         code0 {o->value(virkeys->midioct);}
+       }
++      Fl_Button sm_indicator2 {
++        label SM
++        xywh {560 5 35 15} box ROUNDED_BOX down_box ROUNDED_BOX color 45 selection_color 93 labelfont 3 labelcolor 39 deactivate
++      }
+     }
+     Fl_Window selectuiwindow {
+       label {User Interface mode}
+       callback {*exitprogram=1;}
+-      xywh {342 246 430 250} type Double labeltype NORMAL_LABEL align 80 hide non_modal
++      xywh {342 246 430 250} type Double hide non_modal
+     } {
+       Fl_Box {} {
+         label {Welcome to ZynAddSubFX}
+@@ -1575,7 +1627,7 @@ virkeys->take_focus();}
+         callback {config.cfg.UserInterfaceMode=1;
+ masterwindow->show();
+ selectuiwindow->hide();}
+-        xywh {10 165 100 35} box PLASTIC_UP_BOX color 229 labelfont 1 labelsize 16
++        xywh {10 165 100 35} color 229 labelfont 1 labelsize 16
+       }
+       Fl_Box {} {
+         label {.. if you have used ZynAddSubFX before, or you like to have full controll to all parameters.}
+@@ -1586,7 +1638,7 @@ selectuiwindow->hide();}
+         callback {simplemasterwindow->show();
+ selectuiwindow->hide();
+ config.cfg.UserInterfaceMode=2;}
+-        xywh {10 80 100 65} box PLASTIC_UP_BOX color 238 labelfont 1 labelsize 16
++        xywh {10 80 100 65} color 238 labelfont 1 labelsize 16
+       }
+       Fl_Box {} {
+         label {..if you are a beginner, you prefer using presets or you prefer to use simpler user interfaces. Most functionality of ZynAddSubFX will be hidden in this mode to make simple the learning/using it.}
+@@ -1686,9 +1738,8 @@ simplemaxkcounter->value(master->part[npart]->Pmaxkey);
+ simplepartkeyshiftcounter->value(master->part[npart]->Pkeyshift-64);
+ simplesyseffsend->value(master->Psysefxvol[nsyseff][npart]);} {}
+   }
+-  Function {do_new_master()} {} {
+-    code {if (fl_choice("Clear *ALL* the parameters ?","No","Yes",NULL)){
+-       delete microtonalui;
++  Function {do_new_master_unconditional()} {} {
++    code {delete microtonalui;
+ 
+        pthread_mutex_lock(&master->mutex);
+ 	master->defaults();
+@@ -1696,10 +1747,32 @@ simplesyseffsend->value(master->Psysefxvol[nsyseff][npart]);} {}
+ 	
+        npartcounter->value(1);
+        refresh_master_ui();
+-
+-};
+-
+-updatepanel();} {}
++       updatepanel();} {}
++  }
++  Function {do_new_master()} {} {
++    code {if (fl_choice("Clear *ALL* the parameters ?","No","Yes",NULL)){
++         do_new_master_unconditional();
++         }} {}
++  }
++  Function {do_load_master_unconditional(const char *filename, const char *display_name)} {return_type int
++  } {
++    code {pthread_mutex_lock(&master->mutex);
++    //clear all parameters
++    master->defaults();
++    
++    //load the data
++    int result=master->loadXML(filename);
++    
++    master->applyparameters(false);
++    pthread_mutex_unlock(&master->mutex);
++    
++    npartcounter->value(1);
++    refresh_master_ui();
++    updatepanel();
++
++    if (result>=0) setfilelabel(display_name);
++    
++    return result;} {}
+   }
+   Function {do_load_master(const char* file = NULL)} {} {
+     code {const char *filename;
+@@ -1711,22 +1784,7 @@ updatepanel();} {}
+     filename = file;
+   }
+ 
+-
+-pthread_mutex_lock(&master->mutex);
+-  //clear all parameters
+-  master->defaults();
+-
+-  //load the data
+-  int result=master->loadXML(filename);
+-
+-master->applyparameters(false);
+-pthread_mutex_unlock(&master->mutex);
+-
+-npartcounter->value(1);
+-refresh_master_ui();
+-updatepanel();
+-if (result>=0) setfilelabel(filename);
+-
++  int result = do_load_master_unconditional( filename, filename );
+ 
+ if (result==-10) fl_alert("Error: Could not load the file\\nbecause it is not a zynaddsubfx parameters file.");
+       else if (result<0) fl_alert("Error: Could not load the file.");} {}
+@@ -1757,8 +1815,15 @@ result=master->saveXML(filename);
+ pthread_mutex_unlock(&master->mutex);
+ 
+ if (result<0) fl_alert("Error: Could not save the file.");
+-	else setfilelabel(filename);
+-
++	else
++{
++\#if USE_NSM
++        if ( nsm && nsm->is_active() )
++             setfilelabel( nsm->display_name );
++        else
++\#endif
++             setfilelabel(filename);
++}
+ updatepanel();} {}
+   }
+   Function {refresh_master_ui()} {} {
+@@ -1793,17 +1858,30 @@ virkeys->midich=master->part[npart]->Prcvchn;
+ simplerefresh();
+ bankui->hide();} {}
+   }
+-  decl {Master *master;} {}
+-  decl {MicrotonalUI *microtonalui;} {}
+-  decl {BankUI *bankui;} {}
+-  decl {int ninseff,npart;} {}
+-  decl {int nsyseff;} {}
+-  decl {int *exitprogram;} {}
+-  decl {SysEffSend *syseffsend[NUM_SYS_EFX][NUM_SYS_EFX];} {}
+-  decl {VirKeyboard *virkeyboard;} {}
+-  decl {ConfigUI *configui;} {}
+-  decl {int swapefftype;} {}
+-  decl {char masterwindowlabel[100];} {}
+-  decl {Panellistitem *panellistitem[NUM_MIDI_PARTS];} {}
+-  decl {NioUI nioui;} {}
++  decl {Master *master;} {private local
++  }
++  decl {MicrotonalUI *microtonalui;} {private local
++  }
++  decl {BankUI *bankui;} {private local
++  }
++  decl {int ninseff,npart;} {private local
++  }
++  decl {int nsyseff;} {private local
++  }
++  decl {int *exitprogram;} {private local
++  }
++  decl {SysEffSend *syseffsend[NUM_SYS_EFX][NUM_SYS_EFX];} {private local
++  }
++  decl {VirKeyboard *virkeyboard;} {private local
++  }
++  decl {ConfigUI *configui;} {private local
++  }
++  decl {int swapefftype;} {private local
++  }
++  decl {char masterwindowlabel[100];} {private local
++  }
++  decl {Panellistitem *panellistitem[NUM_MIDI_PARTS];} {private local
++  }
++  decl {NioUI nioui;} {private local
++  }
+ } 
+diff --git a/src/main.cpp b/src/main.cpp
+index f502cba0..0a5e2983 100644
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -37,6 +37,8 @@
+ #include "Misc/Dump.h"
+ extern Dump dump;
+ 
++#include <FL/Fl.H>
++
+ //Nio System
+ #include "Nio/Nio.h"
+ 
+@@ -58,63 +60,25 @@ MasterUI *ui;
+ 
+ using namespace std;
+ 
+-pthread_t thr3, thr4;
++pthread_t thr4;
+ Master   *master;
+ SYNTH_T  *synth;
+ int       swaplr = 0; //1 for left-right swapping
+ 
++int Pexitprogram = 0;     //if the UI set this to 1, the program will exit
++
+ #if LASH
+ #include "Misc/LASHClient.h"
+ LASHClient *lash = NULL;
+ #endif
+ 
+-int Pexitprogram = 0;     //if the UI set this to 1, the program will exit
+-
+-/*
+- * User Interface thread
+- */
+-void *thread3(void *v)
+-{
+-#ifndef DISABLE_GUI
+-
+-#ifdef FLTK_GUI
+-
+-    if(v)
+-        fl_alert("Default IO did not initialize.\nDefaulting to NULL backend.");
+-    ui = new MasterUI(master, &Pexitprogram);
+-    ui->showUI();
+-
+-    while(Pexitprogram == 0) {
+-#if LASH
+-        string filename;
+-        switch(lash->checkevents(filename)) {
+-            case LASHClient::Save:
+-                ui->do_save_master(filename.c_str());
+-                lash->confirmevent(LASHClient::Save);
+-                break;
+-            case LASHClient::Restore:
+-                ui->do_load_master(filename.c_str());
+-                lash->confirmevent(LASHClient::Restore);
+-                break;
+-            case LASHClient::Quit:
+-                Pexitprogram = 1;
+-            default:
+-                break;
+-        }
+-#endif //LASH
+-        Fl::wait(0.1f);
+-    }
++#if USE_NSM
++#include "Misc/NSM.H"
+ 
+-#elif defined QT_GUI
+-    app = new QApplication(0, 0);
+-    ui  = new MasterUI(master, 0);
+-    ui->show();
+-    app->exec();
+-#endif //defined QT_GUI
++NSM_Client *nsm = 0;
++#endif
+ 
+-#endif //DISABLE_GUI
+-    return 0;
+-}
++char *instance_name = 0;
+ 
+ void exitprogram();
+ 
+@@ -122,21 +86,13 @@ void exitprogram();
+ void sigterm_exit(int /*sig*/)
+ {
+     Pexitprogram = 1;
+-    sleep(1);
+-    exitprogram();
+-    exit(0);
+ }
+ 
+-
+ /*
+  * Program initialisation
+  */
+ void initprogram(int argc, char **argv)
+ {
+-#if LASH
+-    lash = new LASHClient(&argc, &argv);
+-#endif
+-
+     cerr.precision(1);
+     cerr << std::fixed;
+     cerr << "\nSample Rate = \t\t" << synth->samplerate << endl;
+@@ -167,9 +123,13 @@ void exitprogram()
+ #ifndef DISABLE_GUI
+     delete ui;
+ #endif
+-
+ #if LASH
+-    delete lash;
++    if ( lash )
++        delete lash;
++#endif
++#if USE_NSM
++    if ( nsm )
++        delete nsm;
+ #endif
+ 
+     delete [] denormalkillbuf;
+@@ -182,8 +142,8 @@ int main(int argc, char *argv[])
+     dump.startnow();
+     int noui = 0;
+     cerr
+-    << "\nZynAddSubFX - Copyright (c) 2002-2011 Nasca Octavian Paul and others"
+-    << endl;
++        << "\nZynAddSubFX - Copyright (c) 2002-2011 Nasca Octavian Paul and others"
++        << endl;
+     cerr << "Compiled: " << __DATE__ << " " << __TIME__ << endl;
+     cerr << "This program is free software (GNU GPL v.2 or later) and \n";
+     cerr << "it comes with ABSOLUTELY NO WARRANTY.\n" << endl;
+@@ -270,10 +230,10 @@ int main(int argc, char *argv[])
+                           &option_index);
+         char *optarguments = optarg;
+ 
+-#define GETOP(x) if(optarguments) \
+-        x = optarguments
+-#define GETOPNUM(x) if(optarguments) \
+-        x = atoi(optarguments)
++#define GETOP(x) if(optarguments)               \
++            x = optarguments
++#define GETOPNUM(x) if(optarguments)            \
++            x = atoi(optarguments)
+ 
+ 
+         if(opt == -1)
+@@ -287,11 +247,11 @@ int main(int argc, char *argv[])
+                 exitwithversion = 1;
+                 break;
+             case 'Y':/* this command a dummy command (has NO effect)
+-                and is used because I need for NSIS installer
+-            (NSIS sometimes forces a command line for a
+-            program, even if I don't need that; eg. when
+-            I want to add a icon to a shortcut.
+-              */
++                        and is used because I need for NSIS installer
++                        (NSIS sometimes forces a command line for a
++                        program, even if I don't need that; eg. when
++                        I want to add a icon to a shortcut.
++                     */
+                 break;
+             case 'U':
+                 noui = 1;
+@@ -327,9 +287,9 @@ int main(int argc, char *argv[])
+                     (int) powf(2, ceil(logf(synth->oscilsize - 1.0f) / logf(2.0f)));
+                 if(tmp != synth->oscilsize)
+                     cerr
+-                    <<
+-                    "synth->oscilsize is wrong (must be 2^n) or too small. Adjusting to "
+-                    << synth->oscilsize << "." << endl;
++                        <<
++                        "synth->oscilsize is wrong (must be 2^n) or too small. Adjusting to "
++                        << synth->oscilsize << "." << endl;
+                 break;
+             case 'S':
+                 swaplr = 1;
+@@ -375,12 +335,12 @@ int main(int argc, char *argv[])
+              << "  -L file, --load-instrument=FILE\t Loads a .xiz file\n"
+              << "  -r SR, --sample-rate=SR\t\t Set the sample rate SR\n"
+              <<
+-        "  -b BS, --buffer-size=SR\t\t Set the buffer size (granularity)\n"
++            "  -b BS, --buffer-size=SR\t\t Set the buffer size (granularity)\n"
+              << "  -o OS, --oscil-size=OS\t\t Set the ADsynth oscil. size\n"
+              << "  -S , --swap\t\t\t\t Swap Left <--> Right\n"
+              << "  -D , --dump\t\t\t\t Dumps midi note ON/OFF commands\n"
+              <<
+-        "  -U , --no-gui\t\t\t\t Run ZynAddSubFX without user interface\n"
++            "  -U , --no-gui\t\t\t\t Run ZynAddSubFX without user interface\n"
+              << "  -N , --named\t\t\t\t Postfix IO Name when possible\n"
+              << "  -a , --auto-connect\t\t\t AutoConnect when using JACK\n"
+              << "  -O , --output\t\t\t\t Set Output Engine\n"
+@@ -398,20 +358,6 @@ int main(int argc, char *argv[])
+ 
+     initprogram(argc, argv);
+ 
+-#if 0 //TODO update this code
+-#ifdef USE_LASH
+-#ifdef ALSAMIDIIN
+-    ALSAMidiIn *alsamidi = dynamic_cast<ALSAMidiIn *>(Midi);
+-    if(alsamidi)
+-        lash->setalsaid(alsamidi->getalsaid());
+-#endif
+-#ifdef JACKAUDIOOUT
+-    lash->setjackname(JACKgetname());
+-#endif
+-#endif
+-#endif
+-
+-
+     if(!loadfile.empty()) {
+         int tmp = master->loadXML(loadfile.c_str());
+         if(tmp < 0) {
+@@ -443,11 +389,6 @@ int main(int argc, char *argv[])
+     //Run the Nio system
+     bool ioGood = Nio::start();
+ 
+-#ifndef DISABLE_GUI
+-    if(noui == 0)
+-        pthread_create(&thr3, NULL, thread3, (void *)!ioGood);
+-#endif
+-
+     if(!execAfterInit.empty()) {
+         cout << "Executing user supplied command: " << execAfterInit << endl;
+         if(system(execAfterInit.c_str()) == -1)
+@@ -455,9 +396,91 @@ int main(int argc, char *argv[])
+     }
+ 
+ 
+-    //TODO look into a conditional variable here, it seems to match usage
+-    while(Pexitprogram == 0) {
++#ifndef DISABLE_GUI
++    ui = new MasterUI(master, &Pexitprogram);
++
++    if(!noui)
++    {
++        ui->showUI();
++
++        if(!ioGood)
++            fl_alert("Default IO did not initialize.\nDefaulting to NULL backend.");
++    }
++
++#endif
++
++#ifndef DISABLE_GUI
++#if USE_NSM
++    char *nsm_url = getenv( "NSM_URL" );
++
++    if ( nsm_url )
++    {
++        nsm = new NSM_Client;
++
++        if ( ! nsm->init( nsm_url ) )
++        {
++            nsm->announce( "ZynAddSubFX", ":switch:", argv[0] );
++        }
++        else
++        {
++            delete nsm;
++            nsm = NULL;
++        }
++    }
++#endif
++#endif
++
++#if USE_NSM
++    if ( ! nsm )
++#endif
++    {
++#if LASH
++    lash = new LASHClient(&argc, &argv);
++#ifndef DISABLE_GUI
++    ui->sm_indicator1->value(1);
++    ui->sm_indicator2->value(1);
++    ui->sm_indicator1->tooltip( "LASH" );
++    ui->sm_indicator2->tooltip( "LASH" );
++#endif
++#endif
++    }
++
++    while(Pexitprogram == 0)
++    {
++#ifndef DISABLE_GUI
++#if USE_NSM
++        if ( nsm )
++        {
++            nsm->check();
++            goto done;
++        }
++#endif
++#if LASH
++        {
++            string filename;
++            switch(lash->checkevents(filename)) {
++                case LASHClient::Save:
++                    ui->do_save_master(filename.c_str());
++                    lash->confirmevent(LASHClient::Save);
++                    break;
++                case LASHClient::Restore:
++                    ui->do_load_master(filename.c_str());
++                    lash->confirmevent(LASHClient::Restore);
++                    break;
++                case LASHClient::Quit:
++                    Pexitprogram = 1;
++                default:
++                    break;
++            }
++        }
++#endif //LASH
++
++    done:
++
++        Fl::wait(0.1f);
++#else
+         usleep(100000);
++#endif
+     }
+ 
+     exitprogram();
+-- 
+2.47.0
+
